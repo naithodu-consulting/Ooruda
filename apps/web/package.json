@@ -44,6 +44,7 @@
     "@kit/next": "workspace:*",
     "@kit/notifications": "workspace:*",
     "@kit/shared": "workspace:*",
+    "@kit/sms": "workspace:*",
     "@kit/supabase": "workspace:*",
     "@kit/team-accounts": "workspace:*",
     "@kit/ui": "workspace:*",

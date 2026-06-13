@@ -2,6 +2,9 @@
 
 import * as React from 'react';
 
+import { Command as CommandPrimitive } from 'cmdk';
+import { SearchIcon, CheckIcon } from 'lucide-react';
+
 import {
   Dialog,
   DialogContent,
@@ -11,8 +14,6 @@ import {
 } from '#components/dialog';
 import { InputGroup, InputGroupAddon } from '#components/input-group';
 import { cn } from '#lib/utils';
-import { Command as CommandPrimitive } from 'cmdk';
-import { SearchIcon, CheckIcon } from 'lucide-react';
 
 function Command({
   className,

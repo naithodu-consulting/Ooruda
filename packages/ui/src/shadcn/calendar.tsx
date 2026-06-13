@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import { Button, buttonVariants } from '#components/button';
-import { cn } from '#lib/utils';
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -15,6 +13,9 @@ import {
   type DayButton,
   type Locale,
 } from 'react-day-picker';
+
+import { Button, buttonVariants } from '#components/button';
+import { cn } from '#lib/utils';
 
 function Calendar({
   className,

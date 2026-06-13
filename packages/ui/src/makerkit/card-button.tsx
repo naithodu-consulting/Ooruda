@@ -1,8 +1,9 @@
 import * as React from 'react';
 
-import { cn } from '#utils';
 import { useRender } from '@base-ui/react/use-render';
 import { ChevronRight } from 'lucide-react';
+
+import { cn } from '#utils';
 
 export const CardButton: React.FC<
   {

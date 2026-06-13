@@ -2,11 +2,12 @@
 
 import * as React from 'react';
 
-import { Label } from '#components/label';
-import { cn } from '#utils';
 import { useRender } from '@base-ui/react/use-render';
 import type { ControllerProps, FieldPath, FieldValues } from 'react-hook-form';
 import { Controller, FormProvider, useFormContext } from 'react-hook-form';
+
+import { Label } from '#components/label';
+import { cn } from '#utils';
 
 const Form = FormProvider;
 

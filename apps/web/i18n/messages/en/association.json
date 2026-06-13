@@ -1,0 +1,44 @@
+{
+  "nav": {
+    "portfolio": "Portfolio",
+    "dashboard": "Dashboard",
+    "operations": "Operations",
+    "units": "Units & Owners",
+    "billing": "Billing",
+    "mescom": "MESCOM / Electricity",
+    "payments": "Payments",
+    "insights": "Insights",
+    "reports": "Reports",
+    "notifications": "Notifications",
+    "admin": "Admin",
+    "members": "Members",
+    "settings": "Settings",
+    "audit": "Audit Log"
+  },
+  "label": "Association",
+  "labelPlural": "Associations",
+  "switchAssociation": "Switch Association",
+  "yourAssociations": "Your Associations ({count})",
+  "createAssociation": "Create an Association",
+  "creatingAssociation": "Creating Association...",
+  "noAssociations": "No associations found",
+  "settings": {
+    "pageTitle": "Association Settings",
+    "pageDescription": "Manage your association profile and configuration",
+    "logo": "Association Logo",
+    "logoDescription": "Upload your association logo for branding on bills and portal",
+    "name": "Association Name",
+    "nameDescription": "The display name shown on bills and member portals",
+    "brandColour": "Brand Colour",
+    "brandColourDescription": "Primary accent colour used on bills and the portal header",
+    "dangerZone": "Danger Zone",
+    "dangerZoneDescription": "Irreversible actions for this association"
+  },
+  "roles": {
+    "super_admin": "Super Admin",
+    "assoc_admin": "Association Admin",
+    "billing_operator": "Billing Operator",
+    "owner": "Owner",
+    "tenant": "Tenant"
+  }
+}

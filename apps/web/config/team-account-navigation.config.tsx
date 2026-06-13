@@ -1,18 +1,27 @@
-import { CreditCard, LayoutDashboard, Settings, Users } from 'lucide-react';
+import {
+  Activity,
+  Bell,
+  Building2,
+  CreditCard,
+  FileText,
+  LayoutDashboard,
+  Settings,
+  Users,
+  Zap,
+} from 'lucide-react';
 
 import { NavigationConfigSchema } from '@kit/ui/navigation-schema';
 
-import featureFlagsConfig from '~/config/feature-flags.config';
 import pathsConfig from '~/config/paths.config';
 
 const iconClasses = 'w-4';
 
 const getRoutes = (account: string) => [
   {
-    label: 'common.routes.application',
+    label: 'association.nav.portfolio',
     children: [
       {
-        label: 'common.routes.dashboard',
+        label: 'association.nav.dashboard',
         path: pathsConfig.app.accountHome.replace('[account]', account),
         Icon: <LayoutDashboard className={iconClasses} />,
         highlightMatch: `${pathsConfig.app.home}$`,
@@ -20,27 +29,59 @@ const getRoutes = (account: string) => [
     ],
   },
   {
-    label: 'common.routes.settings',
-    collapsible: false,
+    label: 'association.nav.operations',
     children: [
       {
-        label: 'common.routes.settings',
-        path: createPath(pathsConfig.app.accountSettings, account),
-        Icon: <Settings className={iconClasses} />,
+        label: 'association.nav.units',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/units`,
+        Icon: <Building2 className={iconClasses} />,
       },
       {
-        label: 'common.routes.members',
-        path: createPath(pathsConfig.app.accountMembers, account),
+        label: 'association.nav.billing',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/billing`,
+        Icon: <FileText className={iconClasses} />,
+      },
+      {
+        label: 'association.nav.mescom',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/mescom`,
+        Icon: <Zap className={iconClasses} />,
+      },
+      {
+        label: 'association.nav.payments',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/payments`,
+        Icon: <CreditCard className={iconClasses} />,
+      },
+    ],
+  },
+  {
+    label: 'association.nav.insights',
+    children: [
+      {
+        label: 'association.nav.reports',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/reports`,
+        Icon: <Activity className={iconClasses} />,
+      },
+      {
+        label: 'association.nav.notifications',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/notifications`,
+        Icon: <Bell className={iconClasses} />,
+      },
+    ],
+  },
+  {
+    label: 'association.nav.admin',
+    children: [
+      {
+        label: 'association.nav.members',
+        path: pathsConfig.app.accountMembers.replace('[account]', account),
         Icon: <Users className={iconClasses} />,
       },
-      featureFlagsConfig.enableTeamAccountBilling
-        ? {
-            label: 'common.routes.billing',
-            path: createPath(pathsConfig.app.accountBilling, account),
-            Icon: <CreditCard className={iconClasses} />,
-          }
-        : undefined,
-    ].filter(Boolean),
+      {
+        label: 'association.nav.settings',
+        path: pathsConfig.app.accountSettings.replace('[account]', account),
+        Icon: <Settings className={iconClasses} />,
+      },
+    ],
   },
 ];
 
@@ -51,8 +92,4 @@ export function getTeamAccountSidebarConfig(account: string) {
     sidebarCollapsed: process.env.NEXT_PUBLIC_TEAM_SIDEBAR_COLLAPSED,
     sidebarCollapsedStyle: process.env.NEXT_PUBLIC_SIDEBAR_COLLAPSIBLE_STYLE,
   });
-}
-
-function createPath(path: string, account: string) {
-  return path.replace('[account]', account);
 }

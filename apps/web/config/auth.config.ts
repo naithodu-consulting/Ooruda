@@ -36,7 +36,7 @@ const authConfig = AuthConfigSchema.parse({
     password: process.env.NEXT_PUBLIC_AUTH_PASSWORD === 'true',
     magicLink: process.env.NEXT_PUBLIC_AUTH_MAGIC_LINK === 'true',
     otp: process.env.NEXT_PUBLIC_AUTH_OTP === 'true',
-    oAuth: ['google'],
+    oAuth: [],
   },
 } satisfies z.output<typeof AuthConfigSchema>);
 
