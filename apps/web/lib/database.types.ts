@@ -138,6 +138,159 @@ export type Database = {
           },
         ]
       }
+      associations: {
+        Row: {
+          account_id: string
+          address: string | null
+          brand_colour: string
+          created_at: string
+          gst_enabled: boolean
+          gstin: string | null
+          id: string
+          logo_url: string | null
+          mescom_consumer_no: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          address?: string | null
+          brand_colour?: string
+          created_at?: string
+          gst_enabled?: boolean
+          gstin?: string | null
+          id?: string
+          logo_url?: string | null
+          mescom_consumer_no?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          address?: string | null
+          brand_colour?: string
+          created_at?: string
+          gst_enabled?: boolean
+          gstin?: string | null
+          id?: string
+          logo_url?: string | null
+          mescom_consumer_no?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "associations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          association_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          summary: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          association_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          summary?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          association_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bill_line_items: {
+        Row: {
+          amount: number
+          bill_id: string
+          charge_type_id: string | null
+          created_at: string
+          description: string
+          gst_applicable: boolean
+          id: string
+          payer: string
+        }
+        Insert: {
+          amount: number
+          bill_id: string
+          charge_type_id?: string | null
+          created_at?: string
+          description: string
+          gst_applicable?: boolean
+          id?: string
+          payer: string
+        }
+        Update: {
+          amount?: number
+          bill_id?: string
+          charge_type_id?: string | null
+          created_at?: string
+          description?: string
+          gst_applicable?: boolean
+          id?: string
+          payer?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_line_items_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_line_items_charge_type_id_fkey"
+            columns: ["charge_type_id"]
+            isOneToOne: false
+            referencedRelation: "charge_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_customers: {
         Row: {
           account_id: string
@@ -184,6 +337,154 @@ export type Database = {
           },
         ]
       }
+      billing_settings: {
+        Row: {
+          association_id: string
+          due_day_of_month: number
+          id: string
+          minimum_electricity_charge: number
+          reminder_schedule_json: Json
+        }
+        Insert: {
+          association_id: string
+          due_day_of_month?: number
+          id?: string
+          minimum_electricity_charge?: number
+          reminder_schedule_json?: Json
+        }
+        Update: {
+          association_id?: string
+          due_day_of_month?: number
+          id?: string
+          minimum_electricity_charge?: number
+          reminder_schedule_json?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_settings_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: true
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bills: {
+        Row: {
+          association_id: string
+          bill_no: string
+          due_date: string
+          generated_at: string
+          generated_by: string | null
+          id: string
+          paid_amount: number
+          period: string
+          status: string
+          total_amount: number
+          unit_id: string
+        }
+        Insert: {
+          association_id: string
+          bill_no: string
+          due_date: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          paid_amount?: number
+          period: string
+          status?: string
+          total_amount?: number
+          unit_id: string
+        }
+        Update: {
+          association_id?: string
+          bill_no?: string
+          due_date?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          paid_amount?: number
+          period?: string
+          status?: string
+          total_amount?: number
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bills_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bills_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charge_types: {
+        Row: {
+          association_id: string
+          calc_method: string
+          created_at: string
+          custom_interval_months: number | null
+          default_payer: string
+          frequency: string
+          gst_applicable: boolean
+          id: string
+          is_active: boolean
+          is_builtin: boolean
+          key: string
+          name: string
+          next_due_period: string | null
+          rate_or_amount: number | null
+        }
+        Insert: {
+          association_id: string
+          calc_method: string
+          created_at?: string
+          custom_interval_months?: number | null
+          default_payer?: string
+          frequency: string
+          gst_applicable?: boolean
+          id?: string
+          is_active?: boolean
+          is_builtin?: boolean
+          key: string
+          name: string
+          next_due_period?: string | null
+          rate_or_amount?: number | null
+        }
+        Update: {
+          association_id?: string
+          calc_method?: string
+          created_at?: string
+          custom_interval_months?: number | null
+          default_payer?: string
+          frequency?: string
+          gst_applicable?: boolean
+          id?: string
+          is_active?: boolean
+          is_builtin?: boolean
+          key?: string
+          name?: string
+          next_due_period?: string | null
+          rate_or_amount?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_types_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       config: {
         Row: {
           billing_provider: Database["public"]["Enums"]["billing_provider"]
@@ -204,6 +505,60 @@ export type Database = {
           enable_team_accounts?: boolean
         }
         Relationships: []
+      }
+      electricity_reconciliation: {
+        Row: {
+          association_id: string
+          carry_forward_in: number
+          carry_forward_out: number | null
+          created_at: string
+          delta: number | null
+          id: string
+          invoiced_amount: number
+          mescom_bill_id: string
+          period: string
+          recovered_amount: number
+        }
+        Insert: {
+          association_id: string
+          carry_forward_in?: number
+          carry_forward_out?: number | null
+          created_at?: string
+          delta?: number | null
+          id?: string
+          invoiced_amount: number
+          mescom_bill_id: string
+          period: string
+          recovered_amount?: number
+        }
+        Update: {
+          association_id?: string
+          carry_forward_in?: number
+          carry_forward_out?: number | null
+          created_at?: string
+          delta?: number | null
+          id?: string
+          invoiced_amount?: number
+          mescom_bill_id?: string
+          period?: string
+          recovered_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "electricity_reconciliation_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "electricity_reconciliation_mescom_bill_id_fkey"
+            columns: ["mescom_bill_id"]
+            isOneToOne: true
+            referencedRelation: "mescom_bills"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       invitations: {
         Row: {
@@ -270,6 +625,98 @@ export type Database = {
           },
         ]
       }
+      mescom_bills: {
+        Row: {
+          association_id: string
+          block_consumption_units: number
+          effective_rate: number | null
+          id: string
+          invoice_amount: number
+          invoice_file_url: string | null
+          period: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          association_id: string
+          block_consumption_units: number
+          effective_rate?: number | null
+          id?: string
+          invoice_amount: number
+          invoice_file_url?: string | null
+          period: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          association_id?: string
+          block_consumption_units?: number
+          effective_rate?: number | null
+          id?: string
+          invoice_amount?: number
+          invoice_file_url?: string | null
+          period?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mescom_bills_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_readings: {
+        Row: {
+          consumed_units: number | null
+          created_at: string
+          current_reading: number
+          id: string
+          mescom_bill_id: string
+          period: string
+          previous_reading: number
+          sub_meter_id: string
+        }
+        Insert: {
+          consumed_units?: number | null
+          created_at?: string
+          current_reading: number
+          id?: string
+          mescom_bill_id: string
+          period: string
+          previous_reading: number
+          sub_meter_id: string
+        }
+        Update: {
+          consumed_units?: number | null
+          created_at?: string
+          current_reading?: number
+          id?: string
+          mescom_bill_id?: string
+          period?: string
+          previous_reading?: number
+          sub_meter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_readings_mescom_bill_id_fkey"
+            columns: ["mescom_bill_id"]
+            isOneToOne: false
+            referencedRelation: "mescom_bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_readings_sub_meter_id_fkey"
+            columns: ["sub_meter_id"]
+            isOneToOne: false
+            referencedRelation: "sub_meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nonces: {
         Row: {
           client_token: string
@@ -327,6 +774,44 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_providers_config: {
+        Row: {
+          association_id: string | null
+          channel: string
+          credentials: Json | null
+          id: string
+          is_active: boolean
+          priority: number
+          provider_key: string
+        }
+        Insert: {
+          association_id?: string | null
+          channel: string
+          credentials?: Json | null
+          id?: string
+          is_active?: boolean
+          priority?: number
+          provider_key: string
+        }
+        Update: {
+          association_id?: string | null
+          channel?: string
+          credentials?: Json | null
+          id?: string
+          is_active?: boolean
+          priority?: number
+          provider_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_providers_config_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           account_id: string
@@ -381,6 +866,50 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications_log: {
+        Row: {
+          association_id: string | null
+          channel: string
+          id: string
+          provider_key: string
+          provider_ref: string | null
+          recipient_user_id: string | null
+          sent_at: string
+          status: string
+          type: string
+        }
+        Insert: {
+          association_id?: string | null
+          channel: string
+          id?: string
+          provider_key: string
+          provider_ref?: string | null
+          recipient_user_id?: string | null
+          sent_at?: string
+          status?: string
+          type: string
+        }
+        Update: {
+          association_id?: string | null
+          channel?: string
+          id?: string
+          provider_key?: string
+          provider_ref?: string | null
+          recipient_user_id?: string | null
+          sent_at?: string
+          status?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_log_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
             referencedColumns: ["id"]
           },
         ]
@@ -491,6 +1020,110 @@ export type Database = {
           },
         ]
       }
+      payments: {
+        Row: {
+          amount: number
+          association_id: string
+          bill_id: string
+          id: string
+          mode: string
+          paid_at: string
+          paid_by_role: string
+          razorpay_payment_id: string | null
+          recorded_by: string | null
+        }
+        Insert: {
+          amount: number
+          association_id: string
+          bill_id: string
+          id?: string
+          mode: string
+          paid_at?: string
+          paid_by_role: string
+          razorpay_payment_id?: string | null
+          recorded_by?: string | null
+        }
+        Update: {
+          amount?: number
+          association_id?: string
+          bill_id?: string
+          id?: string
+          mode?: string
+          paid_at?: string
+          paid_by_role?: string
+          razorpay_payment_id?: string | null
+          recorded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          id: string
+          mobile_number: string | null
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          id: string
+          mobile_number?: string | null
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          mobile_number?: string | null
+        }
+        Relationships: []
+      }
+      receipts: {
+        Row: {
+          generated_at: string
+          id: string
+          payment_id: string
+          pdf_url: string | null
+          receipt_no: string
+        }
+        Insert: {
+          generated_at?: string
+          id?: string
+          payment_id: string
+          pdf_url?: string | null
+          receipt_no: string
+        }
+        Update: {
+          generated_at?: string
+          id?: string
+          payment_id?: string
+          pdf_url?: string | null
+          receipt_no?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receipts_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: true
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_permissions: {
         Row: {
           id: number
@@ -531,6 +1164,41 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      sub_meters: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          meter_label: string
+          meter_type: string
+          unit_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          meter_label: string
+          meter_type?: string
+          unit_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          meter_label?: string
+          meter_type?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sub_meters_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscription_items: {
         Row: {
@@ -662,6 +1330,133 @@ export type Database = {
           },
         ]
       }
+      tenancies: {
+        Row: {
+          created_at: string
+          end_date: string | null
+          id: string
+          start_date: string
+          status: string
+          tenant_id: string
+          unit_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          start_date: string
+          status?: string
+          tenant_id: string
+          unit_id: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          start_date?: string
+          status?: string
+          tenant_id?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenancies_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      unit_charge_overrides: {
+        Row: {
+          charge_type_id: string
+          created_at: string
+          id: string
+          is_excluded: boolean
+          payer_override: string | null
+          rate_or_amount_override: number | null
+          unit_id: string
+        }
+        Insert: {
+          charge_type_id: string
+          created_at?: string
+          id?: string
+          is_excluded?: boolean
+          payer_override?: string | null
+          rate_or_amount_override?: number | null
+          unit_id: string
+        }
+        Update: {
+          charge_type_id?: string
+          created_at?: string
+          id?: string
+          is_excluded?: boolean
+          payer_override?: string | null
+          rate_or_amount_override?: number | null
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unit_charge_overrides_charge_type_id_fkey"
+            columns: ["charge_type_id"]
+            isOneToOne: false
+            referencedRelation: "charge_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_charge_overrides_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      units: {
+        Row: {
+          area_sqft: number
+          association_id: string
+          created_at: string
+          floor: number | null
+          id: string
+          owner_id: string | null
+          status: string
+          type: string
+          unit_no: string
+        }
+        Insert: {
+          area_sqft: number
+          association_id: string
+          created_at?: string
+          floor?: number | null
+          id?: string
+          owner_id?: string | null
+          status?: string
+          type?: string
+          unit_no: string
+        }
+        Update: {
+          area_sqft?: number
+          association_id?: string
+          created_at?: string
+          floor?: number | null
+          id?: string
+          owner_id?: string | null
+          status?: string
+          type?: string
+          unit_no?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "units_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       user_account_workspace: {
@@ -707,6 +1502,7 @@ export type Database = {
         }
         Returns: Database["public"]["Tables"]["invitations"]["Row"][]
       }
+      association_role: { Args: { p_association_id: string }; Returns: string }
       can_action_account_member: {
         Args: { target_team_account_id: string; target_user_id: string }
         Returns: boolean
@@ -743,7 +1539,7 @@ export type Database = {
         Returns: Json
       }
       create_team_account: {
-        Args: { account_name: string; account_slug?: string }
+        Args: { account_name: string; account_slug?: string; user_id: string }
         Returns: {
           created_at: string | null
           created_by: string | null
@@ -835,6 +1631,10 @@ export type Database = {
       is_account_owner: { Args: { account_id: string }; Returns: boolean }
       is_account_team_member: {
         Args: { target_account_id: string }
+        Returns: boolean
+      }
+      is_association_member: {
+        Args: { p_association_id: string }
         Returns: boolean
       }
       is_mfa_compliant: { Args: never; Returns: boolean }
@@ -954,6 +1754,9 @@ export type Database = {
         | "settings.manage"
         | "members.manage"
         | "invites.manage"
+        | "units.manage"
+        | "payments.manage"
+        | "reports.view"
       billing_provider: "stripe" | "lemon-squeezy" | "paddle"
       notification_channel: "in_app" | "email"
       notification_type: "info" | "warning" | "error"
@@ -1071,101 +1874,6 @@ export type Database = {
         }
         Relationships: []
       }
-      iceberg_namespaces: {
-        Row: {
-          bucket_name: string
-          catalog_id: string
-          created_at: string
-          id: string
-          metadata: Json
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          bucket_name: string
-          catalog_id: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          bucket_name?: string
-          catalog_id?: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          name?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "iceberg_namespaces_catalog_id_fkey"
-            columns: ["catalog_id"]
-            isOneToOne: false
-            referencedRelation: "buckets_analytics"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      iceberg_tables: {
-        Row: {
-          bucket_name: string
-          catalog_id: string
-          created_at: string
-          id: string
-          location: string
-          name: string
-          namespace_id: string
-          remote_table_id: string | null
-          shard_id: string | null
-          shard_key: string | null
-          updated_at: string
-        }
-        Insert: {
-          bucket_name: string
-          catalog_id: string
-          created_at?: string
-          id?: string
-          location: string
-          name: string
-          namespace_id: string
-          remote_table_id?: string | null
-          shard_id?: string | null
-          shard_key?: string | null
-          updated_at?: string
-        }
-        Update: {
-          bucket_name?: string
-          catalog_id?: string
-          created_at?: string
-          id?: string
-          location?: string
-          name?: string
-          namespace_id?: string
-          remote_table_id?: string | null
-          shard_id?: string | null
-          shard_key?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "iceberg_tables_catalog_id_fkey"
-            columns: ["catalog_id"]
-            isOneToOne: false
-            referencedRelation: "buckets_analytics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "iceberg_tables_namespace_id_fkey"
-            columns: ["namespace_id"]
-            isOneToOne: false
-            referencedRelation: "iceberg_namespaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       migrations: {
         Row: {
           executed_at: string | null
@@ -1193,7 +1901,6 @@ export type Database = {
           created_at: string | null
           id: string
           last_accessed_at: string | null
-          level: number | null
           metadata: Json | null
           name: string | null
           owner: string | null
@@ -1208,7 +1915,6 @@ export type Database = {
           created_at?: string | null
           id?: string
           last_accessed_at?: string | null
-          level?: number | null
           metadata?: Json | null
           name?: string | null
           owner?: string | null
@@ -1223,7 +1929,6 @@ export type Database = {
           created_at?: string | null
           id?: string
           last_accessed_at?: string | null
-          level?: number | null
           metadata?: Json | null
           name?: string | null
           owner?: string | null
@@ -1243,38 +1948,6 @@ export type Database = {
           },
         ]
       }
-      prefixes: {
-        Row: {
-          bucket_id: string
-          created_at: string | null
-          level: number
-          name: string
-          updated_at: string | null
-        }
-        Insert: {
-          bucket_id: string
-          created_at?: string | null
-          level?: number
-          name: string
-          updated_at?: string | null
-        }
-        Update: {
-          bucket_id?: string
-          created_at?: string | null
-          level?: number
-          name?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "prefixes_bucketId_fkey"
-            columns: ["bucket_id"]
-            isOneToOne: false
-            referencedRelation: "buckets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       s3_multipart_uploads: {
         Row: {
           bucket_id: string
@@ -1282,6 +1955,7 @@ export type Database = {
           id: string
           in_progress_size: number
           key: string
+          metadata: Json | null
           owner_id: string | null
           upload_signature: string
           user_metadata: Json | null
@@ -1293,6 +1967,7 @@ export type Database = {
           id: string
           in_progress_size?: number
           key: string
+          metadata?: Json | null
           owner_id?: string | null
           upload_signature: string
           user_metadata?: Json | null
@@ -1304,6 +1979,7 @@ export type Database = {
           id?: string
           in_progress_size?: number
           key?: string
+          metadata?: Json | null
           owner_id?: string | null
           upload_signature?: string
           user_metadata?: Json | null
@@ -1422,28 +2098,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      add_prefixes: {
-        Args: { _bucket_id: string; _name: string }
-        Returns: undefined
+      allow_any_operation: {
+        Args: { expected_operations: string[] }
+        Returns: boolean
+      }
+      allow_only_operation: {
+        Args: { expected_operation: string }
+        Returns: boolean
       }
       can_insert_object: {
         Args: { bucketid: string; metadata: Json; name: string; owner: string }
         Returns: undefined
       }
-      delete_leaf_prefixes: {
-        Args: { bucket_ids: string[]; names: string[] }
-        Returns: undefined
-      }
-      delete_prefix: {
-        Args: { _bucket_id: string; _name: string }
-        Returns: boolean
-      }
       extension: { Args: { name: string }; Returns: string }
       filename: { Args: { name: string }; Returns: string }
       foldername: { Args: { name: string }; Returns: string[] }
-      get_level: { Args: { name: string }; Returns: number }
-      get_prefix: { Args: { name: string }; Returns: string }
-      get_prefixes: { Args: { name: string }; Returns: string[] }
+      get_common_prefix: {
+        Args: { p_delimiter: string; p_key: string; p_prefix: string }
+        Returns: string
+      }
       get_size_by_bucket: {
         Args: never
         Returns: {
@@ -1468,64 +2141,25 @@ export type Database = {
       }
       list_objects_with_delimiter: {
         Args: {
-          bucket_id: string
+          _bucket_id: string
           delimiter_param: string
           max_keys?: number
           next_token?: string
           prefix_param: string
+          sort_order?: string
           start_after?: string
         }
         Returns: {
+          created_at: string
           id: string
+          last_accessed_at: string
           metadata: Json
           name: string
           updated_at: string
         }[]
-      }
-      lock_top_prefixes: {
-        Args: { bucket_ids: string[]; names: string[] }
-        Returns: undefined
       }
       operation: { Args: never; Returns: string }
-      search:
-        | {
-            Args: {
-              bucketname: string
-              levels?: number
-              limits?: number
-              offsets?: number
-              prefix: string
-            }
-            Returns: {
-              created_at: string
-              id: string
-              last_accessed_at: string
-              metadata: Json
-              name: string
-              updated_at: string
-            }[]
-          }
-        | {
-            Args: {
-              bucketname: string
-              levels?: number
-              limits?: number
-              offsets?: number
-              prefix: string
-              search?: string
-              sortcolumn?: string
-              sortorder?: string
-            }
-            Returns: {
-              created_at: string
-              id: string
-              last_accessed_at: string
-              metadata: Json
-              name: string
-              updated_at: string
-            }[]
-          }
-      search_legacy_v1: {
+      search: {
         Args: {
           bucketname: string
           levels?: number
@@ -1545,65 +2179,48 @@ export type Database = {
           updated_at: string
         }[]
       }
-      search_v1_optimised: {
+      search_by_timestamp: {
         Args: {
-          bucketname: string
-          levels?: number
-          limits?: number
-          offsets?: number
-          prefix: string
-          search?: string
-          sortcolumn?: string
-          sortorder?: string
+          p_bucket_id: string
+          p_level: number
+          p_limit: number
+          p_prefix: string
+          p_sort_column: string
+          p_sort_column_after: string
+          p_sort_order: string
+          p_start_after: string
         }
         Returns: {
           created_at: string
           id: string
+          key: string
           last_accessed_at: string
           metadata: Json
           name: string
           updated_at: string
         }[]
       }
-      search_v2:
-        | {
-            Args: {
-              bucket_name: string
-              levels?: number
-              limits?: number
-              prefix: string
-              start_after?: string
-            }
-            Returns: {
-              created_at: string
-              id: string
-              key: string
-              metadata: Json
-              name: string
-              updated_at: string
-            }[]
-          }
-        | {
-            Args: {
-              bucket_name: string
-              levels?: number
-              limits?: number
-              prefix: string
-              sort_column?: string
-              sort_column_after?: string
-              sort_order?: string
-              start_after?: string
-            }
-            Returns: {
-              created_at: string
-              id: string
-              key: string
-              last_accessed_at: string
-              metadata: Json
-              name: string
-              updated_at: string
-            }[]
-          }
+      search_v2: {
+        Args: {
+          bucket_name: string
+          levels?: number
+          limits?: number
+          prefix: string
+          sort_column?: string
+          sort_column_after?: string
+          sort_order?: string
+          start_after?: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          key: string
+          last_accessed_at: string
+          metadata: Json
+          name: string
+          updated_at: string
+        }[]
+      }
     }
     Enums: {
       buckettype: "STANDARD" | "ANALYTICS" | "VECTOR"
@@ -1743,6 +2360,9 @@ export const Constants = {
         "settings.manage",
         "members.manage",
         "invites.manage",
+        "units.manage",
+        "payments.manage",
+        "reports.view",
       ],
       billing_provider: ["stripe", "lemon-squeezy", "paddle"],
       notification_channel: ["in_app", "email"],
@@ -1767,4 +2387,3 @@ export const Constants = {
     },
   },
 } as const
-

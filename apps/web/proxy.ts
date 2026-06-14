@@ -143,6 +143,25 @@ async function getPatterns() {
       },
     },
     {
+      // Redirect the root to sign-in (unauthenticated) or home (authenticated).
+      // Avoids the double-hop caused by the marketing page Server Component redirect.
+      pattern: new URLPattern({ pathname: '/' }),
+      handler: async (req: NextRequest, res: NextResponse) => {
+        const { data } = await getUser(req, res);
+        const origin = req.nextUrl.origin;
+
+        if (!data?.claims) {
+          return NextResponse.redirect(
+            new URL(pathsConfig.auth.signIn, origin).href,
+          );
+        }
+
+        return NextResponse.redirect(
+          new URL(pathsConfig.app.home, origin).href,
+        );
+      },
+    },
+    {
       pattern: new URLPattern({ pathname: '/home/*?' }),
       handler: async (req: NextRequest, res: NextResponse) => {
         const { data } = await getUser(req, res);

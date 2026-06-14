@@ -18,12 +18,22 @@ export function SettingsSubNavigation(props: { account: string }) {
     props.account,
   );
 
+  const associationPath = pathsConfig.app.accountAssociationSettings.replace(
+    '[account]',
+    props.account,
+  );
+
   return (
     <BorderedNavigationMenu>
       <BorderedNavigationMenuItem
         path={settingsPath}
         label={'common.routes.settings'}
         highlightMatch={`/home/${props.account}/settings$`}
+      />
+
+      <BorderedNavigationMenuItem
+        path={associationPath}
+        label={'association.settings.pageTitle'}
       />
 
       <BorderedNavigationMenuItem
