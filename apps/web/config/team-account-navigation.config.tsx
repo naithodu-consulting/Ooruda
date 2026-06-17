@@ -93,3 +93,62 @@ export function getTeamAccountSidebarConfig(account: string) {
     sidebarCollapsedStyle: process.env.NEXT_PUBLIC_SIDEBAR_COLLAPSIBLE_STYLE,
   });
 }
+
+// Which nav items each PropOps role may see (by i18n label key). Owners and
+// tenants get a minimal portal (dashboard + payments) per the prototype;
+// billing operators see operations + insights but not the Admin section;
+// assoc_admin sees everything. The platform super admin uses /admin, not this
+// team-workspace nav, so it isn't listed here.
+const ROLE_NAV_ALLOWLIST: Record<string, readonly string[] | '*'> = {
+  assoc_admin: '*',
+  billing_operator: [
+    'association.nav.dashboard',
+    'association.nav.units',
+    'association.nav.billing',
+    'association.nav.mescom',
+    'association.nav.payments',
+    'association.nav.reports',
+  ],
+  prop_owner: ['association.nav.dashboard', 'association.nav.payments'],
+  tenant: ['association.nav.dashboard', 'association.nav.payments'],
+};
+
+type SidebarConfig = ReturnType<typeof getTeamAccountSidebarConfig>;
+
+/**
+ * Filter a sidebar config down to the nav items the given role may see,
+ * dropping any section left with no visible children. Pages remain protected
+ * by requireRole() regardless — this only controls what the sidebar shows.
+ */
+export function filterSidebarConfigByRole(
+  config: SidebarConfig,
+  role: string | null | undefined,
+): SidebarConfig {
+  const allowed = role ? ROLE_NAV_ALLOWLIST[role] : undefined;
+
+  // unknown role or full access → return as-is
+  if (!allowed || allowed === '*') {
+    return config;
+  }
+
+  const routes = config.routes
+    .map((section) => {
+      if (!('children' in section) || !Array.isArray(section.children)) {
+        return section;
+      }
+
+      return {
+        ...section,
+        children: section.children.filter((item) =>
+          'label' in item ? allowed.includes(item.label as string) : false,
+        ),
+      };
+    })
+    .filter(
+      (section) =>
+        !('children' in section) ||
+        (Array.isArray(section.children) && section.children.length > 0),
+    );
+
+  return { ...config, routes };
+}

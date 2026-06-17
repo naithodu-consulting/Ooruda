@@ -5,7 +5,10 @@ import { Sidebar, SidebarContent, SidebarHeader } from '@kit/ui/sidebar';
 import type { AccountModel } from '~/components/workspace-dropdown';
 import { WorkspaceDropdown } from '~/components/workspace-dropdown';
 import featureFlagsConfig from '~/config/feature-flags.config';
-import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.config';
+import {
+  filterSidebarConfigByRole,
+  getTeamAccountSidebarConfig,
+} from '~/config/team-account-navigation.config';
 import { TeamAccountNotifications } from '~/home/[account]/_components/team-account-notifications';
 
 import { TeamAccountLayoutSidebarNavigation } from './team-account-layout-sidebar-navigation';
@@ -15,10 +18,14 @@ export function TeamAccountLayoutSidebar(props: {
   accountId: string;
   accounts: AccountModel[];
   user: JWTUserData;
+  role: string | null;
 }) {
-  const { account, accounts, user } = props;
+  const { account, accounts, user, role } = props;
 
-  const config = getTeamAccountSidebarConfig(account);
+  const config = filterSidebarConfigByRole(
+    getTeamAccountSidebarConfig(account),
+    role,
+  );
   const collapsible = config.sidebarCollapsedStyle;
 
   return (

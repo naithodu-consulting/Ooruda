@@ -1,6 +1,7 @@
 import { Building2 } from 'lucide-react';
 
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
+import { ComingSoonState } from '@kit/ui/coming-soon-state';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
@@ -24,14 +25,14 @@ export default async function UnitsPage({ params }: Props) {
         description={<AppBreadcrumbs />}
       />
 
-      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-        <Building2 className="text-muted-foreground h-12 w-12" />
-        <h2 className="text-xl font-semibold">Units &amp; Owners</h2>
-        <p className="text-muted-foreground max-w-sm text-sm">
-          Unit management is coming in Week 2. Signed in as{' '}
-          <span className="text-foreground font-medium">{ROLE_LABELS[role]}</span>.
-        </p>
-      </div>
+      <ComingSoonState
+        icon={Building2}
+        color="blue"
+        title="Units & shops"
+        description="Manage shops, offices, and warehouses across your property, with owner and tenant details."
+        week={2}
+        roleLabel={ROLE_LABELS[role]}
+      />
     </PageBody>
   );
 }

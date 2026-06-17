@@ -1,6 +1,7 @@
 import { Zap } from 'lucide-react';
 
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
+import { ComingSoonState } from '@kit/ui/coming-soon-state';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
@@ -24,14 +25,14 @@ export default async function MescomPage({ params }: Props) {
         description={<AppBreadcrumbs />}
       />
 
-      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-        <Zap className="text-muted-foreground h-12 w-12" />
-        <h2 className="text-xl font-semibold">MESCOM / Electricity</h2>
-        <p className="text-muted-foreground max-w-sm text-sm">
-          Electricity reading management is coming in Week 2. Signed in as{' '}
-          <span className="text-foreground font-medium">{ROLE_LABELS[role]}</span>.
-        </p>
-      </div>
+      <ComingSoonState
+        icon={Zap}
+        color="amber"
+        title="MESCOM & meters"
+        description="Upload MESCOM bills and enter sub-meter readings for accurate electricity billing."
+        week={2}
+        roleLabel={ROLE_LABELS[role]}
+      />
     </PageBody>
   );
 }

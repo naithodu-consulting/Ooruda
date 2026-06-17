@@ -22,7 +22,10 @@ import {
 } from '~/components/mobile-navigation-shared';
 import featureFlagsConfig from '~/config/feature-flags.config';
 import pathsConfig from '~/config/paths.config';
-import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.config';
+import {
+  filterSidebarConfigByRole,
+  getTeamAccountSidebarConfig,
+} from '~/config/team-account-navigation.config';
 
 type Accounts = Array<{
   label: string | null;
@@ -39,6 +42,7 @@ export const TeamAccountLayoutMobileNavigation = (
     account: string;
     userId: string;
     accounts: Accounts;
+    role: string | null;
   }>,
 ) => {
   const router = useRouter();
@@ -80,7 +84,12 @@ export const TeamAccountLayoutMobileNavigation = (
 
         <DropdownMenuGroup>
           <MobileNavRouteLinks
-            routes={getTeamAccountSidebarConfig(props.account).routes}
+            routes={
+              filterSidebarConfigByRole(
+                getTeamAccountSidebarConfig(props.account),
+                props.role,
+              ).routes
+            }
           />
         </DropdownMenuGroup>
 

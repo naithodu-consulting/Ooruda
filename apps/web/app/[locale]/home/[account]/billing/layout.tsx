@@ -1,14 +1,7 @@
-import { notFound } from 'next/navigation';
-
-import featureFlagsConfig from '~/config/feature-flags.config';
-
+// PropOps uses its own domain billing engine (bills/payments tables), not
+// MakerKit's SaaS subscription billing — this route is always available and
+// is no longer gated by `enableTeamAccountBilling`.
 function TeamAccountBillingLayout(props: React.PropsWithChildren) {
-  const isEnabled = featureFlagsConfig.enableTeamAccountBilling;
-
-  if (!isEnabled) {
-    notFound();
-  }
-
   return <>{props.children}</>;
 }
 

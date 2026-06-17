@@ -109,6 +109,16 @@ enabled = true
 port = 54327
 backend = "postgres"
 
+[functions.custom-sms-hook]
+# Supabase Auth's "Send SMS" hook calls this function as a signed webhook, not
+# as a user request — there's no Supabase JWT in the Authorization header.
+# With verify_jwt left at its default (true), the Edge Functions gateway
+# rejects every invocation with 401 before the function code ever runs,
+# which GoTrue then surfaces to the client as a generic auth error. This is
+# why real phone numbers fail to receive an OTP while dashboard test numbers
+# (which never call the hook) work fine.
+verify_jwt = false
+
 [db.migrations]
 schema_paths = ["./schemas/*.sql"]
 

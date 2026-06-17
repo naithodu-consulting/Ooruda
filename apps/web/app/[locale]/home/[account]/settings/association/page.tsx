@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { requireRole } from '~/lib/rbac';
 
 import { AssociationForm } from './_components/association-form';
+import { AssociationLogoUploader } from './_components/association-logo-uploader';
 import { ChargeTypesCard } from './_components/charge-types-card';
 
 interface Props {
@@ -19,6 +20,13 @@ export default async function AssociationSettingsPage({ params }: Props) {
   const { accountId } = await requireRole(account, ['assoc_admin']);
 
   const client = getSupabaseServerClient();
+
+  // The association logo is the MakerKit team account image (accounts.picture_url).
+  const { data: accountRow } = await client
+    .from('accounts')
+    .select('picture_url')
+    .eq('id', accountId)
+    .single();
 
   // Load or create the associations row (safety net — the row is normally
   // auto-created by the create-team trigger).
@@ -62,6 +70,10 @@ export default async function AssociationSettingsPage({ params }: Props) {
 
   return (
     <div className="flex max-w-2xl flex-1 flex-col gap-6">
+      <AssociationLogoUploader
+        account={{ id: accountId, pictureUrl: accountRow?.picture_url ?? null }}
+      />
+
       <AssociationForm
         association={{
           id: association.id,

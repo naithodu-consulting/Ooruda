@@ -1,6 +1,7 @@
 import { Activity } from 'lucide-react';
 
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
+import { ComingSoonState } from '@kit/ui/coming-soon-state';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
@@ -29,14 +30,14 @@ export default async function ReportsPage({ params }: Props) {
         description={<AppBreadcrumbs />}
       />
 
-      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-        <Activity className="text-muted-foreground h-12 w-12" />
-        <h2 className="text-xl font-semibold">Reports</h2>
-        <p className="text-muted-foreground max-w-sm text-sm">
-          Financial reports are coming in Week 5. Signed in as{' '}
-          <span className="text-foreground font-medium">{ROLE_LABELS[role]}</span>.
-        </p>
-      </div>
+      <ComingSoonState
+        icon={Activity}
+        color="purple"
+        title="Reports"
+        description="Download collection summaries, outstanding dues, and MESCOM consumption reports as PDF or Excel."
+        week={5}
+        roleLabel={ROLE_LABELS[role]}
+      />
     </PageBody>
   );
 }

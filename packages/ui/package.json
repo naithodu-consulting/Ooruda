@@ -87,6 +87,8 @@
     "./version-updater": "./src/makerkit/version-updater.tsx",
     "./app-breadcrumbs": "./src/makerkit/app-breadcrumbs.tsx",
     "./empty-state": "./src/makerkit/empty-state.tsx",
+    "./coming-soon-state": "./src/makerkit/coming-soon-state.tsx",
+    "./metric-card": "./src/makerkit/metric-card.tsx",
     "./marketing": "./src/makerkit/marketing/index.tsx",
     "./oauth-provider-logo-image": "./src/makerkit/oauth-provider-logo-image.tsx",
     "./copy-to-clipboard": "./src/makerkit/copy-to-clipboard.tsx",

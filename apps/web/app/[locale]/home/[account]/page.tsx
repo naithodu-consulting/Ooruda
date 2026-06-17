@@ -1,12 +1,12 @@
-import { use } from 'react';
-
 import { getTranslations } from 'next-intl/server';
 
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
-import { DashboardDemo } from './_components/dashboard-demo';
+import { PROPOPS_ROLES, requireRole } from '~/lib/rbac';
+
+import { AssociationDashboard } from './_components/association-dashboard';
 import { TeamAccountLayoutPageHeader } from './_components/team-account-layout-page-header';
 
 interface TeamAccountHomePageProps {
@@ -22,8 +22,12 @@ export const generateMetadata = async () => {
   };
 };
 
-function TeamAccountHomePage({ params }: TeamAccountHomePageProps) {
-  const account = use(params).account;
+async function TeamAccountHomePage({ params }: TeamAccountHomePageProps) {
+  const { account } = await params;
+  const { role, accountId, userId } = await requireRole(
+    account,
+    PROPOPS_ROLES.slice(),
+  );
 
   return (
     <PageBody>
@@ -33,7 +37,7 @@ function TeamAccountHomePage({ params }: TeamAccountHomePageProps) {
         description={<AppBreadcrumbs />}
       />
 
-      <DashboardDemo />
+      <AssociationDashboard accountId={accountId} userId={userId} role={role} />
     </PageBody>
   );
 }

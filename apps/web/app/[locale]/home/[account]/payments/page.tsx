@@ -1,6 +1,7 @@
 import { CreditCard } from 'lucide-react';
 
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
+import { ComingSoonState } from '@kit/ui/coming-soon-state';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
@@ -24,14 +25,14 @@ export default async function PaymentsPage({ params }: Props) {
         description={<AppBreadcrumbs />}
       />
 
-      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-        <CreditCard className="text-muted-foreground h-12 w-12" />
-        <h2 className="text-xl font-semibold">Payments</h2>
-        <p className="text-muted-foreground max-w-sm text-sm">
-          Payment ledger is coming in Week 3. Signed in as{' '}
-          <span className="text-foreground font-medium">{ROLE_LABELS[role]}</span>.
-        </p>
-      </div>
+      <ComingSoonState
+        icon={CreditCard}
+        color="green"
+        title="Payments"
+        description="Record cash, UPI, and bank payments, and track receipts against bills via Razorpay."
+        week={3}
+        roleLabel={ROLE_LABELS[role]}
+      />
     </PageBody>
   );
 }
