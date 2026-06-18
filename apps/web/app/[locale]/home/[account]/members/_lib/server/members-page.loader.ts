@@ -53,7 +53,33 @@ async function loadAccountMembers(
     throw error;
   }
 
-  return data ?? [];
+  const members = data ?? [];
+
+  // This app is phone-OTP only, so members have no email to show. We surface
+  // the phone number from `profiles.mobile_number` instead. Reading co-members'
+  // profiles relies on the `profiles_read_account_members` RLS policy.
+  const userIds = members.map((member) => member.user_id);
+  const phoneByUserId = new Map<string, string | null>();
+
+  if (userIds.length > 0) {
+    const { data: profiles, error: profilesError } = await client
+      .from('profiles')
+      .select('id, mobile_number')
+      .in('id', userIds);
+
+    if (profilesError) {
+      console.error(profilesError);
+    }
+
+    for (const profile of profiles ?? []) {
+      phoneByUserId.set(profile.id, profile.mobile_number);
+    }
+  }
+
+  return members.map((member) => ({
+    ...member,
+    phone: phoneByUserId.get(member.user_id) ?? null,
+  }));
 }
 
 /**

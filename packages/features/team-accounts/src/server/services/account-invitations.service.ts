@@ -10,7 +10,6 @@ import { Database } from '@kit/supabase/database';
 import type { DeleteInvitationSchema } from '../../schema/delete-invitation.schema';
 import type { InviteMembersSchema } from '../../schema/invite-members.schema';
 import type { UpdateInvitationSchema } from '../../schema/update-invitation.schema';
-import { createAccountInvitationsDispatchService } from './account-invitations-dispatcher.service';
 
 /**
  *
@@ -105,35 +104,19 @@ class AccountInvitationsService {
     return data;
   }
 
-  async validateInvitation(
-    invitation: z.output<typeof InviteMembersSchema>['invitations'][number],
-    accountSlug: string,
-  ) {
-    const { data: members, error } = await this.client.rpc(
-      'get_account_members',
-      {
-        account_slug: accountSlug,
-      },
-    );
-
-    if (error) {
-      throw error;
-    }
-
-    const isUserAlreadyMember = members.find((member) => {
-      return member.email === invitation.email;
-    });
-
-    if (isUserAlreadyMember) {
-      throw new Error('User already member of the team');
-    }
-  }
-
   /**
    * @name sendInvitations
-   * @description Sends invitations to join a team.
+   * @description Invites members to an association by phone number.
+   *
+   * This app authenticates with phone OTP only (no email), so there is no
+   * invitation email to dispatch. For each phone number we call
+   * `invite_to_association_by_phone`, which either adds an existing user to the
+   * association immediately or stores a pending invitation that is claimed the
+   * first time that phone signs in. Permission and role-hierarchy checks are
+   * performed by the caller before this runs (it uses the admin client).
    * @param accountSlug
    * @param invitations
+   * @param invitedBy
    */
   async sendInvitations({
     accountSlug,
@@ -151,72 +134,43 @@ class AccountInvitationsService {
       name: this.namespace,
     };
 
-    logger.info(ctx, 'Storing invitations...');
+    logger.info(
+      { ...ctx, count: invitations.length },
+      'Processing phone invitations...',
+    );
 
-    try {
-      await Promise.all(
-        invitations.map((invitation) =>
-          this.validateInvitation(invitation, accountSlug),
-        ),
-      );
-    } catch (error) {
-      logger.error(
-        {
-          ...ctx,
-          error: (error as Error).message,
-        },
-        'Error validating invitations',
-      );
+    const results = await Promise.all(
+      invitations.map((invitation) =>
+        this.client.rpc('invite_to_association_by_phone', {
+          account_slug: accountSlug,
+          p_phone: invitation.phone,
+          p_role: invitation.role,
+          invited_by: invitedBy,
+        }),
+      ),
+    );
 
-      throw error;
+    for (const result of results) {
+      if (result.error) {
+        logger.error(
+          {
+            ...ctx,
+            error: result.error,
+          },
+          `Failed to invite member to account ${accountSlug}`,
+        );
+
+        throw result.error;
+      }
     }
-
-    const accountResponse = await this.client
-      .from('accounts')
-      .select('name')
-      .eq('slug', accountSlug)
-      .single();
-
-    if (!accountResponse.data) {
-      logger.error(
-        ctx,
-        'Account not found in database. Cannot send invitations.',
-      );
-
-      throw new Error('Account not found');
-    }
-
-    const response = await this.client.rpc('add_invitations_to_account', {
-      invitations,
-      account_slug: accountSlug,
-      invited_by: invitedBy,
-    });
-
-    if (response.error) {
-      logger.error(
-        {
-          ...ctx,
-          error: response.error,
-        },
-        `Failed to add invitations to account ${accountSlug}`,
-      );
-
-      throw response.error;
-    }
-
-    const responseInvitations = Array.isArray(response.data)
-      ? response.data
-      : [response.data];
 
     logger.info(
       {
         ...ctx,
-        count: responseInvitations.length,
+        outcomes: results.map((result) => result.data),
       },
-      'Invitations added to account',
+      'Phone invitations processed',
     );
-
-    await this.dispatchInvitationEmails(ctx, responseInvitations);
   }
 
   /**
@@ -330,72 +284,6 @@ class AccountInvitationsService {
     logger.info(ctx, 'Invitation successfully renewed');
 
     return data;
-  }
-
-  /**
-   * @name dispatchInvitationEmails
-   * @description Dispatches invitation emails to the invited users.
-   * @param ctx
-   * @param invitations
-   * @returns
-   */
-  private async dispatchInvitationEmails(
-    ctx: { accountSlug: string; name: string },
-    invitations: Database['public']['Tables']['invitations']['Row'][],
-  ) {
-    if (!invitations.length) {
-      return;
-    }
-
-    const logger = await getLogger();
-    const service = createAccountInvitationsDispatchService(this.client);
-
-    const results = await Promise.allSettled(
-      invitations.map(async (invitation) => {
-        // Generate internal link that will validate and generate auth token on-demand
-        // This solves the 24-hour auth token expiry issue
-        const link = service.getAcceptInvitationLink(invitation.invite_token);
-
-        // send the invitation email
-        const data = await service.sendInvitationEmail({
-          invitation,
-          link,
-        });
-
-        // return the result
-        return {
-          id: invitation.id,
-          data,
-        };
-      }),
-    );
-
-    for (const result of results) {
-      if (result.status !== 'fulfilled' || !result.value.data.success) {
-        logger.error(
-          {
-            ...ctx,
-            invitationId:
-              result.status === 'fulfilled' ? result.value.id : result.reason,
-          },
-          'Failed to send invitation email',
-        );
-      }
-    }
-
-    const succeeded = results.filter(
-      (result) => result.status === 'fulfilled' && result.value.data.success,
-    );
-
-    if (succeeded.length) {
-      logger.info(
-        {
-          ...ctx,
-          count: succeeded.length,
-        },
-        'Invitation emails successfully sent!',
-      );
-    }
   }
 }
 

@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 
-import { Badge } from '../shadcn/badge';
 import { cn } from '../lib/utils';
+import { Badge } from '../shadcn/badge';
 
 const colorVariants = {
   amber: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
@@ -46,9 +46,7 @@ export function ComingSoonState({
 
       <div className="space-y-1.5">
         <h2 className="text-lg font-bold tracking-tight">{title}</h2>
-        <p className="text-muted-foreground max-w-sm text-sm">
-          {description}
-        </p>
+        <p className="text-muted-foreground max-w-sm text-sm">{description}</p>
       </div>
 
       <div className="mt-1 flex items-center gap-2">

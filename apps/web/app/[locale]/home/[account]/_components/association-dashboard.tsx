@@ -152,8 +152,8 @@ export async function AssociationDashboard({
           <CardContent className="flex flex-col items-center gap-2 py-16 text-center">
             <DoorOpen className="text-muted-foreground h-10 w-10" />
             <p className="text-muted-foreground text-sm">
-              No unit is assigned to your account yet. Contact your
-              association admin once your unit is set up.
+              No unit is assigned to your account yet. Contact your association
+              admin once your unit is set up.
             </p>
           </CardContent>
         </Card>
@@ -309,8 +309,8 @@ export async function AssociationDashboard({
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
             <Building2 className="text-muted-foreground h-10 w-10" />
             <p className="text-muted-foreground max-w-sm text-sm">
-              No units have been added yet. Unit management arrives in Week
-              2 &mdash; once added, billing and occupancy will appear here.
+              No units have been added yet. Unit management arrives in Week 2
+              &mdash; once added, billing and occupancy will appear here.
             </p>
           </CardContent>
         </Card>

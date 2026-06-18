@@ -34,7 +34,7 @@ export interface FeaturePolicyInvitationContext extends PolicyContext {
 
   /** The invitations being attempted */
   invitations: Array<{
-    email: string;
+    phone: string;
     role: string;
   }>;
 

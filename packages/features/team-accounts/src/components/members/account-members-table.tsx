@@ -27,8 +27,14 @@ import { RoleBadge } from './role-badge';
 import { TransferOwnershipDialog } from './transfer-ownership-dialog';
 import { UpdateMemberRoleDialog } from './update-member-role-dialog';
 
-type Members =
-  Database['public']['Functions']['get_account_members']['Returns'];
+type Member =
+  Database['public']['Functions']['get_account_members']['Returns'][number] & {
+    // Phone is merged in by the members-page loader from `profiles.mobile_number`
+    // (this app is phone-OTP only, so there is no email to display).
+    phone?: string | null;
+  };
+
+type Members = Member[];
 
 interface Permissions {
   canUpdateRole: (roleHierarchy: number) => boolean;
@@ -82,12 +88,13 @@ export function AccountMembersTable({
 
       const displayName = (
         member.name ??
-        member.email.split('@')[0] ??
+        member.email?.split('@')[0] ??
         ''
       ).toLowerCase();
 
       return (
         displayName.includes(searchString) ||
+        (member.phone ?? '').toLowerCase().includes(searchString) ||
         member.role.toLowerCase().includes(searchString)
       );
     })
@@ -133,7 +140,8 @@ function useGetColumns(
         size: 200,
         cell: ({ row }) => {
           const member = row.original;
-          const displayName = member.name ?? member.email.split('@')[0];
+          const displayName =
+            member.name ?? member.email?.split('@')[0] ?? member.phone ?? '—';
           const isSelf = member.user_id === params.currentUserId;
 
           return (
@@ -157,10 +165,10 @@ function useGetColumns(
         },
       },
       {
-        header: t('emailLabel'),
-        accessorKey: 'email',
+        header: t('phoneLabel'),
+        accessorKey: 'phone',
         cell: ({ row }) => {
-          return row.original.email ?? '-';
+          return row.original.phone ?? '-';
         },
       },
       {
@@ -299,7 +307,7 @@ function ActionsDropdown({
         <TransferOwnershipDialog
           open
           onOpenChange={(open) => !open && setActiveDialog(null)}
-          targetDisplayName={member.name ?? member.email}
+          targetDisplayName={member.name ?? member.phone ?? member.email ?? ''}
           accountId={member.account_id}
           userId={member.user_id}
         />

@@ -564,33 +564,36 @@ export type Database = {
         Row: {
           account_id: string
           created_at: string
-          email: string
+          email: string | null
           expires_at: string
           id: number
           invite_token: string
           invited_by: string
+          phone: string | null
           role: string
           updated_at: string
         }
         Insert: {
           account_id: string
           created_at?: string
-          email: string
+          email?: string | null
           expires_at?: string
           id?: number
           invite_token: string
           invited_by: string
+          phone?: string | null
           role: string
           updated_at?: string
         }
         Update: {
           account_id?: string
           created_at?: string
-          email?: string
+          email?: string | null
           expires_at?: string
           id?: number
           invite_token?: string
           invited_by?: string
+          phone?: string | null
           role?: string
           updated_at?: string
         }
@@ -1626,6 +1629,15 @@ export type Database = {
           target_user_id: string
         }
         Returns: boolean
+      }
+      invite_to_association_by_phone: {
+        Args: {
+          account_slug: string
+          invited_by: string
+          p_phone: string
+          p_role: string
+        }
+        Returns: string
       }
       is_aal2: { Args: never; Returns: boolean }
       is_account_owner: { Args: { account_id: string }; Returns: boolean }

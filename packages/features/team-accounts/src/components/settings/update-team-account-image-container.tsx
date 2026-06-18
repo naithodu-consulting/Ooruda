@@ -89,11 +89,11 @@ export function UpdateTeamAccountImage(props: {
     >
       <div className={'flex flex-col space-y-1'}>
         <span className={'text-sm'}>
-          <Trans i18nKey={'account.profilePictureHeading'} />
+          <Trans i18nKey={'teams.teamLogoInputHeading'} />
         </span>
 
         <span className={'text-xs'}>
-          <Trans i18nKey={'account.profilePictureSubheading'} />
+          <Trans i18nKey={'teams.teamLogoInputSubheading'} />
         </span>
       </div>
     </ImageUploader>

@@ -196,9 +196,7 @@ export function AssociationForm({ association, billingSettings }: Props) {
               type="number"
               min={0}
               step="0.01"
-              defaultValue={
-                billingSettings?.minimum_electricity_charge ?? 0
-              }
+              defaultValue={billingSettings?.minimum_electricity_charge ?? 0}
               className="max-w-[160px]"
             />
           </div>

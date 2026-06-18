@@ -22,24 +22,94 @@ export function LogoImage({
         aria-hidden="true"
       >
         {/* Upper tower */}
-        <rect x="11" y="4" width="10" height="10" rx="1" className="fill-primary" />
+        <rect
+          x="11"
+          y="4"
+          width="10"
+          height="10"
+          rx="1"
+          className="fill-primary"
+        />
         {/* Main building body */}
-        <rect x="4" y="13" width="24" height="15" rx="1" className="fill-primary" />
+        <rect
+          x="4"
+          y="13"
+          width="24"
+          height="15"
+          rx="1"
+          className="fill-primary"
+        />
         {/* Tower windows */}
-        <rect x="13.5" y="6.5" width="2.5" height="2.5" rx="0.4" fill="white" opacity="0.8" />
-        <rect x="17" y="6.5" width="2.5" height="2.5" rx="0.4" fill="white" opacity="0.8" />
+        <rect
+          x="13.5"
+          y="6.5"
+          width="2.5"
+          height="2.5"
+          rx="0.4"
+          fill="white"
+          opacity="0.8"
+        />
+        <rect
+          x="17"
+          y="6.5"
+          width="2.5"
+          height="2.5"
+          rx="0.4"
+          fill="white"
+          opacity="0.8"
+        />
         {/* Main windows row 1 */}
-        <rect x="6.5" y="15.5" width="3.5" height="3" rx="0.4" fill="white" opacity="0.7" />
-        <rect x="12" y="15.5" width="3.5" height="3" rx="0.4" fill="white" opacity="0.7" />
-        <rect x="17.5" y="15.5" width="3.5" height="3" rx="0.4" fill="white" opacity="0.7" />
-        <rect x="23" y="15.5" width="2.5" height="3" rx="0.4" fill="white" opacity="0.7" />
+        <rect
+          x="6.5"
+          y="15.5"
+          width="3.5"
+          height="3"
+          rx="0.4"
+          fill="white"
+          opacity="0.7"
+        />
+        <rect
+          x="12"
+          y="15.5"
+          width="3.5"
+          height="3"
+          rx="0.4"
+          fill="white"
+          opacity="0.7"
+        />
+        <rect
+          x="17.5"
+          y="15.5"
+          width="3.5"
+          height="3"
+          rx="0.4"
+          fill="white"
+          opacity="0.7"
+        />
+        <rect
+          x="23"
+          y="15.5"
+          width="2.5"
+          height="3"
+          rx="0.4"
+          fill="white"
+          opacity="0.7"
+        />
         {/* Door */}
-        <rect x="13" y="22" width="6" height="6" rx="0.5" fill="white" opacity="0.5" />
+        <rect
+          x="13"
+          y="22"
+          width="6"
+          height="6"
+          rx="0.5"
+          fill="white"
+          opacity="0.5"
+        />
       </svg>
 
       <span
         className={cn(
-          'text-xl font-bold tracking-tight text-foreground',
+          'text-foreground text-xl font-bold tracking-tight',
           textClassName,
         )}
       >

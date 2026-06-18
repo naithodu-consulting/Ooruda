@@ -29,7 +29,7 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.769 0.188 70);    /* amber #F59E0B */
+  --primary: oklch(0.769 0.188 70); /* amber #F59E0B */
   --primary-foreground: oklch(0.145 0 0); /* dark text on amber */
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -49,13 +49,13 @@
   --radius: 0.625rem;
   /* PropOps: sidebar stays permanently dark (prototype-matched), independent of light/dark mode */
   --sidebar: #111827;
-  --sidebar-foreground: #8FA6C2;
-  --sidebar-primary: #F59E0B;
+  --sidebar-foreground: #8fa6c2;
+  --sidebar-primary: #f59e0b;
   --sidebar-primary-foreground: #111827;
   --sidebar-accent: rgba(255, 255, 255, 0.06);
-  --sidebar-accent-foreground: #F1F5F9;
-  --sidebar-border: #1F2D3D;
-  --sidebar-ring: #F59E0B;
+  --sidebar-accent-foreground: #f1f5f9;
+  --sidebar-border: #1f2d3d;
+  --sidebar-ring: #f59e0b;
 }
 
 .dark {
@@ -65,7 +65,7 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.16 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.769 0.188 70);    /* amber stays amber in dark mode */
+  --primary: oklch(0.769 0.188 70); /* amber stays amber in dark mode */
   --primary-foreground: oklch(0.145 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);

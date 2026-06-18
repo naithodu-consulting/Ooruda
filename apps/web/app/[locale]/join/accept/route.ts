@@ -86,6 +86,20 @@ export async function GET(request: NextRequest) {
       return redirectToError('Invitation not found or expired');
     }
 
+    // Phone-based invitations have no email and are claimed automatically on
+    // first sign-in (see create_profile_on_signup), so there is no email link
+    // to follow here.
+    if (!invitation.email) {
+      logger.warn(
+        ctx,
+        'Invitation has no email; cannot use the email link flow',
+      );
+
+      return redirectToError(
+        'This invitation cannot be accepted via this link',
+      );
+    }
+
     logger.info(
       {
         ...ctx,

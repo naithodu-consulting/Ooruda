@@ -17,7 +17,8 @@
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type',
 };
 
 Deno.serve(async (req: Request) => {
@@ -26,7 +27,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const payload = await req.json() as {
+    const payload = (await req.json()) as {
       user: { phone: string };
       sms: { otp: string };
     };
@@ -57,17 +58,18 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err) {
     console.error('[custom-sms-hook] error:', err);
-    return new Response(
-      JSON.stringify({ error: (err as Error).message }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-    );
+    return new Response(JSON.stringify({ error: (err as Error).message }), {
+      status: 500,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    });
   }
 });
 
 async function sendViaMsg91(phone: string, otp: string) {
   const authKey = Deno.env.get('MSG91_AUTH_KEY') ?? '';
   const templateId = Deno.env.get('MSG91_TEMPLATE_ID') ?? '';
-  if (!authKey || !templateId) throw new Error('MSG91_AUTH_KEY or MSG91_TEMPLATE_ID missing');
+  if (!authKey || !templateId)
+    throw new Error('MSG91_AUTH_KEY or MSG91_TEMPLATE_ID missing');
 
   // Remove + and ensure country code prefix
   let cleaned = phone.replace(/\D/g, '');
@@ -76,9 +78,16 @@ async function sendViaMsg91(phone: string, otp: string) {
 
   const res = await fetch(
     `https://control.msg91.com/api/v5/otp?template_id=${templateId}&mobile=${cleaned}&otp=${otp}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json', authkey: authKey } },
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', authkey: authKey },
+    },
   );
-  const data = await res.json() as { type?: string; Status?: string; message?: string };
+  const data = (await res.json()) as {
+    type?: string;
+    Status?: string;
+    message?: string;
+  };
   if (!res.ok || (data.type !== 'success' && data.Status !== 'Success')) {
     throw new Error(data.message ?? 'MSG91 send failed');
   }
@@ -95,7 +104,7 @@ async function sendViaTwoFactor(phone: string, otp: string) {
     : `https://2factor.in/API/V1/${apiKey}/SMS/${cleaned}/${otp}`;
 
   const res = await fetch(url);
-  const data = await res.json() as { Status?: string; Details?: string };
+  const data = (await res.json()) as { Status?: string; Details?: string };
   if (!res.ok || data.Status !== 'Success') {
     throw new Error(data.Details ?? '2Factor send failed');
   }

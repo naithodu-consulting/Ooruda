@@ -183,9 +183,14 @@ create
 or replace function kit.protect_account_fields () returns trigger as $$
 begin
     if current_user in('authenticated', 'anon') then
-	if new.id <> old.id or new.is_personal_account <>
-	    old.is_personal_account or new.primary_owner_user_id <>
-	    old.primary_owner_user_id or new.email <> old.email then
+	-- Use `is distinct from` (not `<>`) so NULL values compare correctly.
+	-- This app is phone-OTP only, so personal accounts have a NULL email;
+	-- `new.email <> old.email` evaluates to NULL there, making the guard
+	-- behave unpredictably for routine updates such as the profile picture.
+	if new.id is distinct from old.id
+	    or new.is_personal_account is distinct from old.is_personal_account
+	    or new.primary_owner_user_id is distinct from old.primary_owner_user_id
+	    or new.email is distinct from old.email then
             raise exception 'You do not have permission to update this field';
 
         end if;

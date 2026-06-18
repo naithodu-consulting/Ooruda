@@ -99,7 +99,11 @@ function deleteLogo(client: SupabaseClient, url: string) {
   return client.storage.from(BUCKET).remove([fileName]);
 }
 
-async function uploadLogo(client: SupabaseClient, file: File, accountId: string) {
+async function uploadLogo(
+  client: SupabaseClient,
+  file: File,
+  accountId: string,
+) {
   const bytes = await file.arrayBuffer();
   const bucket = client.storage.from(BUCKET);
 

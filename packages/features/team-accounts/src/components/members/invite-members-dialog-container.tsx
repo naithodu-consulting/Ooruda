@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { Mail, Plus, X } from 'lucide-react';
+import { Phone, Plus, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useAction } from 'next-safe-action/hooks';
 import { useFieldArray, useForm } from 'react-hook-form';
@@ -194,7 +194,7 @@ function InviteMembersForm({
       >
         <div className="flex flex-col gap-y-2.5">
           {fieldArray.fields.map((field, index) => {
-            const emailInputName = `invitations.${index}.email` as const;
+            const phoneInputName = `invitations.${index}.phone` as const;
             const roleInputName = `invitations.${index}.role` as const;
 
             return (
@@ -202,19 +202,19 @@ function InviteMembersForm({
                 <div className={'flex items-end gap-x-2'}>
                   <InputGroup className={'bg-background w-full'}>
                     <InputGroupAddon align="inline-start">
-                      <Mail className="h-4 w-4" />
+                      <Phone className="h-4 w-4" />
                     </InputGroupAddon>
 
                     <FormField
-                      name={emailInputName}
+                      name={phoneInputName}
                       render={({ field }) => {
                         return (
                           <FormItem className="w-full">
                             <FormControl>
                               <InputGroupInput
-                                data-test={'invite-email-input'}
-                                placeholder={t('emailPlaceholder')}
-                                type="email"
+                                data-test={'invite-phone-input'}
+                                placeholder={t('phonePlaceholder')}
+                                type="tel"
                                 required
                                 {...field}
                               />
@@ -265,7 +265,7 @@ function InviteMembersForm({
                               aria-label={t('removeInviteButtonLabel')}
                               onClick={() => {
                                 fieldArray.remove(index);
-                                form.clearErrors(emailInputName);
+                                form.clearErrors(phoneInputName);
                               }}
                             >
                               <X className={'h-4'} />
@@ -321,7 +321,7 @@ function InviteMembersForm({
 }
 
 function createEmptyInviteModel() {
-  return { email: '', role: 'member' as Role };
+  return { phone: '', role: 'member' as Role };
 }
 
 function useFetchInvitationsPolicies({

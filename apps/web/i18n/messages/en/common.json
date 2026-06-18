@@ -74,6 +74,18 @@
     },
     "member": {
       "label": "Member"
+    },
+    "assoc_admin": {
+      "label": "Association Admin"
+    },
+    "billing_operator": {
+      "label": "Billing Operator"
+    },
+    "prop_owner": {
+      "label": "Property Owner"
+    },
+    "tenant": {
+      "label": "Tenant"
     }
   },
   "otp": {

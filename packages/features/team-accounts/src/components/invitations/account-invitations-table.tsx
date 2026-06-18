@@ -51,12 +51,10 @@ export function AccountInvitationsTable({
   const filteredInvitations = invitations.filter((member) => {
     const searchString = search.toLowerCase();
 
-    const email = (
-      member.email.split('@')[0]?.toLowerCase() ?? ''
-    ).toLowerCase();
+    const identifier = (member.email ?? '').toLowerCase();
 
     return (
-      email.includes(searchString) ||
+      identifier.includes(searchString) ||
       member.role.toLowerCase().includes(searchString)
     );
   });
@@ -89,11 +87,14 @@ function useGetColumns(permissions: {
   return useMemo(
     () => [
       {
-        header: t('emailLabel'),
+        header: t('phoneLabel'),
         size: 200,
         cell: ({ row }) => {
           const member = row.original;
-          const email = member.email;
+          // `get_account_invitations` returns the phone number (for phone
+          // invites) coalesced into the `email` field, so this is the
+          // invitee's contact identifier in this phone-OTP app.
+          const identifier = member.email ?? '';
 
           return (
             <span
@@ -101,10 +102,10 @@ function useGetColumns(permissions: {
               className={'flex items-center gap-x-2 text-left'}
             >
               <span>
-                <ProfileAvatar text={email} />
+                <ProfileAvatar text={identifier} />
               </span>
 
-              <span>{email}</span>
+              <span>{identifier}</span>
             </span>
           );
         },

@@ -74,7 +74,7 @@ export function ChargeTypesCard({ chargeTypes, associationId }: Props) {
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{ct.name}</span>
                   {ct.is_builtin && (
-                    <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                    <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase">
                       Built-in
                     </span>
                   )}

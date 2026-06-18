@@ -15,7 +15,10 @@ interface Props {
 
 export default async function NotificationsPage({ params }: Props) {
   const { account } = await params;
-  const { role } = await requireRole(account, ['assoc_admin', 'billing_operator']);
+  const { role } = await requireRole(account, [
+    'assoc_admin',
+    'billing_operator',
+  ]);
 
   return (
     <PageBody>

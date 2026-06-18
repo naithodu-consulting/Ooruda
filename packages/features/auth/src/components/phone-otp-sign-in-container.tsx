@@ -9,9 +9,9 @@ import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { getSafeRedirectPath } from '@kit/shared/utils';
 import { useSignInWithOtp } from '@kit/supabase/hooks/use-sign-in-with-otp';
 import { useVerifyOtp } from '@kit/supabase/hooks/use-verify-otp';
-import { getSafeRedirectPath } from '@kit/shared/utils';
 import { Button } from '@kit/ui/button';
 import {
   Form,
@@ -22,13 +22,13 @@ import {
   FormLabel,
   FormMessage,
 } from '@kit/ui/form';
+import { Input } from '@kit/ui/input';
 import {
   InputOTP,
   InputOTPGroup,
   InputOTPSeparator,
   InputOTPSlot,
 } from '@kit/ui/input-otp';
-import { Input } from '@kit/ui/input';
 import { Spinner } from '@kit/ui/spinner';
 import { Trans } from '@kit/ui/trans';
 
@@ -41,8 +41,7 @@ const MAX_VERIFY_ATTEMPTS = 5;
 // PropOps is invite-based, so production should set this to 'false' once the
 // invitation-provisioning flow is in place; until then it defaults to allowing
 // sign-up so the first association admin can onboard themselves.
-const ALLOW_SIGNUP =
-  process.env.NEXT_PUBLIC_ALLOW_PHONE_SIGNUP !== 'false';
+const ALLOW_SIGNUP = process.env.NEXT_PUBLIC_ALLOW_PHONE_SIGNUP !== 'false';
 
 const PhoneSchema = z.object({
   phone: z
@@ -97,7 +96,9 @@ export function PhoneOtpSignInContainer() {
     defaultValues: { token: '' },
   });
 
-  const handleSendOtp = async ({ phone: rawPhone }: z.output<typeof PhoneSchema>) => {
+  const handleSendOtp = async ({
+    phone: rawPhone,
+  }: z.output<typeof PhoneSchema>) => {
     const e164 = `+91${rawPhone}`;
 
     await signInMutation.mutateAsync({
@@ -194,7 +195,7 @@ export function PhoneOtpSignInContainer() {
             )}
           </Button>
 
-          <p className="text-center text-[11px] text-muted-foreground">
+          <p className="text-muted-foreground text-center text-[11px]">
             Delivered via SMS &middot; DLT registered
           </p>
         </form>
@@ -208,12 +209,15 @@ export function PhoneOtpSignInContainer() {
   return (
     <Form {...otpForm}>
       <div className="flex w-full flex-col items-center gap-y-6">
-        <p className="text-muted-foreground text-sm text-center">
-          <Trans i18nKey="auth.phoneOtpSentTo" values={{ phone: displayPhone }} />
+        <p className="text-muted-foreground text-center text-sm">
+          <Trans
+            i18nKey="auth.phoneOtpSentTo"
+            values={{ phone: displayPhone }}
+          />
         </p>
 
         {isMockMode && (
-          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 text-center w-full">
+          <p className="w-full rounded border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-600">
             <Trans i18nKey="auth.phoneMockHint" />
           </p>
         )}
