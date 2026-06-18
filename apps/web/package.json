@@ -13,6 +13,8 @@
     "start": "next start",
     "start:test": "NODE_ENV=test next start",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "supabase": "supabase",
     "supabase:start": "supabase status || supabase start",
     "supabase:stop": "supabase stop",
@@ -84,7 +86,8 @@
     "pino-pretty": "catalog:",
     "supabase": "catalog:",
     "tailwindcss": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "browserslist": [
     "last 1 versions",
