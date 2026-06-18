@@ -6,6 +6,8 @@ import { redirect } from 'next/navigation';
 import * as z from 'zod';
 
 import { UserWorkspaceContextProvider } from '@kit/accounts/components';
+import { isSuperAdmin } from '@kit/admin';
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Page, PageMobileNavigation, PageNavigation } from '@kit/ui/page';
 import { SidebarProvider } from '@kit/ui/sidebar';
 
@@ -42,6 +44,7 @@ async function SidebarLayout({ children }: React.PropsWithChildren) {
     redirect('/');
   }
 
+  await redirectIfSuperAdmin();
   await redirectIfTeamsOnly(workspace);
 
   return (
@@ -66,6 +69,7 @@ async function SidebarLayout({ children }: React.PropsWithChildren) {
 async function HeaderLayout({ children }: React.PropsWithChildren) {
   const workspace = await loadUserWorkspace();
 
+  await redirectIfSuperAdmin();
   await redirectIfTeamsOnly(workspace);
 
   return (
@@ -99,6 +103,14 @@ function MobileNavigation({
       <HomeMobileNavigation workspace={workspace} />
     </>
   );
+}
+
+async function redirectIfSuperAdmin() {
+  const client = getSupabaseServerClient();
+
+  if (await isSuperAdmin(client)) {
+    redirect(pathsConfig.app.admin);
+  }
 }
 
 async function redirectIfTeamsOnly(
