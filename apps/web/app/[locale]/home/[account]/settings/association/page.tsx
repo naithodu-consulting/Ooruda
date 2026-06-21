@@ -1,9 +1,13 @@
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
+import { TeamAccountDangerZone } from '@kit/team-accounts/components';
 
+import featuresFlagConfig from '~/config/feature-flags.config';
+import pathsConfig from '~/config/paths.config';
 import { requireRole } from '~/lib/rbac';
 
 import { AssociationForm } from './_components/association-form';
 import { AssociationLogoUploader } from './_components/association-logo-uploader';
+import { AssociationNameCard } from './_components/association-name-card';
 import { ChargeTypesCard } from './_components/charge-types-card';
 
 interface Props {
@@ -22,11 +26,18 @@ export default async function AssociationSettingsPage({ params }: Props) {
   const client = getSupabaseServerClient();
 
   // The association logo is the MakerKit team account image (accounts.picture_url).
+  // Name/slug/owner are fetched here too so the name-edit and danger-zone
+  // sections (moved from the old, now-redirected /settings tab) can render
+  // alongside the rest of the association's identity on this single page.
   const { data: accountRow } = await client
     .from('accounts')
-    .select('picture_url')
+    .select('name, slug, picture_url, primary_owner_user_id')
     .eq('id', accountId)
     .single();
+
+  if (!accountRow) {
+    throw new Error('Unable to load the association account record.');
+  }
 
   // Load or create the associations row (safety net — the row is normally
   // auto-created by the create-team trigger).
@@ -71,7 +82,19 @@ export default async function AssociationSettingsPage({ params }: Props) {
   return (
     <div className="flex max-w-2xl flex-1 flex-col gap-6">
       <AssociationLogoUploader
-        account={{ id: accountId, pictureUrl: accountRow?.picture_url ?? null }}
+        account={{ id: accountId, pictureUrl: accountRow.picture_url }}
+      />
+
+      <AssociationNameCard
+        account={{
+          id: accountId,
+          name: accountRow.name,
+          slug: accountRow.slug as string,
+        }}
+        // Pass the UNRESOLVED template (with the `[account]` placeholder) — the
+        // update action does `path.replace('[account]', newSlug)` to redirect
+        // after a slug change. Resolving it here would break that redirect.
+        path={pathsConfig.app.accountAssociationSettings}
       />
 
       <AssociationForm
@@ -90,6 +113,12 @@ export default async function AssociationSettingsPage({ params }: Props) {
       <ChargeTypesCard
         chargeTypes={chargeTypes ?? []}
         associationId={association.id}
+      />
+
+      <TeamAccountDangerZone
+        primaryOwnerUserId={accountRow.primary_owner_user_id}
+        account={{ id: accountId, name: accountRow.name }}
+        features={{ enableTeamDeletion: featuresFlagConfig.enableTeamDeletion }}
       />
     </div>
   );

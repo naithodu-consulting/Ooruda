@@ -18,6 +18,8 @@ export default async function PaymentsPage({ params }: Props) {
   const { role } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
+    'prop_owner',
+    'tenant',
   ]);
 
   return (
@@ -32,8 +34,7 @@ export default async function PaymentsPage({ params }: Props) {
         icon={CreditCard}
         color="green"
         title="Payments"
-        description="Record cash, UPI, and bank payments, and track receipts against bills via Razorpay."
-        week={3}
+        description="Record cash, UPI, and bank payments, and match receipts to the right bills — with Razorpay built in."
         roleLabel={ROLE_LABELS[role]}
       />
     </PageBody>

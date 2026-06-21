@@ -152,8 +152,8 @@ export async function AssociationDashboard({
           <CardContent className="flex flex-col items-center gap-2 py-16 text-center">
             <DoorOpen className="text-muted-foreground h-10 w-10" />
             <p className="text-muted-foreground text-sm">
-              No unit is assigned to your account yet. Contact your association
-              admin once your unit is set up.
+              You don't have a unit assigned yet. Your association admin can set
+              this up for you.
             </p>
           </CardContent>
         </Card>
@@ -209,7 +209,7 @@ export async function AssociationDashboard({
           <Card>
             <CardContent className="py-10 text-center">
               <p className="text-muted-foreground text-sm">
-                No bills have been generated for your unit yet.
+                You don&apos;t have any bills yet.
               </p>
             </CardContent>
           </Card>
@@ -226,7 +226,8 @@ export async function AssociationDashboard({
       <Card>
         <CardContent className="py-16 text-center">
           <p className="text-muted-foreground text-sm">
-            Association record not found.
+            We couldn&apos;t load this association&apos;s details. Please
+            refresh, and contact support if it keeps happening.
           </p>
         </CardContent>
       </Card>
@@ -281,7 +282,7 @@ export async function AssociationDashboard({
         <CardContent className="flex flex-col gap-3">
           {overview.recentActivity.length === 0 ? (
             <p className="text-muted-foreground py-4 text-center text-sm">
-              No activity recorded yet.
+              Nothing has happened here yet.
             </p>
           ) : (
             overview.recentActivity.map((entry, i) => (
@@ -309,8 +310,8 @@ export async function AssociationDashboard({
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
             <Building2 className="text-muted-foreground h-10 w-10" />
             <p className="text-muted-foreground max-w-sm text-sm">
-              No units have been added yet. Unit management arrives in Week 2
-              &mdash; once added, billing and occupancy will appear here.
+              No units yet. Once you add your shops and offices, their billing
+              and occupancy will show up here.
             </p>
           </CardContent>
         </Card>

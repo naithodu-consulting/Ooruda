@@ -200,6 +200,21 @@ class AccountInvitationsDispatchService {
       name: this.namespace,
     };
 
+    // Email is optional on invitations: this app also supports phone-based
+    // invites, so the `email` column is nullable. An email dispatch with no
+    // address can't be delivered, so skip it rather than pass null to the
+    // mailer (which also keeps the column non-null for the calls below).
+    const email = invitation.email;
+
+    if (!email) {
+      logger.warn(
+        ctx,
+        'Invitation has no email address; skipping email dispatch',
+      );
+
+      return;
+    }
+
     const { renderInviteEmail } = await import('@kit/email-templates');
     const { getMailer } = await import('@kit/mailers');
 
@@ -207,7 +222,7 @@ class AccountInvitationsDispatchService {
 
     const { html, subject } = await renderInviteEmail({
       link,
-      invitedUserEmail: invitation.email,
+      invitedUserEmail: email,
       inviter: inviter.name ?? inviter.email ?? '',
       productName: env.productName,
       teamName: team.name,
@@ -216,7 +231,7 @@ class AccountInvitationsDispatchService {
     return mailer
       .sendEmail({
         from: env.emailSender,
-        to: invitation.email,
+        to: email,
         subject,
         html,
       })

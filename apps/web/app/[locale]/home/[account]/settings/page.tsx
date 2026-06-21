@@ -1,54 +1,20 @@
-import { getTranslations } from 'next-intl/server';
+import { redirect } from 'next/navigation';
 
-import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { createTeamAccountsApi } from '@kit/team-accounts/api';
-import { TeamAccountSettingsContainer } from '@kit/team-accounts/components';
-
-import featuresFlagConfig from '~/config/feature-flags.config';
 import pathsConfig from '~/config/paths.config';
-
-export const generateMetadata = async () => {
-  const t = await getTranslations('teams');
-  const title = t('settings.pageTitle');
-
-  return {
-    title,
-  };
-};
 
 interface TeamAccountSettingsPageProps {
   params: Promise<{ account: string }>;
 }
 
-const paths = {
-  teamAccountSettings: pathsConfig.app.accountSettings,
-};
-
+// `/settings` no longer renders its own content — the team-name/logo/danger-zone
+// fields it used to show were merged into the Association Settings tab (which
+// was duplicating the same accounts.picture_url logo and split identity across
+// two tabs). Redirect so existing links and nav items keep working.
 async function TeamAccountSettingsPage(props: TeamAccountSettingsPageProps) {
-  const api = createTeamAccountsApi(getSupabaseServerClient());
-  const slug = (await props.params).account;
-  const data = await api.getTeamAccount(slug);
+  const { account } = await props.params;
 
-  const account = {
-    id: data.id,
-    name: data.name,
-    pictureUrl: data.picture_url,
-    slug: data.slug as string,
-    primaryOwnerUserId: data.primary_owner_user_id,
-  };
-
-  const features = {
-    enableTeamDeletion: featuresFlagConfig.enableTeamDeletion,
-  };
-
-  return (
-    <div className={'flex max-w-2xl flex-1 flex-col'}>
-      <TeamAccountSettingsContainer
-        account={account}
-        paths={paths}
-        features={features}
-      />
-    </div>
+  redirect(
+    pathsConfig.app.accountAssociationSettings.replace('[account]', account),
   );
 }
 

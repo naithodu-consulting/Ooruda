@@ -58,8 +58,8 @@ export function ChargeTypesCard({ chargeTypes, associationId }: Props) {
       <CardHeader>
         <CardTitle>Charge Types</CardTitle>
         <CardDescription>
-          Built-in charge types are seeded automatically. Toggle to enable or
-          disable them for billing runs.
+          These are the charges you can add to your bills. Turn on the ones your
+          association uses and turn off the rest.
         </CardDescription>
       </CardHeader>
 

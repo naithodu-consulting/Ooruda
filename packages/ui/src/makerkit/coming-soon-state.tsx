@@ -15,7 +15,6 @@ export function ComingSoonState({
   icon: Icon,
   title,
   description,
-  week,
   roleLabel,
   color = 'amber',
   className,
@@ -23,7 +22,6 @@ export function ComingSoonState({
   icon: LucideIcon;
   title: string;
   description: string;
-  week: number;
   roleLabel?: string;
   color?: keyof typeof colorVariants;
   className?: string;
@@ -51,7 +49,7 @@ export function ComingSoonState({
 
       <div className="mt-1 flex items-center gap-2">
         <Badge variant="outline" className="font-medium">
-          Coming in Week {week}
+          Coming soon
         </Badge>
 
         {roleLabel ? (

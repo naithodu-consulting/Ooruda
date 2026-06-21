@@ -8,11 +8,6 @@ import {
 import pathsConfig from '~/config/paths.config';
 
 export function SettingsSubNavigation(props: { account: string }) {
-  const settingsPath = pathsConfig.app.accountSettings.replace(
-    '[account]',
-    props.account,
-  );
-
   const profilePath = pathsConfig.app.accountProfileSettings.replace(
     '[account]',
     props.account,
@@ -26,14 +21,8 @@ export function SettingsSubNavigation(props: { account: string }) {
   return (
     <BorderedNavigationMenu>
       <BorderedNavigationMenuItem
-        path={settingsPath}
-        label={'common.routes.settings'}
-        highlightMatch={`/home/${props.account}/settings$`}
-      />
-
-      <BorderedNavigationMenuItem
         path={associationPath}
-        label={'association.settings.pageTitle'}
+        label={'association.label'}
       />
 
       <BorderedNavigationMenuItem

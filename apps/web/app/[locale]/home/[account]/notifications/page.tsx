@@ -32,8 +32,7 @@ export default async function NotificationsPage({ params }: Props) {
         icon={Bell}
         color="blue"
         title="Notifications"
-        description="Send SMS and email reminders for bills, dues, and overdue payments to owners and tenants."
-        week={4}
+        description="Send owners and tenants SMS and email reminders for new bills, upcoming dues, and overdue payments."
         roleLabel={ROLE_LABELS[role]}
       />
     </PageBody>

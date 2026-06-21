@@ -32,8 +32,7 @@ export default async function BillingPage({ params }: Props) {
         icon={FileText}
         color="green"
         title="Billing"
-        description="Generate maintenance and electricity bills, bulk-bill all units, and track collection status."
-        week={3}
+        description="Raise maintenance and electricity bills, bill every unit at once and keep track of what has been collected."
         roleLabel={ROLE_LABELS[role]}
       />
     </PageBody>

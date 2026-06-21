@@ -34,8 +34,7 @@ export default async function ReportsPage({ params }: Props) {
         icon={Activity}
         color="purple"
         title="Reports"
-        description="Download collection summaries, outstanding dues, and MESCOM consumption reports as PDF or Excel."
-        week={5}
+        description="Download collection summaries, outstanding dues, and electricity usage reports as PDF or Excel."
         roleLabel={ROLE_LABELS[role]}
       />
     </PageBody>

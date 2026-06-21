@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { Image as ImageIcon } from 'lucide-react';
+import { Image as ImageIcon, Pencil, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
 import { Button } from '../shadcn/button';
@@ -29,24 +29,45 @@ export function ImageUploader(
 
   const control = register('value');
 
+  // Optimistically reflect the change, but if the parent's save rejects (e.g. a
+  // network or permission error), roll the preview back to the last known value
+  // instead of leaving a stale image on screen until a manual refresh. Parents
+  // that don't return a promise resolve to undefined here, so they keep their
+  // existing fire-and-forget behaviour with no revert.
   const onClear = useCallback(() => {
-    props.onValueChange(null);
+    const previous = props.value;
+
     setValue('value', null);
     setImage('');
+
+    void Promise.resolve(props.onValueChange(null)).catch(() => {
+      setValue('value', previous ?? null);
+      setImage(previous);
+    });
   }, [props, setValue]);
 
   const onValueChange = useCallback(
     ({ image, file }: { image: string; file: File }) => {
-      props.onValueChange(file);
+      const previous = props.value;
 
       setImage(image);
+
+      void Promise.resolve(props.onValueChange(file)).catch(() => {
+        setImage(previous);
+      });
     },
     [props],
   );
 
-  if (props.value !== image) {
+  // Resync from the prop only when it actually changes (e.g. the parent
+  // revalidates after a successful upload/clear) — not on every render. The
+  // old code compared props.value !== image during render and called
+  // setImage unconditionally, which stomped the local optimistic update
+  // (clearing/uploading) back to the stale prop on the very next render,
+  // before the parent ever had a chance to revalidate.
+  useEffect(() => {
     setImage(props.value);
-  }
+  }, [props.value]);
 
   if (!image) {
     return (
@@ -67,18 +88,26 @@ export function ImageUploader(
     <div className={'flex items-center space-x-4'}>
       <label
         className={
-          'animate-in fade-in zoom-in-50 group/label relative h-20 w-20 cursor-pointer'
+          'border-border animate-in fade-in zoom-in-50 group/label relative h-20 w-20 cursor-pointer overflow-hidden rounded-full border'
         }
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           decoding="async"
           className={
-            'h-20 w-20 rounded-full object-cover transition-all duration-300 group-hover/label:opacity-80'
+            'h-full w-full object-cover transition-all duration-300 group-hover/label:opacity-50'
           }
           src={image}
           alt={''}
         />
+
+        <div
+          className={
+            'absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover/label:opacity-100'
+          }
+        >
+          <Pencil className={'text-foreground h-5 w-5'} />
+        </div>
 
         <ImageUploadInput
           {...control}
@@ -91,7 +120,8 @@ export function ImageUploader(
       </label>
 
       <div>
-        <Button onClick={onClear} size={'sm'} variant={'ghost'}>
+        <Button onClick={onClear} size={'sm'} variant={'outline'}>
+          <X className={'mr-1 h-4 w-4'} />
           <Trans i18nKey={'common.clear'} />
         </Button>
       </div>

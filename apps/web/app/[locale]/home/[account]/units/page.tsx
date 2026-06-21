@@ -32,8 +32,7 @@ export default async function UnitsPage({ params }: Props) {
         icon={Building2}
         color="blue"
         title="Units & shops"
-        description="Manage shops, offices, and warehouses across your property, with owner and tenant details."
-        week={2}
+        description="Manage the shops, offices, and warehouses across your property, along with their owner and tenant details."
         roleLabel={ROLE_LABELS[role]}
       />
     </PageBody>

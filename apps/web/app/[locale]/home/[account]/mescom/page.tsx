@@ -32,8 +32,7 @@ export default async function MescomPage({ params }: Props) {
         icon={Zap}
         color="amber"
         title="MESCOM & meters"
-        description="Upload MESCOM bills and enter sub-meter readings for accurate electricity billing."
-        week={2}
+        description="Upload MESCOM bills and enter sub-meter readings so electricity charges are split fairly."
         roleLabel={ROLE_LABELS[role]}
       />
     </PageBody>

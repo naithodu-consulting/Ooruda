@@ -28,8 +28,7 @@ export default async function AuditPage({ params }: Props) {
         icon={History}
         color="purple"
         title="Audit log"
-        description="A full record of every billing, payment, and settings action taken across the association."
-        week={5}
+        description="A complete record of every billing, payment and settings change made across your association."
         roleLabel={ROLE_LABELS[role]}
       />
     </PageBody>
