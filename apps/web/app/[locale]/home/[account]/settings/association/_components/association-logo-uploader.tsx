@@ -31,7 +31,7 @@ const BUCKET = 'account_image';
  * generic team-account settings page (`@kit/team-accounts`'s
  * `UpdateTeamAccountImage`) is not rendered anywhere in this app to avoid a
  * second control writing to the same column. The logo flows to the workspace
- * switcher, sidebar, and (Week 4) branded PDF bills.
+ * switcher, sidebar and branded PDF bills.
  */
 export function AssociationLogoUploader({
   account,
