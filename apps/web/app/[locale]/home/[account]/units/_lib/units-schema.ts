@@ -28,3 +28,17 @@ export const CreateUnitSchema = z.object({
 });
 
 export type CreateUnitInput = z.input<typeof CreateUnitSchema>;
+
+// Same shape as create — editing a unit touches the same fields.
+export const UpdateUnitSchema = CreateUnitSchema;
+export type UpdateUnitInput = z.input<typeof UpdateUnitSchema>;
+
+export const AssignTenantSchema = z.object({
+  tenantId: z.string().uuid('Choose a tenant'),
+  startDate: z
+    .string()
+    .min(1, 'Start date is required')
+    .refine((v) => !Number.isNaN(Date.parse(v)), 'Enter a valid date'),
+});
+
+export type AssignTenantInput = z.input<typeof AssignTenantSchema>;

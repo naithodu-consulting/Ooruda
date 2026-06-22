@@ -1,24 +1,61 @@
-import { FileText } from 'lucide-react';
-
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
-import { ComingSoonState } from '@kit/ui/coming-soon-state';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
-import { ROLE_LABELS, requireRole } from '~/lib/rbac';
+import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { BillsSection, type BillRow } from './_components/bills-section';
 
 interface Props {
   params: Promise<{ account: string }>;
 }
 
+export const metadata = { title: 'Billing' };
+
 export default async function BillingPage({ params }: Props) {
   const { account } = await params;
-  const { role } = await requireRole(account, [
+  const { accountId, role } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
   ]);
+
+  const client = getSupabaseServerClient();
+
+  const { data: association } = await client
+    .from('associations')
+    .select('id')
+    .eq('account_id', accountId)
+    .single();
+
+  if (!association) {
+    throw new Error('Unable to load the association for this account.');
+  }
+
+  const { data: bills } = await client
+    .from('bills')
+    .select(
+      'id, period, bill_no, total_amount, paid_amount, status, due_date, units(unit_no), bill_line_items(id, description, payer, gst_applicable, amount)',
+    )
+    .eq('association_id', association.id)
+    .order('period', { ascending: false })
+    .order('bill_no');
+
+  const billRows: BillRow[] = (bills ?? []).map((b) => ({
+    id: b.id,
+    period: b.period,
+    bill_no: b.bill_no,
+    total_amount: b.total_amount,
+    paid_amount: b.paid_amount,
+    status: b.status,
+    due_date: b.due_date,
+    unit_no: (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
+    lineItems: b.bill_line_items,
+  }));
+
+  const canManage = role === 'assoc_admin' || role === 'billing_operator';
+  const canDelete = role === 'assoc_admin';
 
   return (
     <PageBody>
@@ -28,12 +65,11 @@ export default async function BillingPage({ params }: Props) {
         description={<AppBreadcrumbs />}
       />
 
-      <ComingSoonState
-        icon={FileText}
-        color="green"
-        title="Billing"
-        description="Raise maintenance and electricity bills, bill every unit at once and keep track of what has been collected."
-        roleLabel={ROLE_LABELS[role]}
+      <BillsSection
+        associationId={association.id}
+        bills={billRows}
+        canManage={canManage}
+        canDelete={canDelete}
       />
     </PageBody>
   );

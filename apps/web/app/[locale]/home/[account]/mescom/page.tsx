@@ -1,24 +1,120 @@
-import { Zap } from 'lucide-react';
-
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
-import { ComingSoonState } from '@kit/ui/coming-soon-state';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
-import { ROLE_LABELS, requireRole } from '~/lib/rbac';
+import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { BillsSection, type MescomBillRow } from './_components/bills-section';
+import {
+  SubMetersSection,
+  type SubMeterRow,
+} from './_components/sub-meters-section';
 
 interface Props {
   params: Promise<{ account: string }>;
 }
 
+export const metadata = { title: 'MESCOM & Meters' };
+
 export default async function MescomPage({ params }: Props) {
   const { account } = await params;
-  const { role } = await requireRole(account, [
+  const { accountId, role } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
   ]);
+
+  const client = getSupabaseServerClient();
+
+  const { data: association } = await client
+    .from('associations')
+    .select('id')
+    .eq('account_id', accountId)
+    .single();
+
+  if (!association) {
+    throw new Error('Unable to load the association for this account.');
+  }
+
+  const { data: units } = await client
+    .from('units')
+    .select('id, unit_no')
+    .eq('association_id', association.id)
+    .order('unit_no');
+
+  const unitRows = units ?? [];
+
+  const unitIds = unitRows.map((u) => u.id);
+
+  const { data: subMeters } = unitIds.length
+    ? await client
+        .from('sub_meters')
+        .select(
+          'id, meter_label, meter_type, is_active, unit_id, units(unit_no)',
+        )
+        .in('unit_id', unitIds)
+        .order('meter_label')
+    : { data: [] };
+
+  const subMeterRows: SubMeterRow[] = (subMeters ?? []).map((m) => ({
+    id: m.id,
+    meter_label: m.meter_label,
+    meter_type: m.meter_type,
+    is_active: m.is_active,
+    unit_id: m.unit_id,
+    unit_no: (m.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
+  }));
+
+  const activeSubMeters = subMeterRows.filter((m) => m.is_active);
+  const activeSubMeterIds = activeSubMeters.map((m) => m.id);
+
+  const { data: bills } = await client
+    .from('mescom_bills')
+    .select('id, period, invoice_amount, block_consumption_units')
+    .eq('association_id', association.id)
+    .order('period', { ascending: false });
+
+  const billRows: MescomBillRow[] = bills ?? [];
+
+  const { data: readings } = activeSubMeterIds.length
+    ? await client
+        .from('meter_readings')
+        .select(
+          'sub_meter_id, mescom_bill_id, period, previous_reading, current_reading',
+        )
+        .in('sub_meter_id', activeSubMeterIds)
+        .order('period', { ascending: true })
+    : { data: [] };
+
+  const allReadings = readings ?? [];
+
+  const readingsByBill: Record<
+    string,
+    Record<string, { previous_reading: number; current_reading: number }>
+  > = {};
+
+  const consumedByBill: Record<string, number> = {};
+  const lastKnownReadingBySubMeter: Record<string, number> = {};
+
+  for (const r of allReadings) {
+    readingsByBill[r.mescom_bill_id] ??= {};
+    readingsByBill[r.mescom_bill_id]![r.sub_meter_id] = {
+      previous_reading: r.previous_reading,
+      current_reading: r.current_reading,
+    };
+
+    consumedByBill[r.mescom_bill_id] =
+      (consumedByBill[r.mescom_bill_id] ?? 0) +
+      (r.current_reading - r.previous_reading);
+
+    // `allReadings` is ordered by period ascending, so the last write per
+    // sub-meter is the most recent — a sensible default "previous reading"
+    // for the next bill that hasn't been entered yet.
+    lastKnownReadingBySubMeter[r.sub_meter_id] = r.current_reading;
+  }
+
+  const canManage = role === 'assoc_admin';
 
   return (
     <PageBody>
@@ -28,13 +124,24 @@ export default async function MescomPage({ params }: Props) {
         description={<AppBreadcrumbs />}
       />
 
-      <ComingSoonState
-        icon={Zap}
-        color="amber"
-        title="MESCOM & meters"
-        description="Upload MESCOM bills and enter sub-meter readings so electricity charges are split fairly."
-        roleLabel={ROLE_LABELS[role]}
-      />
+      <div className="flex flex-col gap-6">
+        <SubMetersSection
+          associationId={association.id}
+          subMeters={subMeterRows}
+          units={unitRows}
+          canManage={canManage}
+        />
+
+        <BillsSection
+          associationId={association.id}
+          bills={billRows}
+          activeSubMeters={activeSubMeters}
+          readingsByBill={readingsByBill}
+          consumedByBill={consumedByBill}
+          lastKnownReadingBySubMeter={lastKnownReadingBySubMeter}
+          canManage={canManage}
+        />
+      </div>
     </PageBody>
   );
 }

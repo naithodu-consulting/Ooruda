@@ -8,6 +8,8 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
+import { EditUnitDialog } from './edit-unit-dialog';
+
 export interface UnitRow {
   id: string;
   unit_no: string;
@@ -23,14 +25,40 @@ export interface OwnerInfo {
   mobile_number: string | null;
 }
 
+export interface MemberOption {
+  id: string;
+  label: string;
+}
+
+export interface TenancyInfo {
+  id: string;
+  unit_id: string;
+  tenant_id: string;
+  start_date: string;
+}
+
 const areaFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+
+function personLabel(info: OwnerInfo | undefined): string | null {
+  return info?.full_name?.trim() || info?.mobile_number || null;
+}
 
 export function UnitsTable({
   units,
-  owners,
+  people,
+  tenancyByUnit,
+  canManage,
+  associationId,
+  eligibleOwners,
+  eligibleTenants,
 }: {
   units: UnitRow[];
-  owners: Record<string, OwnerInfo>;
+  people: Record<string, OwnerInfo>;
+  tenancyByUnit: Record<string, TenancyInfo>;
+  canManage: boolean;
+  associationId: string;
+  eligibleOwners: MemberOption[];
+  eligibleTenants: MemberOption[];
 }) {
   return (
     <div className="rounded-xl border">
@@ -42,15 +70,22 @@ export function UnitsTable({
             <TableHead>Floor</TableHead>
             <TableHead className="text-right">Area (sq.ft)</TableHead>
             <TableHead>Owner</TableHead>
+            <TableHead>Tenant</TableHead>
             <TableHead>Status</TableHead>
+            {canManage ? <TableHead /> : null}
           </TableRow>
         </TableHeader>
 
         <TableBody>
           {units.map((unit) => {
-            const owner = unit.owner_id ? owners[unit.owner_id] : undefined;
-            const ownerLabel =
-              owner?.full_name?.trim() || owner?.mobile_number || null;
+            const ownerLabel = unit.owner_id
+              ? personLabel(people[unit.owner_id])
+              : null;
+
+            const tenancy = tenancyByUnit[unit.id];
+            const tenantLabel = tenancy
+              ? personLabel(people[tenancy.tenant_id])
+              : null;
 
             return (
               <TableRow key={unit.id}>
@@ -66,6 +101,11 @@ export function UnitsTable({
                   )}
                 </TableCell>
                 <TableCell>
+                  {tenantLabel ?? (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
                   <Badge
                     variant={
                       unit.status === 'Occupied' ? 'secondary' : 'outline'
@@ -74,6 +114,25 @@ export function UnitsTable({
                     {unit.status}
                   </Badge>
                 </TableCell>
+                {canManage ? (
+                  <TableCell>
+                    <EditUnitDialog
+                      unit={unit}
+                      associationId={associationId}
+                      ownerLabel={ownerLabel}
+                      tenancy={
+                        tenancy
+                          ? {
+                              ...tenancy,
+                              label: tenantLabel ?? tenancy.tenant_id,
+                            }
+                          : null
+                      }
+                      eligibleOwners={eligibleOwners}
+                      eligibleTenants={eligibleTenants}
+                    />
+                  </TableCell>
+                ) : null}
               </TableRow>
             );
           })}

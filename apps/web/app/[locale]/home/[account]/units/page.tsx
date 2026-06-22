@@ -10,6 +10,7 @@ import { requireRole } from '~/lib/rbac';
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import { AddUnitDialog } from './_components/add-unit-dialog';
 import {
+  type MemberOption,
   type OwnerInfo,
   type UnitRow,
   UnitsTable,
@@ -47,24 +48,40 @@ export default async function UnitsPage({ params }: Props) {
     .order('unit_no');
 
   const unitRows = (units ?? []) as UnitRow[];
+  const unitIds = unitRows.map((u) => u.id);
 
-  // Resolve owner names in one query. `units.owner_id` references auth.users,
-  // which has no PostgREST relationship to `profiles`, so we can't embed it —
-  // fetch the co-member profiles (readable via profiles_read_account_members)
-  // and map by id.
-  const ownerIds = [
-    ...new Set(unitRows.map((u) => u.owner_id).filter(Boolean)),
+  const { data: tenancies } = unitIds.length
+    ? await client
+        .from('tenancies')
+        .select('id, unit_id, tenant_id, start_date')
+        .in('unit_id', unitIds)
+        .eq('status', 'active')
+    : { data: [] };
+
+  const activeTenancies = tenancies ?? [];
+  const tenancyByUnit: Record<string, (typeof activeTenancies)[number]> =
+    Object.fromEntries(activeTenancies.map((t) => [t.unit_id, t]));
+
+  // Resolve owner/tenant names in one query. `units.owner_id` and
+  // `tenancies.tenant_id` reference auth.users, which has no PostgREST
+  // relationship to `profiles`, so we can't embed it — fetch the co-member
+  // profiles (readable via profiles_read_account_members) and map by id.
+  const peopleIds = [
+    ...new Set([
+      ...unitRows.map((u) => u.owner_id).filter(Boolean),
+      ...activeTenancies.map((t) => t.tenant_id),
+    ]),
   ] as string[];
 
-  let owners: Record<string, OwnerInfo> = {};
+  let people: Record<string, OwnerInfo> = {};
 
-  if (ownerIds.length > 0) {
+  if (peopleIds.length > 0) {
     const { data: profiles } = await client
       .from('profiles')
       .select('id, full_name, mobile_number')
-      .in('id', ownerIds);
+      .in('id', peopleIds);
 
-    owners = Object.fromEntries(
+    people = Object.fromEntries(
       (profiles ?? []).map((p) => [
         p.id,
         { full_name: p.full_name, mobile_number: p.mobile_number },
@@ -73,6 +90,52 @@ export default async function UnitsPage({ params }: Props) {
   }
 
   const canManage = role === 'assoc_admin';
+
+  let eligibleOwners: MemberOption[] = [];
+  let eligibleTenants: MemberOption[] = [];
+
+  if (canManage) {
+    const { data: members } = await client
+      .from('accounts_memberships')
+      .select('user_id, account_role')
+      .eq('account_id', accountId)
+      .in('account_role', ['prop_owner', 'tenant']);
+
+    const memberIds = [...new Set((members ?? []).map((m) => m.user_id))];
+
+    let memberProfiles: Record<string, OwnerInfo> = {};
+
+    if (memberIds.length > 0) {
+      const { data: profiles } = await client
+        .from('profiles')
+        .select('id, full_name, mobile_number')
+        .in('id', memberIds);
+
+      memberProfiles = Object.fromEntries(
+        (profiles ?? []).map((p) => [
+          p.id,
+          { full_name: p.full_name, mobile_number: p.mobile_number },
+        ]),
+      );
+    }
+
+    const toOption = (userId: string): MemberOption => {
+      const info = memberProfiles[userId];
+
+      return {
+        id: userId,
+        label: info?.full_name?.trim() || info?.mobile_number || userId,
+      };
+    };
+
+    eligibleOwners = (members ?? [])
+      .filter((m) => m.account_role === 'prop_owner')
+      .map((m) => toOption(m.user_id));
+
+    eligibleTenants = (members ?? [])
+      .filter((m) => m.account_role === 'tenant')
+      .map((m) => toOption(m.user_id));
+  }
 
   return (
     <PageBody>
@@ -94,7 +157,15 @@ export default async function UnitsPage({ params }: Props) {
         </div>
 
         {unitRows.length > 0 ? (
-          <UnitsTable units={unitRows} owners={owners} />
+          <UnitsTable
+            units={unitRows}
+            people={people}
+            tenancyByUnit={tenancyByUnit}
+            canManage={canManage}
+            associationId={association.id}
+            eligibleOwners={eligibleOwners}
+            eligibleTenants={eligibleTenants}
+          />
         ) : (
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed py-20 text-center">
             <div className="bg-muted text-muted-foreground flex h-12 w-12 items-center justify-center rounded-2xl">

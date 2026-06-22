@@ -2,15 +2,36 @@
 
 import { revalidatePath } from 'next/cache';
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { getAssociationRole } from '~/lib/rbac';
 
-import { type CreateUnitInput, CreateUnitSchema } from './units-schema';
+import {
+  type AssignTenantInput,
+  AssignTenantSchema,
+  type CreateUnitInput,
+  CreateUnitSchema,
+  type UpdateUnitInput,
+  UpdateUnitSchema,
+} from './units-schema';
 
 const UNITS_PATH = '/home/[account]/units';
 
 type ActionResult = { success: boolean; error?: string };
+
+async function requireAssocAdmin(
+  associationId: string,
+): Promise<string | null> {
+  const role = await getAssociationRole(associationId);
+
+  if (role !== 'assoc_admin') {
+    return 'Only an association admin can do that.';
+  }
+
+  return null;
+}
 
 /**
  * Create a unit under an association. Admin-only — mirrors the `admin_insert`
@@ -21,10 +42,10 @@ export async function createUnitAction(
   associationId: string,
   input: CreateUnitInput,
 ): Promise<ActionResult> {
-  const role = await getAssociationRole(associationId);
+  const roleError = await requireAssocAdmin(associationId);
 
-  if (role !== 'assoc_admin') {
-    return { success: false, error: 'You are not allowed to add units.' };
+  if (roleError) {
+    return { success: false, error: roleError };
   }
 
   const parsed = CreateUnitSchema.safeParse(input);
@@ -61,4 +82,283 @@ export async function createUnitAction(
   revalidatePath(UNITS_PATH, 'page');
 
   return { success: true };
+}
+
+/**
+ * Update a unit's details. Admin-only — mirrors `admin_update` on `units`.
+ */
+export async function updateUnitAction(
+  unitId: string,
+  associationId: string,
+  input: UpdateUnitInput,
+): Promise<ActionResult> {
+  const roleError = await requireAssocAdmin(associationId);
+
+  if (roleError) {
+    return { success: false, error: roleError };
+  }
+
+  const parsed = UpdateUnitSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Please check the form.',
+    };
+  }
+
+  const client = getSupabaseServerClient();
+
+  const { error } = await client
+    .from('units')
+    .update({
+      unit_no: parsed.data.unit_no,
+      type: parsed.data.type,
+      floor: parsed.data.floor ?? null,
+      area_sqft: parsed.data.area_sqft,
+    })
+    .eq('id', unitId)
+    .eq('association_id', associationId);
+
+  if (error) {
+    if (error.code === '23505') {
+      return {
+        success: false,
+        error: `Unit "${parsed.data.unit_no}" already exists.`,
+      };
+    }
+
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(UNITS_PATH, 'page');
+
+  return { success: true };
+}
+
+/**
+ * Delete a unit. Admin-only — mirrors `admin_delete` on `units`. Cascades to
+ * the unit's tenancies, sub-meters, and charge overrides at the DB level.
+ */
+export async function deleteUnitAction(
+  unitId: string,
+  associationId: string,
+): Promise<ActionResult> {
+  const roleError = await requireAssocAdmin(associationId);
+
+  if (roleError) {
+    return { success: false, error: roleError };
+  }
+
+  const client = getSupabaseServerClient();
+
+  const { error } = await client
+    .from('units')
+    .delete()
+    .eq('id', unitId)
+    .eq('association_id', associationId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(UNITS_PATH, 'page');
+
+  return { success: true };
+}
+
+/**
+ * Assign or unassign a unit's owner. `ownerId: null` clears the owner.
+ * Admin-only, and the owner must already hold the `prop_owner` role on this
+ * association's account — we don't let an admin point owner_id at an
+ * arbitrary user id.
+ */
+export async function assignOwnerAction(
+  unitId: string,
+  associationId: string,
+  ownerId: string | null,
+): Promise<ActionResult> {
+  const roleError = await requireAssocAdmin(associationId);
+
+  if (roleError) {
+    return { success: false, error: roleError };
+  }
+
+  const client = getSupabaseServerClient();
+
+  if (ownerId) {
+    const isEligible = await isAssociationMemberWithRole(
+      client,
+      associationId,
+      ownerId,
+      'prop_owner',
+    );
+
+    if (!isEligible) {
+      return {
+        success: false,
+        error: 'That person is not a property owner on this association.',
+      };
+    }
+  }
+
+  const { error } = await client
+    .from('units')
+    .update({ owner_id: ownerId })
+    .eq('id', unitId)
+    .eq('association_id', associationId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(UNITS_PATH, 'page');
+
+  return { success: true };
+}
+
+/**
+ * Move a tenant into a unit. The `tenancies_one_active_per_unit` unique index
+ * rejects this if the unit already has an active tenancy — end it first.
+ */
+export async function assignTenantAction(
+  unitId: string,
+  associationId: string,
+  input: AssignTenantInput,
+): Promise<ActionResult> {
+  const roleError = await requireAssocAdmin(associationId);
+
+  if (roleError) {
+    return { success: false, error: roleError };
+  }
+
+  const parsed = AssignTenantSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Please check the form.',
+    };
+  }
+
+  const client = getSupabaseServerClient();
+
+  const isEligible = await isAssociationMemberWithRole(
+    client,
+    associationId,
+    parsed.data.tenantId,
+    'tenant',
+  );
+
+  if (!isEligible) {
+    return {
+      success: false,
+      error: 'That person is not a tenant on this association.',
+    };
+  }
+
+  const { error: tenancyError } = await client.from('tenancies').insert({
+    unit_id: unitId,
+    tenant_id: parsed.data.tenantId,
+    start_date: parsed.data.startDate,
+  });
+
+  if (tenancyError) {
+    if (tenancyError.code === '23505') {
+      return {
+        success: false,
+        error:
+          'This unit already has an active tenant. End that tenancy first.',
+      };
+    }
+
+    return { success: false, error: tenancyError.message };
+  }
+
+  const { error: statusError } = await client
+    .from('units')
+    .update({ status: 'Occupied' })
+    .eq('id', unitId)
+    .eq('association_id', associationId);
+
+  if (statusError) {
+    return { success: false, error: statusError.message };
+  }
+
+  revalidatePath(UNITS_PATH, 'page');
+
+  return { success: true };
+}
+
+/**
+ * End a unit's active tenancy and mark the unit Vacant again.
+ */
+export async function endTenancyAction(
+  tenancyId: string,
+  unitId: string,
+  associationId: string,
+): Promise<ActionResult> {
+  const roleError = await requireAssocAdmin(associationId);
+
+  if (roleError) {
+    return { success: false, error: roleError };
+  }
+
+  const client = getSupabaseServerClient();
+  const now = new Date();
+  const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  const { error: tenancyError } = await client
+    .from('tenancies')
+    .update({
+      end_date: todayLocal,
+      status: 'ended',
+    })
+    .eq('id', tenancyId)
+    .eq('unit_id', unitId);
+
+  if (tenancyError) {
+    return { success: false, error: tenancyError.message };
+  }
+
+  const { error: statusError } = await client
+    .from('units')
+    .update({ status: 'Vacant' })
+    .eq('id', unitId)
+    .eq('association_id', associationId);
+
+  if (statusError) {
+    return { success: false, error: statusError.message };
+  }
+
+  revalidatePath(UNITS_PATH, 'page');
+
+  return { success: true };
+}
+
+async function isAssociationMemberWithRole(
+  client: SupabaseClient,
+  associationId: string,
+  userId: string,
+  role: 'prop_owner' | 'tenant',
+): Promise<boolean> {
+  const { data: association } = await client
+    .from('associations')
+    .select('account_id')
+    .eq('id', associationId)
+    .single();
+
+  if (!association) {
+    return false;
+  }
+
+  const { data: membership } = await client
+    .from('accounts_memberships')
+    .select('user_id')
+    .eq('account_id', association.account_id)
+    .eq('user_id', userId)
+    .eq('account_role', role)
+    .maybeSingle();
+
+  return Boolean(membership);
 }

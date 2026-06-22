@@ -1,0 +1,294 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
+
+import { getAssociationRole } from '~/lib/rbac';
+
+import { type GenerateBillsInput, GenerateBillsSchema } from './billing-schema';
+
+const BILLING_PATH = '/home/[account]/billing';
+
+type ActionResult = { success: boolean; error?: string };
+type GenerateBillsResult = ActionResult & {
+  created?: number;
+  skipped?: number;
+};
+
+async function requireBillingAccess(
+  associationId: string,
+): Promise<string | null> {
+  const role = await getAssociationRole(associationId);
+
+  if (role !== 'assoc_admin' && role !== 'billing_operator') {
+    return 'Only an association admin or billing operator can do that.';
+  }
+
+  return null;
+}
+
+/**
+ * Generate bills for every unit in the association for a billing period,
+ * from the association's active charge types (respecting per-unit
+ * overrides). Units that already have a bill for this period are skipped —
+ * re-running for the same period only fills in the gaps.
+ *
+ * Electricity line items are only included if a MESCOM bill exists for the
+ * period; the rate used is the simple invoice ÷ block-units rate (no
+ * carry-forward reconciliation yet, same provisional model used on the
+ * MESCOM page).
+ */
+export async function generateBillsAction(
+  associationId: string,
+  input: GenerateBillsInput,
+): Promise<GenerateBillsResult> {
+  const roleError = await requireBillingAccess(associationId);
+
+  if (roleError) {
+    return { success: false, error: roleError };
+  }
+
+  const parsed = GenerateBillsSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Please check the form.',
+    };
+  }
+
+  const { period } = parsed.data;
+  const client = getSupabaseServerClient();
+
+  const { data: units } = await client
+    .from('units')
+    .select('id, unit_no, area_sqft')
+    .eq('association_id', associationId);
+
+  const unitRows = units ?? [];
+
+  if (unitRows.length === 0) {
+    return { success: false, error: 'Add units before generating bills.' };
+  }
+
+  const { data: chargeTypes } = await client
+    .from('charge_types')
+    .select(
+      'id, name, calc_method, rate_or_amount, default_payer, gst_applicable',
+    )
+    .eq('association_id', associationId)
+    .eq('is_active', true);
+
+  const activeChargeTypes = chargeTypes ?? [];
+
+  if (activeChargeTypes.length === 0) {
+    return { success: false, error: 'No active charge types to bill.' };
+  }
+
+  const unitIds = unitRows.map((u) => u.id);
+
+  const { data: overrides } = await client
+    .from('unit_charge_overrides')
+    .select(
+      'unit_id, charge_type_id, payer_override, rate_or_amount_override, is_excluded',
+    )
+    .in('unit_id', unitIds);
+
+  const overrideByKey = new Map(
+    (overrides ?? []).map((o) => [`${o.unit_id}:${o.charge_type_id}`, o]),
+  );
+
+  const { data: billingSettings } = await client
+    .from('billing_settings')
+    .select('due_day_of_month, minimum_electricity_charge')
+    .eq('association_id', associationId)
+    .single();
+
+  const dueDayOfMonth = billingSettings?.due_day_of_month ?? 10;
+  const minimumElectricityCharge =
+    billingSettings?.minimum_electricity_charge ?? 0;
+  const dueDate = `${period}-${String(dueDayOfMonth).padStart(2, '0')}`;
+
+  const hasElectricityChargeType = activeChargeTypes.some(
+    (c) => c.calc_method === 'electricity',
+  );
+
+  let blockRate: number | null = null;
+  const consumedByUnit: Record<string, number> = {};
+
+  if (hasElectricityChargeType) {
+    const { data: mescomBill } = await client
+      .from('mescom_bills')
+      .select('invoice_amount, block_consumption_units')
+      .eq('association_id', associationId)
+      .eq('period', period)
+      .maybeSingle();
+
+    if (mescomBill && mescomBill.block_consumption_units > 0) {
+      blockRate =
+        mescomBill.invoice_amount / mescomBill.block_consumption_units;
+
+      const { data: subMeters } = await client
+        .from('sub_meters')
+        .select('id, unit_id')
+        .in('unit_id', unitIds);
+
+      const subMeterIds = (subMeters ?? []).map((m) => m.id);
+      const unitIdBySubMeter = new Map(
+        (subMeters ?? []).map((m) => [m.id, m.unit_id]),
+      );
+
+      if (subMeterIds.length > 0) {
+        const { data: readings } = await client
+          .from('meter_readings')
+          .select('sub_meter_id, consumed_units')
+          .eq('period', period)
+          .in('sub_meter_id', subMeterIds);
+
+        for (const r of readings ?? []) {
+          const unitId = unitIdBySubMeter.get(r.sub_meter_id);
+
+          if (unitId) {
+            consumedByUnit[unitId] =
+              (consumedByUnit[unitId] ?? 0) + (r.consumed_units ?? 0);
+          }
+        }
+      }
+    }
+  }
+
+  const { data: existingBills } = await client
+    .from('bills')
+    .select('unit_id')
+    .eq('association_id', associationId)
+    .eq('period', period);
+
+  const alreadyBilledUnitIds = new Set(
+    (existingBills ?? []).map((b) => b.unit_id),
+  );
+
+  let seq = (existingBills ?? []).length;
+  let created = 0;
+  const skipped = unitRows.filter((u) => alreadyBilledUnitIds.has(u.id)).length;
+
+  for (const unit of unitRows) {
+    if (alreadyBilledUnitIds.has(unit.id)) {
+      continue;
+    }
+
+    const lineItems: {
+      charge_type_id: string;
+      description: string;
+      payer: string;
+      gst_applicable: boolean;
+      amount: number;
+    }[] = [];
+
+    for (const chargeType of activeChargeTypes) {
+      const override = overrideByKey.get(`${unit.id}:${chargeType.id}`);
+
+      if (override?.is_excluded) {
+        continue;
+      }
+
+      const payer = override?.payer_override ?? chargeType.default_payer;
+      let amount: number;
+
+      if (chargeType.calc_method === 'electricity') {
+        if (blockRate === null) {
+          continue;
+        }
+
+        const consumed = consumedByUnit[unit.id] ?? 0;
+        amount = Math.max(consumed * blockRate, minimumElectricityCharge);
+      } else {
+        const rate =
+          override?.rate_or_amount_override ?? chargeType.rate_or_amount;
+
+        if (rate === null || rate === undefined) {
+          continue;
+        }
+
+        amount =
+          chargeType.calc_method === 'per_sqft' ? rate * unit.area_sqft : rate;
+      }
+
+      lineItems.push({
+        charge_type_id: chargeType.id,
+        description: chargeType.name,
+        payer,
+        gst_applicable: chargeType.gst_applicable,
+        amount,
+      });
+    }
+
+    if (lineItems.length === 0) {
+      continue;
+    }
+
+    seq += 1;
+    const billNo = `${period}-${String(seq).padStart(3, '0')}`;
+    const totalAmount = lineItems.reduce((sum, li) => sum + li.amount, 0);
+
+    const { data: bill, error: billError } = await client
+      .from('bills')
+      .insert({
+        association_id: associationId,
+        unit_id: unit.id,
+        period,
+        bill_no: billNo,
+        total_amount: totalAmount,
+        due_date: dueDate,
+      })
+      .select('id')
+      .single();
+
+    if (billError || !bill) {
+      return {
+        success: false,
+        error: billError?.message ?? 'Could not create the bill.',
+      };
+    }
+
+    const { error: lineItemsError } = await client
+      .from('bill_line_items')
+      .insert(lineItems.map((li) => ({ ...li, bill_id: bill.id })));
+
+    if (lineItemsError) {
+      return { success: false, error: lineItemsError.message };
+    }
+
+    created += 1;
+  }
+
+  revalidatePath(BILLING_PATH, 'page');
+
+  return { success: true, created, skipped };
+}
+
+/**
+ * Void (delete) a bill. Admin-only — cascades to its line items.
+ */
+export async function deleteBillAction(
+  billId: string,
+  associationId: string,
+): Promise<ActionResult> {
+  const role = await getAssociationRole(associationId);
+
+  if (role !== 'assoc_admin') {
+    return { success: false, error: 'Only an association admin can do that.' };
+  }
+
+  const client = getSupabaseServerClient();
+
+  const { error } = await client.from('bills').delete().eq('id', billId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(BILLING_PATH, 'page');
+
+  return { success: true };
+}
