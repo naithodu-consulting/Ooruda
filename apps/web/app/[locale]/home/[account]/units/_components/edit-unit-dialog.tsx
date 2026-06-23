@@ -48,6 +48,8 @@ import {
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 
+import { formatDateDMY } from '~/lib/format-date';
+
 import {
   assignOwnerAction,
   assignTenantAction,
@@ -81,7 +83,7 @@ export function EditUnitDialog(props: {
         }
       />
 
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Unit {props.unit.unit_no}</DialogTitle>
           <DialogDescription>
@@ -279,13 +281,20 @@ function OwnerSection(props: {
           Invite one from the Members page first.
         </p>
       ) : (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Select
             value={value}
             onValueChange={(v) => setValue(v ?? UNASSIGNED)}
           >
-            <SelectTrigger className="flex-1">
-              <SelectValue />
+            <SelectTrigger className="min-w-0 flex-1">
+              <SelectValue>
+                {(v: string) =>
+                  v === UNASSIGNED
+                    ? 'Unassigned'
+                    : (props.eligibleOwners.find((o) => o.id === v)?.label ??
+                      'Unassigned')
+                }
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
@@ -351,7 +360,8 @@ function TenantSection(props: {
       <div className="flex flex-col gap-2 border-t pt-4">
         <span className="text-sm font-medium">Tenant</span>
         <p className="text-sm">
-          {props.tenancy.label} — since {props.tenancy.start_date}
+          {props.tenancy.label} — since{' '}
+          {formatDateDMY(props.tenancy.start_date)}
         </p>
         <Button
           size="sm"
@@ -398,10 +408,15 @@ function TenantSection(props: {
           one from the Members page first.
         </p>
       ) : (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Select value={tenantId} onValueChange={(v) => setTenantId(v ?? '')}>
-            <SelectTrigger className="flex-1">
-              <SelectValue />
+            <SelectTrigger className="min-w-0 flex-1 basis-40">
+              <SelectValue>
+                {(v: string) =>
+                  props.eligibleTenants.find((t) => t.id === v)?.label ??
+                  'Select a tenant'
+                }
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {props.eligibleTenants.map((t) => (
@@ -416,7 +431,7 @@ function TenantSection(props: {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-36"
+            className="w-36 shrink-0"
           />
 
           <Button
@@ -424,6 +439,7 @@ function TenantSection(props: {
             variant="outline"
             disabled={isPending}
             onClick={onAssign}
+            className="shrink-0"
           >
             {isPending && <Spinner className="mr-2 h-4 w-4" />}
             Assign

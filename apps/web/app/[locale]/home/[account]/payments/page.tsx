@@ -1,8 +1,11 @@
+import { Banknote, IndianRupee, Receipt, Wallet } from 'lucide-react';
+
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
+import { MetricCard } from '@kit/ui/metric-card';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
+import { formatINR } from '~/lib/format-inr';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
@@ -132,17 +135,25 @@ export default async function PaymentsPage({ params }: Props) {
         <TeamAccountLayoutPageHeader
           account={account}
           title={<Trans i18nKey="association.nav.payments" />}
-          description={<AppBreadcrumbs />}
+          description={
+            rows.length === 0
+              ? 'No bills yet'
+              : `${rows.length} bills · ${formatINR(rows.reduce((sum, b) => sum + b.paid_amount, 0))} paid`
+          }
         />
 
-        <PaymentsSection
-          associationId={association.id}
-          bills={rows}
-          canManage={false}
-          canVoid={false}
-          title="Your payments"
-          description="Every payment recorded against your bill(s)."
-        />
+        <div className="flex flex-col gap-4">
+          <PaymentsMetrics rows={rows} />
+
+          <PaymentsSection
+            associationId={association.id}
+            bills={rows}
+            canManage={false}
+            canVoid={false}
+            title="Your payments"
+            description="Every payment recorded against your bill(s)."
+          />
+        </div>
       </PageBody>
     );
   }
@@ -166,15 +177,74 @@ export default async function PaymentsPage({ params }: Props) {
       <TeamAccountLayoutPageHeader
         account={account}
         title={<Trans i18nKey="association.nav.payments" />}
-        description={<AppBreadcrumbs />}
+        description={
+          rows.length === 0
+            ? 'No bills yet'
+            : `${rows.length} bills · ${formatINR(rows.reduce((sum, b) => sum + b.paid_amount, 0))} collected`
+        }
       />
 
-      <PaymentsSection
-        associationId={association.id}
-        bills={rows}
-        canManage={role === 'assoc_admin' || role === 'billing_operator'}
-        canVoid={role === 'assoc_admin'}
-      />
+      <div className="flex flex-col gap-4">
+        <PaymentsMetrics rows={rows} />
+
+        <PaymentsSection
+          associationId={association.id}
+          bills={rows}
+          canManage={role === 'assoc_admin' || role === 'billing_operator'}
+          canVoid={role === 'assoc_admin'}
+        />
+      </div>
     </PageBody>
+  );
+}
+
+function PaymentsMetrics(props: { rows: BillPaymentRow[] }) {
+  if (props.rows.length === 0) {
+    return null;
+  }
+
+  const totalBilled = props.rows.reduce((sum, b) => sum + b.total_amount, 0);
+  const totalCollected = props.rows.reduce((sum, b) => sum + b.paid_amount, 0);
+  const totalOutstanding = totalBilled - totalCollected;
+  const paymentCount = props.rows.reduce(
+    (sum, b) => sum + b.payments.length,
+    0,
+  );
+
+  return (
+    <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+      <MetricCard
+        icon={Wallet}
+        label="Collected"
+        value={formatINR(totalCollected)}
+        sublabel={
+          totalBilled === 0
+            ? '0% of billed'
+            : `${Math.round((totalCollected / totalBilled) * 100)}% of billed`
+        }
+        variant="green"
+      />
+      <MetricCard
+        icon={IndianRupee}
+        label="Outstanding"
+        value={formatINR(totalOutstanding)}
+        sublabel="Unpaid + partial"
+        variant="amber"
+      />
+      <MetricCard
+        icon={Receipt}
+        label="Payments recorded"
+        value={String(paymentCount)}
+        sublabel="Across all bills"
+        variant="blue"
+      />
+      <MetricCard
+        icon={Banknote}
+        label="Total billed"
+        value={formatINR(totalBilled)}
+        sublabel={`${props.rows.length} bills`}
+        variant="teal"
+      />
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 import { Badge } from '@kit/ui/badge';
+import { badgeExtras } from '@kit/ui/badge-extras';
 import {
   Card,
   CardContent,
@@ -15,6 +16,8 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
+import { formatTimestampDMY } from '~/lib/format-date';
+
 export interface NotificationLogRow {
   id: string;
   type: string;
@@ -25,17 +28,17 @@ export interface NotificationLogRow {
   sent_at: string;
 }
 
-function statusVariant(
-  status: string,
-): 'secondary' | 'outline' | 'destructive' | 'default' {
+function statusBadgeClassName(status: string): string | undefined {
   switch (status) {
     case 'Delivered':
     case 'Sent':
-      return 'secondary';
+      return badgeExtras.success;
     case 'Failed':
-      return 'destructive';
+      return badgeExtras.danger;
+    case 'Pending':
+      return badgeExtras.warning;
     default:
-      return 'outline';
+      return undefined;
   }
 }
 
@@ -71,15 +74,16 @@ export function NotificationsLogCard(props: { rows: NotificationLogRow[] }) {
               <TableBody>
                 {props.rows.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell>
-                      {new Date(row.sent_at).toLocaleString('en-IN')}
-                    </TableCell>
+                    <TableCell>{formatTimestampDMY(row.sent_at)}</TableCell>
                     <TableCell>{row.type}</TableCell>
                     <TableCell>{row.recipient}</TableCell>
                     <TableCell>{row.channel}</TableCell>
                     <TableCell>{row.provider_key}</TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant(row.status)}>
+                      <Badge
+                        variant="outline"
+                        className={statusBadgeClassName(row.status)}
+                      >
                         {row.status}
                       </Badge>
                     </TableCell>

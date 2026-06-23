@@ -1,8 +1,12 @@
+import { FileText, IndianRupee, TrendingUp, TriangleAlert } from 'lucide-react';
+
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
+import { MetricCard } from '@kit/ui/metric-card';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
+import { displayBillStatus } from '~/lib/bill-status';
+import { formatINR } from '~/lib/format-inr';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
@@ -57,20 +61,70 @@ export default async function BillingPage({ params }: Props) {
   const canManage = role === 'assoc_admin' || role === 'billing_operator';
   const canDelete = role === 'assoc_admin';
 
+  const totalBilled = billRows.reduce((sum, b) => sum + b.total_amount, 0);
+  const totalCollected = billRows.reduce((sum, b) => sum + b.paid_amount, 0);
+  const totalOutstanding = totalBilled - totalCollected;
+  const overdueCount = billRows.filter(
+    (b) => displayBillStatus(b) === 'Overdue',
+  ).length;
+
   return (
     <PageBody>
       <TeamAccountLayoutPageHeader
         account={account}
         title={<Trans i18nKey="association.nav.billing" />}
-        description={<AppBreadcrumbs />}
+        description={
+          billRows.length === 0
+            ? 'No bills yet'
+            : `${billRows.length} bills · ${formatINR(totalCollected)} collected · ${formatINR(totalOutstanding)} outstanding`
+        }
       />
 
-      <BillsSection
-        associationId={association.id}
-        bills={billRows}
-        canManage={canManage}
-        canDelete={canDelete}
-      />
+      <div className="flex flex-col gap-4">
+        {billRows.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+            <MetricCard
+              icon={FileText}
+              label="Total billed"
+              value={formatINR(totalBilled)}
+              sublabel={`${billRows.length} bills`}
+              variant="blue"
+            />
+            <MetricCard
+              icon={TrendingUp}
+              label="Collected"
+              value={formatINR(totalCollected)}
+              sublabel={
+                totalBilled === 0
+                  ? '0% collected'
+                  : `${Math.round((totalCollected / totalBilled) * 100)}% collected`
+              }
+              variant="green"
+            />
+            <MetricCard
+              icon={IndianRupee}
+              label="Outstanding"
+              value={formatINR(totalOutstanding)}
+              sublabel="Unpaid + partial"
+              variant="amber"
+            />
+            <MetricCard
+              icon={TriangleAlert}
+              label="Overdue"
+              value={String(overdueCount)}
+              sublabel="Bills past due"
+              variant="red"
+            />
+          </div>
+        ) : null}
+
+        <BillsSection
+          associationId={association.id}
+          bills={billRows}
+          canManage={canManage}
+          canDelete={canDelete}
+        />
+      </div>
     </PageBody>
   );
 }

@@ -1,4 +1,9 @@
+'use client';
+
+import { useState } from 'react';
+
 import { Badge } from '@kit/ui/badge';
+import { badgeExtras } from '@kit/ui/badge-extras';
 import {
   Table,
   TableBody,
@@ -7,8 +12,19 @@ import {
   TableHeader,
   TableRow,
 } from '@kit/ui/table';
+import { cn } from '@kit/ui/utils';
 
 import { EditUnitDialog } from './edit-unit-dialog';
+
+type UnitFilter = 'all' | 'occupied' | 'vacant' | 'ground' | 'overdue';
+
+const FILTERS: { id: UnitFilter; label: string }[] = [
+  { id: 'all', label: 'All units' },
+  { id: 'occupied', label: 'Occupied' },
+  { id: 'vacant', label: 'Vacant' },
+  { id: 'ground', label: 'Ground floor' },
+  { id: 'overdue', label: 'Overdue' },
+];
 
 export interface UnitRow {
   id: string;
@@ -51,6 +67,7 @@ export function UnitsTable({
   associationId,
   eligibleOwners,
   eligibleTenants,
+  overdueUnitIds,
 }: {
   units: UnitRow[];
   people: Record<string, OwnerInfo>;
@@ -59,85 +76,127 @@ export function UnitsTable({
   associationId: string;
   eligibleOwners: MemberOption[];
   eligibleTenants: MemberOption[];
+  overdueUnitIds: string[];
 }) {
+  const [filter, setFilter] = useState<UnitFilter>('all');
+  const overdueSet = new Set(overdueUnitIds);
+
+  const filteredUnits = units.filter((unit) => {
+    switch (filter) {
+      case 'occupied':
+        return unit.status === 'Occupied';
+      case 'vacant':
+        return unit.status !== 'Occupied';
+      case 'ground':
+        return unit.floor === 0;
+      case 'overdue':
+        return overdueSet.has(unit.id);
+      default:
+        return true;
+    }
+  });
+
   return (
-    <div className="rounded-xl border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Unit</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Floor</TableHead>
-            <TableHead className="text-right">Area (sq.ft)</TableHead>
-            <TableHead>Owner</TableHead>
-            <TableHead>Tenant</TableHead>
-            <TableHead>Status</TableHead>
-            {canManage ? <TableHead /> : null}
-          </TableRow>
-        </TableHeader>
+    <div className="flex flex-col gap-3.5">
+      <div className="flex flex-wrap gap-1.5">
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setFilter(f.id)}
+            className={cn(
+              'rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors',
+              filter === f.id
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground hover:border-primary/30 hover:bg-primary/5',
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
 
-        <TableBody>
-          {units.map((unit) => {
-            const ownerLabel = unit.owner_id
-              ? personLabel(people[unit.owner_id])
-              : null;
+      <div className="rounded-xl border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Unit</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Floor</TableHead>
+              <TableHead className="text-right">Area (sq.ft)</TableHead>
+              <TableHead>Owner</TableHead>
+              <TableHead>Tenant</TableHead>
+              <TableHead>Status</TableHead>
+              {canManage ? <TableHead /> : null}
+            </TableRow>
+          </TableHeader>
 
-            const tenancy = tenancyByUnit[unit.id];
-            const tenantLabel = tenancy
-              ? personLabel(people[tenancy.tenant_id])
-              : null;
+          <TableBody>
+            {filteredUnits.map((unit) => {
+              const ownerLabel = unit.owner_id
+                ? personLabel(people[unit.owner_id])
+                : null;
 
-            return (
-              <TableRow key={unit.id}>
-                <TableCell className="font-medium">{unit.unit_no}</TableCell>
-                <TableCell>{unit.type}</TableCell>
-                <TableCell>{unit.floor ?? '—'}</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {areaFmt.format(unit.area_sqft)}
-                </TableCell>
-                <TableCell>
-                  {ownerLabel ?? (
-                    <span className="text-muted-foreground">Unassigned</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {tenantLabel ?? (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      unit.status === 'Occupied' ? 'secondary' : 'outline'
-                    }
-                  >
-                    {unit.status}
-                  </Badge>
-                </TableCell>
-                {canManage ? (
-                  <TableCell>
-                    <EditUnitDialog
-                      unit={unit}
-                      associationId={associationId}
-                      ownerLabel={ownerLabel}
-                      tenancy={
-                        tenancy
-                          ? {
-                              ...tenancy,
-                              label: tenantLabel ?? tenancy.tenant_id,
-                            }
-                          : null
-                      }
-                      eligibleOwners={eligibleOwners}
-                      eligibleTenants={eligibleTenants}
-                    />
+              const tenancy = tenancyByUnit[unit.id];
+              const tenantLabel = tenancy
+                ? personLabel(people[tenancy.tenant_id])
+                : null;
+
+              return (
+                <TableRow key={unit.id}>
+                  <TableCell className="font-medium">{unit.unit_no}</TableCell>
+                  <TableCell>{unit.type}</TableCell>
+                  <TableCell>{unit.floor ?? '—'}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {areaFmt.format(unit.area_sqft)}
                   </TableCell>
-                ) : null}
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                  <TableCell>
+                    {ownerLabel ?? (
+                      <span className="text-muted-foreground">Unassigned</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {tenantLabel ?? (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={
+                        unit.status === 'Occupied'
+                          ? badgeExtras.success
+                          : undefined
+                      }
+                    >
+                      {unit.status}
+                    </Badge>
+                  </TableCell>
+                  {canManage ? (
+                    <TableCell>
+                      <EditUnitDialog
+                        unit={unit}
+                        associationId={associationId}
+                        ownerLabel={ownerLabel}
+                        tenancy={
+                          tenancy
+                            ? {
+                                ...tenancy,
+                                label: tenantLabel ?? tenancy.tenant_id,
+                              }
+                            : null
+                        }
+                        eligibleOwners={eligibleOwners}
+                        eligibleTenants={eligibleTenants}
+                      />
+                    </TableCell>
+                  ) : null}
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

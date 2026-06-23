@@ -1,5 +1,7 @@
+import { Gauge, IndianRupee, Power, PowerOff } from 'lucide-react';
+
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
+import { MetricCard } from '@kit/ui/metric-card';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
@@ -115,32 +117,84 @@ export default async function MescomPage({ params }: Props) {
   }
 
   const canManage = role === 'assoc_admin';
+  const activeCount = activeSubMeters.length;
+  const inactiveCount = subMeterRows.length - activeCount;
+  const latestBill = billRows[0];
+  const latestBlockRate =
+    latestBill && latestBill.block_consumption_units > 0
+      ? latestBill.invoice_amount / latestBill.block_consumption_units
+      : null;
 
   return (
     <PageBody>
       <TeamAccountLayoutPageHeader
         account={account}
         title={<Trans i18nKey="association.nav.mescom" />}
-        description={<AppBreadcrumbs />}
+        description={
+          subMeterRows.length === 0
+            ? 'No sub-meters yet'
+            : `${subMeterRows.length} meters · ${activeCount} active · ${inactiveCount} inactive`
+        }
       />
 
-      <div className="flex flex-col gap-6">
-        <SubMetersSection
-          associationId={association.id}
-          subMeters={subMeterRows}
-          units={unitRows}
-          canManage={canManage}
-        />
+      <div className="flex flex-col gap-4">
+        {subMeterRows.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+            <MetricCard
+              icon={Gauge}
+              label="Total meters"
+              value={String(subMeterRows.length)}
+              sublabel="All sub-meters"
+              variant="blue"
+            />
+            <MetricCard
+              icon={Power}
+              label="Active"
+              value={String(activeCount)}
+              sublabel="Recording readings"
+              variant="green"
+            />
+            <MetricCard
+              icon={PowerOff}
+              label="Inactive"
+              value={String(inactiveCount)}
+              sublabel="Not metered"
+              variant="amber"
+            />
+            <MetricCard
+              icon={IndianRupee}
+              label="Latest block rate"
+              value={
+                latestBlockRate !== null
+                  ? `₹${latestBlockRate.toFixed(2)}`
+                  : '—'
+              }
+              sublabel={
+                latestBill ? `For ${latestBill.period}` : 'No bills yet'
+              }
+              variant="teal"
+            />
+          </div>
+        ) : null}
 
-        <BillsSection
-          associationId={association.id}
-          bills={billRows}
-          activeSubMeters={activeSubMeters}
-          readingsByBill={readingsByBill}
-          consumedByBill={consumedByBill}
-          lastKnownReadingBySubMeter={lastKnownReadingBySubMeter}
-          canManage={canManage}
-        />
+        <div className="flex flex-col gap-6">
+          <SubMetersSection
+            associationId={association.id}
+            subMeters={subMeterRows}
+            units={unitRows}
+            canManage={canManage}
+          />
+
+          <BillsSection
+            associationId={association.id}
+            bills={billRows}
+            activeSubMeters={activeSubMeters}
+            readingsByBill={readingsByBill}
+            consumedByBill={consumedByBill}
+            lastKnownReadingBySubMeter={lastKnownReadingBySubMeter}
+            canManage={canManage}
+          />
+        </div>
       </div>
     </PageBody>
   );

@@ -15,7 +15,7 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
-import { billStatusBadgeVariant, displayBillStatus } from '~/lib/bill-status';
+import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
 
 import { BillPaymentsDialog, type PaymentRow } from './bill-payments-dialog';
@@ -87,7 +87,10 @@ export function PaymentsSection(props: {
                         {formatINR(outstanding)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={billStatusBadgeVariant(status)}>
+                        <Badge
+                          variant="outline"
+                          className={billStatusBadgeClassName(status)}
+                        >
                           {status}
                         </Badge>
                       </TableCell>

@@ -18,6 +18,7 @@ import { badgeExtras } from '@kit/ui/badge-extras';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import { MetricCard } from '@kit/ui/metric-card';
 
+import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import {
   daysBetweenYmd,
   formatYmdLong,
@@ -114,12 +115,14 @@ async function loadAssociationOverview(accountId: string) {
   const billed = (bills ?? []).reduce((sum, b) => sum + b.total_amount, 0);
   const collected = (bills ?? []).reduce((sum, b) => sum + b.paid_amount, 0);
   const outstanding = billed - collected;
-  const overdueCount = (bills ?? []).filter(
-    (b) => b.status === 'Overdue',
-  ).length;
-  const overdueAmount = (bills ?? [])
-    .filter((b) => b.status === 'Overdue')
-    .reduce((sum, b) => sum + (b.total_amount - b.paid_amount), 0);
+  const overdueBills = (bills ?? []).filter(
+    (b) => displayBillStatus(b) === 'Overdue',
+  );
+  const overdueCount = overdueBills.length;
+  const overdueAmount = overdueBills.reduce(
+    (sum, b) => sum + (b.total_amount - b.paid_amount),
+    0,
+  );
 
   const ageing = { d0to7: 0, d8to30: 0, d30plus: 0 };
   const today = todayInBillingZone();
@@ -262,9 +265,10 @@ export async function AssociationDashboard({
               </div>
 
               <Badge
-                variant={bill.status === 'Paid' ? 'secondary' : 'destructive'}
+                variant="outline"
+                className={billStatusBadgeClassName(displayBillStatus(bill))}
               >
-                {bill.status}
+                {displayBillStatus(bill)}
               </Badge>
             </div>
 

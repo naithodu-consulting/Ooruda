@@ -1,28 +1,30 @@
+import { badgeExtras } from '@kit/ui/badge-extras';
+
+import { todayInBillingZone } from './billing-dates';
+
 export function displayBillStatus(bill: {
   status: string;
   due_date: string;
 }): string {
-  if (
-    bill.status === 'Unpaid' &&
-    bill.due_date < new Date().toISOString().slice(0, 10)
-  ) {
+  const isPastDue = bill.due_date < todayInBillingZone();
+
+  if (isPastDue && (bill.status === 'Unpaid' || bill.status === 'Partial')) {
     return 'Overdue';
   }
 
   return bill.status;
 }
 
-export function billStatusBadgeVariant(
-  status: string,
-): 'secondary' | 'outline' | 'destructive' | 'default' {
+// className for the status Badge, e.g. <Badge variant="outline" className={billStatusBadgeClassName(status)}>
+export function billStatusBadgeClassName(status: string): string | undefined {
   switch (status) {
     case 'Paid':
-      return 'secondary';
-    case 'Overdue':
-      return 'destructive';
+      return badgeExtras.success;
     case 'Partial':
-      return 'default';
+      return badgeExtras.warning;
+    case 'Overdue':
+      return badgeExtras.danger;
     default:
-      return 'outline';
+      return undefined;
   }
 }

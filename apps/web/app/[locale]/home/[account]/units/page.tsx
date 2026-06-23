@@ -1,10 +1,11 @@
-import { Building2 } from 'lucide-react';
+import { Building2, DoorClosed, DoorOpen, Ruler } from 'lucide-react';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
+import { MetricCard } from '@kit/ui/metric-card';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
+import { displayBillStatus } from '~/lib/bill-status';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
@@ -19,6 +20,10 @@ import {
 interface Props {
   params: Promise<{ account: string }>;
 }
+
+const areaFormatter = new Intl.NumberFormat('en-IN', {
+  maximumFractionDigits: 0,
+});
 
 export const metadata = { title: 'Units & Owners' };
 
@@ -89,6 +94,20 @@ export default async function UnitsPage({ params }: Props) {
     );
   }
 
+  const { data: openBills } = unitIds.length
+    ? await client
+        .from('bills')
+        .select('unit_id, status, due_date')
+        .in('unit_id', unitIds)
+        .eq('status', 'Unpaid')
+    : { data: [] };
+
+  const overdueUnitIds = new Set(
+    (openBills ?? [])
+      .filter((bill) => displayBillStatus(bill) === 'Overdue')
+      .map((bill) => bill.unit_id),
+  );
+
   const canManage = role === 'assoc_admin';
 
   let eligibleOwners: MemberOption[] = [];
@@ -124,7 +143,10 @@ export default async function UnitsPage({ params }: Props) {
 
       return {
         id: userId,
-        label: info?.full_name?.trim() || info?.mobile_number || userId,
+        label:
+          info?.full_name?.trim() ||
+          info?.mobile_number ||
+          `Member ${userId.slice(0, 8)}`,
       };
     };
 
@@ -137,22 +159,57 @@ export default async function UnitsPage({ params }: Props) {
       .map((m) => toOption(m.user_id));
   }
 
+  const occupiedCount = unitRows.filter((u) => u.status === 'Occupied').length;
+  const vacantCount = unitRows.length - occupiedCount;
+  const totalAreaSqft = unitRows.reduce((sum, u) => sum + u.area_sqft, 0);
+
   return (
     <PageBody>
       <TeamAccountLayoutPageHeader
         account={account}
         title={<Trans i18nKey="association.nav.units" />}
-        description={<AppBreadcrumbs />}
+        description={
+          unitRows.length === 0
+            ? 'No units yet'
+            : `${unitRows.length} units · ${occupiedCount} occupied · ${vacantCount} vacant`
+        }
       />
 
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-muted-foreground text-sm">
-            {unitRows.length === 0
-              ? 'No units yet'
-              : `${unitRows.length} ${unitRows.length === 1 ? 'unit' : 'units'}`}
-          </p>
+        {unitRows.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+            <MetricCard
+              icon={DoorClosed}
+              label="Total units"
+              value={String(unitRows.length)}
+              sublabel="All units"
+              variant="blue"
+            />
+            <MetricCard
+              icon={DoorOpen}
+              label="Occupied"
+              value={String(occupiedCount)}
+              sublabel={`${unitRows.length === 0 ? 0 : Math.round((occupiedCount / unitRows.length) * 100)}% occupancy`}
+              variant="green"
+            />
+            <MetricCard
+              icon={Building2}
+              label="Vacant"
+              value={String(vacantCount)}
+              sublabel="Available now"
+              variant="amber"
+            />
+            <MetricCard
+              icon={Ruler}
+              label="Total area"
+              value={areaFormatter.format(totalAreaSqft)}
+              sublabel="Sq.ft"
+              variant="teal"
+            />
+          </div>
+        ) : null}
 
+        <div className="flex items-center justify-end gap-4">
           {canManage ? <AddUnitDialog associationId={association.id} /> : null}
         </div>
 
@@ -165,6 +222,7 @@ export default async function UnitsPage({ params }: Props) {
             associationId={association.id}
             eligibleOwners={eligibleOwners}
             eligibleTenants={eligibleTenants}
+            overdueUnitIds={[...overdueUnitIds]}
           />
         ) : (
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed py-20 text-center">

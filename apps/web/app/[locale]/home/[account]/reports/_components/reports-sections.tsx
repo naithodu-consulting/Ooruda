@@ -15,7 +15,8 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
-import { billStatusBadgeVariant, displayBillStatus } from '~/lib/bill-status';
+import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
+import { formatDateDMY } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 
 export interface CollectionSummaryRow {
@@ -139,11 +140,14 @@ export function OutstandingDuesCard(props: { rows: OutstandingDueRow[] }) {
                         {formatINR(bill.total_amount - bill.paid_amount)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={billStatusBadgeVariant(status)}>
+                        <Badge
+                          variant="outline"
+                          className={billStatusBadgeClassName(status)}
+                        >
                           {status}
                         </Badge>
                       </TableCell>
-                      <TableCell>{bill.due_date}</TableCell>
+                      <TableCell>{formatDateDMY(bill.due_date)}</TableCell>
                     </TableRow>
                   );
                 })}
@@ -253,11 +257,14 @@ export function MyDuesCard(props: { bills: OutstandingDueRow[] }) {
                         {formatINR(bill.paid_amount)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={billStatusBadgeVariant(status)}>
+                        <Badge
+                          variant="outline"
+                          className={billStatusBadgeClassName(status)}
+                        >
                           {status}
                         </Badge>
                       </TableCell>
-                      <TableCell>{bill.due_date}</TableCell>
+                      <TableCell>{formatDateDMY(bill.due_date)}</TableCell>
                     </TableRow>
                   );
                 })}

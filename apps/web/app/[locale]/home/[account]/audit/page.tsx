@@ -1,8 +1,7 @@
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { PageBody } from '@kit/ui/page';
 
-import { requireRole } from '~/lib/rbac';
+import { ROLE_LABELS, type PropOpsRole, requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import { AuditLogCard, type AuditLogRow } from './_components/audit-log-card';
@@ -47,6 +46,22 @@ export default async function AuditPage({ params }: Props) {
 
   const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
 
+  const { data: actorMemberships } =
+    actorIds.length > 0
+      ? await client
+          .from('accounts_memberships')
+          .select('user_id, account_role')
+          .eq('account_id', accountId)
+          .in('user_id', actorIds)
+      : { data: [] };
+
+  const roleLabelById = new Map(
+    (actorMemberships ?? []).map((m) => [
+      m.user_id,
+      ROLE_LABELS[m.account_role as PropOpsRole] ?? null,
+    ]),
+  );
+
   const rows: AuditLogRow[] = (logs ?? []).map((l) => ({
     id: l.id,
     action: l.action,
@@ -55,6 +70,9 @@ export default async function AuditPage({ params }: Props) {
     actor: l.actor_user_id
       ? (nameById.get(l.actor_user_id) ?? 'Unknown')
       : 'System',
+    actorRoleLabel: l.actor_user_id
+      ? (roleLabelById.get(l.actor_user_id) ?? null)
+      : null,
     created_at: l.created_at,
   }));
 
@@ -63,7 +81,11 @@ export default async function AuditPage({ params }: Props) {
       <TeamAccountLayoutPageHeader
         account={account}
         title="Audit log"
-        description={<AppBreadcrumbs />}
+        description={
+          rows.length === 0
+            ? 'Nothing logged yet'
+            : `${rows.length} events · most recent first`
+        }
       />
 
       <AuditLogCard rows={rows} />

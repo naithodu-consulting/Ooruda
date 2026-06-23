@@ -56,8 +56,10 @@ import {
   TableHeader,
   TableRow,
 } from '@kit/ui/table';
+import { cn } from '@kit/ui/utils';
 
-import { billStatusBadgeVariant, displayBillStatus } from '~/lib/bill-status';
+import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
+import { formatDateDMY } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 
 import { deleteBillAction, generateBillsAction } from '../_lib/billing-actions';
@@ -66,6 +68,16 @@ import {
   BillLineItemsDialog,
   type BillLineItemRow,
 } from './bill-line-items-dialog';
+
+type BillFilter = 'all' | 'unpaid' | 'paid' | 'partial' | 'overdue';
+
+const FILTERS: { id: BillFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'unpaid', label: 'Unpaid' },
+  { id: 'paid', label: 'Paid' },
+  { id: 'partial', label: 'Partial' },
+  { id: 'overdue', label: 'Overdue' },
+];
 
 export interface BillRow {
   id: string;
@@ -85,6 +97,25 @@ export function BillsSection(props: {
   canManage: boolean;
   canDelete: boolean;
 }) {
+  const [filter, setFilter] = useState<BillFilter>('all');
+
+  const filteredBills = props.bills.filter((bill) => {
+    const status = displayBillStatus(bill);
+
+    switch (filter) {
+      case 'unpaid':
+        return status === 'Unpaid';
+      case 'paid':
+        return status === 'Paid';
+      case 'partial':
+        return status === 'Partial';
+      case 'overdue':
+        return status === 'Overdue';
+      default:
+        return true;
+    }
+  });
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between">
@@ -101,72 +132,95 @@ export function BillsSection(props: {
         ) : null}
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="flex flex-col gap-3.5">
         {props.bills.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No bills generated yet.
           </p>
         ) : (
-          <div className="rounded-xl border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Period</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead>Bill No.</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Paid</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Due</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {props.bills.map((bill) => {
-                  const status = displayBillStatus(bill);
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFilter(f.id)}
+                  className={cn(
+                    'rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors',
+                    filter === f.id
+                      ? 'border-primary/40 bg-primary/10 text-primary'
+                      : 'border-border text-muted-foreground hover:border-primary/30 hover:bg-primary/5',
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
 
-                  return (
-                    <TableRow key={bill.id}>
-                      <TableCell className="font-medium">
-                        {bill.period}
-                      </TableCell>
-                      <TableCell>{bill.unit_no}</TableCell>
-                      <TableCell>{bill.bill_no}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatINR(bill.total_amount)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatINR(bill.paid_amount)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={billStatusBadgeVariant(status)}>
-                          {status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{bill.due_date}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-2">
-                          <BillLineItemsDialog
-                            billNo={bill.bill_no}
-                            period={bill.period}
-                            lineItems={bill.lineItems}
-                          />
+            <div className="rounded-xl border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead>Bill No.</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Paid</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Due</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredBills.map((bill) => {
+                    const status = displayBillStatus(bill);
 
-                          {props.canDelete ? (
-                            <DeleteBillButton
-                              billId={bill.id}
+                    return (
+                      <TableRow key={bill.id}>
+                        <TableCell className="font-medium">
+                          {bill.period}
+                        </TableCell>
+                        <TableCell>{bill.unit_no}</TableCell>
+                        <TableCell>{bill.bill_no}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatINR(bill.total_amount)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatINR(bill.paid_amount)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={billStatusBadgeClassName(status)}
+                          >
+                            {status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{formatDateDMY(bill.due_date)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-end gap-2">
+                            <BillLineItemsDialog
                               billNo={bill.bill_no}
-                              associationId={props.associationId}
+                              period={bill.period}
+                              lineItems={bill.lineItems}
                             />
-                          ) : null}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+
+                            {props.canDelete ? (
+                              <DeleteBillButton
+                                billId={bill.id}
+                                billNo={bill.bill_no}
+                                associationId={props.associationId}
+                              />
+                            ) : null}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </>
         )}
 
         <p className="text-muted-foreground mt-3 text-xs">
@@ -304,14 +358,14 @@ function DeleteBillButton(props: {
       <AlertDialogTrigger
         render={
           <Button size="sm" variant="destructive">
-            Void
+            Delete
           </Button>
         }
       />
 
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Void bill {props.billNo}?</AlertDialogTitle>
+          <AlertDialogTitle>Delete bill {props.billNo}?</AlertDialogTitle>
           <AlertDialogDescription>
             This deletes the bill and its line items. This can't be undone.
           </AlertDialogDescription>
@@ -321,7 +375,7 @@ function DeleteBillButton(props: {
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction disabled={isPending} onClick={onDelete}>
             {isPending && <Spinner className="mr-2 h-4 w-4" />}
-            Void
+            Delete
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

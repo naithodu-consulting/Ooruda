@@ -8,6 +8,10 @@ export const badgeExtras = {
     'bg-green-600/10 text-green-600 dark:bg-green-600/20 [&>svg]:text-green-600',
   warning:
     'bg-transparent border-yellow-600 text-yellow-600 dark:border-yellow-600 [&>svg]:text-yellow-600',
+  danger: 'bg-red-600/10 text-red-600 dark:bg-red-600/20 [&>svg]:text-red-600',
+  purple:
+    'bg-purple-600/10 text-purple-600 dark:bg-purple-600/20 [&>svg]:text-purple-600',
+  teal: 'bg-teal-600/10 text-teal-600 dark:bg-teal-600/20 [&>svg]:text-teal-600',
 } as const;
 
 export type BadgeExtraVariant = keyof typeof badgeExtras;

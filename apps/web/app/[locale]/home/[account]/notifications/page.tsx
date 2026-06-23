@@ -1,5 +1,7 @@
+import { Bell, BellRing, Send } from 'lucide-react';
+
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
+import { MetricCard } from '@kit/ui/metric-card';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
@@ -71,13 +73,53 @@ export default async function NotificationsPage({ params }: Props) {
     sent_at: l.sent_at,
   }));
 
+  const sentCount = rows.filter(
+    (r) => r.status === 'Sent' || r.status === 'Delivered',
+  ).length;
+  const deliveredCount = rows.filter((r) => r.status === 'Delivered').length;
+  const reminderCount = rows.filter((r) => r.type === 'Reminder').length;
+
   return (
     <PageBody>
       <TeamAccountLayoutPageHeader
         account={account}
         title={<Trans i18nKey="association.nav.notifications" />}
-        description={<AppBreadcrumbs />}
+        description={
+          rows.length === 0
+            ? 'No notifications sent yet'
+            : `${rows.length} notifications · ${deliveredCount} delivered`
+        }
       />
+
+      {rows.length > 0 ? (
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+          <MetricCard
+            icon={Send}
+            label="Sent"
+            value={String(sentCount)}
+            sublabel="Out for delivery"
+            variant="blue"
+          />
+          <MetricCard
+            icon={BellRing}
+            label="Delivered"
+            value={String(deliveredCount)}
+            sublabel={
+              sentCount === 0
+                ? '0% delivered'
+                : `${Math.round((deliveredCount / sentCount) * 100)}% delivered`
+            }
+            variant="green"
+          />
+          <MetricCard
+            icon={Bell}
+            label="Reminders"
+            value={String(reminderCount)}
+            sublabel="Payment reminders sent"
+            variant="amber"
+          />
+        </div>
+      ) : null}
 
       <NotificationsLogCard rows={rows} />
     </PageBody>

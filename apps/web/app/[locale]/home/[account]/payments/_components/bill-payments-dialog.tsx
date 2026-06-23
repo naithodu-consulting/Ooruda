@@ -37,6 +37,7 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
+import { formatTimestampDateDMY } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 
 import { voidPaymentAction } from '../_lib/payments-actions';
@@ -63,7 +64,7 @@ export function BillPaymentsDialog(props: {
         render={
           <Button size="sm" variant="outline">
             <Eye className="h-4 w-4" />
-            Payments ({props.payments.length})
+            View payments ({props.payments.length})
           </Button>
         }
       />
@@ -96,7 +97,7 @@ export function BillPaymentsDialog(props: {
               {props.payments.map((payment) => (
                 <TableRow key={payment.id}>
                   <TableCell>
-                    {new Date(payment.paid_at).toLocaleDateString('en-IN')}
+                    {formatTimestampDateDMY(payment.paid_at)}
                   </TableCell>
                   <TableCell>{payment.mode}</TableCell>
                   <TableCell>{payment.paid_by_role}</TableCell>
@@ -140,11 +141,11 @@ function VoidPaymentButton(props: {
       );
 
       if (!result.success) {
-        toast.error(result.error ?? 'Could not void the payment.');
+        toast.error(result.error ?? 'Could not delete the payment.');
         return;
       }
 
-      toast.success('Payment voided.');
+      toast.success('Payment deleted.');
       router.refresh();
     });
   };
@@ -154,14 +155,14 @@ function VoidPaymentButton(props: {
       <AlertDialogTrigger
         render={
           <Button size="sm" variant="destructive">
-            Void
+            Delete
           </Button>
         }
       />
 
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Void this payment?</AlertDialogTitle>
+          <AlertDialogTitle>Delete this payment?</AlertDialogTitle>
           <AlertDialogDescription>
             This deletes the payment and its receipt, and recalculates the
             bill's paid amount. This can't be undone.
@@ -172,7 +173,7 @@ function VoidPaymentButton(props: {
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction disabled={isPending} onClick={onVoid}>
             {isPending && <Spinner className="mr-2 h-4 w-4" />}
-            Void
+            Delete
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -1,5 +1,4 @@
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
@@ -83,7 +82,11 @@ export default async function ReportsPage({ params }: Props) {
         <TeamAccountLayoutPageHeader
           account={account}
           title={<Trans i18nKey="association.nav.reports" />}
-          description={<AppBreadcrumbs />}
+          description={
+            myDues.length === 0
+              ? 'No bills yet'
+              : `${myDues.length} bills across your unit(s)`
+          }
         />
 
         <MyDuesCard bills={myDues} />
@@ -160,7 +163,11 @@ export default async function ReportsPage({ params }: Props) {
       <TeamAccountLayoutPageHeader
         account={account}
         title={<Trans i18nKey="association.nav.reports" />}
-        description={<AppBreadcrumbs />}
+        description={
+          billRows.length === 0
+            ? 'No bills yet'
+            : `${collectionSummary.length} periods · ${outstandingDues.length} outstanding · ${electricityUsage.length} MESCOM bills`
+        }
       />
 
       <div className="flex flex-col gap-6">

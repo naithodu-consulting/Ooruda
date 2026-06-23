@@ -9,6 +9,7 @@ import { Plus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
 import { Badge } from '@kit/ui/badge';
+import { badgeExtras } from '@kit/ui/badge-extras';
 import { Button } from '@kit/ui/button';
 import {
   Card,
@@ -119,7 +120,10 @@ export function SubMetersSection(props: {
                     <TableCell>{meter.meter_type}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={meter.is_active ? 'secondary' : 'outline'}
+                        variant="outline"
+                        className={
+                          meter.is_active ? badgeExtras.success : undefined
+                        }
                       >
                         {meter.is_active ? 'Active' : 'Inactive'}
                       </Badge>
@@ -253,8 +257,13 @@ function AddSubMeterForm(props: {
                 onValueChange={(v) => field.onChange(v ?? '')}
               >
                 <FormControl>
-                  <SelectTrigger>
-                    <SelectValue />
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {(value: string) =>
+                        props.units.find((u) => u.id === value)?.unit_no ??
+                        'Select a unit'
+                      }
+                    </SelectValue>
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -290,8 +299,12 @@ function AddSubMeterForm(props: {
               <FormLabel>Type</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger>
-                    <SelectValue />
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {(value: string) =>
+                        value === 'Unit' ? 'Unit meter' : 'Common area'
+                      }
+                    </SelectValue>
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
