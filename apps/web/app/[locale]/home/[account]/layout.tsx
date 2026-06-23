@@ -16,6 +16,7 @@ import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.co
 import { TeamAccountLayoutMobileNavigation } from './_components/team-account-layout-mobile-navigation';
 import { TeamAccountLayoutSidebar } from './_components/team-account-layout-sidebar';
 import { TeamAccountNavigationMenu } from './_components/team-account-navigation-menu';
+import { TeamAccountTopbar } from './_components/team-account-topbar';
 import { loadTeamWorkspace } from './_lib/server/team-account-workspace.loader';
 
 type TeamWorkspaceLayoutProps = React.PropsWithChildren<{
@@ -81,7 +82,16 @@ async function SidebarLayout({
             </div>
           </PageMobileNavigation>
 
-          {children}
+          <div className="dark:bg-background flex min-w-0 flex-1 flex-col bg-[#F0F4F8]">
+            <TeamAccountTopbar
+              account={account}
+              accountId={data.account.id}
+              userId={data.user.id}
+              role={data.account.role}
+            />
+
+            {children}
+          </div>
         </Page>
       </SidebarProvider>
     </TeamAccountWorkspaceContextProvider>

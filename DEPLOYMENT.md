@@ -1,8 +1,8 @@
-# PropOps — Deployment
+# PropTech — Deployment
 
 ## Vercel (frontend / Next.js app)
 
-PropOps is a pnpm + Turborepo monorepo with **two** Next.js apps: `apps/web`
+PropTech is a pnpm + Turborepo monorepo with **two** Next.js apps: `apps/web`
 (the product) and `apps/dev-tool` (internal). Vercel must be pointed at
 `apps/web` via the project's **Root Directory** setting — otherwise its Turbo
 auto-detection may pick the wrong app and the build fails with

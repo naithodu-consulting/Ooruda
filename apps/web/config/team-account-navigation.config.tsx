@@ -61,16 +61,16 @@ const getRoutes = (account: string) => [
         path: `${pathsConfig.app.accountHome.replace('[account]', account)}/reports`,
         Icon: <Activity className={iconClasses} />,
       },
-      {
-        label: 'association.nav.notifications',
-        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/notifications`,
-        Icon: <Bell className={iconClasses} />,
-      },
     ],
   },
   {
     label: 'association.nav.admin',
     children: [
+      {
+        label: 'association.nav.notifications',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/notifications`,
+        Icon: <Bell className={iconClasses} />,
+      },
       {
         label: 'association.nav.members',
         path: pathsConfig.app.accountMembers.replace('[account]', account),
@@ -94,7 +94,7 @@ export function getTeamAccountSidebarConfig(account: string) {
   });
 }
 
-// Which nav items each PropOps role may see (by i18n label key). Owners and
+// Which nav items each PropTech role may see (by i18n label key). Owners and
 // tenants get a minimal portal (dashboard + payments) per the prototype;
 // billing operators see operations + insights but not the Admin section;
 // assoc_admin sees everything. The platform super admin uses /admin, not this

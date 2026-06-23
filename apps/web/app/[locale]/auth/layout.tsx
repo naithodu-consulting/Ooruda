@@ -22,7 +22,7 @@ function AuthLayout({ children }: React.PropsWithChildren) {
           </div>
 
           <h1 className="text-[28px] leading-tight font-black tracking-tight text-white">
-            PropOps
+            PropTech
           </h1>
 
           <p className="mt-1.5 text-[10px] font-medium tracking-[0.15em] text-white/35 uppercase">
@@ -42,7 +42,7 @@ function AuthLayout({ children }: React.PropsWithChildren) {
         </div>
 
         <p className="mt-6 text-center text-[11px] text-white/20">
-          &copy; {new Date().getFullYear()} PropOps. All rights reserved.
+          &copy; {new Date().getFullYear()} PropTech. All rights reserved.
         </p>
       </div>
     </div>

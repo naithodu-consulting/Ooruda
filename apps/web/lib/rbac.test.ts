@@ -9,7 +9,7 @@ import {
 } from './rbac';
 
 /**
- * Unit tests for the PropOps RBAC primitives in `lib/rbac.ts`.
+ * Unit tests for the PropTech RBAC primitives in `lib/rbac.ts`.
  *
  * These cover the pure, database-free authorization logic:
  *   - the role set and its privilege ordering;
@@ -19,8 +19,8 @@ import {
  * the RLS policies that read it) is asserted separately in the pgTAP suite
  * (`supabase/tests/database/proptech-rbac.test.sql`).
  */
-describe('PropOps role model', () => {
-  it('defines exactly the four PropOps roles', () => {
+describe('PropTech role model', () => {
+  it('defines exactly the four PropTech roles', () => {
     expect([...PROPOPS_ROLES]).toEqual([
       'assoc_admin',
       'billing_operator',

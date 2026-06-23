@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import {
   AlertTriangle,
   Banknote,
@@ -5,13 +7,22 @@ import {
   Clock,
   DoorOpen,
   Receipt,
+  Zap,
 } from 'lucide-react';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
+import { Alert, AlertDescription } from '@kit/ui/alert';
+import { alertExtras } from '@kit/ui/alert-extras';
 import { Badge } from '@kit/ui/badge';
+import { badgeExtras } from '@kit/ui/badge-extras';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import { MetricCard } from '@kit/ui/metric-card';
 
+import {
+  daysBetweenYmd,
+  formatYmdLong,
+  todayInBillingZone,
+} from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
 import { type PropOpsRole, hasMinimumRole } from '~/lib/rbac';
 
@@ -28,6 +39,36 @@ function periodLabel(period: string): string {
   });
 }
 
+function AgeingBar(props: {
+  label: string;
+  amount: number;
+  maxAmount: number;
+  colorClassName: string;
+  textClassName: string;
+}) {
+  const width =
+    props.maxAmount > 0
+      ? `${Math.max(4, (props.amount / props.maxAmount) * 100)}%`
+      : '0%';
+
+  return (
+    <div>
+      <div className="text-muted-foreground mb-1.5 flex items-center justify-between text-xs font-semibold">
+        <span>{props.label}</span>
+      </div>
+      <div className="bg-muted h-1.5 overflow-hidden rounded-full">
+        <div
+          className={`h-full rounded-full ${props.colorClassName}`}
+          style={{ width }}
+        />
+      </div>
+      <p className={`mt-1 text-sm font-semibold ${props.textClassName}`}>
+        {formatINR(props.amount)}
+      </p>
+    </div>
+  );
+}
+
 async function loadAssociationOverview(accountId: string) {
   const client = getSupabaseServerClient();
   const period = currentPeriod();
@@ -42,23 +83,33 @@ async function loadAssociationOverview(accountId: string) {
     return null;
   }
 
-  const [{ count: totalUnits }, { count: occupiedUnits }, { data: bills }] =
-    await Promise.all([
-      client
-        .from('units')
-        .select('id', { count: 'exact', head: true })
-        .eq('association_id', association.id),
-      client
-        .from('units')
-        .select('id', { count: 'exact', head: true })
-        .eq('association_id', association.id)
-        .eq('status', 'Occupied'),
-      client
-        .from('bills')
-        .select('total_amount, paid_amount, status')
-        .eq('association_id', association.id)
-        .eq('period', period),
-    ]);
+  const [
+    { count: totalUnits },
+    { count: occupiedUnits },
+    { data: bills },
+    { data: mescomBill },
+  ] = await Promise.all([
+    client
+      .from('units')
+      .select('id', { count: 'exact', head: true })
+      .eq('association_id', association.id),
+    client
+      .from('units')
+      .select('id', { count: 'exact', head: true })
+      .eq('association_id', association.id)
+      .eq('status', 'Occupied'),
+    client
+      .from('bills')
+      .select('total_amount, paid_amount, status, due_date')
+      .eq('association_id', association.id)
+      .eq('period', period),
+    client
+      .from('mescom_bills')
+      .select('id')
+      .eq('association_id', association.id)
+      .eq('period', period)
+      .maybeSingle(),
+  ]);
 
   const billed = (bills ?? []).reduce((sum, b) => sum + b.total_amount, 0);
   const collected = (bills ?? []).reduce((sum, b) => sum + b.paid_amount, 0);
@@ -69,6 +120,29 @@ async function loadAssociationOverview(accountId: string) {
   const overdueAmount = (bills ?? [])
     .filter((b) => b.status === 'Overdue')
     .reduce((sum, b) => sum + (b.total_amount - b.paid_amount), 0);
+
+  const ageing = { d0to7: 0, d8to30: 0, d30plus: 0 };
+  const today = todayInBillingZone();
+
+  for (const bill of bills ?? []) {
+    const outstandingAmount = bill.total_amount - bill.paid_amount;
+
+    if (outstandingAmount <= 0) {
+      continue;
+    }
+
+    const daysOverdue = daysBetweenYmd(bill.due_date, today);
+
+    if (daysOverdue <= 0) {
+      continue;
+    } else if (daysOverdue <= 7) {
+      ageing.d0to7 += outstandingAmount;
+    } else if (daysOverdue <= 30) {
+      ageing.d8to30 += outstandingAmount;
+    } else {
+      ageing.d30plus += outstandingAmount;
+    }
+  }
 
   const { data: recentActivity } = await client
     .from('audit_logs')
@@ -88,6 +162,8 @@ async function loadAssociationOverview(accountId: string) {
     outstanding,
     overdueCount,
     overdueAmount,
+    ageing,
+    mescomBillUploaded: Boolean(mescomBill),
     recentActivity: recentActivity ?? [],
   };
 }
@@ -133,10 +209,12 @@ async function loadMyBillSummary(accountId: string, userId: string) {
 }
 
 export async function AssociationDashboard({
+  account,
   accountId,
   userId,
   role,
 }: {
+  account: string;
   accountId: string;
   userId: string;
   role: PropOpsRole;
@@ -196,11 +274,7 @@ export async function AssociationDashboard({
                   Due date
                 </div>
                 <div className="mt-0.5 text-sm font-semibold">
-                  {new Date(bill.due_date).toLocaleDateString('en-IN', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })}
+                  {formatYmdLong(bill.due_date)}
                 </div>
               </div>
             </div>
@@ -233,6 +307,12 @@ export async function AssociationDashboard({
       </Card>
     );
   }
+
+  const ageingMax = Math.max(
+    overview.ageing.d0to7,
+    overview.ageing.d8to30,
+    overview.ageing.d30plus,
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -274,6 +354,125 @@ export async function AssociationDashboard({
           sublabel={`${overview.overdueCount} units`}
         />
       </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-sm">Collection progress</CardTitle>
+            <Badge className={badgeExtras.success}>
+              {periodLabel(overview.period)}
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Total billed</span>
+                <span className="font-semibold">
+                  {formatINR(overview.billed)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Collected</span>
+                <span className="font-semibold text-emerald-600">
+                  {formatINR(overview.collected)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Outstanding</span>
+                <span className="font-semibold text-amber-600">
+                  {formatINR(overview.outstanding)}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-amber-100">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600"
+                style={{
+                  width:
+                    overview.billed > 0
+                      ? `${Math.min(100, (overview.collected / overview.billed) * 100)}%`
+                      : '0%',
+                }}
+              />
+            </div>
+            <p className="mt-1.5 text-right text-xs font-semibold text-amber-600">
+              {overview.billed > 0
+                ? `${Math.round((overview.collected / overview.billed) * 100)}% collected`
+                : 'No bills yet'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Ageing analysis</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <AgeingBar
+              label="0–7 days"
+              amount={overview.ageing.d0to7}
+              maxAmount={ageingMax}
+              colorClassName="bg-blue-500"
+              textClassName="text-blue-600"
+            />
+            <AgeingBar
+              label="8–30 days"
+              amount={overview.ageing.d8to30}
+              maxAmount={ageingMax}
+              colorClassName="bg-amber-500"
+              textClassName="text-amber-600"
+            />
+            <AgeingBar
+              label=">30 days overdue"
+              amount={overview.ageing.d30plus}
+              maxAmount={ageingMax}
+              colorClassName="bg-red-500"
+              textClassName="text-red-600"
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {overview.overdueCount > 0 || !overview.mescomBillUploaded ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Pending actions</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {overview.overdueCount > 0 ? (
+              <Alert className={alertExtras.warning}>
+                <AlertTriangle />
+                <AlertDescription>
+                  <strong>{overview.overdueCount} units</strong> overdue —{' '}
+                  <Link
+                    href={`/home/${account}/notifications`}
+                    className="font-semibold underline"
+                  >
+                    send bulk reminder →
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            {!overview.mescomBillUploaded ? (
+              <Alert className={alertExtras.info}>
+                <Zap />
+                <AlertDescription>
+                  MESCOM bill for {periodLabel(overview.period)} hasn&apos;t
+                  been uploaded yet —{' '}
+                  <Link
+                    href={`/home/${account}/mescom`}
+                    className="font-semibold underline"
+                  >
+                    upload bill →
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

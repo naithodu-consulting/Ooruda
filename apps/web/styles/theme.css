@@ -47,7 +47,7 @@
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
   --radius: 0.625rem;
-  /* PropOps: sidebar stays permanently dark (prototype-matched), independent of light/dark mode */
+  /* PropTech: sidebar stays permanently dark (prototype-matched), independent of light/dark mode */
   --sidebar: #111827;
   --sidebar-foreground: #8fa6c2;
   --sidebar-primary: #f59e0b;

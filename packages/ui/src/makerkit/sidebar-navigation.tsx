@@ -274,6 +274,10 @@ function SidebarNavigationRouteChildItem({
         <SidebarMenuButton
           isActive={isActive}
           tooltip={tooltip}
+          className={cn(
+            // Prototype active treatment: amber left accent bar + amber icon
+            'data-active:border-l-primary data-active:[&>svg]:text-primary data-active:rounded-l-sm data-active:border-l-2 data-active:font-semibold',
+          )}
           render={
             <Link
               className={cn('flex items-center gap-x-2', {

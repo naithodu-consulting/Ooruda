@@ -37,7 +37,12 @@ async function TeamAccountHomePage({ params }: TeamAccountHomePageProps) {
         description={<AppBreadcrumbs />}
       />
 
-      <AssociationDashboard accountId={accountId} userId={userId} role={role} />
+      <AssociationDashboard
+        account={account}
+        accountId={accountId}
+        userId={userId}
+        role={role}
+      />
     </PageBody>
   );
 }
