@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole } from '~/lib/rbac';
 
 import {
@@ -59,13 +60,17 @@ export async function createUnitAction(
 
   const client = getSupabaseServerClient();
 
-  const { error } = await client.from('units').insert({
-    association_id: associationId,
-    unit_no: parsed.data.unit_no,
-    type: parsed.data.type,
-    floor: parsed.data.floor ?? null,
-    area_sqft: parsed.data.area_sqft,
-  });
+  const { data: unit, error } = await client
+    .from('units')
+    .insert({
+      association_id: associationId,
+      unit_no: parsed.data.unit_no,
+      type: parsed.data.type,
+      floor: parsed.data.floor ?? null,
+      area_sqft: parsed.data.area_sqft,
+    })
+    .select('id')
+    .single();
 
   if (error) {
     // Unique (association_id, unit_no) violation
@@ -78,6 +83,14 @@ export async function createUnitAction(
 
     return { success: false, error: error.message };
   }
+
+  await logAuditEvent({
+    associationId,
+    action: 'unit.created',
+    entityType: 'unit',
+    entityId: unit.id,
+    summary: `Created unit ${parsed.data.unit_no}`,
+  });
 
   revalidatePath(UNITS_PATH, 'page');
 
@@ -131,6 +144,14 @@ export async function updateUnitAction(
     return { success: false, error: error.message };
   }
 
+  await logAuditEvent({
+    associationId,
+    action: 'unit.updated',
+    entityType: 'unit',
+    entityId: unitId,
+    summary: `Updated unit ${parsed.data.unit_no}`,
+  });
+
   revalidatePath(UNITS_PATH, 'page');
 
   return { success: true };
@@ -152,6 +173,12 @@ export async function deleteUnitAction(
 
   const client = getSupabaseServerClient();
 
+  const { data: unit } = await client
+    .from('units')
+    .select('unit_no')
+    .eq('id', unitId)
+    .maybeSingle();
+
   const { error } = await client
     .from('units')
     .delete()
@@ -161,6 +188,14 @@ export async function deleteUnitAction(
   if (error) {
     return { success: false, error: error.message };
   }
+
+  await logAuditEvent({
+    associationId,
+    action: 'unit.deleted',
+    entityType: 'unit',
+    entityId: unitId,
+    summary: `Deleted unit ${unit?.unit_no ?? unitId}`,
+  });
 
   revalidatePath(UNITS_PATH, 'page');
 
@@ -211,6 +246,14 @@ export async function assignOwnerAction(
   if (error) {
     return { success: false, error: error.message };
   }
+
+  await logAuditEvent({
+    associationId,
+    action: ownerId ? 'unit.owner_assigned' : 'unit.owner_unassigned',
+    entityType: 'unit',
+    entityId: unitId,
+    summary: ownerId ? "Assigned a unit's owner" : "Cleared a unit's owner",
+  });
 
   revalidatePath(UNITS_PATH, 'page');
 
@@ -285,6 +328,14 @@ export async function assignTenantAction(
     return { success: false, error: statusError.message };
   }
 
+  await logAuditEvent({
+    associationId,
+    action: 'tenancy.started',
+    entityType: 'unit',
+    entityId: unitId,
+    summary: 'Moved a tenant into a unit',
+  });
+
   revalidatePath(UNITS_PATH, 'page');
 
   return { success: true };
@@ -330,6 +381,14 @@ export async function endTenancyAction(
   if (statusError) {
     return { success: false, error: statusError.message };
   }
+
+  await logAuditEvent({
+    associationId,
+    action: 'tenancy.ended',
+    entityType: 'unit',
+    entityId: unitId,
+    summary: "Ended a unit's tenancy",
+  });
 
   revalidatePath(UNITS_PATH, 'page');
 

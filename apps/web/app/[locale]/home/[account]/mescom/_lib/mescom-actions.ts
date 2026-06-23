@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole } from '~/lib/rbac';
 
 import {
@@ -80,6 +81,13 @@ export async function createSubMeterAction(
     return { success: false, error: error.message };
   }
 
+  await logAuditEvent({
+    associationId,
+    action: 'sub_meter.created',
+    entityType: 'sub_meter',
+    summary: `Added sub-meter ${parsed.data.meterLabel}`,
+  });
+
   revalidatePath(MESCOM_PATH, 'page');
 
   return { success: true };
@@ -110,6 +118,14 @@ export async function setSubMeterActiveAction(
   if (error) {
     return { success: false, error: error.message };
   }
+
+  await logAuditEvent({
+    associationId,
+    action: isActive ? 'sub_meter.activated' : 'sub_meter.deactivated',
+    entityType: 'sub_meter',
+    entityId: subMeterId,
+    summary: isActive ? 'Reactivated a sub-meter' : 'Deactivated a sub-meter',
+  });
 
   revalidatePath(MESCOM_PATH, 'page');
 
@@ -158,6 +174,13 @@ export async function createMescomBillAction(
 
     return { success: false, error: error.message };
   }
+
+  await logAuditEvent({
+    associationId,
+    action: 'mescom_bill.created',
+    entityType: 'mescom_bill',
+    summary: `Uploaded MESCOM bill for ${parsed.data.period}`,
+  });
 
   revalidatePath(MESCOM_PATH, 'page');
 
@@ -240,6 +263,14 @@ export async function recordMeterReadingsAction(
       }
     }
   }
+
+  await logAuditEvent({
+    associationId,
+    action: 'meter_readings.recorded',
+    entityType: 'mescom_bill',
+    entityId: bill.id,
+    summary: `Recorded meter readings for ${bill.period}`,
+  });
 
   revalidatePath(MESCOM_PATH, 'page');
 

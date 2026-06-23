@@ -57,6 +57,7 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
+import { billStatusBadgeVariant, displayBillStatus } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
 
 import { deleteBillAction, generateBillsAction } from '../_lib/billing-actions';
@@ -76,32 +77,6 @@ export interface BillRow {
   due_date: string;
   unit_no: string;
   lineItems: BillLineItemRow[];
-}
-
-function displayStatus(bill: BillRow): string {
-  if (
-    bill.status === 'Unpaid' &&
-    bill.due_date < new Date().toISOString().slice(0, 10)
-  ) {
-    return 'Overdue';
-  }
-
-  return bill.status;
-}
-
-function statusVariant(
-  status: string,
-): 'secondary' | 'outline' | 'destructive' | 'default' {
-  switch (status) {
-    case 'Paid':
-      return 'secondary';
-    case 'Overdue':
-      return 'destructive';
-    case 'Partial':
-      return 'default';
-    default:
-      return 'outline';
-  }
 }
 
 export function BillsSection(props: {
@@ -148,7 +123,7 @@ export function BillsSection(props: {
               </TableHeader>
               <TableBody>
                 {props.bills.map((bill) => {
-                  const status = displayStatus(bill);
+                  const status = displayBillStatus(bill);
 
                   return (
                     <TableRow key={bill.id}>
@@ -164,7 +139,9 @@ export function BillsSection(props: {
                         {formatINR(bill.paid_amount)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={statusVariant(status)}>{status}</Badge>
+                        <Badge variant={billStatusBadgeVariant(status)}>
+                          {status}
+                        </Badge>
                       </TableCell>
                       <TableCell>{bill.due_date}</TableCell>
                       <TableCell>

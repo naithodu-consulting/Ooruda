@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole } from '~/lib/rbac';
 
 import { type GenerateBillsInput, GenerateBillsSchema } from './billing-schema';
@@ -262,6 +263,15 @@ export async function generateBillsAction(
     created += 1;
   }
 
+  if (created > 0) {
+    await logAuditEvent({
+      associationId,
+      action: 'bills.generated',
+      entityType: 'bill',
+      summary: `Generated ${created} bill(s) for ${period}`,
+    });
+  }
+
   revalidatePath(BILLING_PATH, 'page');
 
   return { success: true, created, skipped };
@@ -282,11 +292,25 @@ export async function deleteBillAction(
 
   const client = getSupabaseServerClient();
 
+  const { data: bill } = await client
+    .from('bills')
+    .select('bill_no')
+    .eq('id', billId)
+    .maybeSingle();
+
   const { error } = await client.from('bills').delete().eq('id', billId);
 
   if (error) {
     return { success: false, error: error.message };
   }
+
+  await logAuditEvent({
+    associationId,
+    action: 'bill.voided',
+    entityType: 'bill',
+    entityId: billId,
+    summary: `Voided bill ${bill?.bill_no ?? billId}`,
+  });
 
   revalidatePath(BILLING_PATH, 'page');
 
