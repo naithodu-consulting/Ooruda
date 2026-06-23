@@ -12,6 +12,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Tables } from '@kit/supabase/database';
+import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import {
   DropdownMenu,
@@ -75,6 +76,10 @@ export function AdminAccountsTable(
     phoneByAccountId?: Record<string, string>;
     // Team accounts a user can be assigned to from the Manage Roles dialog.
     associations?: AssociationOption[];
+    // Account ids that hold platform Super Admin access (app_metadata.role).
+    // Destructive/role actions are disabled for these accounts since they're
+    // already blocked server-side.
+    superAdminIds?: Set<string>;
   }>,
 ) {
   return (
@@ -93,6 +98,7 @@ export function AdminAccountsTable(
             props.membershipsByAccountId ?? {},
             props.phoneByAccountId ?? {},
             props.associations ?? [],
+            props.superAdminIds ?? new Set(),
           )}
         />
       </div>
@@ -202,6 +208,7 @@ function getColumns(
   membershipsByAccountId: Record<string, UserMembership[]>,
   phoneByAccountId: Record<string, string>,
   associations: AssociationOption[],
+  superAdminIds: Set<string>,
 ): ColumnDef<Account>[] {
   return [
     {
@@ -209,13 +216,19 @@ function getColumns(
       header: 'Name',
       cell: ({ row }) => {
         return (
-          <Link
-            prefetch={false}
-            className={'hover:underline'}
-            href={`/admin/accounts/${row.original.id}`}
-          >
-            {row.original.name?.trim() || '—'}
-          </Link>
+          <div className={'flex items-center gap-2'}>
+            <Link
+              prefetch={false}
+              className={'hover:underline'}
+              href={`/admin/accounts/${row.original.id}`}
+            >
+              {row.original.name?.trim() || '—'}
+            </Link>
+
+            {superAdminIds.has(row.original.id) && (
+              <Badge variant={'outline'}>Super Admin</Badge>
+            )}
+          </div>
         );
       },
     },
@@ -291,6 +304,7 @@ function getColumns(
           account={row.original}
           associations={associations}
           memberships={membershipsByAccountId[row.original.id] ?? []}
+          isSuperAdmin={superAdminIds.has(row.original.id)}
         />
       ),
     },
@@ -309,10 +323,12 @@ function ActionsCell({
   account,
   associations,
   memberships,
+  isSuperAdmin,
 }: {
   account: Account;
   associations: AssociationOption[];
   memberships: UserMembership[];
+  isSuperAdmin: boolean;
 }) {
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const isPersonalAccount = account.is_personal_account;
@@ -346,18 +362,21 @@ function ActionsCell({
             {isPersonalAccount && (
               <>
                 <DropdownMenuItem
+                  disabled={isSuperAdmin}
                   onClick={() => setActiveDialog('manage-roles')}
                 >
                   Manage Roles
                 </DropdownMenuItem>
 
                 <DropdownMenuItem
+                  disabled={isSuperAdmin}
                   onClick={() => setActiveDialog('reset-password')}
                 >
                   Send Reset Password link
                 </DropdownMenuItem>
 
                 <DropdownMenuItem
+                  disabled={isSuperAdmin}
                   onClick={() => setActiveDialog('impersonate')}
                 >
                   Impersonate User
@@ -365,6 +384,7 @@ function ActionsCell({
 
                 <DropdownMenuItem
                   variant="destructive"
+                  disabled={isSuperAdmin}
                   onClick={() => setActiveDialog('delete-user')}
                 >
                   Delete Personal Account

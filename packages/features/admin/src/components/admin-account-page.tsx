@@ -23,6 +23,7 @@ import {
 import { AdminBanUserDialog } from './admin-ban-user-dialog';
 import { AdminDeleteAccountDialog } from './admin-delete-account-dialog';
 import { AdminDeleteUserDialog } from './admin-delete-user-dialog';
+import { AdminEditUserDialog } from './admin-edit-user-dialog';
 import { AdminImpersonateUserDialog } from './admin-impersonate-user-dialog';
 import { AdminMembersTable } from './admin-members-table';
 import { AdminMembershipsTable } from './admin-memberships-table';
@@ -59,6 +60,9 @@ async function PersonalAccountPage(props: { account: Account }) {
     'banned_until' in userResult.data.user &&
     userResult.data.user.banned_until !== 'none';
 
+  const isSuperAdminAccount =
+    userResult.data.user.app_metadata?.role === 'super-admin';
+
   return (
     <PageBody className="gap-y-4">
       <PageHeader
@@ -71,55 +75,71 @@ async function PersonalAccountPage(props: { account: Account }) {
           />
         }
       >
-        <div className={'flex gap-x-2.5'}>
-          <If condition={isBanned}>
-            <AdminReactivateUserDialog userId={props.account.id}>
+        <If condition={!isSuperAdminAccount}>
+          <div className={'flex gap-x-2.5'}>
+            <If condition={isBanned}>
+              <AdminReactivateUserDialog userId={props.account.id}>
+                <Button
+                  size={'sm'}
+                  variant={'secondary'}
+                  data-test={'admin-reactivate-account-button'}
+                >
+                  <ShieldPlus className={'mr-1 h-4'} />
+                  Reactivate
+                </Button>
+              </AdminReactivateUserDialog>
+            </If>
+
+            <If condition={!isBanned}>
+              <AdminEditUserDialog
+                userId={props.account.id}
+                userName={props.account.name ?? ''}
+                userPhone={userResult.data.user.phone ?? ''}
+              >
+                <Button
+                  size={'sm'}
+                  variant={'secondary'}
+                  data-test={'admin-edit-account-button'}
+                >
+                  Edit
+                </Button>
+              </AdminEditUserDialog>
+
+              <AdminBanUserDialog userId={props.account.id}>
+                <Button
+                  size={'sm'}
+                  variant={'secondary'}
+                  data-test={'admin-ban-account-button'}
+                >
+                  <Ban className={'text-destructive mr-1 h-3'} />
+                  Ban
+                </Button>
+              </AdminBanUserDialog>
+
+              <AdminImpersonateUserDialog userId={props.account.id}>
+                <Button
+                  size={'sm'}
+                  variant={'secondary'}
+                  data-test={'admin-impersonate-button'}
+                >
+                  <VenetianMask className={'mr-1 h-4 text-blue-500'} />
+                  Impersonate
+                </Button>
+              </AdminImpersonateUserDialog>
+            </If>
+
+            <AdminDeleteUserDialog userId={props.account.id}>
               <Button
                 size={'sm'}
-                variant={'secondary'}
-                data-test={'admin-reactivate-account-button'}
+                variant={'destructive'}
+                data-test={'admin-delete-account-button'}
               >
-                <ShieldPlus className={'mr-1 h-4'} />
-                Reactivate
+                <BadgeX className={'mr-1 h-4'} />
+                Delete
               </Button>
-            </AdminReactivateUserDialog>
-          </If>
-
-          <If condition={!isBanned}>
-            <AdminBanUserDialog userId={props.account.id}>
-              <Button
-                size={'sm'}
-                variant={'secondary'}
-                data-test={'admin-ban-account-button'}
-              >
-                <Ban className={'text-destructive mr-1 h-3'} />
-                Ban
-              </Button>
-            </AdminBanUserDialog>
-
-            <AdminImpersonateUserDialog userId={props.account.id}>
-              <Button
-                size={'sm'}
-                variant={'secondary'}
-                data-test={'admin-impersonate-button'}
-              >
-                <VenetianMask className={'mr-1 h-4 text-blue-500'} />
-                Impersonate
-              </Button>
-            </AdminImpersonateUserDialog>
-          </If>
-
-          <AdminDeleteUserDialog userId={props.account.id}>
-            <Button
-              size={'sm'}
-              variant={'destructive'}
-              data-test={'admin-delete-account-button'}
-            >
-              <BadgeX className={'mr-1 h-4'} />
-              Delete
-            </Button>
-          </AdminDeleteUserDialog>
-        </div>
+            </AdminDeleteUserDialog>
+          </div>
+        </If>
       </PageHeader>
 
       <div className={'flex items-center justify-between'}>
@@ -136,6 +156,10 @@ async function PersonalAccountPage(props: { account: Account }) {
           </div>
 
           <Badge variant={'outline'}>Personal Account</Badge>
+
+          <If condition={isSuperAdminAccount}>
+            <Badge variant={'outline'}>Super Admin</Badge>
+          </If>
 
           <If condition={isBanned}>
             <Badge variant={'destructive'}>Banned</Badge>
@@ -174,18 +198,7 @@ async function TeamAccountPage(props: {
             }}
           />
         }
-      >
-        <AdminDeleteAccountDialog accountId={props.account.id}>
-          <Button
-            size={'sm'}
-            variant={'destructive'}
-            data-test={'admin-delete-account-button'}
-          >
-            <BadgeX className={'mr-1 h-4'} />
-            Delete
-          </Button>
-        </AdminDeleteAccountDialog>
-      </PageHeader>
+      />
 
       <div className={'flex justify-between'}>
         <div className={'flex items-center gap-x-4'}>
@@ -213,6 +226,35 @@ async function TeamAccountPage(props: {
 
             <div className={'rounded-lg border p-2'}>
               <AdminMembersTable members={members} />
+            </div>
+          </div>
+
+          <div
+            className={
+              'border-destructive/20 bg-destructive/5 flex flex-col gap-y-4 rounded-lg border p-4'
+            }
+          >
+            <div className={'flex flex-col space-y-1'}>
+              <span className={'text-destructive text-sm font-medium'}>
+                Danger Zone
+              </span>
+              <p className={'text-muted-foreground text-xs'}>
+                Once you delete this team account, all associated data,
+                settings, and members will be permanently removed. This action
+                is irreversible.
+              </p>
+            </div>
+            <div>
+              <AdminDeleteAccountDialog accountId={props.account.id}>
+                <Button
+                  size={'sm'}
+                  variant={'destructive'}
+                  data-test={'admin-delete-account-button'}
+                >
+                  <BadgeX className={'mr-1 h-4'} />
+                  Delete Team Account
+                </Button>
+              </AdminDeleteAccountDialog>
             </div>
           </div>
         </div>
@@ -388,13 +430,35 @@ async function getMemberships(userId: string) {
 async function getMembers(accountSlug: string) {
   const client = getSupabaseServerClient();
 
-  const members = await client.rpc('get_account_members', {
+  const membersResult = await client.rpc('get_account_members', {
     account_slug: accountSlug,
   });
 
-  if (members.error) {
-    throw members.error;
+  if (membersResult.error) {
+    throw membersResult.error;
   }
 
-  return members.data;
+  const members = membersResult.data ?? [];
+  const userIds = members.map((m) => m.user_id);
+  const phoneByUserId = new Map<string, string | null>();
+
+  if (userIds.length > 0) {
+    const { data: profiles, error: profilesError } = await client
+      .from('profiles')
+      .select('id, mobile_number')
+      .in('id', userIds);
+
+    if (profilesError) {
+      console.error(profilesError);
+    } else {
+      for (const profile of profiles ?? []) {
+        phoneByUserId.set(profile.id, profile.mobile_number);
+      }
+    }
+  }
+
+  return members.map((member) => ({
+    ...member,
+    phone: phoneByUserId.get(member.user_id) ?? null,
+  }));
 }

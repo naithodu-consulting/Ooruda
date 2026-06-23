@@ -38,18 +38,26 @@ async function AccountsPage(props: AdminAccountsPageProps) {
 
   // Team accounts a user can be assigned to, with a role, plus the existing
   // users that can own a new association.
-  const [{ data: associationRows }, { data: userRows }] = await Promise.all([
-    adminClient
-      .from('accounts')
-      .select('id, name')
-      .eq('is_personal_account', false)
-      .order('name'),
-    adminClient
-      .from('accounts')
-      .select('id, name')
-      .eq('is_personal_account', true)
-      .order('name'),
-  ]);
+  const [{ data: associationRows }, { data: userRows }, { data: authUsers }] =
+    await Promise.all([
+      adminClient
+        .from('accounts')
+        .select('id, name')
+        .eq('is_personal_account', false)
+        .order('name'),
+      adminClient
+        .from('accounts')
+        .select('id, name')
+        .eq('is_personal_account', true)
+        .order('name'),
+      adminClient.auth.admin.listUsers({ perPage: 1000 }),
+    ]);
+
+  const superAdminIds = new Set(
+    (authUsers?.users ?? [])
+      .filter((user) => user.app_metadata?.role === 'super-admin')
+      .map((user) => user.id),
+  );
 
   const associations: AssociationOption[] = (associationRows ?? []).map(
     (association) => ({ id: association.id, name: association.name }),
@@ -105,6 +113,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
               pageCount={pageCount}
               data={data}
               associations={associations}
+              superAdminIds={superAdminIds}
               filters={{
                 type: searchParams.account_type ?? 'all',
                 query: searchParams.query ?? '',
@@ -135,6 +144,7 @@ async function AccountsTableWithRoles(props: {
   pageSize: number;
   page: number;
   associations: AssociationOption[];
+  superAdminIds: Set<string>;
   filters: { type: 'all' | 'team' | 'personal'; query: string };
 }) {
   const adminClient = getSupabaseServerAdminClient();
@@ -188,6 +198,7 @@ async function AccountsTableWithRoles(props: {
       associations={props.associations}
       membershipsByAccountId={membershipsByAccountId}
       phoneByAccountId={phoneByAccountId}
+      superAdminIds={props.superAdminIds}
     />
   );
 }
