@@ -14,6 +14,7 @@ import {
   ImpersonateUserSchema,
   ReactivateUserSchema,
 } from './schema/admin-actions.schema';
+import { CreateAssociationSchema } from './schema/create-association.schema';
 import { CreateUserSchema } from './schema/create-user.schema';
 import {
   RemoveUserRoleSchema,
@@ -204,6 +205,40 @@ export const createUserAction = adminActionClient
       };
     },
   );
+
+/**
+ * @name createAssociationAction
+ * @description Create a new association (team account) owned by an existing
+ * user, who becomes its Association Admin. The `associations` row is
+ * auto-created by the `trg_create_association` trigger.
+ */
+export const createAssociationAction = adminActionClient
+  .inputSchema(CreateAssociationSchema)
+  .action(async ({ parsedInput: { name, ownerId } }) => {
+    const adminClient = getSupabaseServerAdminClient();
+    const logger = await getLogger();
+
+    logger.info({ name, ownerId }, `Super Admin is creating an association...`);
+
+    const { data, error } = await adminClient.rpc('create_team_account', {
+      account_name: name,
+      user_id: ownerId,
+    });
+
+    if (error) {
+      logger.error({ error }, `Error creating association`);
+      throw new Error(`Error creating association: ${error.message}`);
+    }
+
+    revalidatePath(`/admin/accounts`);
+
+    logger.info(
+      { accountId: data?.id, name },
+      `Super Admin has successfully created an association`,
+    );
+
+    return { success: true };
+  });
 
 /**
  * @name setUserRoleAction

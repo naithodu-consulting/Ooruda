@@ -1,6 +1,7 @@
 import { ServerDataLoader } from '@makerkit/data-loader-supabase-nextjs';
 
 import { AdminAccountsTable } from '@kit/admin/components/admin-accounts-table';
+import { AdminCreateAssociationDialog } from '@kit/admin/components/admin-create-association-dialog';
 import { AdminCreateUserDialog } from '@kit/admin/components/admin-create-user-dialog';
 import { AdminGuard } from '@kit/admin/components/admin-guard';
 import { type Tables } from '@kit/supabase/database';
@@ -35,21 +36,43 @@ async function AccountsPage(props: AdminAccountsPageProps) {
   const searchParams = await props.searchParams;
   const page = searchParams.page ? parseInt(searchParams.page) : 1;
 
-  // Team accounts a user can be assigned to, with a role.
-  const { data: associationRows } = await adminClient
-    .from('accounts')
-    .select('id, name')
-    .eq('is_personal_account', false)
-    .order('name');
+  // Team accounts a user can be assigned to, with a role, plus the existing
+  // users that can own a new association.
+  const [{ data: associationRows }, { data: userRows }] = await Promise.all([
+    adminClient
+      .from('accounts')
+      .select('id, name')
+      .eq('is_personal_account', false)
+      .order('name'),
+    adminClient
+      .from('accounts')
+      .select('id, name')
+      .eq('is_personal_account', true)
+      .order('name'),
+  ]);
 
   const associations: AssociationOption[] = (associationRows ?? []).map(
     (association) => ({ id: association.id, name: association.name }),
   );
 
+  const users = (userRows ?? []).map((user) => ({
+    id: user.id,
+    name: user.name?.trim() || user.id,
+  }));
+
   return (
     <PageBody>
       <PageHeader description={<AppBreadcrumbs />}>
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <AdminCreateAssociationDialog users={users}>
+            <Button
+              variant="outline"
+              data-test="admin-create-association-button"
+            >
+              Create Association
+            </Button>
+          </AdminCreateAssociationDialog>
+
           <AdminCreateUserDialog associations={associations}>
             <Button data-test="admin-create-user-button">Create User</Button>
           </AdminCreateUserDialog>
