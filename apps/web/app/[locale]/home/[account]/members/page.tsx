@@ -46,13 +46,13 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
 
   const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
-  const canManageRoles = !!isSuperAdmin || account.permissions.includes('roles.manage');
-  const canManageInvitations = !!isSuperAdmin || account.permissions.includes('invites.manage');
+  const canManageRoles =
+    !!isSuperAdmin || account.permissions.includes('roles.manage');
+  const canManageInvitations =
+    !!isSuperAdmin || account.permissions.includes('invites.manage');
 
   const isPrimaryOwner = account.primary_owner_user_id === user.id;
   const currentUserRoleHierarchy = account.role_hierarchy_level;
-
-
 
   return (
     <PageBody>

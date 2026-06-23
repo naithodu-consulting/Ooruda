@@ -67,12 +67,16 @@ export function AccountMembersTable({
   const permissions = {
     canUpdateRole: (targetRole: number) => {
       return (
-        isSuperAdmin || isPrimaryOwner || (canManageRoles && userRoleHierarchy < targetRole)
+        isSuperAdmin ||
+        isPrimaryOwner ||
+        (canManageRoles && userRoleHierarchy < targetRole)
       );
     },
     canRemoveFromAccount: (targetRole: number) => {
       return (
-        isSuperAdmin || isPrimaryOwner || (canManageRoles && userRoleHierarchy < targetRole)
+        isSuperAdmin ||
+        isPrimaryOwner ||
+        (canManageRoles && userRoleHierarchy < targetRole)
       );
     },
     canTransferOwnership: isPrimaryOwner,

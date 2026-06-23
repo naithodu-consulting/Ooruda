@@ -59,5 +59,15 @@ function getColumns(): ColumnDef<Membership>[] {
 }
 
 function renderDate(date: string) {
-  return <span className={'text-xs'}>{new Date(date).toTimeString()}</span>;
+  return (
+    <span className={'text-xs'}>
+      {new Date(date).toLocaleDateString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })}
+    </span>
+  );
 }

@@ -28,15 +28,33 @@ import {
 import { useAsyncDialog } from '@kit/ui/hooks/use-async-dialog';
 import { If } from '@kit/ui/if';
 import { Input } from '@kit/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@kit/ui/select';
 import { toast } from '@kit/ui/sonner';
 
 import { createUserAction } from '../lib/server/admin-server-actions';
 import {
+  ASSIGNABLE_ROLES,
   CreateUserSchema,
   CreateUserSchemaType,
+  ROLE_LABELS,
 } from '../lib/server/schema/create-user.schema';
 
-export function AdminCreateUserDialog(props: React.PropsWithChildren) {
+interface AssociationOption {
+  id: string;
+  name: string;
+}
+
+export function AdminCreateUserDialog(
+  props: React.PropsWithChildren<{
+    associations: AssociationOption[];
+  }>,
+) {
   const { dialogProps, isPending, setIsPending, setOpen } = useAsyncDialog();
 
   const form = useForm({
@@ -44,6 +62,8 @@ export function AdminCreateUserDialog(props: React.PropsWithChildren) {
     defaultValues: {
       fullName: '',
       phone: '',
+      associationId: props.associations[0]?.id ?? '',
+      role: '' as CreateUserSchemaType['role'],
     },
     mode: 'onChange',
   });
@@ -73,8 +93,8 @@ export function AdminCreateUserDialog(props: React.PropsWithChildren) {
           <AlertDialogTitle>Create New User</AlertDialogTitle>
 
           <AlertDialogDescription>
-            Enter the user&apos;s name and phone number. They will be able to
-            sign in via phone OTP.
+            Enter the user&apos;s name and phone number, then assign them to an
+            association. They will be able to sign in via phone OTP.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -131,6 +151,68 @@ export function AdminCreateUserDialog(props: React.PropsWithChildren) {
                     Enter with country code (e.g. 919911000001 or
                     +919911000001).
                   </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              name={'associationId'}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Association</FormLabel>
+
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select an association">
+                          {(value: string) =>
+                            props.associations.find((a) => a.id === value)
+                              ?.name ?? 'Select an association'
+                          }
+                        </SelectValue>
+                      </SelectTrigger>
+                    </FormControl>
+
+                    <SelectContent>
+                      {props.associations.map((association) => (
+                        <SelectItem key={association.id} value={association.id}>
+                          {association.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              name={'role'}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Role</FormLabel>
+
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a role">
+                          {(value: string) =>
+                            ROLE_LABELS[value as keyof typeof ROLE_LABELS] ??
+                            'Select a role'
+                          }
+                        </SelectValue>
+                      </SelectTrigger>
+                    </FormControl>
+
+                    <SelectContent>
+                      {ASSIGNABLE_ROLES.map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {ROLE_LABELS[role]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
