@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 
 import pathsConfig from '~/config/paths.config';
 
-// PropOps has no self-serve sign-up — users are added by association admins.
+// PropTech has no self-serve sign-up — users are added by association admins.
 export default function SignUpPage() {
   redirect(pathsConfig.auth.signIn);
 }

@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { PHONE_USERS, PhoneAuthPageObject, TEST_OTP } from './phone-auth.po';
 
 /**
- * PropOps phone-OTP authentication flows.
+ * PropTech phone-OTP authentication flows.
  *
  * Prerequisites to run (see phone-auth.po.ts for full config):
  *   - local Supabase running with [auth.sms.test_otp] for 919911000001..6

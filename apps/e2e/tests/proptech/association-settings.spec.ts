@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { PHONE_USERS, PhoneAuthPageObject } from './phone-auth.po';
 
 /**
- * PropOps association settings — the one fully-implemented domain surface.
+ * PropTech association settings — the one fully-implemented domain surface.
  *
  * Covers the assoc_admin editing branding / GSTIN / MESCOM / billing defaults
  * (the `updateAssociationAction` server action) and the role gate that hides

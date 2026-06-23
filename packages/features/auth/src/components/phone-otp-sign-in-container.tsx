@@ -38,7 +38,7 @@ const RESEND_COOLDOWN_SECONDS = 60;
 const MAX_VERIFY_ATTEMPTS = 5;
 
 // Whether an unknown phone number is allowed to self-register on sign-in.
-// PropOps is invite-based, so production should set this to 'false' once the
+// PropTech is invite-based, so production should set this to 'false' once the
 // invitation-provisioning flow is in place; until then it defaults to allowing
 // sign-up so the first association admin can onboard themselves.
 const ALLOW_SIGNUP = process.env.NEXT_PUBLIC_ALLOW_PHONE_SIGNUP !== 'false';

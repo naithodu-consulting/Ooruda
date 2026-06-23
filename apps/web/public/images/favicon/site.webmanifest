@@ -1,8 +1,8 @@
 {
-  "name": "Makerkit",
-  "short_name": "makerkit",
-  "theme_color": "#fff",
-  "background_color": "#fff",
+  "name": "PropTech",
+  "short_name": "PropTech",
+  "theme_color": "#F59E0B",
+  "background_color": "#0F172A",
   "display": "fullscreen",
   "orientation": "portrait",
   "scope": "/",
