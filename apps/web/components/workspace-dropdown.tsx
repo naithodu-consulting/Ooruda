@@ -9,7 +9,6 @@ import {
   Check,
   ChevronsUpDown,
   LogOut,
-  MessageCircleQuestion,
   Plus,
   Settings,
   Shield,
@@ -57,6 +56,7 @@ interface WorkspaceDropdownProps {
     name: string | null;
     picture_url: string | null;
   };
+  role?: string | null;
 }
 
 export function WorkspaceDropdown({
@@ -64,6 +64,7 @@ export function WorkspaceDropdown({
   accounts,
   selectedAccount,
   workspace,
+  role,
 }: WorkspaceDropdownProps) {
   const router = useRouter();
   const { open: isSidebarOpen } = useSidebar();
@@ -279,7 +280,11 @@ export function WorkspaceDropdown({
                   </>
                 )}
 
-                <If condition={featuresFlagConfig.enableTeamCreation}>
+                <If
+                  condition={
+                    featuresFlagConfig.enableTeamCreation && user.is_superadmin
+                  }
+                >
                   <DropdownMenuItem
                     onClick={() => setIsCreatingTeam(true)}
                     data-test="create-team-trigger"
@@ -298,21 +303,27 @@ export function WorkspaceDropdown({
             <DropdownMenuSeparator />
           </If>
 
-          <DropdownMenuItem
-            render={
-              <Link
-                className="flex items-center gap-x-2"
-                href={settingsPath}
-                data-test="workspace-settings-link"
-              >
-                <Settings className="size-4" />
-
-                <span>
-                  <Trans i18nKey={'common.routes.settings'} />
-                </span>
-              </Link>
+          <If
+            condition={
+              !isTeamContext || user.is_superadmin || role === 'assoc_admin'
             }
-          />
+          >
+            <DropdownMenuItem
+              render={
+                <Link
+                  className="flex items-center gap-x-2"
+                  href={settingsPath}
+                  data-test="workspace-settings-link"
+                >
+                  <Settings className="size-4" />
+
+                  <span>
+                    <Trans i18nKey={'common.routes.settings'} />
+                  </span>
+                </Link>
+              }
+            />
+          </If>
 
           <If condition={user.is_superadmin}>
             <DropdownMenuItem
@@ -329,20 +340,6 @@ export function WorkspaceDropdown({
               }
             />
           </If>
-
-          <DropdownMenuSeparator />
-
-          <DropdownMenuItem
-            render={
-              <Link className="flex items-center gap-x-2" href="/docs">
-                <MessageCircleQuestion className="size-4" />
-
-                <span>
-                  <Trans i18nKey={'common.documentation'} />
-                </span>
-              </Link>
-            }
-          />
 
           <DropdownMenuSeparator />
 
@@ -367,7 +364,9 @@ export function WorkspaceDropdown({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <If condition={featuresFlagConfig.enableTeamCreation}>
+      <If
+        condition={featuresFlagConfig.enableTeamCreation && user.is_superadmin}
+      >
         <CreateTeamAccountDialog
           isOpen={isCreatingTeam}
           setIsOpen={setIsCreatingTeam}

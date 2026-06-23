@@ -40,12 +40,14 @@ export function UpdateInvitationDialog({
   invitationId,
   userRole,
   userRoleHierarchy,
+  isSuperAdmin,
 }: {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   invitationId: number;
   userRole: Role;
   userRoleHierarchy: number;
+  isSuperAdmin?: boolean;
 }) {
   const { dialogProps, isPending, setIsPending, setOpen } = useAsyncDialog({
     open: isOpen,
@@ -71,6 +73,7 @@ export function UpdateInvitationDialog({
           userRoleHierarchy={userRoleHierarchy}
           isPending={isPending}
           setIsPending={setIsPending}
+          isSuperAdmin={isSuperAdmin}
           onSuccess={() => {
             setIsPending(false);
             setOpen(false);
@@ -88,6 +91,7 @@ function UpdateInvitationForm({
   isPending,
   setIsPending,
   onSuccess,
+  isSuperAdmin,
 }: React.PropsWithChildren<{
   invitationId: number;
   userRole: Role;
@@ -95,6 +99,7 @@ function UpdateInvitationForm({
   isPending: boolean;
   setIsPending: (pending: boolean) => void;
   onSuccess: () => void;
+  isSuperAdmin?: boolean;
 }>) {
   const t = useTranslations('teams');
 
@@ -147,18 +152,26 @@ function UpdateInvitationForm({
 
                 <FormControl>
                   <RolesDataProvider maxRoleHierarchy={userRoleHierarchy}>
-                    {(roles) => (
-                      <MembershipRoleSelector
-                        roles={roles}
-                        currentUserRole={userRole}
-                        value={field.value}
-                        onChange={(newRole) => {
-                          if (newRole) {
-                            form.setValue(field.name, newRole);
-                          }
-                        }}
-                      />
-                    )}
+                    {(roles) => {
+                      const filteredRoles = isSuperAdmin
+                        ? roles
+                        : roles.filter((role) =>
+                            ['prop_owner', 'tenant'].includes(role),
+                          );
+
+                      return (
+                        <MembershipRoleSelector
+                          roles={filteredRoles}
+                          currentUserRole={userRole}
+                          value={field.value}
+                          onChange={(newRole) => {
+                            if (newRole) {
+                              form.setValue(field.name, newRole);
+                            }
+                          }}
+                        />
+                      );
+                    }}
                   </RolesDataProvider>
                 </FormControl>
 

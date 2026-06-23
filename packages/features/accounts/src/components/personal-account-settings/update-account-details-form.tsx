@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { User } from 'lucide-react';
+import { Phone, User } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 
@@ -27,10 +27,12 @@ type UpdateUserDataParams = Database['public']['Tables']['accounts']['Update'];
 
 export function UpdateAccountDetailsForm({
   displayName,
+  phone,
   onUpdate,
   userId,
 }: {
   displayName: string;
+  phone: string;
   userId: string;
   onUpdate: (user: Partial<UpdateUserDataParams>) => void;
 }) {
@@ -90,6 +92,23 @@ export function UpdateAccountDetailsForm({
               </FormItem>
             )}
           />
+
+          <FormItem>
+            <FormControl>
+              <InputGroup className="bg-muted/50 cursor-not-allowed">
+                <InputGroupAddon align="inline-start">
+                  <Phone className="text-muted-foreground h-4 w-4" />
+                </InputGroupAddon>
+
+                <InputGroupInput
+                  value={phone || 'N/A'}
+                  disabled
+                  className="text-muted-foreground cursor-not-allowed bg-transparent"
+                  placeholder="Phone Number"
+                />
+              </InputGroup>
+            </FormControl>
+          </FormItem>
 
           <div>
             <Button type="submit" disabled={updateAccountMutation.isPending}>

@@ -49,6 +49,7 @@ type AccountMembersTableProps = {
   userRoleHierarchy: number;
   isPrimaryOwner: boolean;
   canManageRoles: boolean;
+  isSuperAdmin?: boolean;
 };
 
 export function AccountMembersTable({
@@ -58,6 +59,7 @@ export function AccountMembersTable({
   isPrimaryOwner,
   userRoleHierarchy,
   canManageRoles,
+  isSuperAdmin,
 }: AccountMembersTableProps) {
   const [search, setSearch] = useState('');
   const t = useTranslations('teams');
@@ -65,15 +67,20 @@ export function AccountMembersTable({
   const permissions = {
     canUpdateRole: (targetRole: number) => {
       return (
-        isPrimaryOwner || (canManageRoles && userRoleHierarchy < targetRole)
+        isSuperAdmin ||
+        isPrimaryOwner ||
+        (canManageRoles && userRoleHierarchy < targetRole)
       );
     },
     canRemoveFromAccount: (targetRole: number) => {
       return (
-        isPrimaryOwner || (canManageRoles && userRoleHierarchy < targetRole)
+        isSuperAdmin ||
+        isPrimaryOwner ||
+        (canManageRoles && userRoleHierarchy < targetRole)
       );
     },
     canTransferOwnership: isPrimaryOwner,
+    isSuperAdmin,
   };
 
   const columns = useGetColumns(permissions, {
@@ -124,7 +131,7 @@ export function AccountMembersTable({
 }
 
 function useGetColumns(
-  permissions: Permissions,
+  permissions: Permissions & { isSuperAdmin?: boolean },
   params: {
     currentUserId: string;
     currentAccountId: string;
@@ -206,6 +213,7 @@ function useGetColumns(
             currentUserId={params.currentUserId}
             currentTeamAccountId={params.currentAccountId}
             currentRoleHierarchy={params.currentRoleHierarchy}
+            isSuperAdmin={permissions.isSuperAdmin}
           />
         ),
       },
@@ -220,12 +228,14 @@ function ActionsDropdown({
   currentUserId,
   currentTeamAccountId,
   currentRoleHierarchy,
+  isSuperAdmin,
 }: {
   permissions: Permissions;
   member: Members[0];
   currentUserId: string;
   currentTeamAccountId: string;
   currentRoleHierarchy: number;
+  isSuperAdmin?: boolean;
 }) {
   const isCurrentUser = member.user_id === currentUserId;
   const isPrimaryOwner = member.primary_owner_user_id === member.user_id;
@@ -300,6 +310,7 @@ function ActionsDropdown({
           userRole={member.role}
           teamAccountId={currentTeamAccountId}
           userRoleHierarchy={currentRoleHierarchy}
+          isSuperAdmin={isSuperAdmin}
         />
       )}
 

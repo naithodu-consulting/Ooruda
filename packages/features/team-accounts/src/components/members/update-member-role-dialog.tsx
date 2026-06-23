@@ -42,6 +42,7 @@ export function UpdateMemberRoleDialog({
   teamAccountId,
   userRole,
   userRoleHierarchy,
+  isSuperAdmin,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -49,6 +50,7 @@ export function UpdateMemberRoleDialog({
   teamAccountId: string;
   userRole: Role;
   userRoleHierarchy: number;
+  isSuperAdmin?: boolean;
 }) {
   const { dialogProps, isPending, setIsPending, setOpen } = useAsyncDialog({
     open,
@@ -69,20 +71,26 @@ export function UpdateMemberRoleDialog({
         </DialogHeader>
 
         <RolesDataProvider maxRoleHierarchy={userRoleHierarchy}>
-          {(data) => (
-            <UpdateMemberForm
-              userId={userId}
-              teamAccountId={teamAccountId}
-              userRole={userRole}
-              roles={data}
-              isPending={isPending}
-              setIsPending={setIsPending}
-              onSuccess={() => {
-                setIsPending(false);
-                setOpen(false);
-              }}
-            />
-          )}
+          {(data) => {
+            const filteredRoles = isSuperAdmin
+              ? data
+              : data.filter((role) => ['prop_owner', 'tenant'].includes(role));
+
+            return (
+              <UpdateMemberForm
+                userId={userId}
+                teamAccountId={teamAccountId}
+                userRole={userRole}
+                roles={filteredRoles}
+                isPending={isPending}
+                setIsPending={setIsPending}
+                onSuccess={() => {
+                  setIsPending(false);
+                  setOpen(false);
+                }}
+              />
+            );
+          }}
         </RolesDataProvider>
       </DialogContent>
     </Dialog>

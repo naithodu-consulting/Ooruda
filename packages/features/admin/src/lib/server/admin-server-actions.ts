@@ -14,11 +14,20 @@ import {
   ImpersonateUserSchema,
   ReactivateUserSchema,
 } from './schema/admin-actions.schema';
-import { CreateUserSchema } from './schema/create-user.schema';
+import { CreateAssociationSchema } from './schema/create-association.schema';
+import {
+  CreateUserSchema,
+  UpdateUserSchema,
+} from './schema/create-user.schema';
+import {
+  RemoveUserRoleSchema,
+  SetUserRoleSchema,
+} from './schema/manage-role.schema';
 import { ResetPasswordSchema } from './schema/reset-password.schema';
 import { createAdminAccountsService } from './services/admin-accounts.service';
 import { createAdminAuthUserService } from './services/admin-auth-user.service';
 import { adminActionClient } from './utils/admin-action-client';
+import { isUserSuperAdmin } from './utils/is-super-admin';
 
 /**
  * @name banUserAction
@@ -129,34 +138,194 @@ export const deleteAccountAction = adminActionClient
  */
 export const createUserAction = adminActionClient
   .inputSchema(CreateUserSchema)
-  .action(async ({ parsedInput: { email, password, emailConfirm } }) => {
+  .action(
+    async ({ parsedInput: { phone, fullName, associationId, role }, ctx }) => {
+      const adminClient = getSupabaseServerAdminClient();
+      const logger = await getLogger();
+
+      // Normalise phone: ensure it starts with +
+      const normalisedPhone = phone.startsWith('+') ? phone : `+${phone}`;
+
+      logger.info(
+        { phone: normalisedPhone, associationId, role },
+        `Super Admin is creating a new user...`,
+      );
+
+      // The `kit.setup_new_user` trigger reads `raw_user_meta_data ->> 'name'`
+      // to populate `accounts.name`, so the key must be `name` (not just
+      // `full_name`) or the personal account is created with a blank name.
+      const { data, error } = await adminClient.auth.admin.createUser({
+        phone: normalisedPhone,
+        phone_confirm: true,
+        user_metadata: { name: fullName, full_name: fullName },
+      });
+
+      if (error) {
+        logger.error({ error }, `Error creating user`);
+        throw new Error(`Error creating user: ${error.message}`);
+      }
+
+      // Upsert profile so the phone-invite gate recognises this user
+      await adminClient.from('profiles').upsert(
+        {
+          id: data.user.id,
+          full_name: fullName,
+          mobile_number: normalisedPhone,
+        },
+        { onConflict: 'id' },
+      );
+
+      // Add the user to the chosen association with the chosen role.
+      const { error: membershipError } = await adminClient
+        .from('accounts_memberships')
+        .insert({
+          user_id: data.user.id,
+          account_id: associationId,
+          account_role: role,
+          created_by: ctx.user.id,
+        });
+
+      if (membershipError) {
+        logger.error(
+          { error: membershipError, userId: data.user.id },
+          `User created but failed to assign association role`,
+        );
+
+        throw new Error(
+          `User created but the role could not be assigned: ${membershipError.message}`,
+        );
+      }
+
+      logger.info(
+        { userId: data.user.id, associationId, role },
+        `Super Admin has successfully created a new user`,
+      );
+
+      revalidatePath(`/admin/accounts`);
+
+      return {
+        success: true,
+        user: data.user,
+      };
+    },
+  );
+
+/**
+ * @name createAssociationAction
+ * @description Create a new association (team account) owned by an existing
+ * user, who becomes its Association Admin. The `associations` row is
+ * auto-created by the `trg_create_association` trigger.
+ */
+export const createAssociationAction = adminActionClient
+  .inputSchema(CreateAssociationSchema)
+  .action(async ({ parsedInput: { name, ownerId } }) => {
     const adminClient = getSupabaseServerAdminClient();
     const logger = await getLogger();
 
-    logger.info({ email }, `Super Admin is creating a new user...`);
+    logger.info({ name, ownerId }, `Super Admin is creating an association...`);
 
-    const { data, error } = await adminClient.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: emailConfirm,
+    const { data, error } = await adminClient.rpc('create_team_account', {
+      account_name: name,
+      user_id: ownerId,
     });
 
     if (error) {
-      logger.error({ error }, `Error creating user`);
-      throw new Error(`Error creating user: ${error.message}`);
+      logger.error({ error }, `Error creating association`);
+      throw new Error(`Error creating association: ${error.message}`);
     }
-
-    logger.info(
-      { userId: data.user.id },
-      `Super Admin has successfully created a new user`,
-    );
 
     revalidatePath(`/admin/accounts`);
 
-    return {
-      success: true,
-      user: data.user,
-    };
+    logger.info(
+      { accountId: data?.id, name },
+      `Super Admin has successfully created an association`,
+    );
+
+    return { success: true };
+  });
+
+/**
+ * @name setUserRoleAction
+ * @description Assign or change a user's role within an association. Upserts
+ * the `accounts_memberships` row keyed by (user_id, account_id).
+ */
+export const setUserRoleAction = adminActionClient
+  .inputSchema(SetUserRoleSchema)
+  .action(async ({ parsedInput: { userId, associationId, role }, ctx }) => {
+    const adminClient = getSupabaseServerAdminClient();
+    const logger = await getLogger();
+
+    logger.info(
+      { userId, associationId, role },
+      `Super Admin is setting a user's association role...`,
+    );
+
+    if (await isUserSuperAdmin(adminClient, userId)) {
+      throw new Error('Cannot change roles for a Super Admin account');
+    }
+
+    const { error } = await adminClient.from('accounts_memberships').upsert(
+      {
+        user_id: userId,
+        account_id: associationId,
+        account_role: role,
+        updated_by: ctx.user.id,
+      },
+      { onConflict: 'user_id,account_id' },
+    );
+
+    if (error) {
+      logger.error({ error }, `Error setting user role`);
+      throw new Error(`Error setting user role: ${error.message}`);
+    }
+
+    revalidatePath(`/admin/accounts`);
+
+    logger.info(
+      { userId, associationId, role },
+      `Super Admin has successfully set the user's role`,
+    );
+  });
+
+/**
+ * @name removeUserRoleAction
+ * @description Remove a user's membership (and therefore role) from an
+ * association.
+ */
+export const removeUserRoleAction = adminActionClient
+  .inputSchema(RemoveUserRoleSchema)
+  .action(async ({ parsedInput: { userId, associationId } }) => {
+    const adminClient = getSupabaseServerAdminClient();
+    const logger = await getLogger();
+
+    logger.info(
+      { userId, associationId },
+      `Super Admin is removing a user's association role...`,
+    );
+
+    if (await isUserSuperAdmin(adminClient, userId)) {
+      throw new Error('Cannot remove roles for a Super Admin account');
+    }
+
+    const { error } = await adminClient
+      .from('accounts_memberships')
+      .delete()
+      .eq('user_id', userId)
+      .eq('account_id', associationId);
+
+    if (error) {
+      logger.error({ error }, `Error removing user role`);
+
+      // The DB blocks removing the association owner's own membership.
+      throw new Error(`Error removing user role: ${error.message}`);
+    }
+
+    revalidatePath(`/admin/accounts`);
+
+    logger.info(
+      { userId, associationId },
+      `Super Admin has successfully removed the user's role`,
+    );
   });
 
 /**
@@ -180,6 +349,102 @@ export const resetPasswordAction = adminActionClient
 
     return result;
   });
+
+/**
+ * @name updateUserDetailsAction
+ * @description Update user profile details (full name and phone number).
+ */
+export const updateUserDetailsAction = adminActionClient
+  .inputSchema(UpdateUserSchema)
+  .action(
+    async ({
+      parsedInput: { userId, fullName, phone, associationId, role },
+      ctx,
+    }) => {
+      const adminClient = getSupabaseServerAdminClient();
+      const logger = await getLogger();
+
+      const normalisedPhone = phone.startsWith('+') ? phone : `+${phone}`;
+
+      logger.info(
+        { userId, fullName, phone: normalisedPhone, associationId, role },
+        `Super Admin is updating user details...`,
+      );
+
+      // 1. Update Auth user record
+      const { error: authError } = await adminClient.auth.admin.updateUserById(
+        userId,
+        {
+          phone: normalisedPhone,
+          user_metadata: { name: fullName, full_name: fullName },
+        },
+      );
+
+      if (authError) {
+        logger.error({ error: authError }, `Error updating auth user`);
+        throw new Error(`Error updating auth user: ${authError.message}`);
+      }
+
+      // 2. Update profiles table record
+      const { error: profileError } = await adminClient
+        .from('profiles')
+        .update({
+          full_name: fullName,
+          mobile_number: normalisedPhone,
+        })
+        .eq('id', userId);
+
+      if (profileError) {
+        logger.error({ error: profileError }, `Error updating user profile`);
+        throw new Error(`Error updating user profile: ${profileError.message}`);
+      }
+
+      // 3. Update accounts table record
+      const { error: accountError } = await adminClient
+        .from('accounts')
+        .update({
+          name: fullName,
+        })
+        .eq('id', userId);
+
+      if (accountError) {
+        logger.error({ error: accountError }, `Error updating user account`);
+        throw new Error(`Error updating user account: ${accountError.message}`);
+      }
+
+      // 4. Update team membership role if both associationId and role are provided
+      if (associationId && role) {
+        if (await isUserSuperAdmin(adminClient, userId)) {
+          throw new Error('Cannot change roles for a Super Admin account');
+        }
+
+        const { error: roleError } = await adminClient
+          .from('accounts_memberships')
+          .upsert(
+            {
+              user_id: userId,
+              account_id: associationId,
+              account_role: role,
+              updated_by: ctx.user.id,
+            },
+            { onConflict: 'user_id,account_id' },
+          );
+
+        if (roleError) {
+          logger.error({ error: roleError }, `Error setting user role`);
+          throw new Error(`Error setting user role: ${roleError.message}`);
+        }
+      }
+
+      logger.info(
+        { userId },
+        `Super Admin has successfully updated user details`,
+      );
+
+      revalidateAdmin();
+      revalidatePath(`/admin/accounts`);
+    },
+  );
 
 function revalidateAdmin() {
   revalidatePath(`/admin/accounts/[id]`, 'page');

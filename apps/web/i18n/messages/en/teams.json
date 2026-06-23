@@ -135,7 +135,7 @@
   "deleteTeamErrorHeading": "Sorry, we couldn't delete your team.",
   "leaveTeamErrorHeading": "Sorry, we couldn't leave your team.",
   "searchMembersPlaceholder": "Search members",
-  "createTeamErrorHeading": "Sorry, we couldn't create your team.",
+  "createTeamErrorHeading": "Sorry, you are not allowed to create an association.",
   "createTeamErrorMessage": "We encountered an error creating your team. Please try again.",
   "transferTeamErrorHeading": "Sorry, we couldn't transfer ownership of your team.",
   "transferTeamErrorMessage": "We encountered an error transferring ownership of your team. Please try again.",
@@ -180,7 +180,7 @@
   "policyErrors": {
     "subscriptionRequired": "An active subscription is required to invite team members.",
     "paddleTrialRestriction": "Cannot invite members during trial period with per-seat billing on Paddle.",
-    "superAdminRequired": "New associations are set up by our team — ask to be invited to your association instead."
+    "superAdminRequired": "Request admin for new association invitation."
   },
   "policyRemediation": {
     "subscriptionRequired": "Please upgrade your plan or activate your subscription",

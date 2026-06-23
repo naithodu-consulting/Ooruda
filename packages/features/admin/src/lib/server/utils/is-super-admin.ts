@@ -20,3 +20,23 @@ export async function isSuperAdmin(client: SupabaseClient<Database>) {
     return false;
   }
 }
+
+/**
+ * @name isUserSuperAdmin
+ * @description Check if a given target user (by id) is a Super Admin, via
+ * their `app_metadata.role`. Used to block destructive/role-altering admin
+ * actions against other Super Admin accounts. Fails closed: if the lookup
+ * errors, the caller should treat the action as not permitted.
+ */
+export async function isUserSuperAdmin(
+  adminClient: SupabaseClient<Database>,
+  userId: string,
+) {
+  const { data, error } = await adminClient.auth.admin.getUserById(userId);
+
+  if (error || !data.user) {
+    throw new Error(`Error fetching user`);
+  }
+
+  return data.user.app_metadata?.role === 'super-admin';
+}

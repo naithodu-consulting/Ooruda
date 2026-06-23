@@ -46,6 +46,7 @@ export function TeamAccountLayoutSidebar(props: {
           user={user}
           accounts={accounts}
           selectedAccount={account}
+          role={role}
         />
       </SidebarFooter>
     </Sidebar>

@@ -154,6 +154,15 @@ export const updateInvitationAction = authActionClient
   .inputSchema(UpdateInvitationSchema)
   .action(async ({ parsedInput: invitation }) => {
     const client = getSupabaseServerClient();
+
+    const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+
+    if (!isSuperAdmin && !['prop_owner', 'tenant'].includes(invitation.role)) {
+      throw new Error(
+        'You can only update invitations to "Property Owner" or "Tenant" roles',
+      );
+    }
+
     const service = createAccountInvitationsService(client);
 
     await service.updateInvitation(invitation);
@@ -291,35 +300,58 @@ async function checkInvitationPermissions(
   // Get unique roles from invitations to minimize RPC calls
   const uniqueRoles = [...new Set(invitations.map((inv) => inv.role))];
 
-  // Run all checks in parallel: permission check + role hierarchy checks for each unique role
-  const [permissionResult, ...roleResults] = await Promise.all([
-    client.rpc('has_permission', {
-      user_id: userId,
-      account_id: accountId,
-      permission_name:
-        'invites.manage' as Database['public']['Enums']['app_permissions'],
-    }),
-    ...uniqueRoles.map((role) =>
-      Promise.all([
-        client.rpc('has_more_elevated_role', {
-          target_user_id: userId,
-          target_account_id: accountId,
-          role_name: role,
-        }),
-        client.rpc('has_same_role_hierarchy_level', {
-          target_user_id: userId,
-          target_account_id: accountId,
-          role_name: role,
-        }),
-      ]).then(([elevated, sameLevel]) => ({
-        role,
-        allowed: elevated.data || sameLevel.data,
-      })),
-    ),
-  ]);
+  // Run all checks in parallel: permission check + super admin check + role hierarchy checks for each unique role
+  const [permissionResult, isSuperAdminResult, ...roleResults] =
+    await Promise.all([
+      client.rpc('has_permission', {
+        user_id: userId,
+        account_id: accountId,
+        permission_name:
+          'invites.manage' as Database['public']['Enums']['app_permissions'],
+      }),
+      client.rpc('is_super_admin'),
+      ...uniqueRoles.map((role) =>
+        Promise.all([
+          client.rpc('has_more_elevated_role', {
+            target_user_id: userId,
+            target_account_id: accountId,
+            role_name: role,
+          }),
+          client.rpc('has_same_role_hierarchy_level', {
+            target_user_id: userId,
+            target_account_id: accountId,
+            role_name: role,
+          }),
+        ]).then(([elevated, sameLevel]) => ({
+          role,
+          allowed: elevated.data || sameLevel.data,
+        })),
+      ),
+    ]);
+
+  const isSuperAdmin = isSuperAdminResult.data;
+
+  if (!isSuperAdmin) {
+    const invalidRoles = uniqueRoles.filter(
+      (role) => !['prop_owner', 'tenant'].includes(role),
+    );
+
+    if (invalidRoles.length > 0) {
+      logger.info(
+        { ...ctx, invalidRoles },
+        'User is not a super admin and cannot invite members with these roles',
+      );
+
+      return {
+        allowed: false,
+        reason:
+          'You can only invite members with the "Property Owner" or "Tenant" roles',
+      };
+    }
+  }
 
   // Check permission first
-  if (!permissionResult.data) {
+  if (!isSuperAdmin && !permissionResult.data) {
     logger.info(ctx, 'User does not have invites.manage permission');
 
     return {
@@ -331,7 +363,7 @@ async function checkInvitationPermissions(
   // Check role hierarchy results
   const failedRole = roleResults.find((result) => !result.allowed);
 
-  if (failedRole) {
+  if (!isSuperAdmin && failedRole) {
     logger.info(
       { ...ctx, role: failedRole.role },
       'User cannot invite to a role higher than their own',

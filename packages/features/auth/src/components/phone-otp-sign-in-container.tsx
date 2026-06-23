@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { ArrowLeft, Lock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -32,16 +33,11 @@ import {
 import { Spinner } from '@kit/ui/spinner';
 import { Trans } from '@kit/ui/trans';
 
+import { checkPhoneInvitationAction } from '../actions/check-invitation-action';
 import { AuthErrorAlert } from './auth-error-alert';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 const MAX_VERIFY_ATTEMPTS = 5;
-
-// Whether an unknown phone number is allowed to self-register on sign-in.
-// PropTech is invite-based, so production should set this to 'false' once the
-// invitation-provisioning flow is in place; until then it defaults to allowing
-// sign-up so the first association admin can onboard themselves.
-const ALLOW_SIGNUP = process.env.NEXT_PUBLIC_ALLOW_PHONE_SIGNUP !== 'false';
 
 const PhoneSchema = z.object({
   phone: z
@@ -64,6 +60,7 @@ export function PhoneOtpSignInContainer() {
   const [phone, setPhone] = useState('');
   const [resendSeconds, setResendSeconds] = useState(0);
   const [verifyAttempts, setVerifyAttempts] = useState(0);
+  const [localError, setLocalError] = useState<string | Error | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const signInMutation = useSignInWithOtp();
@@ -101,29 +98,57 @@ export function PhoneOtpSignInContainer() {
   }: z.output<typeof PhoneSchema>) => {
     const e164 = `+91${rawPhone}`;
 
-    await signInMutation.mutateAsync({
-      phone: e164,
-      options: { shouldCreateUser: ALLOW_SIGNUP },
-    });
+    try {
+      setLocalError(null);
+      signInMutation.reset();
 
-    setPhone(e164);
-    setResendSeconds(RESEND_COOLDOWN_SECONDS);
-    setVerifyAttempts(0);
-    otpForm.reset();
-    setStep('otp');
+      // Check if user has permission to sign in (invite-only logic)
+      const checkResult = await checkPhoneInvitationAction(e164);
+      if (!checkResult.allowed) {
+        setLocalError('not_invited');
+        return;
+      }
+
+      await signInMutation.mutateAsync({
+        phone: e164,
+        options: { shouldCreateUser: checkResult.shouldCreateUser },
+      });
+
+      setPhone(e164);
+      setResendSeconds(RESEND_COOLDOWN_SECONDS);
+      setVerifyAttempts(0);
+      otpForm.reset();
+      setStep('otp');
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleResend = async () => {
     if (resendSeconds > 0) return;
 
-    await signInMutation.mutateAsync({
-      phone,
-      options: { shouldCreateUser: ALLOW_SIGNUP },
-    });
+    try {
+      setLocalError(null);
+      signInMutation.reset();
 
-    setResendSeconds(RESEND_COOLDOWN_SECONDS);
-    setVerifyAttempts(0);
-    otpForm.reset();
+      // Check if user has permission to sign in (invite-only logic)
+      const checkResult = await checkPhoneInvitationAction(phone);
+      if (!checkResult.allowed) {
+        setLocalError('not_invited');
+        return;
+      }
+
+      await signInMutation.mutateAsync({
+        phone,
+        options: { shouldCreateUser: checkResult.shouldCreateUser },
+      });
+
+      setResendSeconds(RESEND_COOLDOWN_SECONDS);
+      setVerifyAttempts(0);
+      otpForm.reset();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleVerifyOtp = async ({ token }: z.output<typeof OtpSchema>) => {
@@ -131,14 +156,18 @@ export function PhoneOtpSignInContainer() {
 
     setVerifyAttempts((n) => n + 1);
 
-    await verifyMutation.mutateAsync({
-      type: 'sms',
-      phone,
-      token,
-    });
+    try {
+      await verifyMutation.mutateAsync({
+        type: 'sms',
+        phone,
+        token,
+      });
 
-    const next = getSafeRedirectPath(params.get('next'), '/home');
-    router.replace(next);
+      const next = getSafeRedirectPath(params.get('next'), '/home');
+      router.replace(next);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   if (step === 'phone') {
@@ -148,7 +177,7 @@ export function PhoneOtpSignInContainer() {
           className="flex flex-col gap-y-4"
           onSubmit={phoneForm.handleSubmit(handleSendOtp)}
         >
-          <AuthErrorAlert error={signInMutation.error} />
+          <AuthErrorAlert error={localError || signInMutation.error} />
 
           <FormField
             name="phone"
@@ -194,10 +223,6 @@ export function PhoneOtpSignInContainer() {
               <Trans i18nKey="auth.phoneSendOtp" />
             )}
           </Button>
-
-          <p className="text-muted-foreground text-center text-[11px]">
-            Delivered via SMS &middot; DLT registered
-          </p>
         </form>
       </Form>
     );
@@ -209,7 +234,7 @@ export function PhoneOtpSignInContainer() {
   return (
     <Form {...otpForm}>
       <div className="flex w-full flex-col items-center gap-y-6">
-        <p className="text-muted-foreground text-center text-sm">
+        <p className="text-center text-sm font-medium text-[#6B88A4]">
           <Trans
             i18nKey="auth.phoneOtpSentTo"
             values={{ phone: displayPhone }}
@@ -217,22 +242,22 @@ export function PhoneOtpSignInContainer() {
         </p>
 
         {isMockMode && (
-          <p className="w-full rounded border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-600">
+          <p className="w-full animate-pulse rounded border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-center text-xs font-medium text-[#F59E0B]">
             <Trans i18nKey="auth.phoneMockHint" />
           </p>
         )}
 
         <form
-          className="flex w-full flex-col items-center gap-y-6"
+          className="flex w-full flex-col gap-y-5"
           onSubmit={otpForm.handleSubmit(handleVerifyOtp)}
         >
           <AuthErrorAlert error={verifyMutation.error} />
 
           {/* surface failures from resending the OTP, not just verification */}
-          <AuthErrorAlert error={signInMutation.error} />
+          <AuthErrorAlert error={localError || signInMutation.error} />
 
           {tooManyAttempts && (
-            <p className="text-destructive text-sm">
+            <p className="text-destructive text-center text-sm font-semibold">
               <Trans i18nKey="auth.phoneTooManyAttempts" />
             </p>
           )}
@@ -241,7 +266,7 @@ export function PhoneOtpSignInContainer() {
             name="token"
             control={otpForm.control}
             render={({ field }) => (
-              <FormItem className="flex flex-col items-center">
+              <FormItem className="flex flex-col items-center gap-y-2">
                 <FormControl>
                   <InputOTP
                     maxLength={6}
@@ -250,20 +275,44 @@ export function PhoneOtpSignInContainer() {
                     autoFocus
                     data-test="otp-input"
                   >
-                    <InputOTPGroup>
-                      <InputOTPSlot index={0} data-slot="0" />
-                      <InputOTPSlot index={1} data-slot="1" />
-                      <InputOTPSlot index={2} data-slot="2" />
+                    <InputOTPGroup className="gap-1.5 md:gap-2">
+                      <InputOTPSlot
+                        index={0}
+                        data-slot="0"
+                        className="h-13 w-11 rounded-md border-[#2E3F50] bg-[#1B293A] text-center text-[22px] font-black text-[#F59E0B] focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B] focus:outline-none md:h-14 md:w-12"
+                      />
+                      <InputOTPSlot
+                        index={1}
+                        data-slot="1"
+                        className="h-13 w-11 rounded-md border-[#2E3F50] bg-[#1B293A] text-center text-[22px] font-black text-[#F59E0B] focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B] focus:outline-none md:h-14 md:w-12"
+                      />
+                      <InputOTPSlot
+                        index={2}
+                        data-slot="2"
+                        className="h-13 w-11 rounded-md border-[#2E3F50] bg-[#1B293A] text-center text-[22px] font-black text-[#F59E0B] focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B] focus:outline-none md:h-14 md:w-12"
+                      />
                     </InputOTPGroup>
-                    <InputOTPSeparator />
-                    <InputOTPGroup>
-                      <InputOTPSlot index={3} data-slot="3" />
-                      <InputOTPSlot index={4} data-slot="4" />
-                      <InputOTPSlot index={5} data-slot="5" />
+                    <InputOTPSeparator className="mx-1 font-bold text-[#2E3F50]" />
+                    <InputOTPGroup className="gap-1.5 md:gap-2">
+                      <InputOTPSlot
+                        index={3}
+                        data-slot="3"
+                        className="h-13 w-11 rounded-md border-[#2E3F50] bg-[#1B293A] text-center text-[22px] font-black text-[#F59E0B] focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B] focus:outline-none md:h-14 md:w-12"
+                      />
+                      <InputOTPSlot
+                        index={4}
+                        data-slot="4"
+                        className="h-13 w-11 rounded-md border-[#2E3F50] bg-[#1B293A] text-center text-[22px] font-black text-[#F59E0B] focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B] focus:outline-none md:h-14 md:w-12"
+                      />
+                      <InputOTPSlot
+                        index={5}
+                        data-slot="5"
+                        className="h-13 w-11 rounded-md border-[#2E3F50] bg-[#1B293A] text-center text-[22px] font-black text-[#F59E0B] focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B] focus:outline-none md:h-14 md:w-12"
+                      />
                     </InputOTPGroup>
                   </InputOTP>
                 </FormControl>
-                <FormDescription>
+                <FormDescription className="text-center text-xs text-[#6B88A4]">
                   <Trans i18nKey="auth.phoneOtpLabel" />
                 </FormDescription>
                 <FormMessage />
@@ -273,31 +322,38 @@ export function PhoneOtpSignInContainer() {
 
           <Button
             type="submit"
-            className="w-full"
+            className="mt-2 flex h-12 w-full items-center justify-center gap-2 border-0 bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-[13px] font-extrabold text-[#0F172A] shadow-[0_4px_16px_rgba(245,158,11,0.22)] transition-all hover:brightness-[1.03] active:scale-[0.98]"
             disabled={verifyMutation.isPending || tooManyAttempts}
             data-test="otp-verify-button"
           >
             {verifyMutation.isPending ? (
               <>
-                <Spinner className="mr-2 h-4 w-4" />
+                <Spinner className="mr-2 h-4 w-4 text-current" />
                 <Trans i18nKey="auth.phoneVerifyingOtp" />
               </>
             ) : (
-              <Trans i18nKey="auth.phoneVerifyOtp" />
+              <>
+                <Lock className="h-[14px] w-[14px]" strokeWidth={2.5} />
+                <Trans i18nKey="auth.phoneVerifyOtp" />
+              </>
             )}
           </Button>
 
-          <div className="flex w-full justify-between text-sm">
+          <div className="mt-3 flex w-full justify-between px-1 text-sm">
             <Button
               type="button"
               variant="ghost"
               size="sm"
+              className="flex h-9 items-center gap-1.5 text-[#6B88A4] transition-all hover:bg-[#1B293A]/50 hover:text-white"
               onClick={() => {
                 setStep('phone');
                 setPhone('');
+                setLocalError(null);
+                signInMutation.reset();
                 phoneForm.reset();
               }}
             >
+              <ArrowLeft className="h-[14px] w-[14px]" strokeWidth={2.5} />
               <Trans i18nKey="auth.phoneChangeNumber" />
             </Button>
 
@@ -308,6 +364,7 @@ export function PhoneOtpSignInContainer() {
               disabled={resendSeconds > 0 || signInMutation.isPending}
               onClick={handleResend}
               data-test="resend-otp-button"
+              className="h-9 text-[#6B88A4] transition-all hover:bg-[#1B293A]/50 hover:text-white disabled:text-[#6B88A4]/40 disabled:hover:bg-transparent"
             >
               {resendSeconds > 0 ? (
                 <Trans

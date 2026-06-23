@@ -9,6 +9,7 @@ export function UpdateAccountDetailsFormContainer({
   user: {
     name: string | null;
     id: string;
+    phone?: string | null;
   };
 }) {
   const revalidateUserDataQuery = useRevalidatePersonalAccountDataQuery();
@@ -16,6 +17,7 @@ export function UpdateAccountDetailsFormContainer({
   return (
     <UpdateAccountDetailsForm
       displayName={user.name ?? ''}
+      phone={user.phone ?? ''}
       userId={user.id}
       onUpdate={() => revalidateUserDataQuery(user.id)}
     />

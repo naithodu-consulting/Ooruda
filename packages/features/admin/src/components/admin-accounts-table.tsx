@@ -12,6 +12,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Tables } from '@kit/supabase/database';
+import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import {
   DropdownMenu,
@@ -34,12 +35,22 @@ import {
   SelectValue,
 } from '@kit/ui/select';
 
+import { ROLE_LABELS } from '../lib/server/schema/create-user.schema';
 import { AdminDeleteAccountDialog } from './admin-delete-account-dialog';
 import { AdminDeleteUserDialog } from './admin-delete-user-dialog';
 import { AdminImpersonateUserDialog } from './admin-impersonate-user-dialog';
+import {
+  AdminManageRolesDialog,
+  type AssociationOption,
+  type UserMembership,
+} from './admin-manage-roles-dialog';
 import { AdminResetPasswordDialog } from './admin-reset-password-dialog';
 
 type Account = Tables<'accounts'>;
+
+function roleLabel(role: string): string {
+  return ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role;
+}
 
 const FiltersSchema = z.object({
   type: z.enum(['all', 'team', 'personal']),
@@ -56,6 +67,19 @@ export function AdminAccountsTable(
       type: 'all' | 'team' | 'personal';
       query: string;
     };
+    // Map of personal-account (user) id → the association memberships they
+    // hold (association + role), used for both the Role column and the
+    // Manage Roles dialog.
+    membershipsByAccountId?: Record<string, UserMembership[]>;
+    // Map of personal-account (user) id → their phone number, since
+    // phone-based users have no `accounts.email`.
+    phoneByAccountId?: Record<string, string>;
+    // Team accounts a user can be assigned to from the Manage Roles dialog.
+    associations?: AssociationOption[];
+    // Account ids that hold platform Super Admin access (app_metadata.role).
+    // Destructive/role actions are disabled for these accounts since they're
+    // already blocked server-side.
+    superAdminIds?: Set<string>;
   }>,
 ) {
   return (
@@ -70,7 +94,12 @@ export function AdminAccountsTable(
           pageIndex={props.page - 1}
           pageCount={props.pageCount}
           data={props.data}
-          columns={getColumns()}
+          columns={getColumns(
+            props.membershipsByAccountId ?? {},
+            props.phoneByAccountId ?? {},
+            props.associations ?? [],
+            props.superAdminIds ?? new Set(),
+          )}
         />
       </div>
     </div>
@@ -175,27 +204,47 @@ function AccountsTableFilters(props: {
   );
 }
 
-function getColumns(): ColumnDef<Account>[] {
+function getColumns(
+  membershipsByAccountId: Record<string, UserMembership[]>,
+  phoneByAccountId: Record<string, string>,
+  associations: AssociationOption[],
+  superAdminIds: Set<string>,
+): ColumnDef<Account>[] {
   return [
     {
       id: 'name',
       header: 'Name',
       cell: ({ row }) => {
         return (
-          <Link
-            prefetch={false}
-            className={'hover:underline'}
-            href={`/admin/accounts/${row.original.id}`}
-          >
-            {row.original.name}
-          </Link>
+          <div className={'flex items-center gap-2'}>
+            <Link
+              prefetch={false}
+              className={'hover:underline'}
+              href={`/admin/accounts/${row.original.id}`}
+            >
+              {row.original.name?.trim() || '—'}
+            </Link>
+
+            {superAdminIds.has(row.original.id) && (
+              <Badge variant={'outline'}>Super Admin</Badge>
+            )}
+          </div>
         );
+      },
+    },
+    {
+      id: 'phone',
+      header: 'Phone',
+      cell: ({ row }) => {
+        return phoneByAccountId[row.original.id] ?? '—';
       },
     },
     {
       id: 'email',
       header: 'Email',
-      accessorKey: 'email',
+      cell: ({ row }) => {
+        return row.original.email?.trim() || '—';
+      },
     },
     {
       id: 'type',
@@ -205,19 +254,31 @@ function getColumns(): ColumnDef<Account>[] {
       },
     },
     {
+      id: 'role',
+      header: 'Role',
+      cell: ({ row }) => {
+        if (!row.original.is_personal_account) {
+          return '—';
+        }
+
+        const memberships = membershipsByAccountId[row.original.id] ?? [];
+
+        return memberships.length > 0
+          ? memberships.map((m) => roleLabel(m.role)).join(', ')
+          : '—';
+      },
+    },
+    {
       id: 'created_at',
       header: 'Created At',
       cell: ({ row }) => {
-        return new Date(row.original.created_at!).toLocaleDateString(
-          undefined,
-          {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          },
-        );
+        return new Date(row.original.created_at!).toLocaleDateString('en-IN', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
       },
     },
     {
@@ -225,7 +286,7 @@ function getColumns(): ColumnDef<Account>[] {
       header: 'Updated At',
       cell: ({ row }) => {
         return row.original.updated_at
-          ? new Date(row.original.updated_at).toLocaleDateString(undefined, {
+          ? new Date(row.original.updated_at).toLocaleDateString('en-IN', {
               year: 'numeric',
               month: 'short',
               day: 'numeric',
@@ -238,7 +299,14 @@ function getColumns(): ColumnDef<Account>[] {
     {
       id: 'actions',
       header: '',
-      cell: ({ row }) => <ActionsCell account={row.original} />,
+      cell: ({ row }) => (
+        <ActionsCell
+          account={row.original}
+          associations={associations}
+          memberships={membershipsByAccountId[row.original.id] ?? []}
+          isSuperAdmin={superAdminIds.has(row.original.id)}
+        />
+      ),
     },
   ];
 }
@@ -248,9 +316,20 @@ type ActiveDialog =
   | 'impersonate'
   | 'delete-user'
   | 'delete-account'
+  | 'manage-roles'
   | null;
 
-function ActionsCell({ account }: { account: Account }) {
+function ActionsCell({
+  account,
+  associations,
+  memberships,
+  isSuperAdmin,
+}: {
+  account: Account;
+  associations: AssociationOption[];
+  memberships: UserMembership[];
+  isSuperAdmin: boolean;
+}) {
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const isPersonalAccount = account.is_personal_account;
 
@@ -283,12 +362,21 @@ function ActionsCell({ account }: { account: Account }) {
             {isPersonalAccount && (
               <>
                 <DropdownMenuItem
+                  disabled={isSuperAdmin}
+                  onClick={() => setActiveDialog('manage-roles')}
+                >
+                  Manage Roles
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  disabled={isSuperAdmin}
                   onClick={() => setActiveDialog('reset-password')}
                 >
                   Send Reset Password link
                 </DropdownMenuItem>
 
                 <DropdownMenuItem
+                  disabled={isSuperAdmin}
                   onClick={() => setActiveDialog('impersonate')}
                 >
                   Impersonate User
@@ -296,6 +384,7 @@ function ActionsCell({ account }: { account: Account }) {
 
                 <DropdownMenuItem
                   variant="destructive"
+                  disabled={isSuperAdmin}
                   onClick={() => setActiveDialog('delete-user')}
                 >
                   Delete Personal Account
@@ -317,6 +406,15 @@ function ActionsCell({ account }: { account: Account }) {
 
       {isPersonalAccount && (
         <>
+          <AdminManageRolesDialog
+            userId={account.id}
+            userName={account.name?.trim() || account.id}
+            associations={associations}
+            memberships={memberships}
+            open={activeDialog === 'manage-roles'}
+            onOpenChange={(open) => !open && setActiveDialog(null)}
+          />
+
           <AdminResetPasswordDialog
             userId={account.id}
             open={activeDialog === 'reset-password'}

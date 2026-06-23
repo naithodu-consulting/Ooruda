@@ -39,6 +39,6 @@ async function getLayoutState() {
   const sidebarOpenCookie = cookieStore.get('sidebar_state');
 
   return {
-    open: sidebarOpenCookie?.value === 'true',
+    open: sidebarOpenCookie ? sidebarOpenCookie.value === 'true' : true,
   };
 }

@@ -119,11 +119,20 @@ export function ImageUploader(
         />
       </label>
 
-      <div>
-        <Button onClick={onClear} size={'sm'} variant={'outline'}>
-          <X className={'mr-1 h-4 w-4'} />
-          <Trans i18nKey={'common.clear'} />
-        </Button>
+      <div className="flex flex-col gap-4">
+        {props.children}
+
+        <div>
+          <Button
+            onClick={onClear}
+            size={'sm'}
+            variant={'ghost'}
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <X className={'mr-1 h-4 w-4'} />
+            <Trans i18nKey={'common.clear'} />
+          </Button>
+        </div>
       </div>
     </div>
   );
