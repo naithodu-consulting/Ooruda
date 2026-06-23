@@ -129,22 +129,35 @@ export const deleteAccountAction = adminActionClient
  */
 export const createUserAction = adminActionClient
   .inputSchema(CreateUserSchema)
-  .action(async ({ parsedInput: { email, password, emailConfirm } }) => {
+  .action(async ({ parsedInput: { phone, fullName } }) => {
     const adminClient = getSupabaseServerAdminClient();
     const logger = await getLogger();
 
-    logger.info({ email }, `Super Admin is creating a new user...`);
+    // Normalise phone: ensure it starts with +
+    const normalisedPhone = phone.startsWith('+') ? phone : `+${phone}`;
+
+    logger.info({ phone: normalisedPhone }, `Super Admin is creating a new user...`);
 
     const { data, error } = await adminClient.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: emailConfirm,
+      phone: normalisedPhone,
+      phone_confirm: true,
+      user_metadata: { full_name: fullName },
     });
 
     if (error) {
       logger.error({ error }, `Error creating user`);
       throw new Error(`Error creating user: ${error.message}`);
     }
+
+    // Upsert profile so the phone-invite gate recognises this user
+    await adminClient.from('profiles').upsert(
+      {
+        id: data.user.id,
+        full_name: fullName,
+        mobile_number: normalisedPhone,
+      },
+      { onConflict: 'id' },
+    );
 
     logger.info(
       { userId: data.user.id },

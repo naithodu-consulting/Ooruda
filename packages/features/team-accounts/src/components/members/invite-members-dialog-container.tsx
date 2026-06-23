@@ -59,10 +59,12 @@ const MAX_INVITES = 5;
 export function InviteMembersDialogContainer({
   accountSlug,
   userRoleHierarchy,
+  isSuperAdmin,
   children,
 }: React.PropsWithChildren<{
   accountSlug: string;
   userRoleHierarchy: number;
+  isSuperAdmin?: boolean;
 }>) {
   const { dialogProps, isPending, setIsPending, setOpen } = useAsyncDialog();
   const t = useTranslations('teams');
@@ -141,18 +143,26 @@ export function InviteMembersDialogContainer({
 
         <If condition={policiesResult?.allowed}>
           <RolesDataProvider maxRoleHierarchy={userRoleHierarchy}>
-            {(roles) => (
-              <InviteMembersForm
-                pending={isPending}
-                roles={roles}
-                onSubmit={(data) => {
-                  execute({
-                    accountSlug,
-                    invitations: data.invitations,
-                  });
-                }}
-              />
-            )}
+            {(roles) => {
+              const filteredRoles = isSuperAdmin
+                ? roles
+                : roles.filter((role) =>
+                    ['prop_owner', 'tenant'].includes(role),
+                  );
+
+              return (
+                <InviteMembersForm
+                  pending={isPending}
+                  roles={filteredRoles}
+                  onSubmit={(data) => {
+                    execute({
+                      accountSlug,
+                      invitations: data.invitations,
+                    });
+                  }}
+                />
+              );
+            }}
           </RolesDataProvider>
         </If>
       </DialogContent>
@@ -321,7 +331,7 @@ function InviteMembersForm({
 }
 
 function createEmptyInviteModel() {
-  return { phone: '', role: 'member' as Role };
+  return { phone: '', role: 'prop_owner' as Role };
 }
 
 function useFetchInvitationsPolicies({

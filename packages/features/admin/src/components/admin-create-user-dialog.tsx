@@ -16,7 +16,6 @@ import {
   AlertDialogTrigger,
 } from '@kit/ui/alert-dialog';
 import { Button } from '@kit/ui/button';
-import { Checkbox } from '@kit/ui/checkbox';
 import {
   Form,
   FormControl,
@@ -43,9 +42,8 @@ export function AdminCreateUserDialog(props: React.PropsWithChildren) {
   const form = useForm({
     resolver: zodResolver(CreateUserSchema),
     defaultValues: {
-      email: '',
-      password: '',
-      emailConfirm: false,
+      fullName: '',
+      phone: '',
     },
     mode: 'onChange',
   });
@@ -75,7 +73,8 @@ export function AdminCreateUserDialog(props: React.PropsWithChildren) {
           <AlertDialogTitle>Create New User</AlertDialogTitle>
 
           <AlertDialogDescription>
-            Complete the form below to create a new user.
+            Enter the user&apos;s name and phone number. They will be able to
+            sign in via phone OTP.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -90,22 +89,21 @@ export function AdminCreateUserDialog(props: React.PropsWithChildren) {
             <If condition={!!error}>
               <Alert variant={'destructive'}>
                 <AlertTitle>Error</AlertTitle>
-
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             </If>
 
             <FormField
-              name={'email'}
+              name={'fullName'}
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel>Full Name</FormLabel>
 
                   <FormControl>
                     <Input
                       required
-                      type="email"
-                      placeholder={'user@example.com'}
+                      type="text"
+                      placeholder={'e.g. Rajesh Kumar'}
                       {...field}
                     />
                   </FormControl>
@@ -115,47 +113,25 @@ export function AdminCreateUserDialog(props: React.PropsWithChildren) {
             />
 
             <FormField
-              name={'password'}
+              name={'phone'}
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Password</FormLabel>
+                  <FormLabel>Phone Number</FormLabel>
 
                   <FormControl>
                     <Input
                       required
-                      type="password"
-                      placeholder={'Password'}
+                      type="tel"
+                      placeholder={'e.g. 919911000001'}
                       {...field}
                     />
                   </FormControl>
 
                   <FormDescription>
-                    Password must be at least 8 characters long.
+                    Enter with country code (e.g. 919911000001 or
+                    +919911000001).
                   </FormDescription>
                   <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              name={'emailConfirm'}
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-y-0 space-x-3 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-
-                  <div className="flex flex-col space-y-1">
-                    <FormLabel>Auto-confirm email</FormLabel>
-
-                    <FormDescription>
-                      If checked, the user&apos;s email will be automatically
-                      confirmed.
-                    </FormDescription>
-                  </div>
                 </FormItem>
               )}
             />

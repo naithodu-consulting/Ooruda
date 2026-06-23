@@ -37,6 +37,7 @@ type AccountInvitationsTableProps = {
     canUpdateInvitation: boolean;
     canRemoveInvitation: boolean;
     currentUserRoleHierarchy: number;
+    isSuperAdmin?: boolean;
   };
 };
 
@@ -235,6 +236,7 @@ function ActionsDropdown({
           invitationId={invitation.id}
           userRole={invitation.role}
           userRoleHierarchy={permissions.currentUserRoleHierarchy}
+          isSuperAdmin={permissions.isSuperAdmin}
         />
       </If>
 

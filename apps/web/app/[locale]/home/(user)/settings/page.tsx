@@ -51,6 +51,7 @@ function PersonalAccountSettingsPage() {
 
       <PersonalAccountSettingsContainer
         userId={user.id}
+        phone={user.phone}
         features={features}
         paths={paths}
         providers={providers}

@@ -33,16 +33,11 @@ import {
 import { Spinner } from '@kit/ui/spinner';
 import { Trans } from '@kit/ui/trans';
 
+import { checkPhoneInvitationAction } from '../actions/check-invitation-action';
 import { AuthErrorAlert } from './auth-error-alert';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 const MAX_VERIFY_ATTEMPTS = 5;
-
-// Whether an unknown phone number is allowed to self-register on sign-in.
-// PropTech is invite-based, so production should set this to 'false' once the
-// invitation-provisioning flow is in place; until then it defaults to allowing
-// sign-up so the first association admin can onboard themselves.
-const ALLOW_SIGNUP = process.env.NEXT_PUBLIC_ALLOW_PHONE_SIGNUP !== 'false';
 
 const PhoneSchema = z.object({
   phone: z
@@ -65,6 +60,7 @@ export function PhoneOtpSignInContainer() {
   const [phone, setPhone] = useState('');
   const [resendSeconds, setResendSeconds] = useState(0);
   const [verifyAttempts, setVerifyAttempts] = useState(0);
+  const [localError, setLocalError] = useState<string | Error | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const signInMutation = useSignInWithOtp();
@@ -102,29 +98,57 @@ export function PhoneOtpSignInContainer() {
   }: z.output<typeof PhoneSchema>) => {
     const e164 = `+91${rawPhone}`;
 
-    await signInMutation.mutateAsync({
-      phone: e164,
-      options: { shouldCreateUser: ALLOW_SIGNUP },
-    });
+    try {
+      setLocalError(null);
+      signInMutation.reset();
 
-    setPhone(e164);
-    setResendSeconds(RESEND_COOLDOWN_SECONDS);
-    setVerifyAttempts(0);
-    otpForm.reset();
-    setStep('otp');
+      // Check if user has permission to sign in (invite-only logic)
+      const checkResult = await checkPhoneInvitationAction(e164);
+      if (!checkResult.allowed) {
+        setLocalError('not_invited');
+        return;
+      }
+
+      await signInMutation.mutateAsync({
+        phone: e164,
+        options: { shouldCreateUser: checkResult.shouldCreateUser },
+      });
+
+      setPhone(e164);
+      setResendSeconds(RESEND_COOLDOWN_SECONDS);
+      setVerifyAttempts(0);
+      otpForm.reset();
+      setStep('otp');
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleResend = async () => {
     if (resendSeconds > 0) return;
 
-    await signInMutation.mutateAsync({
-      phone,
-      options: { shouldCreateUser: ALLOW_SIGNUP },
-    });
+    try {
+      setLocalError(null);
+      signInMutation.reset();
 
-    setResendSeconds(RESEND_COOLDOWN_SECONDS);
-    setVerifyAttempts(0);
-    otpForm.reset();
+      // Check if user has permission to sign in (invite-only logic)
+      const checkResult = await checkPhoneInvitationAction(phone);
+      if (!checkResult.allowed) {
+        setLocalError('not_invited');
+        return;
+      }
+
+      await signInMutation.mutateAsync({
+        phone,
+        options: { shouldCreateUser: checkResult.shouldCreateUser },
+      });
+
+      setResendSeconds(RESEND_COOLDOWN_SECONDS);
+      setVerifyAttempts(0);
+      otpForm.reset();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleVerifyOtp = async ({ token }: z.output<typeof OtpSchema>) => {
@@ -132,14 +156,18 @@ export function PhoneOtpSignInContainer() {
 
     setVerifyAttempts((n) => n + 1);
 
-    await verifyMutation.mutateAsync({
-      type: 'sms',
-      phone,
-      token,
-    });
+    try {
+      await verifyMutation.mutateAsync({
+        type: 'sms',
+        phone,
+        token,
+      });
 
-    const next = getSafeRedirectPath(params.get('next'), '/home');
-    router.replace(next);
+      const next = getSafeRedirectPath(params.get('next'), '/home');
+      router.replace(next);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   if (step === 'phone') {
@@ -149,7 +177,7 @@ export function PhoneOtpSignInContainer() {
           className="flex flex-col gap-y-4"
           onSubmit={phoneForm.handleSubmit(handleSendOtp)}
         >
-          <AuthErrorAlert error={signInMutation.error} />
+          <AuthErrorAlert error={localError || signInMutation.error} />
 
           <FormField
             name="phone"
@@ -226,7 +254,7 @@ export function PhoneOtpSignInContainer() {
           <AuthErrorAlert error={verifyMutation.error} />
 
           {/* surface failures from resending the OTP, not just verification */}
-          <AuthErrorAlert error={signInMutation.error} />
+          <AuthErrorAlert error={localError || signInMutation.error} />
 
           {tooManyAttempts && (
             <p className="text-destructive text-center text-sm font-semibold">
@@ -320,6 +348,8 @@ export function PhoneOtpSignInContainer() {
               onClick={() => {
                 setStep('phone');
                 setPhone('');
+                setLocalError(null);
+                signInMutation.reset();
                 phoneForm.reset();
               }}
             >

@@ -27,6 +27,7 @@ import { UpdateAccountImageContainer } from './update-account-image-container';
 export function PersonalAccountSettingsContainer(
   props: React.PropsWithChildren<{
     userId: string;
+    phone?: string | null;
 
     features: {
       enableAccountDeletion: boolean;
@@ -84,7 +85,12 @@ export function PersonalAccountSettingsContainer(
         </CardHeader>
 
         <CardContent>
-          <UpdateAccountDetailsFormContainer user={user.data} />
+          <UpdateAccountDetailsFormContainer
+            user={{
+              ...user.data,
+              phone: props.phone,
+            }}
+          />
         </CardContent>
       </Card>
 

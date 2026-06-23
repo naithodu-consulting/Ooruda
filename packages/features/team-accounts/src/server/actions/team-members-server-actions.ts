@@ -42,6 +42,15 @@ export const updateMemberRoleAction = authActionClient
   .inputSchema(UpdateMemberRoleSchema)
   .action(async ({ parsedInput: data, ctx: { user } }) => {
     const client = getSupabaseServerClient();
+
+    const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+
+    if (!isSuperAdmin && !['prop_owner', 'tenant'].includes(data.role)) {
+      throw new Error(
+        'You can only update members to "Property Owner" or "Tenant" roles',
+      );
+    }
+
     const service = createAccountMembersService(client);
     const adminClient = getSupabaseServerAdminClient();
 

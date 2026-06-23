@@ -9,7 +9,6 @@ import {
   Check,
   ChevronsUpDown,
   LogOut,
-  MessageCircleQuestion,
   Plus,
   Settings,
   Shield,
@@ -329,20 +328,6 @@ export function WorkspaceDropdown({
               }
             />
           </If>
-
-          <DropdownMenuSeparator />
-
-          <DropdownMenuItem
-            render={
-              <Link className="flex items-center gap-x-2" href="/docs">
-                <MessageCircleQuestion className="size-4" />
-
-                <span>
-                  <Trans i18nKey={'common.documentation'} />
-                </span>
-              </Link>
-            }
-          />
 
           <DropdownMenuSeparator />
 

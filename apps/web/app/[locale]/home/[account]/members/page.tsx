@@ -44,11 +44,15 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
   const [members, invitations, canAddMember, { user, account }] =
     await loadMembersPageData(client, slug);
 
-  const canManageRoles = account.permissions.includes('roles.manage');
-  const canManageInvitations = account.permissions.includes('invites.manage');
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+
+  const canManageRoles = !!isSuperAdmin || account.permissions.includes('roles.manage');
+  const canManageInvitations = !!isSuperAdmin || account.permissions.includes('invites.manage');
 
   const isPrimaryOwner = account.primary_owner_user_id === user.id;
   const currentUserRoleHierarchy = account.role_hierarchy_level;
+
+
 
   return (
     <PageBody>
@@ -75,6 +79,7 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
               <InviteMembersDialogContainer
                 userRoleHierarchy={currentUserRoleHierarchy}
                 accountSlug={account.slug}
+                isSuperAdmin={!!isSuperAdmin}
               >
                 <Button size={'sm'} data-test={'invite-members-form-trigger'}>
                   <PlusCircle className={'w-4'} />
@@ -95,6 +100,7 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
               members={members}
               isPrimaryOwner={isPrimaryOwner}
               canManageRoles={canManageRoles}
+              isSuperAdmin={!!isSuperAdmin}
             />
           </CardContent>
         </Card>
@@ -118,6 +124,7 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
                 canUpdateInvitation: canManageRoles,
                 canRemoveInvitation: canManageRoles,
                 currentUserRoleHierarchy,
+                isSuperAdmin: !!isSuperAdmin,
               }}
               invitations={invitations}
             />
