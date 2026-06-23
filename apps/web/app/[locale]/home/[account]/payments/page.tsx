@@ -34,7 +34,7 @@ export default async function PaymentsPage({ params }: Props) {
         icon={CreditCard}
         color="green"
         title="Payments"
-        description="Record cash, UPI, and bank payments, and match receipts to the right bills — with Razorpay built in."
+        description="Record card, UPI, bank payments and match receipts to the right bills with Razorpay built in."
         roleLabel={ROLE_LABELS[role]}
       />
     </PageBody>

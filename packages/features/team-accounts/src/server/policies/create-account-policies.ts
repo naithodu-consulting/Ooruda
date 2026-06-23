@@ -24,6 +24,14 @@ export const superAdminOnlyAccountCreationPolicy =
     id: 'super-admin-only-account-creation',
     stages: ['preliminary', 'submission'],
     evaluate: async () => {
+      // Allow self-serve creation if phone signup is enabled (dev or before invitations are fully set up)
+      const allowSelfServe =
+        process.env.NEXT_PUBLIC_ALLOW_PHONE_SIGNUP !== 'false';
+
+      if (allowSelfServe) {
+        return allow();
+      }
+
       const client = getSupabaseServerClient();
       const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
