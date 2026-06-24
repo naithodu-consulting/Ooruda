@@ -1,6 +1,6 @@
-# PropTech — Supabase & Next.js SaaS Platform
+# Ooruda — Supabase & Next.js SaaS Platform
 
-PropTech is a premium Software-as-a-Service (SaaS) application built for housing association and property management. It is designed using a multi-tenant architecture on top of Next.js 16 (App Router), Supabase (Postgres, Auth, Storage), Tailwind CSS 4, and Turborepo.
+Ooruda is a premium Software-as-a-Service (SaaS) application built for housing association and property management. It is designed using a multi-tenant architecture on top of Next.js 16 (App Router), Supabase (Postgres, Auth, Storage), Tailwind CSS 4, and Turborepo.
 
 ---
 

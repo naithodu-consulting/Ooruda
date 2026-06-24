@@ -1,7 +1,7 @@
 -- =============================================================
--- PropTech RLS — tenant isolation and the write-policy matrix
+-- Ooruda RLS — tenant isolation and the write-policy matrix
 -- -------------------------------------------------------------
--- Validates the row-level security from 20260612000000_proptech_domain.sql
+-- Validates the row-level security from 20260612000000_ooruda_domain.sql
 -- (member_read) and 20260614000003_assoc_setup.sql (write policies):
 --   * a member reads only their own association's rows, never another
 --     tenant's (multi-tenant isolation)

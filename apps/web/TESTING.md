@@ -49,7 +49,7 @@ pnpm supabase:web:stop          # stop local Supabase
 
 ## 3. pgTAP database tests
 
-Covers PropTech domain rules enforced in the database: auto-provisioning
+Covers Ooruda domain rules enforced in the database: auto-provisioning
 triggers, CHECK/enum constraints, uniqueness rules, generated columns, the
 RBAC role/permission seed, and RLS (tenant isolation + the write-policy
 matrix).
@@ -59,11 +59,11 @@ pnpm supabase:web:start          # (requires Docker — see section 2)
 pnpm --filter web supabase:test  # runs supabase/tests/database/*.test.sql
 ```
 
-PropTech-specific files:
+Ooruda-specific files:
 
-- `supabase/tests/database/proptech-domain.test.sql`
-- `supabase/tests/database/proptech-rbac.test.sql`
-- `supabase/tests/database/proptech-rls.test.sql`
+- `supabase/tests/database/ooruda-domain.test.sql`
+- `supabase/tests/database/ooruda-rbac.test.sql`
+- `supabase/tests/database/ooruda-rls.test.sql`
 
 These tests create their own users/accounts inside a transaction and roll
 back, so they need no manual seed data.
@@ -73,8 +73,8 @@ back, so they need no manual seed data.
 ## 4. Playwright E2E tests
 
 Covers full user flows: phone-OTP sign-in, super-admin → `/admin` routing,
-and the association settings page. PropTech specs live in
-`apps/e2e/tests/proptech/`.
+and the association settings page. Ooruda specs live in
+`apps/e2e/tests/ooruda/`.
 
 ### 4.1 Enable test OTPs (required for phone-OTP sign-in)
 
@@ -128,8 +128,8 @@ NEXT_PUBLIC_MOCK_OTP=true pnpm --filter web dev
 # Terminal 2 — run the E2E suite (expects the app on http://localhost:3000)
 pnpm --filter web-e2e test
 
-# …or just the PropTech specs:
-pnpm --filter web-e2e exec playwright test tests/proptech --workers=1
+# …or just the Ooruda specs:
+pnpm --filter web-e2e exec playwright test tests/ooruda --workers=1
 ```
 
 Playwright can also start the server itself via the `PLAYWRIGHT_SERVER_COMMAND`
@@ -139,7 +139,7 @@ env var (see `apps/e2e/playwright.config.ts`).
 
 ## Summary of what's covered
 
-PropTech tests target the **implemented** surfaces only: RBAC, the association
+Ooruda tests target the **implemented** surfaces only: RBAC, the association
 settings action/page, phone-OTP auth, and the database layer (RLS, triggers,
 constraints). Domain areas still rendered as `ComingSoonState` (units,
 billing, payments, MESCOM, reports, audit, notifications) have no business

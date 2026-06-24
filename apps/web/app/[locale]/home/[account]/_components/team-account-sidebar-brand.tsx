@@ -6,7 +6,7 @@ export function TeamAccountSidebarBrand() {
   return (
     <Link
       href={'/home'}
-      aria-label={'PropTech Home'}
+      aria-label={'Ooruda Home'}
       className="flex items-center gap-2.5 px-1 group-data-[collapsible=icon]:justify-center"
     >
       <div
@@ -23,7 +23,7 @@ export function TeamAccountSidebarBrand() {
 
       <div className="min-w-0 group-data-[collapsible=icon]:hidden">
         <div className="text-[15.5px] font-black tracking-tight text-white">
-          PropTech
+          Ooruda
         </div>
         <div className="text-[9px] font-medium tracking-[0.1em] text-[#6B88A4] uppercase">
           Property Mgmt

@@ -11,11 +11,11 @@
  *
  * These helpers work purely from `'YYYY-MM-DD'` strings, comparing them in
  * UTC, so the result is identical regardless of the host timezone. "Today" is
- * resolved in a fixed billing timezone (PropTech associations bill in India,
+ * resolved in a fixed billing timezone (Ooruda associations bill in India,
  * so day boundaries follow IST), not the host's.
  */
 
-// PropTech bills in India; calendar-day boundaries follow IST.
+// Ooruda bills in India; calendar-day boundaries follow IST.
 export const BILLING_TIME_ZONE = 'Asia/Kolkata';
 
 /**

@@ -34,7 +34,7 @@
 }
 
 /*
- * PropTech primary-button treatment.
+ * Ooruda primary-button treatment.
  * The prototype's primary CTAs use an amber gradient + glow, not flat amber.
  * We target the shadcn default ("primary") button via its data-slot + the
  * .bg-primary utility it always carries — this is more specific than the

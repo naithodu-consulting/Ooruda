@@ -1,5 +1,5 @@
 -- =============================================================
--- PropTech Domain Schema — Phase 1
+-- Ooruda Domain Schema — Phase 1
 -- Built on top of MakerKit's existing auth/accounts schema.
 -- All domain tables carry association_id and are RLS-protected.
 -- =============================================================

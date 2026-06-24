@@ -1,7 +1,7 @@
 import { type Page, expect } from '@playwright/test';
 
 /**
- * Page object for the PropTech phone-OTP sign-in flow.
+ * Page object for the Ooruda phone-OTP sign-in flow.
  *
  * Mirrors `PhoneOtpSignInContainer`: a phone step (10-digit national number,
  * +91 prefix added by the app) followed by a 6-digit OTP step.

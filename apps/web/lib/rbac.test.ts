@@ -9,7 +9,7 @@ import {
 } from './rbac';
 
 /**
- * Unit tests for the PropTech RBAC primitives in `lib/rbac.ts`.
+ * Unit tests for the Ooruda RBAC primitives in `lib/rbac.ts`.
  *
  * These cover the pure, database-free authorization logic:
  *   - the role set and its privilege ordering;
@@ -17,10 +17,10 @@ import {
  *
  * The DB-side mirror of this model (the `roles` / `role_permissions` seed and
  * the RLS policies that read it) is asserted separately in the pgTAP suite
- * (`supabase/tests/database/proptech-rbac.test.sql`).
+ * (`supabase/tests/database/ooruda-rbac.test.sql`).
  */
-describe('PropTech role model', () => {
-  it('defines exactly the four PropTech roles', () => {
+describe('Ooruda role model', () => {
+  it('defines exactly the four Ooruda roles', () => {
     expect([...PROPOPS_ROLES]).toEqual([
       'assoc_admin',
       'billing_operator',

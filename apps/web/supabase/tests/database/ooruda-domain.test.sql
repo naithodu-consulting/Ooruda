@@ -1,8 +1,8 @@
 -- =============================================================
--- PropTech domain — schema, triggers, constraints, generated cols
+-- Ooruda domain — schema, triggers, constraints, generated cols
 -- -------------------------------------------------------------
 -- Validates the database-enforced business rules from
--- 20260612000000_proptech_domain.sql and 20260614000003_assoc_setup.sql:
+-- 20260612000000_ooruda_domain.sql and 20260614000003_assoc_setup.sql:
 --   * auto-provisioning triggers (association on team create; builtin
 --     charge types + billing_settings on association create; profile on
 --     user signup)

@@ -113,7 +113,7 @@ export function LogoImage({
           textClassName,
         )}
       >
-        PropTech
+        Ooruda
       </span>
     </div>
   );
@@ -144,7 +144,7 @@ export function AppLogo({
 
   return (
     <Link
-      aria-label={label ?? 'PropTech Home'}
+      aria-label={label ?? 'Ooruda Home'}
       href={href ?? '/'}
       prefetch={true}
       className="inline-flex"
