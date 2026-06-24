@@ -13,5 +13,3 @@ export const badgeExtras = {
     'bg-purple-600/10 text-purple-600 dark:bg-purple-600/20 [&>svg]:text-purple-600',
   teal: 'bg-teal-600/10 text-teal-600 dark:bg-teal-600/20 [&>svg]:text-teal-600',
 } as const;
-
-export type BadgeExtraVariant = keyof typeof badgeExtras;

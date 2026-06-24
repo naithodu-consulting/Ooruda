@@ -9,5 +9,3 @@ export const alertExtras = {
   warning:
     'border-yellow-600/30 text-yellow-700 *:data-[slot=alert-description]:text-yellow-700/90 *:[svg]:text-yellow-600 dark:text-yellow-400 dark:border-yellow-400/30 dark:*:data-[slot=alert-description]:text-yellow-400/90 dark:*:[svg]:text-yellow-400',
 } as const;
-
-export type AlertExtraVariant = keyof typeof alertExtras;

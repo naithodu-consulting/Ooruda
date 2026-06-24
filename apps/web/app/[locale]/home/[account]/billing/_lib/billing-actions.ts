@@ -173,6 +173,8 @@ export async function generateBillsAction(
   let created = 0;
   const skipped = unitRows.filter((u) => alreadyBilledUnitIds.has(u.id)).length;
 
+  const roundToTwoDecimals = (val: number) => Math.round(val * 100) / 100;
+
   for (const unit of unitRows) {
     if (alreadyBilledUnitIds.has(unit.id)) {
       continue;
@@ -220,7 +222,7 @@ export async function generateBillsAction(
         description: chargeType.name,
         payer,
         gst_applicable: chargeType.gst_applicable,
-        amount,
+        amount: roundToTwoDecimals(amount),
       });
     }
 
@@ -230,34 +232,28 @@ export async function generateBillsAction(
 
     seq += 1;
     const billNo = `${period}-${String(seq).padStart(3, '0')}`;
-    const totalAmount = lineItems.reduce((sum, li) => sum + li.amount, 0);
+    const totalAmount = roundToTwoDecimals(
+      lineItems.reduce((sum, li) => sum + li.amount, 0),
+    );
 
-    const { data: bill, error: billError } = await client
-      .from('bills')
-      .insert({
-        association_id: associationId,
-        unit_id: unit.id,
-        period,
-        bill_no: billNo,
-        total_amount: totalAmount,
-        due_date: dueDate,
-      })
-      .select('id')
-      .single();
+    const { error: rpcError } = await client.rpc(
+      'create_bill_with_items' as any,
+      {
+        p_association_id: associationId,
+        p_unit_id: unit.id,
+        p_period: period,
+        p_bill_no: billNo,
+        p_due_date: dueDate,
+        p_total_amount: totalAmount,
+        p_line_items: lineItems,
+      },
+    );
 
-    if (billError || !bill) {
+    if (rpcError) {
       return {
         success: false,
-        error: billError?.message ?? 'Could not create the bill.',
+        error: rpcError.message,
       };
-    }
-
-    const { error: lineItemsError } = await client
-      .from('bill_line_items')
-      .insert(lineItems.map((li) => ({ ...li, bill_id: bill.id })));
-
-    if (lineItemsError) {
-      return { success: false, error: lineItemsError.message };
     }
 
     created += 1;

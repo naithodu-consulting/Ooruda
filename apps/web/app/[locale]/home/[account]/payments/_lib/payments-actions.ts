@@ -28,21 +28,9 @@ async function requireBillingAccess(
   return null;
 }
 
-function nextBillStatus(paidAmount: number, totalAmount: number): string {
-  if (paidAmount >= totalAmount) {
-    return 'Paid';
-  }
-
-  if (paidAmount > 0) {
-    return 'Partial';
-  }
-
-  return 'Unpaid';
-}
-
 /**
- * Record a payment against a bill, update the bill's paid_amount/status,
- * and issue a receipt. Rejects payments that would overpay the bill.
+ * Record a payment against a bill using the atomic record_payment RPC function.
+ * Verifies billing access, validates inputs, and executes atomically.
  */
 export async function recordPaymentAction(
   billId: string,
@@ -67,81 +55,30 @@ export async function recordPaymentAction(
   const { amount, mode, paid_by_role } = parsed.data;
   const client = getSupabaseServerClient();
 
-  const { data: bill } = await client
-    .from('bills')
-    .select('id, bill_no, total_amount, paid_amount')
-    .eq('id', billId)
-    .eq('association_id', associationId)
-    .single();
-
-  if (!bill) {
-    return { success: false, error: 'Bill not found.' };
-  }
-
-  const outstanding = bill.total_amount - bill.paid_amount;
-
-  if (amount > outstanding) {
-    return {
-      success: false,
-      error: `Amount exceeds the outstanding balance (${outstanding.toFixed(2)}).`,
-    };
-  }
-
-  const { count: existingPaymentCount } = await client
-    .from('payments')
-    .select('id', { count: 'exact', head: true })
-    .eq('bill_id', billId);
-
-  const { data: payment, error: paymentError } = await client
-    .from('payments')
-    .insert({
-      association_id: associationId,
-      bill_id: billId,
-      amount,
-      mode,
-      paid_by_role,
-    })
-    .select('id')
-    .single();
-
-  if (paymentError || !payment) {
-    return {
-      success: false,
-      error: paymentError?.message ?? 'Could not record the payment.',
-    };
-  }
-
-  const receiptNo = `${bill.bill_no}-R${(existingPaymentCount ?? 0) + 1}`;
-
-  const { error: receiptError } = await client.from('receipts').insert({
-    payment_id: payment.id,
-    receipt_no: receiptNo,
+  const { data: paymentId, error } = await client.rpc('record_payment' as any, {
+    p_bill_id: billId,
+    p_association_id: associationId,
+    p_amount: amount,
+    p_mode: mode,
+    p_paid_by_role: paid_by_role,
   });
 
-  if (receiptError) {
-    return { success: false, error: receiptError.message };
+  if (error) {
+    return { success: false, error: error.message };
   }
 
-  const newPaidAmount = bill.paid_amount + amount;
-
-  const { error: billError } = await client
+  const { data: bill } = await client
     .from('bills')
-    .update({
-      paid_amount: newPaidAmount,
-      status: nextBillStatus(newPaidAmount, bill.total_amount),
-    })
-    .eq('id', billId);
-
-  if (billError) {
-    return { success: false, error: billError.message };
-  }
+    .select('bill_no')
+    .eq('id', billId)
+    .single();
 
   await logAuditEvent({
     associationId,
     action: 'payment.recorded',
     entityType: 'payment',
-    entityId: payment.id,
-    summary: `Recorded a ${mode} payment for bill ${bill.bill_no}`,
+    entityId: paymentId as unknown as string,
+    summary: `Recorded a ${mode} payment for bill ${bill?.bill_no ?? billId}`,
   });
 
   revalidatePath(PAYMENTS_PATH, 'page');
@@ -151,7 +88,7 @@ export async function recordPaymentAction(
 
 /**
  * Void (delete) a payment. Admin-only — cascades to its receipt and
- * recomputes the bill's paid_amount/status from the remaining payments.
+ * triggers a database-level update to recompute the bill's paid_amount/status.
  */
 export async function voidPaymentAction(
   paymentId: string,
@@ -173,38 +110,6 @@ export async function voidPaymentAction(
 
   if (deleteError) {
     return { success: false, error: deleteError.message };
-  }
-
-  const { data: bill } = await client
-    .from('bills')
-    .select('id, total_amount')
-    .eq('id', billId)
-    .single();
-
-  if (!bill) {
-    return { success: false, error: 'Bill not found.' };
-  }
-
-  const { data: remainingPayments } = await client
-    .from('payments')
-    .select('amount')
-    .eq('bill_id', billId);
-
-  const newPaidAmount = (remainingPayments ?? []).reduce(
-    (sum, p) => sum + p.amount,
-    0,
-  );
-
-  const { error: billError } = await client
-    .from('bills')
-    .update({
-      paid_amount: newPaidAmount,
-      status: nextBillStatus(newPaidAmount, bill.total_amount),
-    })
-    .eq('id', billId);
-
-  if (billError) {
-    return { success: false, error: billError.message };
   }
 
   await logAuditEvent({

@@ -7,6 +7,13 @@ import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@kit/ui/card';
 import { Heading } from '@kit/ui/heading';
 import { If } from '@kit/ui/if';
 import { PageBody, PageHeader } from '@kit/ui/page';
@@ -170,7 +177,7 @@ async function PersonalAccountPage(props: { account: Account }) {
       <div className={'flex flex-col gap-y-8'}>
         <SubscriptionsTable accountId={props.account.id} />
 
-        <div className={'divider-divider-x flex flex-col gap-y-2.5'}>
+        <div className={'flex flex-col gap-y-2.5'}>
           <Heading level={6}>Teams</Heading>
 
           <div className={'rounded-lg border p-2'}>
@@ -229,34 +236,40 @@ async function TeamAccountPage(props: {
             </div>
           </div>
 
-          <div
-            className={
-              'border-destructive/20 bg-destructive/5 flex flex-col gap-y-4 rounded-lg border p-4'
-            }
-          >
-            <div className={'flex flex-col space-y-1'}>
-              <span className={'text-destructive text-sm font-medium'}>
-                Danger Zone
-              </span>
-              <p className={'text-muted-foreground text-xs'}>
-                Once you delete this team account, all associated data,
-                settings, and members will be permanently removed. This action
-                is irreversible.
-              </p>
-            </div>
-            <div>
-              <AdminDeleteAccountDialog accountId={props.account.id}>
-                <Button
-                  size={'sm'}
-                  variant={'destructive'}
-                  data-test={'admin-delete-account-button'}
-                >
-                  <BadgeX className={'mr-1 h-4'} />
-                  Delete Team Account
-                </Button>
-              </AdminDeleteAccountDialog>
-            </div>
-          </div>
+          <Card className={'border-destructive border'}>
+            <CardHeader>
+              <CardTitle>Danger Zone</CardTitle>
+              <CardDescription>
+                Actions in this area are irreversible and can lead to data loss.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className={'flex flex-col space-y-4'}>
+                <div className={'flex flex-col space-y-1'}>
+                  <span className={'text-sm font-medium'}>
+                    Delete Team Account
+                  </span>
+                  <p className={'text-muted-foreground text-sm'}>
+                    Once you delete this team account, all associated data,
+                    settings, and members will be permanently removed. This
+                    action is irreversible.
+                  </p>
+                </div>
+                <div>
+                  <AdminDeleteAccountDialog accountId={props.account.id}>
+                    <Button
+                      size={'sm'}
+                      variant={'destructive'}
+                      data-test={'admin-delete-account-button'}
+                    >
+                      <BadgeX className={'mr-1 h-4'} />
+                      Delete Team Account
+                    </Button>
+                  </AdminDeleteAccountDialog>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </PageBody>

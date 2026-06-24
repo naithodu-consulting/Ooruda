@@ -119,7 +119,7 @@ export function ImageUploader(
         />
       </label>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
         {props.children}
 
         <div>
@@ -127,7 +127,7 @@ export function ImageUploader(
             onClick={onClear}
             size={'sm'}
             variant={'ghost'}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive -ml-3 h-8"
           >
             <X className={'mr-1 h-4 w-4'} />
             <Trans i18nKey={'common.clear'} />
