@@ -23,14 +23,23 @@ export const CreateUnitSchema = z.object({
   ),
   area_sqft: z.coerce
     .number()
+    .int('Area must be a whole number')
     .positive('Area must be greater than 0')
     .max(1_000_000, 'Area looks too large'),
 });
 
 export type CreateUnitInput = z.input<typeof CreateUnitSchema>;
 
-// Same shape as create — editing a unit touches the same fields.
-export const UpdateUnitSchema = CreateUnitSchema;
+// Same shape as create, plus optional owner_id
+export const UpdateUnitSchema = CreateUnitSchema.extend({
+  owner_id: z.preprocess(
+    (v) =>
+      v === '__unassigned__' || v === '' || v === null || v === undefined
+        ? null
+        : v,
+    z.string().uuid().nullable().optional(),
+  ),
+});
 export type UpdateUnitInput = z.input<typeof UpdateUnitSchema>;
 
 export const AssignTenantSchema = z.object({

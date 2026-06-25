@@ -1,0 +1,12 @@
+unit_no,type,floor,area_sqft
+G-01,Shop,0,450
+G-02,Shop,0,380
+G-03,Shop,0,520
+G-04,Warehouse,0,1200
+1-01,Office,1,600
+1-02,Office,1,550
+1-03,Shop,1,410
+2-01,Office,2,700
+2-02,Office,2,650
+2-03,Warehouse,2,980
+3-01,Office,3,480

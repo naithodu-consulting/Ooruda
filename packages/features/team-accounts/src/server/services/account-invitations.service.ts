@@ -146,6 +146,8 @@ class AccountInvitationsService {
           p_phone: invitation.phone,
           p_role: invitation.role,
           invited_by: invitedBy,
+          p_name: invitation.name || undefined,
+          p_email: invitation.email || undefined,
         }),
       ),
     );
@@ -211,8 +213,9 @@ class AccountInvitationsService {
       );
     }
 
-    // if the invitation email does not match the user email, throw an error
-    if (invitation.data?.email !== params.userEmail) {
+    // For email-based invitations verify the accepting user's email matches.
+    // Phone-only invitations have no email on the row, so skip this check.
+    if (invitation.data?.email && invitation.data.email !== params.userEmail) {
       logger.error({
         ...ctx,
         error: 'Invitation email does not match user email',

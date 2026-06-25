@@ -25,7 +25,8 @@ export const CreateMescomBillSchema = z.object({
     .positive('Invoice amount must be greater than 0'),
   blockConsumptionUnits: z.coerce
     .number()
-    .positive('Consumption must be greater than 0'),
+    .positive('Consumption must be greater than 0')
+    .int('Consumption units must be a full number'),
 });
 
 export type CreateMescomBillInput = z.input<typeof CreateMescomBillSchema>;

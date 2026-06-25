@@ -81,7 +81,7 @@ export function SubMetersSection(props: {
           <CardTitle>Sub-meters</CardTitle>
           <CardDescription>
             Each shop or office can have its own meter. Add a common-area meter
-            for shared lighting, lifts, or pumps.
+            for shared lighting, lifts, pumps etc.
           </CardDescription>
         </div>
 

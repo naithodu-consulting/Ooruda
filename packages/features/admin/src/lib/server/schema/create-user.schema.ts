@@ -22,8 +22,16 @@ export const ROLE_LABELS: Record<(typeof ASSIGNABLE_ROLES)[number], string> = {
   tenant: 'Tenant',
 };
 
+// Email is mandatory: it is the secondary (email-OTP) login identity and is
+// required everywhere a user is created or edited.
+const email = z
+  .string()
+  .min(1, { message: 'Email is required' })
+  .email({ message: 'Please enter a valid email address' });
+
 export const CreateUserSchema = z.object({
   phone: phoneNumber,
+  email,
   fullName: z
     .string()
     .min(2, { message: 'Full name must be at least 2 characters' }),
@@ -38,6 +46,7 @@ export type CreateUserSchemaType = z.output<typeof CreateUserSchema>;
 export const UpdateUserSchema = z.object({
   userId: z.string().uuid(),
   phone: phoneNumber,
+  email,
   fullName: z
     .string()
     .min(2, { message: 'Full name must be at least 2 characters' }),

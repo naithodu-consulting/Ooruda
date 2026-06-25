@@ -8,22 +8,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Pencil } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@kit/ui/alert-dialog';
 import { Button } from '@kit/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -51,9 +41,7 @@ import { Spinner } from '@kit/ui/spinner';
 import { formatDateDMY } from '~/lib/format-date';
 
 import {
-  assignOwnerAction,
   assignTenantAction,
-  deleteUnitAction,
   endTenancyAction,
   updateUnitAction,
 } from '../_lib/units-actions';
@@ -77,8 +65,8 @@ export function EditUnitDialog(props: {
       <DialogTrigger
         render={
           <Button size="sm" variant="outline" data-test="edit-unit-trigger">
-            <Pencil className="h-4 w-4" />
-            Manage
+            <Pencil className="mr-1.5 h-4 w-4" />
+            Edit
           </Button>
         }
       />
@@ -91,38 +79,29 @@ export function EditUnitDialog(props: {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-6">
-          <UnitDetailsForm
-            unit={props.unit}
-            associationId={props.associationId}
-          />
-
-          <OwnerSection
-            unit={props.unit}
-            associationId={props.associationId}
-            ownerLabel={props.ownerLabel}
-            eligibleOwners={props.eligibleOwners}
-          />
-
+        <UnitDetailsForm
+          unit={props.unit}
+          associationId={props.associationId}
+          eligibleOwners={props.eligibleOwners}
+        >
           <TenantSection
             unit={props.unit}
             associationId={props.associationId}
             tenancy={props.tenancy}
             eligibleTenants={props.eligibleTenants}
           />
-
-          <DeleteUnitSection
-            unit={props.unit}
-            associationId={props.associationId}
-            onDeleted={() => setOpen(false)}
-          />
-        </div>
+        </UnitDetailsForm>
       </DialogContent>
     </Dialog>
   );
 }
 
-function UnitDetailsForm(props: { unit: UnitRow; associationId: string }) {
+function UnitDetailsForm(props: {
+  unit: UnitRow;
+  associationId: string;
+  eligibleOwners: MemberOption[];
+  children?: React.ReactNode;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -133,6 +112,7 @@ function UnitDetailsForm(props: { unit: UnitRow; associationId: string }) {
       type: props.unit.type as (typeof UNIT_TYPES)[number],
       floor: props.unit.floor?.toString() ?? '',
       area_sqft: props.unit.area_sqft.toString(),
+      owner_id: props.unit.owner_id ?? UNASSIGNED,
     },
   });
 
@@ -149,176 +129,132 @@ function UnitDetailsForm(props: { unit: UnitRow; associationId: string }) {
         return;
       }
 
-      toast.success('Unit updated.');
+      toast.success('Unit details updated.');
       router.refresh();
     });
   });
 
   return (
-    <Form {...form}>
-      <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <FormField
-          name="unit_no"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Unit number</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          name="type"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Type</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {UNIT_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            name="area_sqft"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Area (sq.ft)</FormLabel>
-                <FormControl>
-                  <Input type="number" step="0.01" min="0" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            name="floor"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Floor</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="1"
-                    placeholder="Optional"
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>Leave blank if N/A.</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <Button
-          type="submit"
-          disabled={isPending}
-          size="sm"
-          className="self-start"
+    <div className="flex flex-col gap-6">
+      <Form {...form}>
+        <form
+          id="unit-details-form"
+          onSubmit={onSubmit}
+          className="flex flex-col gap-4"
         >
+          <FormField
+            name="unit_no"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Unit number</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            name="type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Type</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {UNIT_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              name="area_sqft"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Area (sq.ft)</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="1" min="0" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              name="floor"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Floor</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="1"
+                      placeholder="Optional"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>Leave blank if N/A.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            name="owner_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Owner</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue>
+                        {(v: string) =>
+                          v === UNASSIGNED
+                            ? 'Unassigned'
+                            : (props.eligibleOwners.find((o) => o.id === v)
+                                ?.label ?? 'Unassigned')
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                    {props.eligibleOwners.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </form>
+      </Form>
+
+      {props.children}
+
+      <DialogFooter>
+        <Button type="submit" form="unit-details-form" disabled={isPending}>
           {isPending && <Spinner className="mr-2 h-4 w-4" />}
           Save details
         </Button>
-      </form>
-    </Form>
-  );
-}
-
-function OwnerSection(props: {
-  unit: UnitRow;
-  associationId: string;
-  ownerLabel: string | null;
-  eligibleOwners: MemberOption[];
-}) {
-  const router = useRouter();
-  const [value, setValue] = useState(props.unit.owner_id ?? UNASSIGNED);
-  const [isPending, startTransition] = useTransition();
-
-  const onSave = () => {
-    startTransition(async () => {
-      const ownerId = value === UNASSIGNED ? null : value;
-      const result = await assignOwnerAction(
-        props.unit.id,
-        props.associationId,
-        ownerId,
-      );
-
-      if (!result.success) {
-        toast.error(result.error ?? 'Could not update the owner.');
-        return;
-      }
-
-      toast.success('Owner updated.');
-      router.refresh();
-    });
-  };
-
-  return (
-    <div className="flex flex-col gap-2 border-t pt-4">
-      <span className="text-sm font-medium">Owner</span>
-
-      {props.eligibleOwners.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          No one with the Property Owner role has joined this association yet.
-          Invite one from the Members page first.
-        </p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={value}
-            onValueChange={(v) => setValue(v ?? UNASSIGNED)}
-          >
-            <SelectTrigger className="min-w-0 flex-1">
-              <SelectValue>
-                {(v: string) =>
-                  v === UNASSIGNED
-                    ? 'Unassigned'
-                    : (props.eligibleOwners.find((o) => o.id === v)?.label ??
-                      'Unassigned')
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
-              {props.eligibleOwners.map((o) => (
-                <SelectItem key={o.id} value={o.id}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={
-              isPending || value === (props.unit.owner_id ?? UNASSIGNED)
-            }
-            onClick={onSave}
-          >
-            {isPending && <Spinner className="mr-2 h-4 w-4" />}
-            Save
-          </Button>
-        </div>
-      )}
+      </DialogFooter>
     </div>
   );
 }
@@ -446,68 +382,6 @@ function TenantSection(props: {
           </Button>
         </div>
       )}
-    </div>
-  );
-}
-
-function DeleteUnitSection(props: {
-  unit: UnitRow;
-  associationId: string;
-  onDeleted: () => void;
-}) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-
-  const onDelete = () => {
-    startTransition(async () => {
-      const result = await deleteUnitAction(props.unit.id, props.associationId);
-
-      if (!result.success) {
-        toast.error(result.error ?? 'Could not delete the unit.');
-        return;
-      }
-
-      toast.success(`Unit ${props.unit.unit_no} deleted.`);
-      props.onDeleted();
-      router.refresh();
-    });
-  };
-
-  return (
-    <div className="border-t pt-4">
-      <AlertDialog>
-        <AlertDialogTrigger
-          render={
-            <Button
-              size="sm"
-              variant="destructive"
-              data-test="delete-unit-trigger"
-            >
-              Delete unit
-            </Button>
-          }
-        />
-
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Delete unit {props.unit.unit_no}?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes the unit along with its tenancy history and any
-              billing overrides. This can't be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={isPending} onClick={onDelete}>
-              {isPending && <Spinner className="mr-2 h-4 w-4" />}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

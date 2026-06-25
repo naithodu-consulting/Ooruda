@@ -111,6 +111,7 @@ async function PersonalAccountPage(props: { account: Account }) {
                   userResult.data.user.phone ??
                   ''
                 }
+                userEmail={userResult.data.user.email ?? ''}
               >
                 <Button
                   size={'sm'}
@@ -478,6 +479,9 @@ async function getMemberships(userId: string) {
 
 async function getMembers(accountSlug: string) {
   const client = getSupabaseServerClient();
+  // Admin client required: profiles.rls only permits id = auth.uid(), so the
+  // regular server client returns only the logged-in admin's own row.
+  const adminClient = getSupabaseServerAdminClient();
 
   const membersResult = await client.rpc('get_account_members', {
     account_slug: accountSlug,
@@ -490,11 +494,12 @@ async function getMembers(accountSlug: string) {
   const members = membersResult.data ?? [];
   const userIds = members.map((m) => m.user_id);
   const phoneByUserId = new Map<string, string | null>();
+  const emailByUserId = new Map<string, string | null>();
 
   if (userIds.length > 0) {
-    const { data: profiles, error: profilesError } = await client
+    const { data: profiles, error: profilesError } = await adminClient
       .from('profiles')
-      .select('id, mobile_number')
+      .select('id, mobile_number, email')
       .in('id', userIds);
 
     if (profilesError) {
@@ -502,6 +507,7 @@ async function getMembers(accountSlug: string) {
     } else {
       for (const profile of profiles ?? []) {
         phoneByUserId.set(profile.id, profile.mobile_number);
+        emailByUserId.set(profile.id, profile.email ?? null);
       }
     }
   }
@@ -509,5 +515,7 @@ async function getMembers(accountSlug: string) {
   return members.map((member) => ({
     ...member,
     phone: phoneByUserId.get(member.user_id) ?? null,
+    // accounts.email may be null for phone-only users; fall back to profiles.email
+    email: member.email ?? emailByUserId.get(member.user_id) ?? null,
   }));
 }

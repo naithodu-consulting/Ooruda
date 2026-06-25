@@ -13,6 +13,19 @@ import pathsConfig from '~/config/paths.config';
 
 const NEXT_ACTION_HEADER = 'next-action';
 
+// Seeded dev users are provisioned phone-only and are exempt from the
+// mandatory-email gate (they also receive synthetic <phone>@ooruda.test emails
+// in the seed, so this is belt-and-suspenders). Phones are stored E.164 without
+// a leading '+', matching auth.users.phone / the JWT phone claim.
+const EMAIL_GATE_EXEMPT_PHONES = new Set([
+  '919911000001',
+  '919911000002',
+  '919911000003',
+  '919911000004',
+  '919911000005',
+  '919911000006',
+]);
+
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|images|locales|assets|sitemap.xml|robots.txt|api/*).*)',
@@ -128,9 +141,14 @@ async function getPatterns() {
         // check if we need to verify MFA (user is authenticated but needs to verify MFA)
         const isVerifyMfa = normalizedPathname === pathsConfig.auth.verifyMfa;
 
-        // If user is logged in and does not need to verify MFA,
-        // redirect to home page.
-        if (!isVerifyMfa) {
+        // the complete-profile page lives under /auth but is for already
+        // logged-in users adding a mandatory email — don't bounce them home.
+        const isCompleteProfile =
+          normalizedPathname === pathsConfig.auth.completeProfile;
+
+        // If user is logged in and does not need to verify MFA or complete
+        // their profile, redirect to home page.
+        if (!isVerifyMfa && !isCompleteProfile) {
           const nextPath = getSafeRedirectPath(
             req.nextUrl.searchParams.get('next'),
             pathsConfig.app.home,
@@ -184,6 +202,25 @@ async function getPatterns() {
         if (requiresMultiFactorAuthentication) {
           return NextResponse.redirect(
             new URL(pathsConfig.auth.verifyMfa, origin).href,
+          );
+        }
+
+        // Email is mandatory. A user with no email on their account (legacy
+        // phone-only users) is sent to complete their profile before reaching
+        // the app. Seeded dev phones are exempt. Super-admins authenticate by
+        // email already, so they always have one.
+        const claims = data.claims as {
+          email?: string;
+          phone?: string;
+        };
+
+        const hasEmail = !!claims.email;
+        const isExemptPhone =
+          !!claims.phone && EMAIL_GATE_EXEMPT_PHONES.has(claims.phone);
+
+        if (!hasEmail && !isExemptPhone) {
+          return NextResponse.redirect(
+            new URL(pathsConfig.auth.completeProfile, origin).href,
           );
         }
       },

@@ -69,7 +69,7 @@ function formDataFrom(fields: Record<string, string>) {
 
 const validFields = {
   status: 'Active',
-  address: '123 MG Road, Bengaluru',
+  address: '123 MG Road, Mangaluru',
   brand_colour: '#F59E0B',
   gstin: VALID_GSTIN,
   gst_enabled: 'on',
@@ -145,7 +145,7 @@ describe('updateAssociationAction — happy path', () => {
       1,
       expect.objectContaining({
         status: 'Active',
-        address: '123 MG Road, Bengaluru',
+        address: '123 MG Road, Mangaluru',
         brand_colour: '#F59E0B',
         gstin: VALID_GSTIN,
         gst_enabled: true,

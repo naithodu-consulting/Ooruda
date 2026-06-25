@@ -31,6 +31,30 @@ import { createAdminAuthUserService } from './services/admin-auth-user.service';
 import { adminActionClient } from './utils/admin-action-client';
 import { isUserSuperAdmin } from './utils/is-super-admin';
 
+function friendlyAuthError(message: string): string {
+  const msg = message.toLowerCase();
+  if (
+    msg.includes('already been registered') ||
+    msg.includes('already in use') ||
+    (msg.includes('email') && msg.includes('exists'))
+  ) {
+    return 'This email address is already registered to another user. Please use a different email.';
+  }
+  if (
+    msg.includes('invalid email') ||
+    msg.includes('unable to validate email')
+  ) {
+    return 'The email address is not valid. Please check and try again.';
+  }
+  if (
+    msg.includes('phone') &&
+    (msg.includes('invalid') || msg.includes('exists'))
+  ) {
+    return 'This phone number is already registered or is not valid.';
+  }
+  return message;
+}
+
 /**
  * @name banUserAction
  * @description Ban a user from the system.
@@ -141,7 +165,10 @@ export const deleteAccountAction = adminActionClient
 export const createUserAction = adminActionClient
   .inputSchema(CreateUserSchema)
   .action(
-    async ({ parsedInput: { phone, fullName, associationId, role }, ctx }) => {
+    async ({
+      parsedInput: { phone, email, fullName, associationId, role },
+      ctx,
+    }) => {
       const adminClient = getSupabaseServerAdminClient();
       const logger = await getLogger();
 
@@ -153,6 +180,8 @@ export const createUserAction = adminActionClient
         throw new Error('Invalid phone number');
       }
 
+      const normalisedEmail = email.trim().toLowerCase();
+
       logger.info(
         { phone: normalisedPhone, associationId, role },
         `Super Admin is creating a new user...`,
@@ -161,15 +190,18 @@ export const createUserAction = adminActionClient
       // The `kit.setup_new_user` trigger reads `raw_user_meta_data ->> 'name'`
       // to populate `accounts.name`, so the key must be `name` (not just
       // `full_name`) or the personal account is created with a blank name.
+      // Email is set + confirmed so the user can immediately use email OTP.
       const { data, error } = await adminClient.auth.admin.createUser({
         phone: normalisedPhone,
         phone_confirm: true,
+        email: normalisedEmail,
+        email_confirm: true,
         user_metadata: { name: fullName, full_name: fullName },
       });
 
       if (error) {
         logger.error({ error }, `Error creating user`);
-        throw new Error(`Error creating user: ${error.message}`);
+        throw new Error(friendlyAuthError(error.message));
       }
 
       // Upsert profile so the phone-invite gate recognises this user
@@ -178,6 +210,7 @@ export const createUserAction = adminActionClient
           id: data.user.id,
           full_name: fullName,
           mobile_number: normalisedPhone,
+          email: normalisedEmail,
         },
         { onConflict: 'id' },
       );
@@ -365,7 +398,7 @@ export const updateUserDetailsAction = adminActionClient
   .inputSchema(UpdateUserSchema)
   .action(
     async ({
-      parsedInput: { userId, fullName, phone, associationId, role },
+      parsedInput: { userId, fullName, phone, email, associationId, role },
       ctx,
     }) => {
       const adminClient = getSupabaseServerAdminClient();
@@ -377,23 +410,27 @@ export const updateUserDetailsAction = adminActionClient
         throw new Error('Invalid phone number');
       }
 
+      const normalisedEmail = email.trim().toLowerCase();
+
       logger.info(
         { userId, fullName, phone: normalisedPhone, associationId, role },
         `Super Admin is updating user details...`,
       );
 
-      // 1. Update Auth user record
+      // 1. Update Auth user record (email_confirm so it's usable immediately)
       const { error: authError } = await adminClient.auth.admin.updateUserById(
         userId,
         {
           phone: normalisedPhone,
+          email: normalisedEmail,
+          email_confirm: true,
           user_metadata: { name: fullName, full_name: fullName },
         },
       );
 
       if (authError) {
         logger.error({ error: authError }, `Error updating auth user`);
-        throw new Error(`Error updating auth user: ${authError.message}`);
+        throw new Error(friendlyAuthError(authError.message));
       }
 
       // 2. Update profiles table record
@@ -402,6 +439,7 @@ export const updateUserDetailsAction = adminActionClient
         .update({
           full_name: fullName,
           mobile_number: normalisedPhone,
+          email: normalisedEmail,
         })
         .eq('id', userId);
 
@@ -423,7 +461,11 @@ export const updateUserDetailsAction = adminActionClient
         throw new Error(`Error updating user account: ${accountError.message}`);
       }
 
-      // 4. Update team membership role if both associationId and role are provided
+      // 4. Update team membership role if both associationId and role are provided.
+      // The DB trigger `kit.prevent_memberships_update` only permits an UPDATE
+      // that actually changes account_role — any update where old == new raises
+      // "Only the account_role can be updated". Use .neq() so the statement is
+      // a no-op (0 rows) when the role hasn't changed, avoiding the trigger.
       if (associationId && role) {
         if (await isUserSuperAdmin(adminClient, userId)) {
           throw new Error('Cannot change roles for a Super Admin account');
@@ -431,15 +473,13 @@ export const updateUserDetailsAction = adminActionClient
 
         const { error: roleError } = await adminClient
           .from('accounts_memberships')
-          .upsert(
-            {
-              user_id: userId,
-              account_id: associationId,
-              account_role: role,
-              updated_by: ctx.user.id,
-            },
-            { onConflict: 'user_id,account_id' },
-          );
+          .update({
+            account_role: role,
+            updated_by: ctx.user.id,
+          })
+          .eq('user_id', userId)
+          .eq('account_id', associationId)
+          .neq('account_role', role);
 
         if (roleError) {
           logger.error({ error: roleError }, `Error setting user role`);

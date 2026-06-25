@@ -8,13 +8,21 @@ import { AuditLogCard, type AuditLogRow } from './_components/audit-log-card';
 
 interface Props {
   params: Promise<{ account: string }>;
+  searchParams: Promise<{ page?: string }>;
 }
+
+const PAGE_SIZE = 25;
 
 export const metadata = { title: 'Audit log' };
 
-export default async function AuditPage({ params }: Props) {
+export default async function AuditPage({ params, searchParams }: Props) {
   const { account } = await params;
+  const { page: pageParam } = await searchParams;
   const { accountId } = await requireRole(account, ['assoc_admin']);
+
+  const page = Math.max(1, parseInt(pageParam ?? '1', 10) || 1);
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
 
   const client = getSupabaseServerClient();
 
@@ -28,12 +36,14 @@ export default async function AuditPage({ params }: Props) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  const { data: logs } = await client
+  const { data: logs, count } = await client
     .from('audit_logs')
-    .select('id, action, entity_type, summary, actor_user_id, created_at')
+    .select('id, action, entity_type, summary, actor_user_id, created_at', {
+      count: 'exact',
+    })
     .eq('association_id', association.id)
     .order('created_at', { ascending: false })
-    .limit(200);
+    .range(from, to);
 
   const actorIds = [
     ...new Set((logs ?? []).map((l) => l.actor_user_id).filter(Boolean)),
@@ -76,19 +86,28 @@ export default async function AuditPage({ params }: Props) {
     created_at: l.created_at,
   }));
 
+  const totalCount = count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
   return (
     <PageBody>
       <TeamAccountLayoutPageHeader
         account={account}
         title="Audit log"
         description={
-          rows.length === 0
+          totalCount === 0
             ? 'Nothing logged yet'
-            : `${rows.length} events · most recent first`
+            : `${totalCount} events · most recent first`
         }
       />
 
-      <AuditLogCard rows={rows} />
+      <AuditLogCard
+        rows={rows}
+        page={page}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        account={account}
+      />
     </PageBody>
   );
 }

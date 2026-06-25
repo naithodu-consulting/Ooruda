@@ -153,6 +153,7 @@ function ActionsCell({ member }: { member: Memberships }) {
         userId={member.user_id}
         userName={member.name || member.email || 'Member'}
         userPhone={normalizePhoneNumber(member.phone) ?? member.phone ?? ''}
+        userEmail={member.email ?? ''}
         teamAccountId={member.account_id}
         currentRole={member.role}
       />

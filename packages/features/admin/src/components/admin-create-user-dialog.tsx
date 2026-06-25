@@ -63,6 +63,7 @@ export function AdminCreateUserDialog(
     defaultValues: {
       fullName: '',
       phone: '',
+      email: '',
       associationId: props.associations[0]?.id ?? '',
       role: '' as CreateUserSchemaType['role'],
     },
@@ -94,8 +95,9 @@ export function AdminCreateUserDialog(
           <AlertDialogTitle>Create New User</AlertDialogTitle>
 
           <AlertDialogDescription>
-            Enter the user&apos;s name and phone number, then assign them to an
-            association. They will be able to sign in via phone OTP.
+            Enter the user&apos;s name, phone number and email, then assign them
+            to an association. They can sign in via phone OTP (primary) or email
+            OTP (secondary).
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -153,6 +155,29 @@ export function AdminCreateUserDialog(
 
                   <FormDescription>
                     Enter the 10-digit Indian mobile number.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              name={'email'}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+
+                  <FormControl>
+                    <Input
+                      required
+                      type="email"
+                      placeholder={'e.g. rajesh@example.com'}
+                      {...field}
+                    />
+                  </FormControl>
+
+                  <FormDescription>
+                    Used as the secondary email-OTP login.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

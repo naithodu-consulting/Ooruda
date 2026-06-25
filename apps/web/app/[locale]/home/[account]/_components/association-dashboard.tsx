@@ -174,26 +174,38 @@ async function loadAssociationOverview(accountId: string) {
 async function loadMyBillSummary(accountId: string, userId: string) {
   const client = getSupabaseServerClient();
 
-  const { data: ownedUnit } = await client
-    .from('units')
-    .select('id, unit_no')
-    .eq('association_id', accountId)
-    .eq('owner_id', userId)
+  const { data: association } = await client
+    .from('associations')
+    .select('id')
+    .eq('account_id', accountId)
     .maybeSingle();
 
-  let unit = ownedUnit;
+  if (!association) {
+    return null;
+  }
+
+  const { data: ownedUnits } = await client
+    .from('units')
+    .select('id, unit_no')
+    .eq('association_id', association.id)
+    .eq('owner_id', userId)
+    .order('unit_no')
+    .limit(1);
+
+  let unit = ownedUnits?.[0];
 
   if (!unit) {
     const { data: tenancy } = await client
       .from('tenancies')
-      .select('unit_id, units(id, unit_no)')
+      .select('unit_id, units:units(id, unit_no, association_id)')
       .eq('tenant_id', userId)
       .eq('status', 'active')
       .maybeSingle();
 
-    unit = tenancy?.units
-      ? { id: tenancy.units.id, unit_no: tenancy.units.unit_no }
-      : null;
+    const u = tenancy?.units;
+    if (u && 'association_id' in u && u.association_id === association.id) {
+      unit = { id: u.id, unit_no: u.unit_no };
+    }
   }
 
   if (!unit) {
@@ -464,12 +476,12 @@ export async function AssociationDashboard({
                 <Zap />
                 <AlertDescription>
                   MESCOM bill for {periodLabel(overview.period)} hasn&apos;t
-                  been uploaded yet —{' '}
+                  been uploaded yet.{' '}
                   <Link
                     href={`/home/${account}/mescom`}
                     className="font-semibold underline"
                   >
-                    upload bill →
+                    Upload Bill →
                   </Link>
                 </AlertDescription>
               </Alert>
@@ -479,31 +491,59 @@ export async function AssociationDashboard({
       ) : null}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <CardTitle className="text-sm">Recent activity</CardTitle>
+          <Link
+            href={`/home/${account}/audit`}
+            className="text-sm font-semibold text-orange-600 hover:text-orange-700 hover:underline"
+          >
+            View all &rarr;
+          </Link>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent>
           {overview.recentActivity.length === 0 ? (
-            <p className="text-muted-foreground py-4 text-center text-sm">
+            <p className="text-muted-foreground py-8 text-center text-sm">
               Nothing has happened here yet.
             </p>
           ) : (
-            overview.recentActivity.map((entry, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between border-b pb-3 text-sm last:border-0 last:pb-0"
-              >
-                <span className="font-medium">
-                  {entry.summary ?? entry.action}
-                </span>
-                <span className="text-muted-foreground text-xs">
-                  {new Date(entry.created_at).toLocaleDateString('en-IN', {
-                    day: 'numeric',
-                    month: 'short',
-                  })}
-                </span>
-              </div>
-            ))
+            <div className="flex flex-col">
+              {overview.recentActivity.map((entry, i) => {
+                const isGreen =
+                  entry.action.includes('payment') ||
+                  entry.action.includes('unit.created');
+                const isBlue = entry.action.includes('bill');
+                const badgeBg = isGreen
+                  ? 'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400'
+                  : isBlue
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
+                    : 'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400';
+                const dotBg = isGreen
+                  ? 'bg-green-500'
+                  : isBlue
+                    ? 'bg-blue-500'
+                    : 'bg-slate-400';
+
+                return (
+                  <div
+                    key={i}
+                    className="border-border flex items-center justify-between border-b py-4 first:pt-0 last:border-0 last:pb-0"
+                  >
+                    <span className="text-sm font-medium">
+                      {entry.summary ?? entry.action}
+                    </span>
+                    <div
+                      className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${badgeBg}`}
+                    >
+                      <div className={`h-1.5 w-1.5 rounded-full ${dotBg}`} />
+                      {new Date(entry.created_at).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>

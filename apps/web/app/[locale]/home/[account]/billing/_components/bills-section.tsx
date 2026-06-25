@@ -225,7 +225,7 @@ export function BillsSection(props: {
 
         <p className="text-muted-foreground mt-3 text-xs">
           Electricity line items use the simple invoice ÷ block-units rate from
-          MESCOM Bills — carry-forward reconciliation isn't built yet.
+          MESCOM Bills. Carry-forward reconciliation isn't built yet.
         </p>
       </CardContent>
     </Card>

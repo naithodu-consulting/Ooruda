@@ -634,6 +634,7 @@ export type Database = {
           id: number
           invite_token: string
           invited_by: string
+          invitee_name: string | null
           phone: string | null
           role: string
           updated_at: string
@@ -646,6 +647,7 @@ export type Database = {
           id?: number
           invite_token: string
           invited_by: string
+          invitee_name?: string | null
           phone?: string | null
           role: string
           updated_at?: string
@@ -658,6 +660,7 @@ export type Database = {
           id?: number
           invite_token?: string
           invited_by?: string
+          invitee_name?: string | null
           phone?: string | null
           role?: string
           updated_at?: string
@@ -1142,18 +1145,21 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          email: string | null
           full_name: string | null
           id: string
           mobile_number: string | null
         }
         Insert: {
           created_at?: string
+          email?: string | null
           full_name?: string | null
           id: string
           mobile_number?: string | null
         }
         Update: {
           created_at?: string
+          email?: string | null
           full_name?: string | null
           id?: string
           mobile_number?: string | null
@@ -1714,6 +1720,8 @@ export type Database = {
           invited_by: string
           p_phone: string
           p_role: string
+          p_name?: string
+          p_email?: string
         }
         Returns: string
       }

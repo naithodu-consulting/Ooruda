@@ -49,6 +49,7 @@ export function AdminEditUserDialog(
     userId: string;
     userName: string;
     userPhone: string;
+    userEmail?: string;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
     teamAccountId?: string;
@@ -66,6 +67,10 @@ export function AdminEditUserDialog(
     phone: z.string().refine((v) => normalizePhoneNumber(v) !== null, {
       message: 'Enter a valid 10-digit Indian mobile number',
     }),
+    email: z
+      .string()
+      .min(1, { message: 'Email is required' })
+      .email({ message: 'Please enter a valid email address' }),
     role: isTeamMode
       ? z.enum(ASSIGNABLE_ROLES, { message: 'Please select a role' })
       : z.string().optional(),
@@ -79,6 +84,7 @@ export function AdminEditUserDialog(
       fullName: props.userName,
       // Show only the 10-digit national number; the +91 prefix is fixed in the UI.
       phone: (props.userPhone || '').replace(/\D/g, '').slice(-10),
+      email: props.userEmail || '',
       role: props.currentRole || '',
     },
     mode: 'onChange',
@@ -104,6 +110,7 @@ export function AdminEditUserDialog(
       userId: props.userId,
       fullName: values.fullName,
       phone: values.phone,
+      email: values.email,
       associationId: props.teamAccountId,
       role: isTeamMode ? (values.role as any) : undefined,
     });
@@ -172,6 +179,27 @@ export function AdminEditUserDialog(
                   </FormControl>
                   <FormDescription>
                     Enter the 10-digit Indian mobile number.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              name={'email'}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      required
+                      type="email"
+                      placeholder={'e.g. rajesh@example.com'}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Used as the secondary email-OTP login.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

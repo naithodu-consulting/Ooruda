@@ -34,6 +34,13 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@kit/ui/select';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import {
@@ -136,6 +143,7 @@ export function BillsSection(props: {
                             associationId={props.associationId}
                             mescomBillId={bill.id}
                             period={bill.period}
+                            blockConsumptionUnits={bill.block_consumption_units}
                             activeSubMeters={props.activeSubMeters}
                             existingReadings={
                               props.readingsByBill[bill.id] ?? {}
@@ -156,7 +164,7 @@ export function BillsSection(props: {
 
         <p className="text-muted-foreground mt-3 text-xs">
           Block rate is the simple invoice ÷ block-units rate. Carry-forward
-          reconciliation across periods isn't built yet — this is provisional
+          reconciliation across periods isn't built yet. This is provisional
           until billing runs are in place.
         </p>
       </CardContent>
@@ -189,6 +197,21 @@ function AddBillDialog(props: { associationId: string }) {
       </DialogContent>
     </Dialog>
   );
+}
+
+function getPeriodOptions() {
+  const options = [];
+  const now = new Date();
+  for (let i = -6; i <= 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleDateString('en-US', {
+      month: 'short',
+      year: 'numeric',
+    });
+    options.push({ value, label });
+  }
+  return options;
 }
 
 function AddBillForm(props: { associationId: string }) {
@@ -230,9 +253,20 @@ function AddBillForm(props: { associationId: string }) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Period</FormLabel>
-              <FormControl>
-                <Input placeholder="YYYY-MM, e.g. 2026-06" {...field} />
-              </FormControl>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a period" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {getPeriodOptions().map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormDescription>One bill per calendar month.</FormDescription>
               <FormMessage />
             </FormItem>
@@ -258,7 +292,7 @@ function AddBillForm(props: { associationId: string }) {
             <FormItem>
               <FormLabel>Block consumption (units)</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} />
+                <Input type="number" step="1" min="1" {...field} />
               </FormControl>
               <FormDescription>
                 The total units MESCOM billed you for, from the invoice.

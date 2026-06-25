@@ -57,15 +57,27 @@ except Exception:
     print('')"
 }
 
+# Each test user also gets a UNIQUE synthetic email (<phone>@ooruda.test) with
+# email_confirm=true. WHY <phone> (not role): multiple test users can share a
+# role, so a role-based address would collide on profiles.email's unique
+# constraint — the phone is unique, so this never collides and needs no bypass.
+# Having an email also means these users skip the mandatory-email gate and can
+# exercise the email-OTP channel (read the code from Inbucket locally).
 echo "Creating test users via GoTrue Admin API..."
 for entry in "${USERS[@]}"; do
   IFS='|' read -r phone name role <<< "$entry"
-  if [[ -n "$(user_id_by_phone "$phone")" ]]; then
-    echo "  exists  $phone (skipped)"
+  email="${phone}@ooruda.test"
+  uid="$(user_id_by_phone "$phone")"
+  if [[ -n "$uid" ]]; then
+    # Backfill the synthetic email on pre-existing users (idempotent).
+    curl -s -X PUT "$URL/auth/v1/admin/users/$uid" \
+      -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+      -d "{\"email\":\"$email\",\"email_confirm\":true}" \
+      | python3 -c "import sys,json;d=json.load(sys.stdin);print('  updated', '$phone', d.get('email') or ('ERR '+str(d.get('msg'))))"
   else
     curl -s -X POST "$URL/auth/v1/admin/users" \
       -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-      -d "{\"phone\":\"$phone\",\"phone_confirm\":true,\"user_metadata\":{\"full_name\":\"$name\"}}" \
+      -d "{\"phone\":\"$phone\",\"phone_confirm\":true,\"email\":\"$email\",\"email_confirm\":true,\"user_metadata\":{\"full_name\":\"$name\"}}" \
       | python3 -c "import sys,json;d=json.load(sys.stdin);print('  created', '$phone', d.get('id') or ('ERR '+str(d.get('msg'))))"
   fi
 done
@@ -77,16 +89,17 @@ done
 SUPER_ADMIN_PHONE="919911000006"
 echo "Provisioning super admin ($SUPER_ADMIN_PHONE)..."
 sa_id=$(user_id_by_phone "$SUPER_ADMIN_PHONE")
+SUPER_ADMIN_EMAIL="${SUPER_ADMIN_PHONE}@ooruda.test"
 if [[ -z "$sa_id" ]]; then
   curl -s -X POST "$URL/auth/v1/admin/users" \
     -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-    -d "{\"phone\":\"$SUPER_ADMIN_PHONE\",\"phone_confirm\":true,\"user_metadata\":{\"full_name\":\"Dev Super Admin\"},\"app_metadata\":{\"role\":\"super-admin\"}}" \
+    -d "{\"phone\":\"$SUPER_ADMIN_PHONE\",\"phone_confirm\":true,\"email\":\"$SUPER_ADMIN_EMAIL\",\"email_confirm\":true,\"user_metadata\":{\"full_name\":\"Dev Super Admin\"},\"app_metadata\":{\"role\":\"super-admin\"}}" \
     | python3 -c "import sys,json;d=json.load(sys.stdin);print('  created super admin', d.get('id') or ('ERR '+str(d.get('msg'))))"
 else
-  # ensure the role claim is set even if the user pre-existed
+  # ensure the role claim and synthetic email are set even if the user pre-existed
   curl -s -X PUT "$URL/auth/v1/admin/users/$sa_id" \
     -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-    -d "{\"app_metadata\":{\"role\":\"super-admin\"}}" \
+    -d "{\"email\":\"$SUPER_ADMIN_EMAIL\",\"email_confirm\":true,\"app_metadata\":{\"role\":\"super-admin\"}}" \
     | python3 -c "import sys,json;d=json.load(sys.stdin);print('  updated super admin', d.get('id'))"
 fi
 

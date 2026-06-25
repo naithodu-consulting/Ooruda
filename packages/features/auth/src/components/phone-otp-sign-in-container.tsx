@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Lock } from 'lucide-react';
+import { ArrowLeft, Lock, Mail, Smartphone } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -33,11 +33,21 @@ import {
 import { Spinner } from '@kit/ui/spinner';
 import { Trans } from '@kit/ui/trans';
 
+import { checkEmailLoginAction } from '../actions/check-email-login-action';
 import { checkPhoneInvitationAction } from '../actions/check-invitation-action';
 import { AuthErrorAlert } from './auth-error-alert';
 
-const RESEND_COOLDOWN_SECONDS = 60;
-const MAX_VERIFY_ATTEMPTS = 5;
+// Per-channel throttling. Phone (primary) keeps its established limits; email
+// (secondary) is intentionally tighter. The two are tracked independently —
+// switching channels resets the counters, and the server-side SMS vs email
+// rate-limit buckets are separate too.
+const CHANNEL_CONFIG = {
+  phone: { resendCooldown: 60, maxVerifyAttempts: 5 },
+  email: { resendCooldown: 30, maxVerifyAttempts: 3 },
+} as const;
+
+type Channel = keyof typeof CHANNEL_CONFIG;
+type Step = 'identifier' | 'otp';
 
 const PhoneSchema = z.object({
   phone: z
@@ -45,19 +55,23 @@ const PhoneSchema = z.object({
     .regex(/^[6-9]\d{9}$/, { message: 'auth.phoneInvalidFormat' }),
 });
 
+const EmailSchema = z.object({
+  email: z.string().email({ message: 'auth.emailInvalidFormat' }),
+});
+
 const OtpSchema = z.object({
   token: z.string().min(6).max(6),
 });
-
-type Step = 'phone' | 'otp';
 
 export function PhoneOtpSignInContainer() {
   const router = useRouter();
   const params = useSearchParams();
   const t = useTranslations('auth');
 
-  const [step, setStep] = useState<Step>('phone');
-  const [phone, setPhone] = useState('');
+  const [channel, setChannel] = useState<Channel>('phone');
+  const [step, setStep] = useState<Step>('identifier');
+  // The identifier the OTP was sent to: an E.164 phone ('+91…') or an email.
+  const [sentTo, setSentTo] = useState('');
   const [resendSeconds, setResendSeconds] = useState(0);
   const [verifyAttempts, setVerifyAttempts] = useState(0);
   const [localError, setLocalError] = useState<string | Error | null>(null);
@@ -67,6 +81,7 @@ export function PhoneOtpSignInContainer() {
   const verifyMutation = useVerifyOtp();
 
   const isMockMode = process.env.NEXT_PUBLIC_MOCK_OTP === 'true';
+  const config = CHANNEL_CONFIG[channel];
 
   // Countdown timer for resend cooldown
   useEffect(() => {
@@ -88,34 +103,80 @@ export function PhoneOtpSignInContainer() {
     defaultValues: { phone: '' },
   });
 
+  const emailForm = useForm({
+    resolver: zodResolver(EmailSchema),
+    defaultValues: { email: '' },
+  });
+
   const otpForm = useForm({
     resolver: zodResolver(OtpSchema),
     defaultValues: { token: '' },
   });
 
-  const handleSendOtp = async ({
+  // Send the OTP to a given identifier, gating on whether the user is allowed
+  // to sign in (invited phone, or an email belonging to an existing account).
+  const sendOtpTo = async (channelArg: Channel, identifier: string) => {
+    setLocalError(null);
+    signInMutation.reset();
+
+    if (channelArg === 'phone') {
+      const checkResult = await checkPhoneInvitationAction(identifier);
+      if (!checkResult.allowed) {
+        setLocalError('not_invited');
+        return false;
+      }
+
+      await signInMutation.mutateAsync({
+        phone: identifier,
+        options: { shouldCreateUser: checkResult.shouldCreateUser },
+      });
+
+      return true;
+    }
+
+    // email channel — secondary login, never creates an account
+    const checkResult = await checkEmailLoginAction(identifier);
+    if (!checkResult.allowed) {
+      setLocalError('email_not_registered');
+      return false;
+    }
+
+    await signInMutation.mutateAsync({
+      email: identifier,
+      options: { shouldCreateUser: false },
+    });
+
+    return true;
+  };
+
+  const handleSendPhone = async ({
     phone: rawPhone,
   }: z.output<typeof PhoneSchema>) => {
     const e164 = `+91${rawPhone}`;
 
     try {
-      setLocalError(null);
-      signInMutation.reset();
+      const ok = await sendOtpTo('phone', e164);
+      if (!ok) return;
 
-      // Check if user has permission to sign in (invite-only logic)
-      const checkResult = await checkPhoneInvitationAction(e164);
-      if (!checkResult.allowed) {
-        setLocalError('not_invited');
-        return;
-      }
+      setSentTo(e164);
+      setResendSeconds(CHANNEL_CONFIG.phone.resendCooldown);
+      setVerifyAttempts(0);
+      otpForm.reset();
+      setStep('otp');
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
-      await signInMutation.mutateAsync({
-        phone: e164,
-        options: { shouldCreateUser: checkResult.shouldCreateUser },
-      });
+  const handleSendEmail = async ({ email }: z.output<typeof EmailSchema>) => {
+    const normalized = email.trim().toLowerCase();
 
-      setPhone(e164);
-      setResendSeconds(RESEND_COOLDOWN_SECONDS);
+    try {
+      const ok = await sendOtpTo('email', normalized);
+      if (!ok) return;
+
+      setSentTo(normalized);
+      setResendSeconds(CHANNEL_CONFIG.email.resendCooldown);
       setVerifyAttempts(0);
       otpForm.reset();
       setStep('otp');
@@ -128,22 +189,10 @@ export function PhoneOtpSignInContainer() {
     if (resendSeconds > 0) return;
 
     try {
-      setLocalError(null);
-      signInMutation.reset();
+      const ok = await sendOtpTo(channel, sentTo);
+      if (!ok) return;
 
-      // Check if user has permission to sign in (invite-only logic)
-      const checkResult = await checkPhoneInvitationAction(phone);
-      if (!checkResult.allowed) {
-        setLocalError('not_invited');
-        return;
-      }
-
-      await signInMutation.mutateAsync({
-        phone,
-        options: { shouldCreateUser: checkResult.shouldCreateUser },
-      });
-
-      setResendSeconds(RESEND_COOLDOWN_SECONDS);
+      setResendSeconds(config.resendCooldown);
       setVerifyAttempts(0);
       otpForm.reset();
     } catch (e) {
@@ -152,16 +201,16 @@ export function PhoneOtpSignInContainer() {
   };
 
   const handleVerifyOtp = async ({ token }: z.output<typeof OtpSchema>) => {
-    if (verifyAttempts >= MAX_VERIFY_ATTEMPTS) return;
+    if (verifyAttempts >= config.maxVerifyAttempts) return;
 
     setVerifyAttempts((n) => n + 1);
 
     try {
-      await verifyMutation.mutateAsync({
-        type: 'sms',
-        phone,
-        token,
-      });
+      await verifyMutation.mutateAsync(
+        channel === 'phone'
+          ? { type: 'sms', phone: sentTo, token }
+          : { type: 'email', email: sentTo, token },
+      );
 
       const next = getSafeRedirectPath(params.get('next'), '/home');
       router.replace(next);
@@ -170,12 +219,27 @@ export function PhoneOtpSignInContainer() {
     }
   };
 
-  if (step === 'phone') {
-    return (
+  // Reset all transient state when switching channels.
+  const switchChannel = (next: Channel) => {
+    setChannel(next);
+    setStep('identifier');
+    setSentTo('');
+    setLocalError(null);
+    setResendSeconds(0);
+    setVerifyAttempts(0);
+    signInMutation.reset();
+    verifyMutation.reset();
+    phoneForm.reset();
+    emailForm.reset();
+    otpForm.reset();
+  };
+
+  if (step === 'identifier') {
+    return channel === 'phone' ? (
       <Form {...phoneForm}>
         <form
           className="flex flex-col gap-y-4"
-          onSubmit={phoneForm.handleSubmit(handleSendOtp)}
+          onSubmit={phoneForm.handleSubmit(handleSendPhone)}
         >
           <AuthErrorAlert error={localError || signInMutation.error} />
 
@@ -223,21 +287,83 @@ export function PhoneOtpSignInContainer() {
               <Trans i18nKey="auth.phoneSendOtp" />
             )}
           </Button>
+
+          <ChannelToggle target="email" onSwitch={switchChannel} />
+        </form>
+      </Form>
+    ) : (
+      <Form {...emailForm}>
+        <form
+          className="flex flex-col gap-y-4"
+          onSubmit={emailForm.handleSubmit(handleSendEmail)}
+        >
+          <AuthErrorAlert error={localError || signInMutation.error} />
+
+          <FormField
+            name="email"
+            control={emailForm.control}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  <Trans i18nKey="auth.emailInputLabel" />
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    placeholder={t('emailInputPlaceholder')}
+                    autoFocus
+                    data-test="email-input"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={signInMutation.isPending}
+            data-test="email-send-otp-button"
+          >
+            {signInMutation.isPending ? (
+              <>
+                <Spinner className="mr-2 h-4 w-4" />
+                <Trans i18nKey="auth.phoneSendingOtp" />
+              </>
+            ) : (
+              <Trans i18nKey="auth.emailSendOtp" />
+            )}
+          </Button>
+
+          <ChannelToggle target="phone" onSwitch={switchChannel} />
         </form>
       </Form>
     );
   }
 
-  const displayPhone = phone.replace('+91', '');
-  const tooManyAttempts = verifyAttempts >= MAX_VERIFY_ATTEMPTS;
+  const displayTarget =
+    channel === 'phone' ? sentTo.replace('+91', '') : sentTo;
+  const tooManyAttempts = verifyAttempts >= config.maxVerifyAttempts;
 
   return (
     <Form {...otpForm}>
       <div className="flex w-full flex-col items-center gap-y-6">
         <p className="text-center text-sm font-medium text-[#6B88A4]">
           <Trans
-            i18nKey="auth.phoneOtpSentTo"
-            values={{ phone: displayPhone }}
+            i18nKey={
+              channel === 'phone'
+                ? 'auth.phoneOtpSentTo'
+                : 'auth.emailOtpSentTo'
+            }
+            values={
+              channel === 'phone'
+                ? { phone: displayTarget }
+                : { email: displayTarget }
+            }
           />
         </p>
 
@@ -346,15 +472,22 @@ export function PhoneOtpSignInContainer() {
               size="sm"
               className="flex h-9 items-center gap-1.5 text-[#6B88A4] transition-all hover:bg-[#1B293A]/50 hover:text-white"
               onClick={() => {
-                setStep('phone');
-                setPhone('');
+                setStep('identifier');
+                setSentTo('');
                 setLocalError(null);
                 signInMutation.reset();
-                phoneForm.reset();
+                if (channel === 'phone') phoneForm.reset();
+                else emailForm.reset();
               }}
             >
               <ArrowLeft className="h-[14px] w-[14px]" strokeWidth={2.5} />
-              <Trans i18nKey="auth.phoneChangeNumber" />
+              <Trans
+                i18nKey={
+                  channel === 'phone'
+                    ? 'auth.phoneChangeNumber'
+                    : 'auth.emailChangeAddress'
+                }
+              />
             </Button>
 
             <Button
@@ -379,5 +512,40 @@ export function PhoneOtpSignInContainer() {
         </form>
       </div>
     </Form>
+  );
+}
+
+// Link to switch between the phone and email login channels.
+function ChannelToggle({
+  target,
+  onSwitch,
+}: {
+  target: Channel;
+  onSwitch: (next: Channel) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 pt-1">
+      <span className="h-px flex-1 bg-[#2E3F50]" />
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() => onSwitch(target)}
+        data-test={`use-${target}-instead`}
+        className="h-9 gap-1.5 text-[#6B88A4] transition-all hover:bg-[#1B293A]/50 hover:text-white"
+      >
+        {target === 'email' ? (
+          <Mail className="h-[14px] w-[14px]" strokeWidth={2.5} />
+        ) : (
+          <Smartphone className="h-[14px] w-[14px]" strokeWidth={2.5} />
+        )}
+        <Trans
+          i18nKey={
+            target === 'email' ? 'auth.useEmailInstead' : 'auth.usePhoneInstead'
+          }
+        />
+      </Button>
+      <span className="h-px flex-1 bg-[#2E3F50]" />
+    </div>
   );
 }

@@ -89,7 +89,7 @@ export async function createUnitAction(
     action: 'unit.created',
     entityType: 'unit',
     entityId: unit.id,
-    summary: `Created unit ${parsed.data.unit_no}`,
+    summary: `Created unit ${parsed.data.unit_no} (${parsed.data.type})`,
   });
 
   revalidatePath(UNITS_PATH, 'page');
@@ -121,6 +121,23 @@ export async function updateUnitAction(
   }
 
   const client = getSupabaseServerClient();
+  const ownerId = parsed.data.owner_id ?? null;
+
+  if (ownerId) {
+    const isEligible = await isAssociationMemberWithRole(
+      client,
+      associationId,
+      ownerId,
+      'prop_owner',
+    );
+
+    if (!isEligible) {
+      return {
+        success: false,
+        error: 'That person is not a property owner on this association.',
+      };
+    }
+  }
 
   const { error } = await client
     .from('units')
@@ -129,6 +146,7 @@ export async function updateUnitAction(
       type: parsed.data.type,
       floor: parsed.data.floor ?? null,
       area_sqft: parsed.data.area_sqft,
+      owner_id: ownerId,
     })
     .eq('id', unitId)
     .eq('association_id', associationId);
@@ -149,7 +167,7 @@ export async function updateUnitAction(
     action: 'unit.updated',
     entityType: 'unit',
     entityId: unitId,
-    summary: `Updated unit ${parsed.data.unit_no}`,
+    summary: `Updated details for unit ${parsed.data.unit_no}`,
   });
 
   revalidatePath(UNITS_PATH, 'page');
@@ -247,12 +265,20 @@ export async function assignOwnerAction(
     return { success: false, error: error.message };
   }
 
+  const { data: unit } = await client
+    .from('units')
+    .select('unit_no')
+    .eq('id', unitId)
+    .single();
+
   await logAuditEvent({
     associationId,
     action: ownerId ? 'unit.owner_assigned' : 'unit.owner_unassigned',
     entityType: 'unit',
     entityId: unitId,
-    summary: ownerId ? "Assigned a unit's owner" : "Cleared a unit's owner",
+    summary: ownerId
+      ? `Owner assigned to unit ${unit?.unit_no ?? unitId}`
+      : `Cleared owner for unit ${unit?.unit_no ?? unitId}`,
   });
 
   revalidatePath(UNITS_PATH, 'page');
@@ -328,12 +354,18 @@ export async function assignTenantAction(
     return { success: false, error: statusError.message };
   }
 
+  const { data: unit } = await client
+    .from('units')
+    .select('unit_no')
+    .eq('id', unitId)
+    .single();
+
   await logAuditEvent({
     associationId,
     action: 'tenancy.started',
     entityType: 'unit',
     entityId: unitId,
-    summary: 'Moved a tenant into a unit',
+    summary: `New tenant onboarded — Unit ${unit?.unit_no ?? unitId}`,
   });
 
   revalidatePath(UNITS_PATH, 'page');
@@ -382,17 +414,162 @@ export async function endTenancyAction(
     return { success: false, error: statusError.message };
   }
 
+  const { data: unit } = await client
+    .from('units')
+    .select('unit_no')
+    .eq('id', unitId)
+    .single();
+
   await logAuditEvent({
     associationId,
     action: 'tenancy.ended',
     entityType: 'unit',
     entityId: unitId,
-    summary: "Ended a unit's tenancy",
+    summary: `Ended tenancy for unit ${unit?.unit_no ?? unitId}`,
   });
 
   revalidatePath(UNITS_PATH, 'page');
 
   return { success: true };
+}
+
+export type BulkImportRow = {
+  unit_no: string;
+  type: string;
+  floor: string | number | null | undefined;
+  area_sqft: string | number;
+};
+
+export type BulkImportSkipped = {
+  row: number;
+  unit_no: string;
+  reason: string;
+};
+
+export type BulkImportResult = {
+  success: boolean;
+  imported: number;
+  skipped: BulkImportSkipped[];
+  error?: string;
+};
+
+/**
+ * Bulk import units from CSV. Each row is validated with CreateUnitSchema.
+ * Rows that fail validation or have a duplicate unit_no are skipped and
+ * returned in the `skipped` list so the caller can surface them to the user.
+ */
+export async function bulkImportUnitsAction(
+  associationId: string,
+  rows: BulkImportRow[],
+): Promise<BulkImportResult> {
+  const roleError = await requireAssocAdmin(associationId);
+
+  if (roleError) {
+    return { success: false, imported: 0, skipped: [], error: roleError };
+  }
+
+  const client = getSupabaseServerClient();
+  const skipped: BulkImportSkipped[] = [];
+  const toInsert: {
+    association_id: string;
+    unit_no: string;
+    type: string;
+    floor: number | null;
+    area_sqft: number;
+  }[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    const parsed = CreateUnitSchema.safeParse(row);
+
+    if (!parsed.success) {
+      skipped.push({
+        row: i + 1,
+        unit_no: String(row.unit_no ?? ''),
+        reason: parsed.error.issues[0]?.message ?? 'Validation error',
+      });
+      continue;
+    }
+
+    toInsert.push({
+      association_id: associationId,
+      unit_no: parsed.data.unit_no,
+      type: parsed.data.type,
+      floor: parsed.data.floor ?? null,
+      area_sqft: parsed.data.area_sqft,
+    });
+  }
+
+  if (toInsert.length === 0) {
+    return { success: true, imported: 0, skipped };
+  }
+
+  const { data: inserted, error } = await client
+    .from('units')
+    .insert(toInsert)
+    .select('id, unit_no');
+
+  if (error) {
+    // Unique (association_id, unit_no) conflict — fall back to row-by-row to
+    // surface which unit_no duplicates so skipped list is accurate.
+    if (error.code === '23505') {
+      const rowByRow: typeof toInsert = [];
+      const rowByRowSkipped: BulkImportSkipped[] = [...skipped];
+
+      for (let i = 0; i < toInsert.length; i++) {
+        const r = toInsert[i]!;
+        const { error: rowErr } = await client.from('units').insert(r);
+
+        if (rowErr) {
+          const originalIdx = rows.findIndex(
+            (orig) => orig.unit_no === r.unit_no,
+          );
+          rowByRowSkipped.push({
+            row: originalIdx + 1,
+            unit_no: r.unit_no,
+            reason:
+              rowErr.code === '23505'
+                ? `Unit "${r.unit_no}" already exists`
+                : rowErr.message,
+          });
+        } else {
+          rowByRow.push(r);
+        }
+      }
+
+      const imported = rowByRow.length;
+
+      if (imported > 0) {
+        await logAuditEvent({
+          associationId,
+          action: 'unit.bulk_imported',
+          entityType: 'unit',
+          entityId: associationId,
+          summary: `Bulk imported ${imported} unit(s) via CSV`,
+        });
+        revalidatePath(UNITS_PATH, 'page');
+      }
+
+      return { success: true, imported, skipped: rowByRowSkipped };
+    }
+
+    return { success: false, imported: 0, skipped, error: error.message };
+  }
+
+  const imported = inserted?.length ?? 0;
+
+  if (imported > 0) {
+    await logAuditEvent({
+      associationId,
+      action: 'unit.bulk_imported',
+      entityType: 'unit',
+      entityId: associationId,
+      summary: `Bulk imported ${imported} unit(s) via CSV`,
+    });
+    revalidatePath(UNITS_PATH, 'page');
+  }
+
+  return { success: true, imported, skipped };
 }
 
 async function isAssociationMemberWithRole(

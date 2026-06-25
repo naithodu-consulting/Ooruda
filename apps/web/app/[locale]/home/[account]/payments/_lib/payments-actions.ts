@@ -69,7 +69,7 @@ export async function recordPaymentAction(
 
   const { data: bill } = await client
     .from('bills')
-    .select('bill_no')
+    .select('bill_no, units!inner(unit_no)')
     .eq('id', billId)
     .single();
 
@@ -78,7 +78,7 @@ export async function recordPaymentAction(
     action: 'payment.recorded',
     entityType: 'payment',
     entityId: paymentId as unknown as string,
-    summary: `Recorded a ${mode} payment for bill ${bill?.bill_no ?? billId}`,
+    summary: `Unit ${bill?.units?.unit_no ?? '?'} — ₹${amount.toLocaleString('en-IN')} collected via ${mode}`,
   });
 
   revalidatePath(PAYMENTS_PATH, 'page');

@@ -350,30 +350,37 @@ async function checkInvitationPermissions(
   const isSuperAdmin = isSuperAdminResult.data;
 
   if (!isSuperAdmin) {
-    const { data: permRows } = await client
+    // Fetch ALL permission rows for this association (not just the invited
+    // roles). An empty result means no configuration was done by super-admin
+    // → fall back to base hierarchy permissions (no per-role invite gate).
+    const { data: allPermRows } = await client
       .from('assoc_admin_permissions')
       .select('target_role, can_invite')
-      .eq('association_id', accountId)
-      .in('target_role', uniqueRoles);
+      .eq('association_id', accountId);
 
-    const allowedRoleSet = new Set(
-      (permRows ?? []).filter((r) => r.can_invite).map((r) => r.target_role),
-    );
-
-    const invalidRoles = uniqueRoles.filter(
-      (role) => !allowedRoleSet.has(role),
-    );
-
-    if (invalidRoles.length > 0) {
-      logger.info(
-        { ...ctx, invalidRoles },
-        'User is not a super admin and cannot invite members with these roles',
+    if ((allPermRows ?? []).length > 0) {
+      const allowedRoleSet = new Set(
+        (allPermRows ?? [])
+          .filter((r) => r.can_invite)
+          .map((r) => r.target_role),
       );
 
-      return {
-        allowed: false,
-        reason: 'You do not have permission to invite members with these roles',
-      };
+      const invalidRoles = uniqueRoles.filter(
+        (role) => !allowedRoleSet.has(role),
+      );
+
+      if (invalidRoles.length > 0) {
+        logger.info(
+          { ...ctx, invalidRoles },
+          'User is not a super admin and cannot invite members with these roles',
+        );
+
+        return {
+          allowed: false,
+          reason:
+            'You do not have permission to invite members with these roles',
+        };
+      }
     }
   }
 

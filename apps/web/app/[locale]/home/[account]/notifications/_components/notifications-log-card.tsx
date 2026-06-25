@@ -49,7 +49,7 @@ export function NotificationsLogCard(props: { rows: NotificationLogRow[] }) {
         <CardTitle>Notifications log</CardTitle>
         <CardDescription>
           A history of reminders sent to owners and tenants. Sending reminders
-          isn't built yet — this view will fill in once it is.
+          isn&apos;t built yet.
         </CardDescription>
       </CardHeader>
 

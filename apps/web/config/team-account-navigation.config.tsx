@@ -2,6 +2,7 @@ import {
   Activity,
   Bell,
   Building2,
+  ClipboardList,
   CreditCard,
   FileText,
   LayoutDashboard,
@@ -70,6 +71,11 @@ const getRoutes = (account: string) => [
         label: 'association.nav.notifications',
         path: `${pathsConfig.app.accountHome.replace('[account]', account)}/notifications`,
         Icon: <Bell className={iconClasses} />,
+      },
+      {
+        label: 'association.nav.audit',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/audit`,
+        Icon: <ClipboardList className={iconClasses} />,
       },
       {
         label: 'association.nav.members',

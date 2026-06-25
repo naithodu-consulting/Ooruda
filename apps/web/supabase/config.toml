@@ -60,11 +60,18 @@ verify_enabled = true
 enroll_enabled = true
 
 [auth.email]
-# Allow/disallow new user signups via email to your project.
-enable_signup = true
+# Email is a SECONDARY login channel for users who already exist (provisioned
+# by phone). It must never create new accounts, so email signups are disabled
+# here (the app also passes shouldCreateUser:false). Phone signup is governed
+# separately by the top-level [auth] enable_signup and is unaffected.
+enable_signup = false
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
-double_confirm_changes = true
+# MUST be false here: the add-email and change-email flows use a single OTP
+# verification of the NEW address. Legacy phone-only users have no old email to
+# confirm, and a user changing email may have lost access to the old one — both
+# of which a double-confirm would dead-end. Only the new address is verified.
+double_confirm_changes = false
 # If enabled, users need to confirm their email address before signing in.
 enable_confirmations = true
 
@@ -100,9 +107,13 @@ content_path = "./supabase/templates/reset-password.html"
 subject = "Confirm your email change"
 content_path = "./supabase/templates/change-email-address.html"
 
+# Email OTP sign-in reuses GoTrue's magic_link template. We point it at the
+# code template (otp.html contains {{ .Token }}) so users receive a 6-digit
+# code, mirroring the phone OTP flow. Magic-link login itself is disabled
+# (NEXT_PUBLIC_AUTH_MAGIC_LINK=false), so there is no link-login side effect.
 [auth.email.template.magic_link]
-subject = "Sign in to Makerkit"
-content_path = "./supabase/templates/magic-link.html"
+subject = "Your sign-in code"
+content_path = "./supabase/templates/otp.html"
 
 [analytics]
 # Disabled for local dev: the vector container bind-mounts the Docker

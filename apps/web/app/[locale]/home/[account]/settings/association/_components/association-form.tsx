@@ -101,7 +101,7 @@ export function AssociationForm({ association, billingSettings }: Props) {
               id="address"
               name="address"
               defaultValue={association.address ?? ''}
-              placeholder="123, Commercial Complex, MG Road, Bengaluru — 560001"
+              placeholder="123, Commercial Complex, MG Road, Mangaluru — 575008"
             />
           </div>
         </CardContent>

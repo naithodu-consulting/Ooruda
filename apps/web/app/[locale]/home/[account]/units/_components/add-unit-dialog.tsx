@@ -139,7 +139,7 @@ export function AddUnitDialog({ associationId }: { associationId: string }) {
                     <FormControl>
                       <Input
                         type="number"
-                        step="0.01"
+                        step="1"
                         min="0"
                         placeholder="e.g. 450"
                         {...field}

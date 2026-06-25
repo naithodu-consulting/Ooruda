@@ -219,7 +219,7 @@ function useGetColumns(
       {
         header: t('joinedAtLabel'),
         cell: ({ row }) => {
-          return new Date(row.original.created_at).toLocaleDateString();
+          return new Date(row.original.created_at).toLocaleDateString('en-IN');
         },
       },
       {

@@ -1,5 +1,7 @@
 'use client';
 
+import React from 'react';
+
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { Phone, Plus, X } from 'lucide-react';
@@ -26,6 +28,7 @@ import {
 } from '@kit/ui/form';
 import { useAsyncDialog } from '@kit/ui/hooks/use-async-dialog';
 import { If } from '@kit/ui/if';
+import { Input } from '@kit/ui/input';
 import {
   InputGroup,
   InputGroupAddon,
@@ -46,7 +49,12 @@ import { createInvitationsAction } from '../../server/actions/team-invitations-s
 import { MembershipRoleSelector } from './membership-role-selector';
 import { RolesDataProvider } from './roles-data-provider';
 
-type InviteModel = ReturnType<typeof createEmptyInviteModel>;
+type InviteModel = {
+  phone: string;
+  role: Role;
+  name?: string;
+  email?: string;
+};
 
 type Role = string;
 
@@ -99,9 +107,18 @@ export function InviteMembersDialogContainer({
 
   return (
     <Dialog {...dialogProps}>
-      <DialogTrigger render={children as React.ReactElement} />
+      <DialogTrigger
+        render={React.cloneElement(
+          children as React.ReactElement<{ [key: string]: unknown }>,
+          // Base UI's render prop merges data-slot differently in SSR vs
+          // hydration, causing a mismatch between "dialog-trigger" (SSR) and
+          // "button" (client). Pinning to "dialog-trigger" here makes both
+          // paths consistent. The slot is not used in any CSS selector.
+          { 'data-slot': 'dialog-trigger' },
+        )}
+      />
 
-      <DialogContent showCloseButton={!isPending}>
+      <DialogContent className={'sm:max-w-lg'} showCloseButton={!isPending}>
         <DialogHeader>
           <DialogTitle>
             <Trans i18nKey={'teams.inviteMembersHeading'} />
@@ -199,7 +216,7 @@ function InviteMembersForm({
   return (
     <Form {...form}>
       <form
-        className={'flex flex-col space-y-8'}
+        className={'flex flex-col space-y-4'}
         data-test={'invite-members-form'}
         onSubmit={form.handleSubmit(onSubmit)}
       >
@@ -207,11 +224,17 @@ function InviteMembersForm({
           {fieldArray.fields.map((field, index) => {
             const phoneInputName = `invitations.${index}.phone` as const;
             const roleInputName = `invitations.${index}.role` as const;
+            const nameInputName = `invitations.${index}.name` as const;
+            const emailInputName = `invitations.${index}.email` as const;
 
             return (
-              <div data-test={'invite-member-form-item'} key={field.id}>
-                <div className={'flex items-end gap-x-2'}>
-                  <InputGroup className={'bg-background w-full'}>
+              <div
+                className={'space-y-3 rounded-lg border p-4'}
+                data-test={'invite-member-form-item'}
+                key={field.id}
+              >
+                <div className={'flex items-center gap-x-2'}>
+                  <InputGroup className={'min-w-0 flex-1'}>
                     <InputGroupAddon align="inline-start">
                       <Phone className="h-4 w-4" />
                       <span className="text-muted-foreground text-sm font-medium">
@@ -282,7 +305,7 @@ function InviteMembersForm({
                     }}
                   />
 
-                  <div className={'flex items-end justify-end'}>
+                  {fieldArray.fields.length > 1 && (
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger
@@ -291,7 +314,6 @@ function InviteMembersForm({
                               variant={'ghost'}
                               size={'icon'}
                               type={'button'}
-                              disabled={fieldArray.fields.length <= 1}
                               data-test={'remove-invite-button'}
                               aria-label={t('removeInviteButtonLabel')}
                               onClick={() => {
@@ -309,7 +331,41 @@ function InviteMembersForm({
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
-                  </div>
+                  )}
+                </div>
+
+                <div className={'flex flex-col gap-y-2'}>
+                  <FormField
+                    name={nameInputName}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder={'Name (optional)'}
+                            maxLength={255}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    name={emailInputName}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type={'email'}
+                            placeholder={'Email (optional)'}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               </div>
             );
@@ -352,7 +408,7 @@ function InviteMembersForm({
 }
 
 function createEmptyInviteModel() {
-  return { phone: '', role: 'prop_owner' as Role };
+  return { phone: '', role: 'prop_owner' as Role, name: '', email: '' };
 }
 
 function useFetchInvitationsPolicies({
@@ -365,13 +421,29 @@ function useFetchInvitationsPolicies({
   return useQuery({
     queryKey: ['invitation-policies', accountSlug],
     queryFn: async () => {
-      const response = await fetch(`./members/policies`);
+      // This call is a best-effort PREFLIGHT to surface policy restrictions
+      // before the user fills out the form. It is NOT the security gate:
+      // createInvitationsAction independently enforces checkInvitationPermissions
+      // and evaluateInvitationsPolicies server-side. So if the preflight endpoint
+      // is unavailable (e.g. routing 404/500), we must degrade to "allowed" and
+      // let the server action be the authority — never hard-block the dialog.
+      const permissive = {
+        allowed: true,
+        reasons: [],
+        metadata: { preflightSkipped: true },
+      };
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      try {
+        const response = await fetch(`./members/policies`);
+
+        if (!response.ok) {
+          return permissive;
+        }
+
+        return response.json();
+      } catch {
+        return permissive;
       }
-
-      return response.json();
     },
     enabled: isOpen,
     staleTime: 5 * 60 * 1000,

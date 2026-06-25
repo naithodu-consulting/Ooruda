@@ -10,6 +10,7 @@ import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import { AddUnitDialog } from './_components/add-unit-dialog';
+import { ImportUnitsDialog } from './_components/import-units-dialog';
 import {
   type MemberOption,
   type OwnerInfo,
@@ -210,7 +211,12 @@ export default async function UnitsPage({ params }: Props) {
         ) : null}
 
         <div className="flex items-center justify-end gap-4">
-          {canManage ? <AddUnitDialog associationId={association.id} /> : null}
+          {canManage ? (
+            <>
+              <ImportUnitsDialog associationId={association.id} />
+              <AddUnitDialog associationId={association.id} />
+            </>
+          ) : null}
         </div>
 
         {unitRows.length > 0 ? (

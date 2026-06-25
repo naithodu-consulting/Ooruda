@@ -76,8 +76,7 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
   // Hide the invite button when no roles are grantable yet (super-admin hasn't
   // configured can_invite for any role in this association).
   const hasInvitableRoles =
-    !!isSuperAdmin ||
-    effectiveAssocPermissions.allowedInviteRoles.length > 0;
+    !!isSuperAdmin || effectiveAssocPermissions.allowedInviteRoles.length > 0;
 
   return (
     <PageBody>
@@ -100,7 +99,11 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
               </CardDescription>
             </div>
 
-            <If condition={canManageInvitations && canAddMember && hasInvitableRoles}>
+            <If
+              condition={
+                canManageInvitations && canAddMember && hasInvitableRoles
+              }
+            >
               <InviteMembersDialogContainer
                 userRoleHierarchy={currentUserRoleHierarchy}
                 accountSlug={account.slug}

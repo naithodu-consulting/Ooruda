@@ -260,11 +260,15 @@ export async function generateBillsAction(
   }
 
   if (created > 0) {
+    const monthName = new Date(`${period}-01T00:00:00`).toLocaleString(
+      'en-IN',
+      { month: 'long' },
+    );
     await logAuditEvent({
       associationId,
       action: 'bills.generated',
       entityType: 'bill',
-      summary: `Generated ${created} bill(s) for ${period}`,
+      summary: `${monthName} bills generated — ${created} units`,
     });
   }
 

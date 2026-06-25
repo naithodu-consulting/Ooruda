@@ -15,10 +15,12 @@ export interface AssocAdminPermissionMap {
   canEdit: (role: string) => boolean;
   canDelete: (role: string) => boolean;
   allowedInviteRoles: string[];
-  // Serializable role lists for passing to Client Components (functions cannot
-  // cross the server/client boundary).
-  editableRoles: string[];
-  deletableRoles: string[];
+  // Serializable role lists for Client Components (functions can't cross the
+  // server/client boundary). `undefined` means no rows are configured for this
+  // association → fall back to base hierarchy permissions. An empty array means
+  // rows exist but no role has that flag set → deny all.
+  editableRoles: string[] | undefined;
+  deletableRoles: string[] | undefined;
 }
 
 /**
@@ -43,6 +45,23 @@ export async function loadAssocAdminPermissions(
   }));
 
   const byRole = new Map(entries.map((e) => [e.targetRole, e]));
+
+  // No rows configured → no per-role restriction; base hierarchy applies.
+  if (entries.length === 0) {
+    return {
+      canInvite: () => true,
+      canEdit: () => true,
+      canDelete: () => true,
+      allowedInviteRoles: [
+        'assoc_admin',
+        'billing_operator',
+        'prop_owner',
+        'tenant',
+      ],
+      editableRoles: undefined,
+      deletableRoles: undefined,
+    };
+  }
 
   return {
     canInvite: (role) => byRole.get(role)?.canInvite ?? false,
