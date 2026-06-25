@@ -157,10 +157,28 @@ export const updateInvitationAction = authActionClient
 
     const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
-    if (!isSuperAdmin && !['prop_owner', 'tenant'].includes(invitation.role)) {
-      throw new Error(
-        'You can only update invitations to "Property Owner" or "Tenant" roles',
-      );
+    if (!isSuperAdmin) {
+      // Look up the account this invitation belongs to
+      const { data: inv } = await client
+        .from('invitations')
+        .select('account_id')
+        .eq('id', invitation.invitationId)
+        .maybeSingle();
+
+      if (inv) {
+        const { data: perm } = await client
+          .from('assoc_admin_permissions')
+          .select('can_invite')
+          .eq('association_id', inv.account_id)
+          .eq('target_role', invitation.role)
+          .maybeSingle();
+
+        if (!perm?.can_invite) {
+          throw new Error(
+            'You do not have permission to assign this role to invitations',
+          );
+        }
+      }
     }
 
     const service = createAccountInvitationsService(client);
@@ -332,8 +350,18 @@ async function checkInvitationPermissions(
   const isSuperAdmin = isSuperAdminResult.data;
 
   if (!isSuperAdmin) {
+    const { data: permRows } = await client
+      .from('assoc_admin_permissions')
+      .select('target_role, can_invite')
+      .eq('association_id', accountId)
+      .in('target_role', uniqueRoles);
+
+    const allowedRoleSet = new Set(
+      (permRows ?? []).filter((r) => r.can_invite).map((r) => r.target_role),
+    );
+
     const invalidRoles = uniqueRoles.filter(
-      (role) => !['prop_owner', 'tenant'].includes(role),
+      (role) => !allowedRoleSet.has(role),
     );
 
     if (invalidRoles.length > 0) {
@@ -344,8 +372,7 @@ async function checkInvitationPermissions(
 
       return {
         allowed: false,
-        reason:
-          'You can only invite members with the "Property Owner" or "Tenant" roles',
+        reason: 'You do not have permission to invite members with these roles',
       };
     }
   }

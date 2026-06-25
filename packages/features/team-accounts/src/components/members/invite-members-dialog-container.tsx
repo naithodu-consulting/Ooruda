@@ -60,11 +60,14 @@ export function InviteMembersDialogContainer({
   accountSlug,
   userRoleHierarchy,
   isSuperAdmin,
+  allowedRoles,
   children,
 }: React.PropsWithChildren<{
   accountSlug: string;
   userRoleHierarchy: number;
   isSuperAdmin?: boolean;
+  /** Roles the current user is permitted to invite (from assoc_admin_permissions). Ignored for super-admins. */
+  allowedRoles?: string[];
 }>) {
   const { dialogProps, isPending, setIsPending, setOpen } = useAsyncDialog();
   const t = useTranslations('teams');
@@ -146,9 +149,7 @@ export function InviteMembersDialogContainer({
             {(roles) => {
               const filteredRoles = isSuperAdmin
                 ? roles
-                : roles.filter((role) =>
-                    ['prop_owner', 'tenant'].includes(role),
-                  );
+                : roles.filter((role) => (allowedRoles ?? []).includes(role));
 
               return (
                 <InviteMembersForm
@@ -213,6 +214,9 @@ function InviteMembersForm({
                   <InputGroup className={'bg-background w-full'}>
                     <InputGroupAddon align="inline-start">
                       <Phone className="h-4 w-4" />
+                      <span className="text-muted-foreground text-sm font-medium">
+                        +91
+                      </span>
                     </InputGroupAddon>
 
                     <FormField
@@ -221,12 +225,29 @@ function InviteMembersForm({
                         return (
                           <FormItem className="w-full">
                             <FormControl>
+                              {/*
+                                India-locked: fixed +91 prefix, 10-digit national
+                                number only. The backend accepts any country, but
+                                entry is constrained to India for now.
+                              */}
                               <InputGroupInput
                                 data-test={'invite-phone-input'}
                                 placeholder={t('phonePlaceholder')}
                                 type="tel"
+                                inputMode="numeric"
+                                maxLength={10}
                                 required
-                                {...field}
+                                name={field.name}
+                                ref={field.ref}
+                                onBlur={field.onBlur}
+                                value={field.value}
+                                onChange={(e) =>
+                                  field.onChange(
+                                    e.target.value
+                                      .replace(/\D/g, '')
+                                      .slice(0, 10),
+                                  )
+                                }
                               />
                             </FormControl>
 

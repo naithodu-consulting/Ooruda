@@ -6,6 +6,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Ellipsis } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { formatPhoneNumber } from '@kit/shared/utils';
 import { Database } from '@kit/supabase/database';
 import { Badge } from '@kit/ui/badge';
 import { badgeExtras } from '@kit/ui/badge-extras';
@@ -50,6 +51,10 @@ type AccountMembersTableProps = {
   isPrimaryOwner: boolean;
   canManageRoles: boolean;
   isSuperAdmin?: boolean;
+  /** Roles this user may edit (role-change); undefined => no per-role gating. */
+  assocEditableRoles?: string[];
+  /** Roles this user may delete (remove-member); undefined => no per-role gating. */
+  assocDeletableRoles?: string[];
 };
 
 export function AccountMembersTable({
@@ -60,9 +65,19 @@ export function AccountMembersTable({
   userRoleHierarchy,
   canManageRoles,
   isSuperAdmin,
+  assocEditableRoles,
+  assocDeletableRoles,
 }: AccountMembersTableProps) {
   const [search, setSearch] = useState('');
   const t = useTranslations('teams');
+
+  const assocCanEdit = assocEditableRoles
+    ? (role: string) => assocEditableRoles.includes(role)
+    : undefined;
+
+  const assocCanDelete = assocDeletableRoles
+    ? (role: string) => assocDeletableRoles.includes(role)
+    : undefined;
 
   const permissions = {
     canUpdateRole: (targetRole: number) => {
@@ -87,6 +102,8 @@ export function AccountMembersTable({
     currentUserId,
     currentAccountId,
     currentRoleHierarchy: userRoleHierarchy,
+    assocCanEdit,
+    assocCanDelete,
   });
 
   const filteredMembers = members
@@ -136,6 +153,8 @@ function useGetColumns(
     currentUserId: string;
     currentAccountId: string;
     currentRoleHierarchy: number;
+    assocCanEdit?: (role: string) => boolean;
+    assocCanDelete?: (role: string) => boolean;
   },
 ): ColumnDef<Members[0]>[] {
   const t = useTranslations('teams');
@@ -175,7 +194,7 @@ function useGetColumns(
         header: t('phoneLabel'),
         accessorKey: 'phone',
         cell: ({ row }) => {
-          return row.original.phone ?? '-';
+          return formatPhoneNumber(row.original.phone);
         },
       },
       {
@@ -214,6 +233,8 @@ function useGetColumns(
             currentTeamAccountId={params.currentAccountId}
             currentRoleHierarchy={params.currentRoleHierarchy}
             isSuperAdmin={permissions.isSuperAdmin}
+            assocCanEdit={params.assocCanEdit}
+            assocCanDelete={params.assocCanDelete}
           />
         ),
       },
@@ -229,6 +250,8 @@ function ActionsDropdown({
   currentTeamAccountId,
   currentRoleHierarchy,
   isSuperAdmin,
+  assocCanEdit,
+  assocCanDelete,
 }: {
   permissions: Permissions;
   member: Members[0];
@@ -236,6 +259,8 @@ function ActionsDropdown({
   currentTeamAccountId: string;
   currentRoleHierarchy: number;
   isSuperAdmin?: boolean;
+  assocCanEdit?: (role: string) => boolean;
+  assocCanDelete?: (role: string) => boolean;
 }) {
   const isCurrentUser = member.user_id === currentUserId;
   const isPrimaryOwner = member.primary_owner_user_id === member.user_id;
@@ -249,10 +274,13 @@ function ActionsDropdown({
   }
 
   const memberRoleHierarchy = member.role_hierarchy_level;
-  const canUpdateRole = permissions.canUpdateRole(memberRoleHierarchy);
+  const canUpdateRole =
+    permissions.canUpdateRole(memberRoleHierarchy) &&
+    (isSuperAdmin || !assocCanEdit || assocCanEdit(member.role));
 
   const canRemoveFromAccount =
-    permissions.canRemoveFromAccount(memberRoleHierarchy);
+    permissions.canRemoveFromAccount(memberRoleHierarchy) &&
+    (isSuperAdmin || !assocCanDelete || assocCanDelete(member.role));
 
   // if has no permission to update role, transfer ownership or remove from account
   // do not render the dropdown menu

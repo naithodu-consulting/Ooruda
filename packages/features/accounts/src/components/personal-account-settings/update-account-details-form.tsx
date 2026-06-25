@@ -3,6 +3,7 @@ import { Phone, User } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 
+import { formatPhoneNumber } from '@kit/shared/utils';
 import { Database } from '@kit/supabase/database';
 import { Button } from '@kit/ui/button';
 import {
@@ -101,7 +102,7 @@ export function UpdateAccountDetailsForm({
                 </InputGroupAddon>
 
                 <InputGroupInput
-                  value={phone || 'N/A'}
+                  value={phone ? formatPhoneNumber(phone) : 'N/A'}
                   disabled
                   className="text-muted-foreground cursor-not-allowed bg-transparent"
                   placeholder="Phone Number"

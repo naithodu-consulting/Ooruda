@@ -41,8 +41,13 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
   const client = getSupabaseServerClient();
   const slug = (await params).account;
 
-  const [members, invitations, canAddMember, { user, account }] =
-    await loadMembersPageData(client, slug);
+  const [
+    members,
+    invitations,
+    canAddMember,
+    { user, account },
+    assocPermissions,
+  ] = await loadMembersPageData(client, slug);
 
   const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
@@ -53,6 +58,26 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
 
   const isPrimaryOwner = account.primary_owner_user_id === user.id;
   const currentUserRoleHierarchy = account.role_hierarchy_level;
+
+  // For non-super-admins, constrain invite/edit/delete to what super-admin
+  // has granted for this association. Super-admins bypass all these checks.
+  const effectiveAssocPermissions = isSuperAdmin
+    ? {
+        canInvite: () => true,
+        canEdit: () => true,
+        canDelete: () => true,
+        allowedInviteRoles: ['prop_owner', 'billing_operator', 'tenant'],
+        // Undefined => no per-role gating; super-admins bypass these checks.
+        editableRoles: undefined,
+        deletableRoles: undefined,
+      }
+    : assocPermissions;
+
+  // Hide the invite button when no roles are grantable yet (super-admin hasn't
+  // configured can_invite for any role in this association).
+  const hasInvitableRoles =
+    !!isSuperAdmin ||
+    effectiveAssocPermissions.allowedInviteRoles.length > 0;
 
   return (
     <PageBody>
@@ -75,11 +100,12 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
               </CardDescription>
             </div>
 
-            <If condition={canManageInvitations && canAddMember}>
+            <If condition={canManageInvitations && canAddMember && hasInvitableRoles}>
               <InviteMembersDialogContainer
                 userRoleHierarchy={currentUserRoleHierarchy}
                 accountSlug={account.slug}
                 isSuperAdmin={!!isSuperAdmin}
+                allowedRoles={effectiveAssocPermissions.allowedInviteRoles}
               >
                 <Button size={'sm'} data-test={'invite-members-form-trigger'}>
                   <PlusCircle className={'w-4'} />
@@ -101,6 +127,8 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
               isPrimaryOwner={isPrimaryOwner}
               canManageRoles={canManageRoles}
               isSuperAdmin={!!isSuperAdmin}
+              assocEditableRoles={effectiveAssocPermissions.editableRoles}
+              assocDeletableRoles={effectiveAssocPermissions.deletableRoles}
             />
           </CardContent>
         </Card>

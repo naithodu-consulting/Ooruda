@@ -4,6 +4,8 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { loadTeamWorkspace } from '~/home/[account]/_lib/server/team-account-workspace.loader';
 import { Database } from '~/lib/database.types';
 
+import { loadAssocAdminPermissions } from './assoc-permissions.loader';
+
 /**
  * Load data for the members page
  * @param client
@@ -13,12 +15,23 @@ export async function loadMembersPageData(
   client: SupabaseClient<Database>,
   slug: string,
 ) {
-  return Promise.all([
+  const workspaceData = await loadTeamWorkspace(slug);
+  const { account } = workspaceData;
+
+  const [members, invitations, canAdd, assocPermissions] = await Promise.all([
     loadAccountMembers(client, slug),
     loadInvitations(client, slug),
-    canAddMember,
-    loadTeamWorkspace(slug),
+    canAddMember(),
+    loadAssocAdminPermissions(client, account.id),
   ]);
+
+  return [
+    members,
+    invitations,
+    canAdd,
+    workspaceData,
+    assocPermissions,
+  ] as const;
 }
 
 /**

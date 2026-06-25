@@ -52,6 +52,7 @@ catalog:
   dotenv: 17.4.2
   embla-carousel-react: ^8.6.0
   input-otp: ^1.4.2
+  libphonenumber-js: ^1.13.7
   lucide-react: 1.17.0
   nanoid: ^5.1.11
   next: 16.2.7
@@ -99,13 +100,6 @@ catalogMode: prefer
 
 cleanupUnusedCatalogs: true
 
-minimumReleaseAgeIgnoreMissingTime: false
-
-onlyBuiltDependencies:
-  - '@tailwindcss/oxide'
-  - '@sentry/cli'
-  - supabase
-
 minimumReleaseAgeExclude:
   - '@base-ui/*'
   - react
@@ -113,3 +107,10 @@ minimumReleaseAgeExclude:
   - stripe
   - '@next/*'
   - next
+
+minimumReleaseAgeIgnoreMissingTime: false
+
+onlyBuiltDependencies:
+  - '@tailwindcss/oxide'
+  - '@sentry/cli'
+  - supabase

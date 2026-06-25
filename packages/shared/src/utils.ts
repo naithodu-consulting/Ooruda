@@ -1,3 +1,8 @@
+import {
+  type CountryCode,
+  parsePhoneNumberFromString,
+} from 'libphonenumber-js';
+
 /**
  * Check if the code is running in a browser environment.
  */
@@ -20,6 +25,54 @@ export function formatCurrency(params: {
     style: 'currency',
     currency: params.currencyCode,
   }).format(Number(params.value));
+}
+
+/**
+ * @name DEFAULT_PHONE_COUNTRY
+ * @description Default region for parsing inputs without an explicit country
+ * code. The app's primary market is India, so a bare 10-digit number is treated
+ * as Indian — but full E.164 numbers from any country are accepted too.
+ */
+export const DEFAULT_PHONE_COUNTRY: CountryCode = 'IN';
+
+/**
+ * @name normalizePhoneNumber
+ * @description Normalize phone-ish input to canonical E.164 (e.g.
+ * `+919911000006`, `+14155552671`). Numbers given in international form (with a
+ * `+` country code) are validated against that country; numbers without a
+ * country code fall back to `defaultCountry` (India by default). Returns `null`
+ * when the input is not a valid phone number.
+ */
+export function normalizePhoneNumber(
+  input: string | null | undefined,
+  defaultCountry: CountryCode = DEFAULT_PHONE_COUNTRY,
+): string | null {
+  if (!input || !input.trim()) return null;
+
+  const parsed = parsePhoneNumberFromString(input.trim(), defaultCountry);
+
+  if (!parsed || !parsed.isValid()) return null;
+
+  return parsed.number; // E.164, e.g. "+919911000006"
+}
+
+/**
+ * @name formatPhoneNumber
+ * @description Format a stored phone value for display in international form
+ * (e.g. `+91 99110 00006`, `+1 415 555 2671`). Falls back to the raw value if
+ * it isn't a recognisable number, and to an em dash when empty.
+ */
+export function formatPhoneNumber(
+  value: string | null | undefined,
+  defaultCountry: CountryCode = DEFAULT_PHONE_COUNTRY,
+): string {
+  if (!value || !value.trim()) return '—';
+
+  const parsed = parsePhoneNumberFromString(value.trim(), defaultCountry);
+
+  if (!parsed || !parsed.isValid()) return value;
+
+  return parsed.formatInternational();
 }
 
 /**

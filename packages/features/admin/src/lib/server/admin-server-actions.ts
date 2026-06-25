@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { getLogger } from '@kit/shared/logger';
+import { normalizePhoneNumber } from '@kit/shared/utils';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
@@ -14,6 +15,7 @@ import {
   ImpersonateUserSchema,
   ReactivateUserSchema,
 } from './schema/admin-actions.schema';
+import { AssocAdminPermissionsSchema } from './schema/assoc-permissions.schema';
 import { CreateAssociationSchema } from './schema/create-association.schema';
 import {
   CreateUserSchema,
@@ -143,8 +145,13 @@ export const createUserAction = adminActionClient
       const adminClient = getSupabaseServerAdminClient();
       const logger = await getLogger();
 
-      // Normalise phone: ensure it starts with +
-      const normalisedPhone = phone.startsWith('+') ? phone : `+${phone}`;
+      // Normalise to canonical E.164 (+91XXXXXXXXXX). Guaranteed non-null by
+      // the schema's validation, but guard for type-safety.
+      const normalisedPhone = normalizePhoneNumber(phone);
+
+      if (!normalisedPhone) {
+        throw new Error('Invalid phone number');
+      }
 
       logger.info(
         { phone: normalisedPhone, associationId, role },
@@ -364,7 +371,11 @@ export const updateUserDetailsAction = adminActionClient
       const adminClient = getSupabaseServerAdminClient();
       const logger = await getLogger();
 
-      const normalisedPhone = phone.startsWith('+') ? phone : `+${phone}`;
+      const normalisedPhone = normalizePhoneNumber(phone);
+
+      if (!normalisedPhone) {
+        throw new Error('Invalid phone number');
+      }
 
       logger.info(
         { userId, fullName, phone: normalisedPhone, associationId, role },
@@ -445,6 +456,51 @@ export const updateUserDetailsAction = adminActionClient
       revalidatePath(`/admin/accounts`);
     },
   );
+
+/**
+ * @name setAssocAdminPermissionsAction
+ * @description Upsert the 9-permission matrix (3 target roles × 3 actions)
+ * for a given association. Only super-admins may call this; the admin client
+ * bypasses RLS for the write since assoc_admin only has SELECT on this table.
+ */
+export const setAssocAdminPermissionsAction = adminActionClient
+  .inputSchema(AssocAdminPermissionsSchema)
+  .action(async ({ parsedInput: { associationId, permissions }, ctx }) => {
+    const adminClient = getSupabaseServerAdminClient();
+    const logger = await getLogger();
+
+    logger.info(
+      { associationId },
+      `Super Admin is updating assoc_admin permissions...`,
+    );
+
+    const rows = permissions.map((p) => ({
+      association_id: associationId,
+      target_role: p.targetRole,
+      can_invite: p.canInvite,
+      can_edit: p.canEdit,
+      can_delete: p.canDelete,
+      updated_by: ctx.user.id,
+    }));
+
+    const { error } = await adminClient
+      .from('assoc_admin_permissions')
+      .upsert(rows, { onConflict: 'association_id,target_role' });
+
+    if (error) {
+      logger.error({ error }, `Error saving assoc_admin permissions`);
+      throw new Error(`Error saving permissions: ${error.message}`);
+    }
+
+    revalidateAdmin();
+
+    logger.info(
+      { associationId },
+      `Super Admin has successfully updated assoc_admin permissions`,
+    );
+
+    return { success: true };
+  });
 
 function revalidateAdmin() {
   revalidatePath(`/admin/accounts/[id]`, 'page');

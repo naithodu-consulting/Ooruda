@@ -138,6 +138,71 @@ export type Database = {
           },
         ]
       }
+      assoc_admin_permissions: {
+        Row: {
+          association_id: string
+          can_delete: boolean
+          can_edit: boolean
+          can_invite: boolean
+          created_at: string
+          id: string
+          target_role: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          association_id: string
+          can_delete?: boolean
+          can_edit?: boolean
+          can_invite?: boolean
+          created_at?: string
+          id?: string
+          target_role: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          association_id?: string
+          can_delete?: boolean
+          can_edit?: boolean
+          can_invite?: boolean
+          created_at?: string
+          id?: string
+          target_role?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assoc_admin_permissions_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assoc_admin_permissions_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assoc_admin_permissions_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assoc_admin_permissions_target_role_fkey"
+            columns: ["target_role"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["name"]
+          },
+        ]
+      }
       associations: {
         Row: {
           account_id: string
@@ -1510,16 +1575,29 @@ export type Database = {
         Args: { target_team_account_id: string; target_user_id: string }
         Returns: boolean
       }
+      create_bill_with_items: {
+        Args: {
+          p_association_id: string
+          p_bill_no: string
+          p_due_date: string
+          p_line_items: Json
+          p_period: string
+          p_total_amount: number
+          p_unit_id: string
+        }
+        Returns: string
+      }
       create_invitation: {
         Args: { account_id: string; email: string; role: string }
         Returns: {
           account_id: string
           created_at: string
-          email: string
+          email: string | null
           expires_at: string
           id: number
           invite_token: string
           invited_by: string
+          phone: string | null
           role: string
           updated_at: string
         }
@@ -1655,6 +1733,16 @@ export type Database = {
       is_team_member: {
         Args: { account_id: string; user_id: string }
         Returns: boolean
+      }
+      record_payment: {
+        Args: {
+          p_amount: number
+          p_association_id: string
+          p_bill_id: string
+          p_mode: string
+          p_paid_by_role: string
+        }
+        Returns: string
       }
       revoke_nonce: {
         Args: { p_id: string; p_reason?: string }

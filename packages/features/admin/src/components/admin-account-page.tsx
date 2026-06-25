@@ -1,5 +1,6 @@
 import { BadgeX, Ban, ShieldPlus, VenetianMask } from 'lucide-react';
 
+import { normalizePhoneNumber } from '@kit/shared/utils';
 import { Tables } from '@kit/supabase/database';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
@@ -27,6 +28,10 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
+import {
+  AdminAssocPermissions,
+  type AssocPermissionRow,
+} from './admin-assoc-permissions';
 import { AdminBanUserDialog } from './admin-ban-user-dialog';
 import { AdminDeleteAccountDialog } from './admin-delete-account-dialog';
 import { AdminDeleteUserDialog } from './admin-delete-user-dialog';
@@ -101,7 +106,11 @@ async function PersonalAccountPage(props: { account: Account }) {
               <AdminEditUserDialog
                 userId={props.account.id}
                 userName={props.account.name ?? ''}
-                userPhone={userResult.data.user.phone ?? ''}
+                userPhone={
+                  normalizePhoneNumber(userResult.data.user.phone) ??
+                  userResult.data.user.phone ??
+                  ''
+                }
               >
                 <Button
                   size={'sm'}
@@ -192,7 +201,24 @@ async function PersonalAccountPage(props: { account: Account }) {
 async function TeamAccountPage(props: {
   account: Account & { memberships: Membership[] };
 }) {
-  const members = await getMembers(props.account.slug ?? '');
+  const adminClient = getSupabaseServerAdminClient();
+
+  const [members, { data: rawPermissions }] = await Promise.all([
+    getMembers(props.account.slug ?? ''),
+    adminClient
+      .from('assoc_admin_permissions')
+      .select('target_role, can_invite, can_edit, can_delete')
+      .eq('association_id', props.account.id),
+  ]);
+
+  const initialPermissions: AssocPermissionRow[] = (rawPermissions ?? []).map(
+    (r) => ({
+      targetRole: r.target_role as AssocPermissionRow['targetRole'],
+      canInvite: r.can_invite,
+      canEdit: r.can_edit,
+      canDelete: r.can_delete,
+    }),
+  );
 
   return (
     <PageBody className={'gap-y-6'}>
@@ -235,6 +261,16 @@ async function TeamAccountPage(props: {
               <AdminMembersTable members={members} />
             </div>
           </div>
+
+          <Card>
+            <CardContent className={'pt-6'}>
+              <AdminAssocPermissions
+                key={props.account.id}
+                associationId={props.account.id}
+                initialPermissions={initialPermissions}
+              />
+            </CardContent>
+          </Card>
 
           <Card className={'border-destructive border'}>
             <CardHeader>

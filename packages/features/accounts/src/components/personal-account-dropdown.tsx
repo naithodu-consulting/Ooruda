@@ -6,6 +6,7 @@ import Link from 'next/link';
 
 import { ChevronsUpDown, Home, LogOut, Shield } from 'lucide-react';
 
+import { formatPhoneNumber } from '@kit/shared/utils';
 import { JWTUserData } from '@kit/supabase/types';
 import {
   DropdownMenu,
@@ -60,7 +61,7 @@ export function PersonalAccountDropdown({
 
   const signedInAsLabel = useMemo(() => {
     const email = user?.email ?? undefined;
-    const phone = user?.phone ?? undefined;
+    const phone = user?.phone ? formatPhoneNumber(user.phone) : undefined;
 
     return email ?? phone;
   }, [user]);

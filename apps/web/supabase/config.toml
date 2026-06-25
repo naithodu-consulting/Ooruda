@@ -105,7 +105,10 @@ subject = "Sign in to Makerkit"
 content_path = "./supabase/templates/magic-link.html"
 
 [analytics]
-enabled = true
+# Disabled for local dev: the vector container bind-mounts the Docker
+# socket, which Colima's virtiofs cannot mount ("operation not supported").
+# Re-enable when running under Docker Desktop if you need the log viewer.
+enabled = false
 port = 54327
 backend = "postgres"
 

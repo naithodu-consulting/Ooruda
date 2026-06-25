@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { formatPhoneNumber } from '@kit/shared/utils';
 import { Badge } from '@kit/ui/badge';
 import { badgeExtras } from '@kit/ui/badge-extras';
 import {
@@ -56,7 +57,9 @@ export interface TenancyInfo {
 const areaFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
 function personLabel(info: OwnerInfo | undefined): string | null {
-  return info?.full_name?.trim() || info?.mobile_number || null;
+  if (info?.full_name?.trim()) return info.full_name.trim();
+
+  return info?.mobile_number ? formatPhoneNumber(info.mobile_number) : null;
 }
 
 export function UnitsTable({

@@ -27,6 +27,7 @@
     "./navigation-menu": "./src/shadcn/navigation-menu.tsx",
     "./form": "./src/makerkit/form.tsx",
     "./input": "./src/shadcn/input.tsx",
+    "./phone-input": "./src/makerkit/phone-input.tsx",
     "./label": "./src/shadcn/label.tsx",
     "./popover": "./src/shadcn/popover.tsx",
     "./progress": "./src/shadcn/progress.tsx",

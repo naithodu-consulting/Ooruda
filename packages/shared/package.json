@@ -21,6 +21,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "libphonenumber-js": "catalog:",
     "next-runtime-env": "catalog:",
     "pino": "catalog:"
   },

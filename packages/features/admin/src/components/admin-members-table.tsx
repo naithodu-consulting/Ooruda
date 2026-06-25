@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { ColumnDef } from '@tanstack/react-table';
 import { EllipsisVertical } from 'lucide-react';
 
+import { normalizePhoneNumber } from '@kit/shared/utils';
 import { Database } from '@kit/supabase/database';
 import { Button } from '@kit/ui/button';
 import {
@@ -151,7 +152,7 @@ function ActionsCell({ member }: { member: Memberships }) {
         onOpenChange={(open) => !open && setActiveDialog(null)}
         userId={member.user_id}
         userName={member.name || member.email || 'Member'}
-        userPhone={member.phone || ''}
+        userPhone={normalizePhoneNumber(member.phone) ?? member.phone ?? ''}
         teamAccountId={member.account_id}
         currentRole={member.role}
       />

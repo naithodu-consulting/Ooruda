@@ -11,6 +11,7 @@ import { EllipsisVertical } from 'lucide-react';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
+import { formatPhoneNumber } from '@kit/shared/utils';
 import { Tables } from '@kit/supabase/database';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
@@ -236,7 +237,7 @@ function getColumns(
       id: 'phone',
       header: 'Phone',
       cell: ({ row }) => {
-        return phoneByAccountId[row.original.id] ?? '—';
+        return formatPhoneNumber(phoneByAccountId[row.original.id]);
       },
     },
     {

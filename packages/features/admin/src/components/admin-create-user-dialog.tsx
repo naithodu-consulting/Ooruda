@@ -28,6 +28,7 @@ import {
 import { useAsyncDialog } from '@kit/ui/hooks/use-async-dialog';
 import { If } from '@kit/ui/if';
 import { Input } from '@kit/ui/input';
+import { PhoneInput } from '@kit/ui/phone-input';
 import {
   Select,
   SelectContent,
@@ -139,17 +140,19 @@ export function AdminCreateUserDialog(
                   <FormLabel>Phone Number</FormLabel>
 
                   <FormControl>
-                    <Input
+                    <PhoneInput
                       required
-                      type="tel"
-                      placeholder={'e.g. 919911000001'}
-                      {...field}
+                      placeholder={'e.g. 9911000001'}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
                     />
                   </FormControl>
 
                   <FormDescription>
-                    Enter with country code (e.g. 919911000001 or
-                    +919911000001).
+                    Enter the 10-digit Indian mobile number.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

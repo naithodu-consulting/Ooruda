@@ -7,6 +7,7 @@ import { useAction } from 'next-safe-action/hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { normalizePhoneNumber } from '@kit/shared/utils';
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { Button } from '@kit/ui/button';
 import {
@@ -27,6 +28,7 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
+import { PhoneInput } from '@kit/ui/phone-input';
 import {
   Select,
   SelectContent,
@@ -61,13 +63,9 @@ export function AdminEditUserDialog(
     fullName: z
       .string()
       .min(2, { message: 'Full name must be at least 2 characters' }),
-    phone: z
-      .string()
-      .min(10, { message: 'Please enter a valid phone number' })
-      .regex(/^\+?[0-9]{10,15}$/, {
-        message:
-          'Phone number must be 10-15 digits, optionally starting with +',
-      }),
+    phone: z.string().refine((v) => normalizePhoneNumber(v) !== null, {
+      message: 'Enter a valid 10-digit Indian mobile number',
+    }),
     role: isTeamMode
       ? z.enum(ASSIGNABLE_ROLES, { message: 'Please select a role' })
       : z.string().optional(),
@@ -79,7 +77,8 @@ export function AdminEditUserDialog(
     resolver: zodResolver(FormSchema),
     defaultValues: {
       fullName: props.userName,
-      phone: props.userPhone || '',
+      // Show only the 10-digit national number; the +91 prefix is fixed in the UI.
+      phone: (props.userPhone || '').replace(/\D/g, '').slice(-10),
       role: props.currentRole || '',
     },
     mode: 'onChange',
@@ -161,16 +160,18 @@ export function AdminEditUserDialog(
                 <FormItem>
                   <FormLabel>Phone Number</FormLabel>
                   <FormControl>
-                    <Input
+                    <PhoneInput
                       required
-                      type="tel"
                       placeholder={'Phone Number'}
-                      {...field}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
                     />
                   </FormControl>
                   <FormDescription>
-                    Enter with country code (e.g. 919911000001 or
-                    +919911000001).
+                    Enter the 10-digit Indian mobile number.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

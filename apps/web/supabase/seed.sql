@@ -170,8 +170,11 @@ VALUES ('5deaa894-2094-4da3-b4fd-1fada0809d1c', '31a03e74-1639-45b6-bfa7-77447f1
 -- Data for Name: roles; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
+-- hierarchy_level 1-4 are taken by the PropOps roles seeded in migration
+-- 20260614000002_propops_roles.sql (assoc_admin/billing_operator/prop_owner/tenant);
+-- use 5 to avoid the unique constraint on roles.hierarchy_level.
 INSERT INTO "public"."roles" ("name", "hierarchy_level")
-VALUES ('custom-role', 4);
+VALUES ('custom-role', 5);
 
 --
 -- Data for Name: accounts_memberships; Type: TABLE DATA; Schema: public; Owner: postgres
@@ -179,13 +182,13 @@ VALUES ('custom-role', 4);
 
 INSERT INTO "public"."accounts_memberships" ("user_id", "account_id", "account_role", "created_at", "updated_at",
                                              "created_by", "updated_by")
-VALUES ('31a03e74-1639-45b6-bfa7-77447f1a4762', '5deaa894-2094-4da3-b4fd-1fada0809d1c', 'owner',
+VALUES ('31a03e74-1639-45b6-bfa7-77447f1a4762', '5deaa894-2094-4da3-b4fd-1fada0809d1c', 'assoc_admin',
         '2024-04-20 08:21:16.802867+00', '2024-04-20 08:21:16.802867+00', NULL, NULL),
-       ('5c064f1b-78ee-4e1c-ac3b-e99aa97c99bf', '5deaa894-2094-4da3-b4fd-1fada0809d1c', 'owner',
+       ('5c064f1b-78ee-4e1c-ac3b-e99aa97c99bf', '5deaa894-2094-4da3-b4fd-1fada0809d1c', 'assoc_admin',
         '2024-04-20 08:36:44.21028+00', '2024-04-20 08:36:44.21028+00', NULL, NULL),
        ('b73eb03e-fb7a-424d-84ff-18e2791ce0b4', '5deaa894-2094-4da3-b4fd-1fada0809d1c', 'custom-role',
         '2024-04-20 08:38:02.50993+00', '2024-04-20 08:38:02.50993+00', NULL, NULL),
-       ('6b83d656-e4ab-48e3-a062-c0c54a427368', '5deaa894-2094-4da3-b4fd-1fada0809d1c', 'member',
+       ('6b83d656-e4ab-48e3-a062-c0c54a427368', '5deaa894-2094-4da3-b4fd-1fada0809d1c', 'prop_owner',
         '2024-04-20 08:41:17.833709+00', '2024-04-20 08:41:17.833709+00', NULL, NULL);
 
 -- MFA Factors

@@ -21,6 +21,34 @@ export const removeMemberFromAccountAction = authActionClient
   .inputSchema(RemoveMemberSchema)
   .action(async ({ parsedInput: { accountId, userId } }) => {
     const client = getSupabaseServerClient();
+
+    const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+
+    if (!isSuperAdmin) {
+      // Fetch the target member's current role to gate the delete action
+      const { data: membership } = await client
+        .from('accounts_memberships')
+        .select('account_role')
+        .eq('account_id', accountId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (membership) {
+        const { data: perm } = await client
+          .from('assoc_admin_permissions')
+          .select('can_delete')
+          .eq('association_id', accountId)
+          .eq('target_role', membership.account_role)
+          .maybeSingle();
+
+        if (!perm?.can_delete) {
+          throw new Error(
+            'You do not have permission to remove members with this role',
+          );
+        }
+      }
+    }
+
     const service = createAccountMembersService(client);
 
     await service.removeMemberFromAccount({
@@ -45,10 +73,19 @@ export const updateMemberRoleAction = authActionClient
 
     const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
-    if (!isSuperAdmin && !['prop_owner', 'tenant'].includes(data.role)) {
-      throw new Error(
-        'You can only update members to "Property Owner" or "Tenant" roles',
-      );
+    if (!isSuperAdmin) {
+      const { data: perm } = await client
+        .from('assoc_admin_permissions')
+        .select('can_edit')
+        .eq('association_id', data.accountId)
+        .eq('target_role', data.role)
+        .maybeSingle();
+
+      if (!perm?.can_edit) {
+        throw new Error(
+          'You do not have permission to assign this role to members',
+        );
+      }
     }
 
     const service = createAccountMembersService(client);
