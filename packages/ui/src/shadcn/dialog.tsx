@@ -54,7 +54,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          'bg-popover text-popover-foreground ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl p-4 text-sm ring-1 duration-100 outline-none sm:max-w-sm',
+          'bg-popover text-popover-foreground ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl p-4 text-sm ring-1 duration-100 outline-none sm:max-w-sm',
           className,
         )}
         {...props}
@@ -102,7 +102,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        'bg-muted/50 -mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t p-4 sm:flex-row sm:justify-end',
+        'bg-muted -mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t p-4 sticky bottom-0 sm:flex-row sm:justify-end',
         className,
       )}
       {...props}
@@ -121,7 +121,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-base leading-none font-medium', className)}
+      className={cn('text-base leading-snug font-medium', className)}
       {...props}
     />
   );
@@ -135,7 +135,7 @@ function DialogDescription({
     <DialogPrimitive.Description
       data-slot="dialog-description"
       className={cn(
-        'text-muted-foreground *:[a]:hover:text-foreground text-sm *:[a]:underline *:[a]:underline-offset-3',
+        'text-muted-foreground *:[a]:hover:text-foreground text-sm break-words *:[a]:underline *:[a]:underline-offset-3',
         className,
       )}
       {...props}

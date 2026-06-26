@@ -78,17 +78,23 @@ export function PaymentsSection(props: {
 
                   return (
                     <TableRow key={bill.id}>
-                      <TableCell className="font-medium text-muted-foreground">
+                      <TableCell className="text-muted-foreground font-medium">
                         {formatPeriod(bill.period)}
                       </TableCell>
-                      <TableCell className="font-semibold">{bill.unit_no}</TableCell>
-                      <TableCell className="text-muted-foreground">{bill.bill_no}</TableCell>
-                      <TableCell className="text-right tabular-nums font-bold">
+                      <TableCell className="font-semibold">
+                        {bill.unit_no}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {bill.bill_no}
+                      </TableCell>
+                      <TableCell className="text-right font-bold tabular-nums">
                         {formatINR(bill.total_amount)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums font-medium">
+                      <TableCell className="text-right font-medium tabular-nums">
                         {outstanding > 0 ? (
-                          <span className="text-red-600">{formatINR(outstanding)}</span>
+                          <span className="text-red-600">
+                            {formatINR(outstanding)}
+                          </span>
                         ) : (
                           <span className="text-green-600">0</span>
                         )}
@@ -96,17 +102,27 @@ export function PaymentsSection(props: {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={cn(billStatusBadgeClassName(status), "border-0 shadow-none font-bold bg-transparent px-0")}
+                          className={cn(
+                            billStatusBadgeClassName(status),
+                            'border-0 bg-transparent px-0 font-bold shadow-none',
+                          )}
                         >
-                          <span className={cn("h-2 w-2 rounded-full mr-2 inline-block", 
-                            status === 'Paid' ? 'bg-green-500' : 
-                            status === 'Overdue' ? 'bg-red-500' : 
-                            status === 'Partial' ? 'bg-orange-500' : 'bg-yellow-500'
-                          )}></span>
+                          <span
+                            className={cn(
+                              'mr-2 inline-block h-2 w-2 rounded-full',
+                              status === 'Paid'
+                                ? 'bg-green-500'
+                                : status === 'Overdue'
+                                  ? 'bg-red-500'
+                                  : status === 'Partial'
+                                    ? 'bg-orange-500'
+                                    : 'bg-yellow-500',
+                            )}
+                          ></span>
                           {status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="w-[1%] whitespace-nowrap text-right">
+                      <TableCell className="w-[1%] text-right whitespace-nowrap">
                         <BillPaymentsDialog
                           billId={bill.id}
                           billNo={bill.bill_no}
@@ -116,7 +132,7 @@ export function PaymentsSection(props: {
                         />
                       </TableCell>
 
-                      <TableCell className="w-[1%] whitespace-nowrap text-right">
+                      <TableCell className="w-[1%] text-right whitespace-nowrap">
                         {props.canManage && outstanding > 0 ? (
                           <RecordPaymentDialog
                             billId={bill.id}

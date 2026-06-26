@@ -55,14 +55,20 @@ export function AdminDeleteUserDialog(
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <DeleteUserForm userId={props.userId} />
+        <DeleteUserForm
+          key={String(props.open)}
+          userId={props.userId}
+          onSuccess={() => props.onOpenChange?.(false)}
+        />
       </AlertDialogContent>
     </AlertDialog>
   );
 }
 
-function DeleteUserForm(props: { userId: string }) {
-  const { execute, isPending, hasErrored } = useAction(deleteUserAction);
+function DeleteUserForm(props: { userId: string; onSuccess: () => void }) {
+  const { execute, isPending, hasErrored } = useAction(deleteUserAction, {
+    onSuccess: props.onSuccess,
+  });
 
   const form = useForm({
     resolver: zodResolver(DeleteUserSchema),

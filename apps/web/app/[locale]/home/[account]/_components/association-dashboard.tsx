@@ -211,7 +211,9 @@ async function loadMyBillSummary(accountId: string, userId: string) {
   const unitIds = units.map((u) => u.id);
   const { data: allBills } = await client
     .from('bills')
-    .select('id, bill_no, period, total_amount, paid_amount, status, due_date, unit_id')
+    .select(
+      'id, bill_no, period, total_amount, paid_amount, status, due_date, unit_id',
+    )
     .in('unit_id', unitIds)
     .order('period', { ascending: false });
 
@@ -280,14 +282,14 @@ export async function AssociationDashboard({
         </p>
 
         {hasBills ? (
-          <div className="rounded-2xl bg-gradient-to-br from-[#0C1829] via-[#1A3A58] to-[#0F2440] p-6 text-white">
+          <div className="rounded-2xl bg-gradient-to-br from-[#0C1829] via-[#1A3A58] to-[#0F2440] p-4 text-white sm:p-6">
             {/* Total outstanding across all units */}
-            <div className="flex items-start justify-between">
-              <div>
+            <div className="flex min-w-0 items-start justify-between">
+              <div className="min-w-0">
                 <div className="text-[10px] font-bold tracking-wider text-white/45 uppercase">
                   Amount due
                 </div>
-                <div className="text-primary mt-1.5 text-3xl font-black tracking-tight">
+                <div className="text-primary mt-1.5 text-2xl font-black tracking-tight break-words sm:text-3xl">
                   {formatINR(totalOutstanding)}
                 </div>
                 <div className="mt-1 text-xs text-white/50">
@@ -308,18 +310,18 @@ export async function AssociationDashboard({
                 return (
                   <div
                     key={unit.id}
-                    className="flex items-center justify-between"
+                    className="flex min-w-0 flex-col gap-2 rounded-lg border border-white/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:border-0 sm:p-0"
                   >
-                    <div>
-                      <span className="text-sm font-semibold">
+                    <div className="min-w-0">
+                      <span className="block text-sm font-semibold sm:inline">
                         Unit {unit.unit_no}
                       </span>
-                      <span className="ml-2 text-xs text-white/50">
+                      <span className="mt-1 block text-xs break-words text-white/50 sm:mt-0 sm:ml-2 sm:inline">
                         Bill {bill.bill_no} &middot; {periodLabel(bill.period)}
                         &middot; Due {formatYmdLong(bill.due_date)}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                       <span className="text-sm font-semibold tabular-nums">
                         {formatINR(outstanding)}
                       </span>
@@ -376,7 +378,7 @@ export async function AssociationDashboard({
         {`${periodLabel(overview.period)} · ${overview.totalUnits} units · ${overview.occupiedUnits} occupied`}
       </p>
 
-      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3.5 min-[480px]:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           icon={Receipt}
           variant="blue"
@@ -413,7 +415,7 @@ export async function AssociationDashboard({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-sm">Collection progress</CardTitle>
             <Badge className={badgeExtras.success}>
               {periodLabel(overview.period)}
@@ -531,7 +533,7 @@ export async function AssociationDashboard({
       ) : null}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+        <CardHeader className="flex flex-col gap-2 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-sm">Recent activity</CardTitle>
           <Link
             href={`/home/${account}/audit`}
@@ -566,9 +568,9 @@ export async function AssociationDashboard({
                 return (
                   <div
                     key={i}
-                    className="border-border flex items-center justify-between border-b py-4 first:pt-0 last:border-0 last:pb-0"
+                    className="border-border flex min-w-0 flex-col gap-2 border-b py-4 first:pt-0 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <span className="text-sm font-medium">
+                    <span className="min-w-0 text-sm font-medium break-words">
                       {entry.summary ?? entry.action}
                     </span>
                     <div

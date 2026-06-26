@@ -76,7 +76,9 @@ export function CollectionSummaryCard(props: { rows: CollectionSummaryRow[] }) {
               <TableBody>
                 {props.rows.map((row) => (
                   <TableRow key={formatPeriod(row.period)}>
-                    <TableCell className="font-medium">{formatPeriod(row.period)}</TableCell>
+                    <TableCell className="font-medium">
+                      {formatPeriod(row.period)}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {row.billCount}
                     </TableCell>
@@ -190,7 +192,9 @@ export function ElectricityUsageCard(props: { rows: ElectricityUsageRow[] }) {
               <TableBody>
                 {props.rows.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="font-medium">{formatPeriod(row.period)}</TableCell>
+                    <TableCell className="font-medium">
+                      {formatPeriod(row.period)}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatINR(row.invoice_amount)}
                     </TableCell>

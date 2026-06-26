@@ -63,6 +63,9 @@ export function LinkAccountsList(props: LinkAccountsListProps) {
   const unlinkMutation = useUnlinkUserIdentity();
   const pathname = usePathname();
   const user = useUser();
+  const [unlinkDialogIdentityId, setUnlinkDialogIdentityId] = useState<
+    string | null
+  >(null);
 
   const linkMutation = useLinkIdentityWithProvider({
     redirectToPath: props.redirectTo,
@@ -113,7 +116,11 @@ export function LinkAccountsList(props: LinkAccountsListProps) {
    * @param identity
    */
   const handleUnlinkAccount = (identity: UserIdentity) => {
-    const promise = unlinkMutation.mutateAsync(identity);
+    const promise = unlinkMutation.mutateAsync(identity).then((result) => {
+      setUnlinkDialogIdentityId(null);
+
+      return result;
+    });
 
     toast.promise(promise, {
       loading: <Trans i18nKey={'account.unlinkingAccount'} />,
@@ -188,7 +195,12 @@ export function LinkAccountsList(props: LinkAccountsListProps) {
 
                 <ItemActions>
                   <If condition={hasMultipleIdentities}>
-                    <AlertDialog>
+                    <AlertDialog
+                      open={unlinkDialogIdentityId === identity.id}
+                      onOpenChange={(open) =>
+                        setUnlinkDialogIdentityId(open ? identity.id : null)
+                      }
+                    >
                       <AlertDialogTrigger
                         render={
                           <Button
@@ -224,7 +236,10 @@ export function LinkAccountsList(props: LinkAccountsListProps) {
                           </AlertDialogCancel>
 
                           <AlertDialogAction
-                            onClick={() => handleUnlinkAccount(identity)}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              handleUnlinkAccount(identity);
+                            }}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           >
                             <Trans i18nKey={'account.unlinkAccount'} />

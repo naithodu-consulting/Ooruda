@@ -117,12 +117,16 @@ export default async function MescomPage({ params }: Props) {
   // an older bill after a newer one doesn't carry forward a future reading.
   // `allReadings` is sorted ascending by period, so iterating and overwriting
   // gives us the most recent reading strictly before each bill's period.
-  const lastReadingBeforePeriodByBill: Record<string, Record<string, number>> = {};
+  const lastReadingBeforePeriodByBill: Record<
+    string,
+    Record<string, number>
+  > = {};
   for (const bill of billRows) {
     lastReadingBeforePeriodByBill[bill.id] = {};
     for (const r of allReadings) {
       if (r.period < bill.period) {
-        lastReadingBeforePeriodByBill[bill.id]![r.sub_meter_id] = r.current_reading;
+        lastReadingBeforePeriodByBill[bill.id]![r.sub_meter_id] =
+          r.current_reading;
       }
     }
   }
@@ -181,7 +185,9 @@ export default async function MescomPage({ params }: Props) {
                   : '—'
               }
               sublabel={
-                latestBill ? `For ${formatPeriod(latestBill.period)}` : 'No bills yet'
+                latestBill
+                  ? `For ${formatPeriod(latestBill.period)}`
+                  : 'No bills yet'
               }
               variant="teal"
             />

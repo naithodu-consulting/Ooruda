@@ -145,8 +145,6 @@ function ConfirmUnenrollFactorModal(
       if (unEnroll.isPending) return;
 
       const promise = unEnroll.mutateAsync(factorId).then((response) => {
-        props.setIsModalOpen(false);
-
         if (!response.success) {
           const errorCode = response.data;
 
@@ -157,6 +155,8 @@ function ConfirmUnenrollFactorModal(
             } as never,
           );
         }
+
+        props.setIsModalOpen(false);
       });
 
       toast.promise(promise, {
@@ -191,7 +191,10 @@ function ConfirmUnenrollFactorModal(
           <AlertDialogAction
             type={'button'}
             disabled={unEnroll.isPending}
-            onClick={() => onUnenrollRequested(props.factorId)}
+            onClick={(event) => {
+              event.preventDefault();
+              onUnenrollRequested(props.factorId);
+            }}
           >
             <Trans i18nKey={'account.unenrollFactorModalButtonLabel'} />
           </AlertDialogAction>
@@ -287,7 +290,9 @@ function FactorsTable({
           <ConfirmUnenrollFactorModal
             userId={userId}
             factorId={factorId}
-            setIsModalOpen={() => setUnenrolling(undefined)}
+            setIsModalOpen={(open) => {
+              if (!open) setUnenrolling(undefined);
+            }}
           />
         )}
       </If>

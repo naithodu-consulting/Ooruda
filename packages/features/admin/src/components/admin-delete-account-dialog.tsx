@@ -55,14 +55,23 @@ export function AdminDeleteAccountDialog(
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <DeleteAccountForm accountId={props.accountId} />
+        <DeleteAccountForm
+          key={String(props.open)}
+          accountId={props.accountId}
+          onSuccess={() => props.onOpenChange?.(false)}
+        />
       </AlertDialogContent>
     </AlertDialog>
   );
 }
 
-function DeleteAccountForm(props: { accountId: string }) {
-  const { execute, isPending, hasErrored } = useAction(deleteAccountAction);
+function DeleteAccountForm(props: {
+  accountId: string;
+  onSuccess: () => void;
+}) {
+  const { execute, isPending, hasErrored } = useAction(deleteAccountAction, {
+    onSuccess: props.onSuccess,
+  });
 
   const form = useForm({
     resolver: zodResolver(DeleteAccountSchema),

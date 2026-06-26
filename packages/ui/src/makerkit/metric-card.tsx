@@ -32,7 +32,7 @@ export function MetricCard({
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-2xl border p-5',
+        'relative min-w-0 overflow-hidden rounded-2xl border p-4 sm:p-5',
         variantClasses[variant],
         className,
       )}
@@ -40,17 +40,17 @@ export function MetricCard({
       {/* Decorative corner circle — prototype flourish (bleeds off bottom-right) */}
       <div className="pointer-events-none absolute -right-3 -bottom-3 h-16 w-16 rounded-full bg-current opacity-[0.07]" />
 
-      <div className="relative flex items-center gap-1.5 text-[10.5px] font-bold tracking-wide uppercase opacity-75">
-        <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
-        {label}
+      <div className="relative flex min-w-0 items-center gap-1.5 text-[10.5px] font-bold tracking-wide uppercase opacity-75">
+        <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} />
+        <span className="min-w-0 truncate">{label}</span>
       </div>
 
-      <div className="relative mt-1.5 text-2xl leading-none font-black tracking-tight">
+      <div className="relative mt-1.5 text-xl leading-tight font-black tracking-tight break-words sm:text-2xl">
         {value}
       </div>
 
       {sublabel ? (
-        <div className="text-foreground/55 relative mt-1.5 text-[10.5px] font-medium">
+        <div className="text-foreground/55 relative mt-1.5 text-[10.5px] font-medium break-words">
           {sublabel}
         </div>
       ) : null}

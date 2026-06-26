@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -58,12 +58,14 @@ export function BillPaymentsDialog(props: {
   payments: PaymentRow[];
   canVoid: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+
   if (props.payments.length === 0) {
     return null;
   }
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
           <Button size="sm" variant="outline">
@@ -115,6 +117,7 @@ export function BillPaymentsDialog(props: {
                         paymentId={payment.id}
                         billId={props.billId}
                         associationId={props.associationId}
+                        onVoidSuccess={() => setOpen(false)}
                       />
                     </TableCell>
                   ) : null}
@@ -132,8 +135,10 @@ function VoidPaymentButton(props: {
   paymentId: string;
   billId: string;
   associationId: string;
+  onVoidSuccess: () => void;
 }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const onVoid = () => {
@@ -150,12 +155,14 @@ function VoidPaymentButton(props: {
       }
 
       toast.success('Payment deleted.');
+      setOpen(false);
+      props.onVoidSuccess();
       router.refresh();
     });
   };
 
   return (
-    <AlertDialog>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger
         render={
           <Button size="sm" variant="destructive">
@@ -175,7 +182,13 @@ function VoidPaymentButton(props: {
 
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction disabled={isPending} onClick={onVoid}>
+          <AlertDialogAction
+            disabled={isPending}
+            onClick={(event) => {
+              event.preventDefault();
+              onVoid();
+            }}
+          >
             {isPending && <Spinner className="mr-2 h-4 w-4" />}
             Delete
           </AlertDialogAction>

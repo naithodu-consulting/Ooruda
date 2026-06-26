@@ -117,7 +117,7 @@ export function BillsSection(props: {
 
   return (
     <Card className="border-0 shadow-none">
-      <CardHeader className="flex flex-row items-start justify-between">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col space-y-1.5">
           <CardTitle>Bills</CardTitle>
           <CardDescription>
@@ -127,7 +127,9 @@ export function BillsSection(props: {
         </div>
 
         {props.canManage ? (
-          <GenerateBillsDialog associationId={props.associationId} />
+          <div className="sm:shrink-0">
+            <GenerateBillsDialog associationId={props.associationId} />
+          </div>
         ) : null}
       </CardHeader>
 
@@ -173,35 +175,63 @@ export function BillsSection(props: {
                 <TableBody>
                   {filteredBills.map((bill) => {
                     const status = displayBillStatus(bill);
-                    const maintenanceLine = bill.lineItems.find((li) => li.description.toLowerCase().includes('maintenance'));
-                    const electricityLine = bill.lineItems.find((li) => li.description.toLowerCase().includes('electricity'));
+                    const maintenanceLine = bill.lineItems.find((li) =>
+                      li.description.toLowerCase().includes('maintenance'),
+                    );
+                    const electricityLine = bill.lineItems.find((li) =>
+                      li.description.toLowerCase().includes('electricity'),
+                    );
 
                     return (
                       <TableRow key={bill.id}>
-                        <TableCell className="font-medium text-muted-foreground">{bill.bill_no}</TableCell>
-                        <TableCell className="font-semibold">{bill.unit_no}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {maintenanceLine ? formatINR(maintenanceLine.amount) : '—'}
+                        <TableCell className="text-muted-foreground font-medium">
+                          {bill.bill_no}
+                        </TableCell>
+                        <TableCell className="font-semibold">
+                          {bill.unit_no}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {electricityLine ? formatINR(electricityLine.amount) : '—'}
+                          {maintenanceLine
+                            ? formatINR(maintenanceLine.amount)
+                            : '—'}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums font-bold">
+                        <TableCell className="text-right tabular-nums">
+                          {electricityLine
+                            ? formatINR(electricityLine.amount)
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="text-right font-bold tabular-nums">
                           {formatINR(bill.total_amount)}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums font-medium text-muted-foreground">
-                          {bill.paid_amount > 0 ? <span className="text-green-600">{formatINR(bill.paid_amount)}</span> : '0'}
+                        <TableCell className="text-muted-foreground text-right font-medium tabular-nums">
+                          {bill.paid_amount > 0 ? (
+                            <span className="text-green-600">
+                              {formatINR(bill.paid_amount)}
+                            </span>
+                          ) : (
+                            '0'
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge
                             variant="outline"
-                            className={cn(billStatusBadgeClassName(status), "border-0 shadow-none font-bold bg-transparent px-0")}
+                            className={cn(
+                              billStatusBadgeClassName(status),
+                              'border-0 bg-transparent px-0 font-bold shadow-none',
+                            )}
                           >
-                            <span className={cn("h-2 w-2 rounded-full mr-2 inline-block", 
-                              status === 'Paid' ? 'bg-green-500' : 
-                              status === 'Overdue' ? 'bg-red-500' : 
-                              status === 'Partial' ? 'bg-orange-500' : 'bg-yellow-500'
-                            )}></span>
+                            <span
+                              className={cn(
+                                'mr-2 inline-block h-2 w-2 rounded-full',
+                                status === 'Paid'
+                                  ? 'bg-green-500'
+                                  : status === 'Overdue'
+                                    ? 'bg-red-500'
+                                    : status === 'Partial'
+                                      ? 'bg-orange-500'
+                                      : 'bg-yellow-500',
+                              )}
+                            ></span>
                             {status}
                           </Badge>
                         </TableCell>
@@ -345,6 +375,7 @@ function DeleteBillButton(props: {
   associationId: string;
 }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const onDelete = () => {
@@ -357,12 +388,13 @@ function DeleteBillButton(props: {
       }
 
       toast.success(`Bill ${props.billNo} deleted.`);
+      setOpen(false);
       router.refresh();
     });
   };
 
   return (
-    <AlertDialog>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger
         render={
           <Button size="sm" variant="destructive">
@@ -381,7 +413,13 @@ function DeleteBillButton(props: {
 
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction disabled={isPending} onClick={onDelete}>
+          <AlertDialogAction
+            disabled={isPending}
+            onClick={(event) => {
+              event.preventDefault();
+              onDelete();
+            }}
+          >
             {isPending && <Spinner className="mr-2 h-4 w-4" />}
             Delete
           </AlertDialogAction>

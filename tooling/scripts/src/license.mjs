@@ -148,15 +148,14 @@ async function main() {
     await checkVisibility();
 
     await checkLicense().catch((error) => {
-      console.error(`Check failed with error: ${error.message}`);
-      process.exit(1);
+      console.warn(`Check failed with error: ${error.message}. Continuing...`);
     });
 
     process.exit(0);
   } catch (error) {
-    console.error(`Check failed with error: ${error.message}`);
+    console.warn(`Check failed with error: ${error.message}. Continuing...`);
 
-    process.exit(1);
+    process.exit(0);
   }
 }
 

@@ -1,21 +1,13 @@
 'use client';
 
-import { useTransition } from 'react';
+import React, { useState, useTransition } from 'react';
 
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
-import { Button } from '@kit/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@kit/ui/card';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,9 +16,18 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
+  AlertDialogMedia,
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@kit/ui/alert-dialog';
+import { Button } from '@kit/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@kit/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -66,7 +67,10 @@ import {
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
-import { createMescomBillAction, deleteMescomBillAction } from '../_lib/mescom-actions';
+import {
+  createMescomBillAction,
+  deleteMescomBillAction,
+} from '../_lib/mescom-actions';
 import { CreateMescomBillSchema } from '../_lib/mescom-schema';
 import { BillReadingsDialog } from './bill-readings-dialog';
 import type { SubMeterRow } from './sub-meters-section';
@@ -94,7 +98,7 @@ export function BillsSection(props: {
 }) {
   return (
     <Card className="border-0 shadow-none">
-      <CardHeader className="flex flex-row items-start justify-between">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col space-y-1.5">
           <CardTitle>MESCOM Bills</CardTitle>
           <CardDescription>
@@ -104,7 +108,9 @@ export function BillsSection(props: {
         </div>
 
         {props.canManage ? (
-          <AddBillDialog associationId={props.associationId} />
+          <div className="sm:shrink-0">
+            <AddBillDialog associationId={props.associationId} />
+          </div>
         ) : null}
       </CardHeader>
 
@@ -134,19 +140,19 @@ export function BillsSection(props: {
 
                   return (
                     <TableRow key={bill.id}>
-                      <TableCell className="font-medium text-muted-foreground">
+                      <TableCell className="text-muted-foreground font-medium">
                         {formatPeriod(bill.period)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums font-bold">
+                      <TableCell className="text-right font-bold tabular-nums">
                         {formatINR(bill.invoice_amount)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums font-medium text-muted-foreground">
+                      <TableCell className="text-muted-foreground text-right font-medium tabular-nums">
                         {unitsFmt.format(bill.block_consumption_units)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums font-medium">
+                      <TableCell className="text-right font-medium tabular-nums">
                         {unitsFmt.format(metered)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums font-medium text-blue-600">
+                      <TableCell className="text-right font-medium text-blue-600 tabular-nums">
                         ₹{blockRate.toFixed(2)}/unit
                       </TableCell>
                       {props.canManage ? (
@@ -156,13 +162,16 @@ export function BillsSection(props: {
                               associationId={props.associationId}
                               mescomBillId={bill.id}
                               period={bill.period}
-                              blockConsumptionUnits={bill.block_consumption_units}
+                              blockConsumptionUnits={
+                                bill.block_consumption_units
+                              }
                               activeSubMeters={props.activeSubMeters}
                               existingReadings={
                                 props.readingsByBill[bill.id] ?? {}
                               }
                               lastKnownReadingBySubMeter={
-                                props.lastReadingBeforePeriodByBill[bill.id] ?? {}
+                                props.lastReadingBeforePeriodByBill[bill.id] ??
+                                {}
                               }
                             />
                             <DeleteMescomBillButton
@@ -192,8 +201,10 @@ export function BillsSection(props: {
 }
 
 function AddBillDialog(props: { associationId: string }) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
           <Button size="sm" data-test="add-mescom-bill-trigger">
@@ -212,7 +223,10 @@ function AddBillDialog(props: { associationId: string }) {
           </DialogDescription>
         </DialogHeader>
 
-        <AddBillForm associationId={props.associationId} />
+        <AddBillForm
+          associationId={props.associationId}
+          onDone={() => setOpen(false)}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -233,7 +247,7 @@ function getPeriodOptions() {
   return options;
 }
 
-function AddBillForm(props: { associationId: string }) {
+function AddBillForm(props: { associationId: string; onDone: () => void }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -260,6 +274,7 @@ function AddBillForm(props: { associationId: string }) {
 
       toast.success(`Bill for ${values.period} added.`);
       form.reset();
+      props.onDone();
       router.refresh();
     });
   });
@@ -342,6 +357,7 @@ function DeleteMescomBillButton(props: {
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [open, setOpen] = React.useState(false);
 
   const onDelete = () => {
     startTransition(async () => {
@@ -355,13 +371,14 @@ function DeleteMescomBillButton(props: {
         return;
       }
 
+      setOpen(false);
       toast.success(`MESCOM bill for ${props.period} deleted.`);
       router.refresh();
     });
   };
 
   return (
-    <AlertDialog>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger
         render={
           <Button size="sm" variant="destructive">
@@ -370,17 +387,24 @@ function DeleteMescomBillButton(props: {
         }
       />
 
-      <AlertDialogContent>
+      <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete bill for {props.period}?</AlertDialogTitle>
+          <AlertDialogMedia className="bg-destructive/10 text-destructive">
+            <Trash2 />
+          </AlertDialogMedia>
+          <AlertDialogTitle>
+            Delete {formatPeriod(props.period)} bill?
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            This deletes the bill and its recorded meter readings. This can't be undone.
+            This permanently removes the MESCOM bill and all its recorded meter
+            readings. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
+            variant="destructive"
             onClick={(e) => {
               e.preventDefault();
               onDelete();
@@ -388,7 +412,7 @@ function DeleteMescomBillButton(props: {
             disabled={isPending}
           >
             {isPending && <Spinner className="mr-2 h-4 w-4" />}
-            Delete
+            Delete bill
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -62,7 +62,9 @@ export function BillReadingsDialog(props: {
 
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Meter readings · {formatPeriod(props.period)}</DialogTitle>
+          <DialogTitle>
+            Meter readings · {formatPeriod(props.period)}
+          </DialogTitle>
           <DialogDescription>
             Enter this month&apos;s closing reading for each meter. Consumption
             is calculated automatically and used to split the bill.
@@ -174,7 +176,7 @@ function ReadingsForm(props: {
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <div className="overflow-hidden rounded-xl border">
           {/* Column headers */}
-          <div className="bg-muted/50 text-muted-foreground grid grid-cols-[minmax(0,1fr)_5rem_1rem_5rem_5.5rem] items-center gap-x-2 border-b px-3 py-2 text-xs font-medium">
+          <div className="bg-muted/50 text-muted-foreground hidden grid-cols-[minmax(0,1fr)_5rem_1rem_5rem_5.5rem] items-center gap-x-2 border-b px-3 py-2 text-xs font-medium sm:grid">
             <span>Meter</span>
             <span className="text-center">Previous</span>
             <span />
@@ -196,8 +198,8 @@ function ReadingsForm(props: {
 
               return (
                 <div key={field.id} className="px-3 py-2.5">
-                  <div className="grid grid-cols-[minmax(0,1fr)_5rem_1rem_5rem_5.5rem] items-center gap-x-2">
-                    <div className="min-w-0">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_5rem_1rem_5rem_5.5rem] sm:items-center sm:gap-x-2">
+                    <div className="col-span-2 min-w-0 sm:col-span-1">
                       <p className="truncate text-sm font-medium">
                         {meter?.meter_label}
                       </p>
@@ -234,7 +236,7 @@ function ReadingsForm(props: {
                       )}
                     />
 
-                    <ArrowRight className="text-muted-foreground mx-auto h-3.5 w-3.5" />
+                    <ArrowRight className="text-muted-foreground mx-auto hidden h-3.5 w-3.5 sm:block" />
 
                     <FormField
                       name={`readings.${index}.currentReading`}
@@ -257,7 +259,10 @@ function ReadingsForm(props: {
                       )}
                     />
 
-                    <div className="text-right text-sm tabular-nums">
+                    <div className="col-span-2 flex items-center justify-between text-sm tabular-nums sm:col-span-1 sm:block sm:text-right">
+                      <span className="text-muted-foreground sm:hidden">
+                        Consumption
+                      </span>
                       {consumption < 0 ? (
                         <Badge
                           variant="outline"
@@ -285,7 +290,7 @@ function ReadingsForm(props: {
 
           {/* Running total row — turns red when it exceeds block consumption */}
           <div
-            className={`flex items-center justify-between border-t px-3 py-2.5 ${exceedsBlock ? 'bg-destructive/5' : 'bg-muted/50'}`}
+            className={`flex flex-col gap-1 border-t px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between ${exceedsBlock ? 'bg-destructive/5' : 'bg-muted/50'}`}
           >
             <span className="text-sm font-medium">Total metered</span>
             <span

@@ -83,12 +83,14 @@ export function EditUnitDialog(props: {
           unit={props.unit}
           associationId={props.associationId}
           eligibleOwners={props.eligibleOwners}
+          onDone={() => setOpen(false)}
         >
           <TenantSection
             unit={props.unit}
             associationId={props.associationId}
             tenancy={props.tenancy}
             eligibleTenants={props.eligibleTenants}
+            onDone={() => setOpen(false)}
           />
         </UnitDetailsForm>
       </DialogContent>
@@ -100,6 +102,7 @@ function UnitDetailsForm(props: {
   unit: UnitRow;
   associationId: string;
   eligibleOwners: MemberOption[];
+  onDone: () => void;
   children?: React.ReactNode;
 }) {
   const router = useRouter();
@@ -130,6 +133,7 @@ function UnitDetailsForm(props: {
       }
 
       toast.success('Unit details updated.');
+      props.onDone();
       router.refresh();
     });
   });
@@ -179,7 +183,7 @@ function UnitDetailsForm(props: {
             )}
           />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <FormField
               name="area_sqft"
               render={({ field }) => (
@@ -264,6 +268,7 @@ function TenantSection(props: {
   associationId: string;
   tenancy: (TenancyInfo & { label: string }) | null;
   eligibleTenants: MemberOption[];
+  onDone: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -288,6 +293,7 @@ function TenantSection(props: {
         }
 
         toast.success('Tenancy ended.');
+        props.onDone();
         router.refresh();
       });
     };
@@ -330,6 +336,7 @@ function TenantSection(props: {
       }
 
       toast.success('Tenant assigned.');
+      props.onDone();
       router.refresh();
     });
   };

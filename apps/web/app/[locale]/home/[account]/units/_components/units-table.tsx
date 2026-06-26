@@ -239,6 +239,7 @@ function DeleteUnitButton({
   associationId: string;
 }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const onDelete = () => {
@@ -251,12 +252,13 @@ function DeleteUnitButton({
       }
 
       toast.success(`Unit ${unit.unit_no} deleted.`);
+      setOpen(false);
       router.refresh();
     });
   };
 
   return (
-    <AlertDialog>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger
         render={
           <Button
@@ -281,7 +283,13 @@ function DeleteUnitButton({
 
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction disabled={isPending} onClick={onDelete}>
+          <AlertDialogAction
+            disabled={isPending}
+            onClick={(event) => {
+              event.preventDefault();
+              onDelete();
+            }}
+          >
             {isPending && <Spinner className="mr-2 h-4 w-4" />}
             Delete
           </AlertDialogAction>

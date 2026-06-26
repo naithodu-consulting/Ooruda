@@ -1,7 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
@@ -15,8 +13,6 @@ import {
   type RecordMeterReadingsInput,
   RecordMeterReadingsSchema,
 } from './mescom-schema';
-
-const MESCOM_PATH = '/home/[account]/mescom';
 
 type ActionResult = { success: boolean; error?: string };
 
@@ -88,8 +84,6 @@ export async function createSubMeterAction(
     summary: `Added sub-meter ${parsed.data.meterLabel}`,
   });
 
-  revalidatePath(MESCOM_PATH, 'page');
-
   return { success: true };
 }
 
@@ -126,8 +120,6 @@ export async function setSubMeterActiveAction(
     entityId: subMeterId,
     summary: isActive ? 'Reactivated a sub-meter' : 'Deactivated a sub-meter',
   });
-
-  revalidatePath(MESCOM_PATH, 'page');
 
   return { success: true };
 }
@@ -182,8 +174,6 @@ export async function createMescomBillAction(
     summary: `Uploaded MESCOM bill for ${parsed.data.period}`,
   });
 
-  revalidatePath(MESCOM_PATH, 'page');
-
   return { success: true };
 }
 
@@ -218,8 +208,6 @@ export async function deleteMescomBillAction(
     entityType: 'mescom_bill',
     summary: `Deleted MESCOM bill`,
   });
-
-  revalidatePath(MESCOM_PATH, 'page');
 
   return { success: true };
 }
@@ -308,8 +296,6 @@ export async function recordMeterReadingsAction(
     entityId: bill.id,
     summary: `Recorded meter readings for ${bill.period}`,
   });
-
-  revalidatePath(MESCOM_PATH, 'page');
 
   return { success: true };
 }

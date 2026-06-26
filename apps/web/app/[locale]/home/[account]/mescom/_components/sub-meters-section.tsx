@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -10,7 +10,6 @@ import { useForm } from 'react-hook-form';
 
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
-import { cn } from '@kit/ui/utils';
 import {
   Card,
   CardContent,
@@ -52,6 +51,7 @@ import {
   TableHeader,
   TableRow,
 } from '@kit/ui/table';
+import { cn } from '@kit/ui/utils';
 
 import {
   createSubMeterAction,
@@ -76,7 +76,7 @@ export function SubMetersSection(props: {
 }) {
   return (
     <Card className="border-0 shadow-none">
-      <CardHeader className="flex flex-row items-start justify-between">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col space-y-1.5">
           <CardTitle>Sub-meters</CardTitle>
           <CardDescription>
@@ -86,10 +86,12 @@ export function SubMetersSection(props: {
         </div>
 
         {props.canManage ? (
-          <AddSubMeterDialog
-            associationId={props.associationId}
-            units={props.units}
-          />
+          <div className="sm:shrink-0">
+            <AddSubMeterDialog
+              associationId={props.associationId}
+              units={props.units}
+            />
+          </div>
         ) : null}
       </CardHeader>
 
@@ -121,9 +123,14 @@ export function SubMetersSection(props: {
                     <TableCell>
                       <Badge
                         variant="outline"
-                        className="border-0 shadow-none font-bold bg-transparent px-0"
+                        className="border-0 bg-transparent px-0 font-bold shadow-none"
                       >
-                        <span className={cn("h-2 w-2 rounded-full mr-2 inline-block", meter.is_active ? 'bg-green-500' : 'bg-gray-400')}></span>
+                        <span
+                          className={cn(
+                            'mr-2 inline-block h-2 w-2 rounded-full',
+                            meter.is_active ? 'bg-green-500' : 'bg-gray-400',
+                          )}
+                        ></span>
                         {meter.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </TableCell>
@@ -184,8 +191,10 @@ function AddSubMeterDialog(props: {
   associationId: string;
   units: { id: string; unit_no: string }[];
 }) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
           <Button size="sm" data-test="add-sub-meter-trigger">
@@ -206,6 +215,7 @@ function AddSubMeterDialog(props: {
         <AddSubMeterForm
           associationId={props.associationId}
           units={props.units}
+          onDone={() => setOpen(false)}
         />
       </DialogContent>
     </Dialog>
@@ -215,6 +225,7 @@ function AddSubMeterDialog(props: {
 function AddSubMeterForm(props: {
   associationId: string;
   units: { id: string; unit_no: string }[];
+  onDone: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -239,6 +250,7 @@ function AddSubMeterForm(props: {
 
       toast.success('Sub-meter added.');
       form.reset();
+      props.onDone();
       router.refresh();
     });
   });
