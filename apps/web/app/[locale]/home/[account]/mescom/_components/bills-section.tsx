@@ -17,6 +17,17 @@ import {
   CardTitle,
 } from '@kit/ui/card';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@kit/ui/alert-dialog';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -53,8 +64,9 @@ import {
 } from '@kit/ui/table';
 
 import { formatINR } from '~/lib/format-inr';
+import { formatPeriod } from '~/lib/format-period';
 
-import { createMescomBillAction } from '../_lib/mescom-actions';
+import { createMescomBillAction, deleteMescomBillAction } from '../_lib/mescom-actions';
 import { CreateMescomBillSchema } from '../_lib/mescom-schema';
 import { BillReadingsDialog } from './bill-readings-dialog';
 import type { SubMeterRow } from './sub-meters-section';
@@ -77,11 +89,11 @@ export function BillsSection(props: {
     Record<string, { previous_reading: number; current_reading: number }>
   >;
   consumedByBill: Record<string, number>;
-  lastKnownReadingBySubMeter: Record<string, number>;
+  lastReadingBeforePeriodByBill: Record<string, Record<string, number>>;
   canManage: boolean;
 }) {
   return (
-    <Card>
+    <Card className="border-0 shadow-none">
       <CardHeader className="flex flex-row items-start justify-between">
         <div className="flex flex-col space-y-1.5">
           <CardTitle>MESCOM Bills</CardTitle>
@@ -102,7 +114,7 @@ export function BillsSection(props: {
             No MESCOM bills uploaded yet.
           </p>
         ) : (
-          <div className="rounded-xl border">
+          <div className="w-full">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -122,36 +134,43 @@ export function BillsSection(props: {
 
                   return (
                     <TableRow key={bill.id}>
-                      <TableCell className="font-medium">
-                        {bill.period}
+                      <TableCell className="font-medium text-muted-foreground">
+                        {formatPeriod(bill.period)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right tabular-nums font-bold">
                         {formatINR(bill.invoice_amount)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right tabular-nums font-medium text-muted-foreground">
                         {unitsFmt.format(bill.block_consumption_units)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right tabular-nums font-medium">
                         {unitsFmt.format(metered)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right tabular-nums font-medium text-blue-600">
                         ₹{blockRate.toFixed(2)}/unit
                       </TableCell>
                       {props.canManage ? (
                         <TableCell>
-                          <BillReadingsDialog
-                            associationId={props.associationId}
-                            mescomBillId={bill.id}
-                            period={bill.period}
-                            blockConsumptionUnits={bill.block_consumption_units}
-                            activeSubMeters={props.activeSubMeters}
-                            existingReadings={
-                              props.readingsByBill[bill.id] ?? {}
-                            }
-                            lastKnownReadingBySubMeter={
-                              props.lastKnownReadingBySubMeter
-                            }
-                          />
+                          <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                            <BillReadingsDialog
+                              associationId={props.associationId}
+                              mescomBillId={bill.id}
+                              period={bill.period}
+                              blockConsumptionUnits={bill.block_consumption_units}
+                              activeSubMeters={props.activeSubMeters}
+                              existingReadings={
+                                props.readingsByBill[bill.id] ?? {}
+                              }
+                              lastKnownReadingBySubMeter={
+                                props.lastReadingBeforePeriodByBill[bill.id] ?? {}
+                              }
+                            />
+                            <DeleteMescomBillButton
+                              mescomBillId={bill.id}
+                              period={bill.period}
+                              associationId={props.associationId}
+                            />
+                          </div>
                         </TableCell>
                       ) : null}
                     </TableRow>
@@ -202,7 +221,7 @@ function AddBillDialog(props: { associationId: string }) {
 function getPeriodOptions() {
   const options = [];
   const now = new Date();
-  for (let i = -6; i <= 6; i++) {
+  for (let i = -6; i <= 0; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const label = d.toLocaleDateString('en-US', {
@@ -313,5 +332,66 @@ function AddBillForm(props: { associationId: string }) {
         </Button>
       </form>
     </Form>
+  );
+}
+
+function DeleteMescomBillButton(props: {
+  mescomBillId: string;
+  period: string;
+  associationId: string;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const onDelete = () => {
+    startTransition(async () => {
+      const result = await deleteMescomBillAction(
+        props.associationId,
+        props.mescomBillId,
+      );
+
+      if (!result.success) {
+        toast.error(result.error ?? 'Could not delete the bill.');
+        return;
+      }
+
+      toast.success(`MESCOM bill for ${props.period} deleted.`);
+      router.refresh();
+    });
+  };
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger
+        render={
+          <Button size="sm" variant="destructive">
+            Delete
+          </Button>
+        }
+      />
+
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete bill for {props.period}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This deletes the bill and its recorded meter readings. This can't be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              onDelete();
+            }}
+            disabled={isPending}
+          >
+            {isPending && <Spinner className="mr-2 h-4 w-4" />}
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

@@ -9,8 +9,8 @@ import { Plus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
 import { Badge } from '@kit/ui/badge';
-import { badgeExtras } from '@kit/ui/badge-extras';
 import { Button } from '@kit/ui/button';
+import { cn } from '@kit/ui/utils';
 import {
   Card,
   CardContent,
@@ -75,7 +75,7 @@ export function SubMetersSection(props: {
   canManage: boolean;
 }) {
   return (
-    <Card>
+    <Card className="border-0 shadow-none">
       <CardHeader className="flex flex-row items-start justify-between">
         <div className="flex flex-col space-y-1.5">
           <CardTitle>Sub-meters</CardTitle>
@@ -99,7 +99,7 @@ export function SubMetersSection(props: {
             No sub-meters yet. Add one to start recording readings.
           </p>
         ) : (
-          <div className="rounded-xl border">
+          <div className="w-full">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -121,10 +121,9 @@ export function SubMetersSection(props: {
                     <TableCell>
                       <Badge
                         variant="outline"
-                        className={
-                          meter.is_active ? badgeExtras.success : undefined
-                        }
+                        className="border-0 shadow-none font-bold bg-transparent px-0"
                       >
+                        <span className={cn("h-2 w-2 rounded-full mr-2 inline-block", meter.is_active ? 'bg-green-500' : 'bg-gray-400')}></span>
                         {meter.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </TableCell>

@@ -21,6 +21,7 @@ import {
 } from '@kit/ui/table';
 
 import { formatINR } from '~/lib/format-inr';
+import { formatPeriod } from '~/lib/format-period';
 
 export interface BillLineItemRow {
   id: string;
@@ -49,12 +50,18 @@ export function BillLineItemsDialog(props: {
 
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            Bill {props.billNo} — {props.period}
-          </DialogTitle>
-          <DialogDescription>
-            Line-by-line breakdown of this bill.
+          <DialogTitle>Bill Details</DialogTitle>
+          <DialogDescription className="sr-only">
+            Bill {props.billNo} for {formatPeriod(props.period)}
           </DialogDescription>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-foreground text-sm font-medium">
+              {formatPeriod(props.period)}
+            </span>
+            <span className="text-muted-foreground text-xs">
+              #{props.billNo}
+            </span>
+          </div>
         </DialogHeader>
 
         <Table>

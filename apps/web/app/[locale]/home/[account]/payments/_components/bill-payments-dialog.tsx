@@ -58,6 +58,10 @@ export function BillPaymentsDialog(props: {
   payments: PaymentRow[];
   canVoid: boolean;
 }) {
+  if (props.payments.length === 0) {
+    return null;
+  }
+
   return (
     <Dialog>
       <DialogTrigger

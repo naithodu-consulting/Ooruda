@@ -18,6 +18,7 @@ import {
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import { formatDateDMY } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
+import { formatPeriod } from '~/lib/format-period';
 
 export interface CollectionSummaryRow {
   period: string;
@@ -74,8 +75,8 @@ export function CollectionSummaryCard(props: { rows: CollectionSummaryRow[] }) {
               </TableHeader>
               <TableBody>
                 {props.rows.map((row) => (
-                  <TableRow key={row.period}>
-                    <TableCell className="font-medium">{row.period}</TableCell>
+                  <TableRow key={formatPeriod(row.period)}>
+                    <TableCell className="font-medium">{formatPeriod(row.period)}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {row.billCount}
                     </TableCell>
@@ -135,7 +136,7 @@ export function OutstandingDuesCard(props: { rows: OutstandingDueRow[] }) {
                     <TableRow key={bill.id}>
                       <TableCell>{bill.unit_no}</TableCell>
                       <TableCell>{bill.bill_no}</TableCell>
-                      <TableCell>{bill.period}</TableCell>
+                      <TableCell>{formatPeriod(bill.period)}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {formatINR(bill.total_amount - bill.paid_amount)}
                       </TableCell>
@@ -189,7 +190,7 @@ export function ElectricityUsageCard(props: { rows: ElectricityUsageRow[] }) {
               <TableBody>
                 {props.rows.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.period}</TableCell>
+                    <TableCell className="font-medium">{formatPeriod(row.period)}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatINR(row.invoice_amount)}
                     </TableCell>
@@ -246,7 +247,7 @@ export function MyDuesCard(props: { bills: OutstandingDueRow[] }) {
                   return (
                     <TableRow key={bill.id}>
                       <TableCell className="font-medium">
-                        {bill.period}
+                        {formatPeriod(bill.period)}
                       </TableCell>
                       <TableCell>{bill.unit_no}</TableCell>
                       <TableCell>{bill.bill_no}</TableCell>

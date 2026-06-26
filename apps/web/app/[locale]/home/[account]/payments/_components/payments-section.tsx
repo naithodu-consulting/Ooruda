@@ -14,9 +14,11 @@ import {
   TableHeader,
   TableRow,
 } from '@kit/ui/table';
+import { cn } from '@kit/ui/utils';
 
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
+import { formatPeriod } from '~/lib/format-period';
 
 import { BillPaymentsDialog, type PaymentRow } from './bill-payments-dialog';
 import { RecordPaymentDialog } from './record-payment-dialog';
@@ -42,7 +44,7 @@ export function PaymentsSection(props: {
   description?: string;
 }) {
   return (
-    <Card>
+    <Card className="border-0 shadow-none">
       <CardHeader>
         <CardTitle>{props.title ?? 'Payments'}</CardTitle>
         <CardDescription>
@@ -55,7 +57,7 @@ export function PaymentsSection(props: {
         {props.bills.length === 0 ? (
           <p className="text-muted-foreground text-sm">No bills to show yet.</p>
         ) : (
-          <div className="rounded-xl border">
+          <div className="w-full">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -65,7 +67,8 @@ export function PaymentsSection(props: {
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead className="text-right">Outstanding</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead />
+                  <TableHead className="w-[1%]" />
+                  <TableHead className="w-[1%]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -75,44 +78,53 @@ export function PaymentsSection(props: {
 
                   return (
                     <TableRow key={bill.id}>
-                      <TableCell className="font-medium">
-                        {bill.period}
+                      <TableCell className="font-medium text-muted-foreground">
+                        {formatPeriod(bill.period)}
                       </TableCell>
-                      <TableCell>{bill.unit_no}</TableCell>
-                      <TableCell>{bill.bill_no}</TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="font-semibold">{bill.unit_no}</TableCell>
+                      <TableCell className="text-muted-foreground">{bill.bill_no}</TableCell>
+                      <TableCell className="text-right tabular-nums font-bold">
                         {formatINR(bill.total_amount)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatINR(outstanding)}
+                      <TableCell className="text-right tabular-nums font-medium">
+                        {outstanding > 0 ? (
+                          <span className="text-red-600">{formatINR(outstanding)}</span>
+                        ) : (
+                          <span className="text-green-600">0</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={billStatusBadgeClassName(status)}
+                          className={cn(billStatusBadgeClassName(status), "border-0 shadow-none font-bold bg-transparent px-0")}
                         >
+                          <span className={cn("h-2 w-2 rounded-full mr-2 inline-block", 
+                            status === 'Paid' ? 'bg-green-500' : 
+                            status === 'Overdue' ? 'bg-red-500' : 
+                            status === 'Partial' ? 'bg-orange-500' : 'bg-yellow-500'
+                          )}></span>
                           {status}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-2">
-                          <BillPaymentsDialog
+                      <TableCell className="w-[1%] whitespace-nowrap text-right">
+                        <BillPaymentsDialog
+                          billId={bill.id}
+                          billNo={bill.bill_no}
+                          associationId={props.associationId}
+                          payments={bill.payments}
+                          canVoid={props.canVoid}
+                        />
+                      </TableCell>
+
+                      <TableCell className="w-[1%] whitespace-nowrap text-right">
+                        {props.canManage && outstanding > 0 ? (
+                          <RecordPaymentDialog
                             billId={bill.id}
                             billNo={bill.bill_no}
                             associationId={props.associationId}
-                            payments={bill.payments}
-                            canVoid={props.canVoid}
+                            outstanding={outstanding}
                           />
-
-                          {props.canManage && outstanding > 0 ? (
-                            <RecordPaymentDialog
-                              billId={bill.id}
-                              billNo={bill.bill_no}
-                              associationId={props.associationId}
-                              outstanding={outstanding}
-                            />
-                          ) : null}
-                        </div>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   );

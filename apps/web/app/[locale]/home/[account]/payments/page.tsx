@@ -106,9 +106,10 @@ export default async function PaymentsPage({ params }: Props) {
     } else {
       const { data: tenancies } = await client
         .from('tenancies')
-        .select('unit_id')
+        .select('unit_id, units!inner(association_id)')
         .eq('tenant_id', userId)
-        .eq('status', 'active');
+        .eq('status', 'active')
+        .eq('units.association_id', association.id);
 
       unitIds.push(...(tenancies ?? []).map((t) => t.unit_id));
     }

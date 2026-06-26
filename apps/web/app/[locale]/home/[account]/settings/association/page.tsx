@@ -73,7 +73,7 @@ export default async function AssociationSettingsPage({ params }: Props) {
   const { data: chargeTypes } = await client
     .from('charge_types')
     .select(
-      'id, key, name, is_builtin, calc_method, frequency, default_payer, is_active',
+      'id, key, name, is_builtin, calc_method, frequency, default_payer, is_active, rate_or_amount',
     )
     .eq('association_id', association.id)
     .order('is_builtin', { ascending: false })

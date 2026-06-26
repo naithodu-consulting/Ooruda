@@ -59,7 +59,6 @@ import {
 import { cn } from '@kit/ui/utils';
 
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
-import { formatDateDMY } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 
 import { deleteBillAction, generateBillsAction } from '../_lib/billing-actions';
@@ -117,7 +116,7 @@ export function BillsSection(props: {
   });
 
   return (
-    <Card>
+    <Card className="border-0 shadow-none">
       <CardHeader className="flex flex-row items-start justify-between">
         <div className="flex flex-col space-y-1.5">
           <CardTitle>Bills</CardTitle>
@@ -157,46 +156,55 @@ export function BillsSection(props: {
               ))}
             </div>
 
-            <div className="rounded-xl border">
+            <div className="w-full">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Unit</TableHead>
                     <TableHead>Bill No.</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead className="text-right">Maintenance</TableHead>
+                    <TableHead className="text-right">Electricity</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Paid</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Due</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredBills.map((bill) => {
                     const status = displayBillStatus(bill);
+                    const maintenanceLine = bill.lineItems.find((li) => li.description.toLowerCase().includes('maintenance'));
+                    const electricityLine = bill.lineItems.find((li) => li.description.toLowerCase().includes('electricity'));
 
                     return (
                       <TableRow key={bill.id}>
-                        <TableCell className="font-medium">
-                          {bill.period}
-                        </TableCell>
-                        <TableCell>{bill.unit_no}</TableCell>
-                        <TableCell>{bill.bill_no}</TableCell>
+                        <TableCell className="font-medium text-muted-foreground">{bill.bill_no}</TableCell>
+                        <TableCell className="font-semibold">{bill.unit_no}</TableCell>
                         <TableCell className="text-right tabular-nums">
+                          {maintenanceLine ? formatINR(maintenanceLine.amount) : '—'}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {electricityLine ? formatINR(electricityLine.amount) : '—'}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums font-bold">
                           {formatINR(bill.total_amount)}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatINR(bill.paid_amount)}
+                        <TableCell className="text-right tabular-nums font-medium text-muted-foreground">
+                          {bill.paid_amount > 0 ? <span className="text-green-600">{formatINR(bill.paid_amount)}</span> : '0'}
                         </TableCell>
                         <TableCell>
                           <Badge
                             variant="outline"
-                            className={billStatusBadgeClassName(status)}
+                            className={cn(billStatusBadgeClassName(status), "border-0 shadow-none font-bold bg-transparent px-0")}
                           >
+                            <span className={cn("h-2 w-2 rounded-full mr-2 inline-block", 
+                              status === 'Paid' ? 'bg-green-500' : 
+                              status === 'Overdue' ? 'bg-red-500' : 
+                              status === 'Partial' ? 'bg-orange-500' : 'bg-yellow-500'
+                            )}></span>
                             {status}
                           </Badge>
                         </TableCell>
-                        <TableCell>{formatDateDMY(bill.due_date)}</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-2">
                             <BillLineItemsDialog

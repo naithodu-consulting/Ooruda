@@ -5,6 +5,7 @@ import { MetricCard } from '@kit/ui/metric-card';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
+import { formatPeriod } from '~/lib/format-period';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
@@ -97,7 +98,6 @@ export default async function MescomPage({ params }: Props) {
   > = {};
 
   const consumedByBill: Record<string, number> = {};
-  const lastKnownReadingBySubMeter: Record<string, number> = {};
 
   for (const r of allReadings) {
     readingsByBill[r.mescom_bill_id] ??= {};
@@ -109,11 +109,22 @@ export default async function MescomPage({ params }: Props) {
     consumedByBill[r.mescom_bill_id] =
       (consumedByBill[r.mescom_bill_id] ?? 0) +
       (r.current_reading - r.previous_reading);
+  }
 
-    // `allReadings` is ordered by period ascending, so the last write per
-    // sub-meter is the most recent — a sensible default "previous reading"
-    // for the next bill that hasn't been entered yet.
-    lastKnownReadingBySubMeter[r.sub_meter_id] = r.current_reading;
+  // For each bill's readings dialog, the default "previous reading" for a
+  // sub-meter should be its most recent current_reading from any period
+  // BEFORE this bill's period — not the global latest. This ensures entering
+  // an older bill after a newer one doesn't carry forward a future reading.
+  // `allReadings` is sorted ascending by period, so iterating and overwriting
+  // gives us the most recent reading strictly before each bill's period.
+  const lastReadingBeforePeriodByBill: Record<string, Record<string, number>> = {};
+  for (const bill of billRows) {
+    lastReadingBeforePeriodByBill[bill.id] = {};
+    for (const r of allReadings) {
+      if (r.period < bill.period) {
+        lastReadingBeforePeriodByBill[bill.id]![r.sub_meter_id] = r.current_reading;
+      }
+    }
   }
 
   const canManage = role === 'assoc_admin';
@@ -170,7 +181,7 @@ export default async function MescomPage({ params }: Props) {
                   : '—'
               }
               sublabel={
-                latestBill ? `For ${latestBill.period}` : 'No bills yet'
+                latestBill ? `For ${formatPeriod(latestBill.period)}` : 'No bills yet'
               }
               variant="teal"
             />
@@ -191,7 +202,7 @@ export default async function MescomPage({ params }: Props) {
             activeSubMeters={activeSubMeters}
             readingsByBill={readingsByBill}
             consumedByBill={consumedByBill}
-            lastKnownReadingBySubMeter={lastKnownReadingBySubMeter}
+            lastReadingBeforePeriodByBill={lastReadingBeforePeriodByBill}
             canManage={canManage}
           />
         </div>

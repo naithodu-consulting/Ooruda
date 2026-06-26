@@ -25,6 +25,7 @@ import {
   todayInBillingZone,
 } from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
+import { formatPeriod } from '~/lib/format-period';
 import { type PropOpsRole, hasMinimumRole } from '~/lib/rbac';
 
 function currentPeriod(): string {
@@ -32,13 +33,7 @@ function currentPeriod(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function periodLabel(period: string): string {
-  const [year, month] = period.split('-').map(Number);
-  return new Date(year ?? 0, (month ?? 1) - 1).toLocaleDateString('en-IN', {
-    month: 'long',
-    year: 'numeric',
-  });
-}
+const periodLabel = formatPeriod;
 
 function AgeingBar(props: {
   label: string;
@@ -184,43 +179,64 @@ async function loadMyBillSummary(accountId: string, userId: string) {
     return null;
   }
 
+  // Fetch ALL units owned by this user in this association.
   const { data: ownedUnits } = await client
     .from('units')
     .select('id, unit_no')
     .eq('association_id', association.id)
     .eq('owner_id', userId)
-    .order('unit_no')
-    .limit(1);
+    .order('unit_no');
 
-  let unit = ownedUnits?.[0];
+  let units: { id: string; unit_no: string }[] = ownedUnits ?? [];
 
-  if (!unit) {
-    const { data: tenancy } = await client
+  // Fallback: tenant with no owned units — find all active tenancy units in this association.
+  if (units.length === 0) {
+    const { data: tenancies } = await client
       .from('tenancies')
-      .select('unit_id, units:units(id, unit_no, association_id)')
+      .select('units!inner(id, unit_no, association_id)')
       .eq('tenant_id', userId)
       .eq('status', 'active')
-      .maybeSingle();
+      .eq('units.association_id', association.id);
 
-    const u = tenancy?.units;
-    if (u && 'association_id' in u && u.association_id === association.id) {
-      unit = { id: u.id, unit_no: u.unit_no };
-    }
+    units = (tenancies ?? [])
+      .map((t) => t.units as { id: string; unit_no: string } | null)
+      .filter((u): u is { id: string; unit_no: string } => u !== null);
   }
 
-  if (!unit) {
+  if (units.length === 0) {
     return null;
   }
 
-  const { data: latestBill } = await client
+  // Fetch ALL bills for ALL owned units, newest period first.
+  const unitIds = units.map((u) => u.id);
+  const { data: allBills } = await client
     .from('bills')
-    .select('id, bill_no, period, total_amount, paid_amount, status, due_date')
-    .eq('unit_id', unit.id)
-    .order('period', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .select('id, bill_no, period, total_amount, paid_amount, status, due_date, unit_id')
+    .in('unit_id', unitIds)
+    .order('period', { ascending: false });
 
-  return { unit, latestBill };
+  const bills = allBills ?? [];
+  const totalOutstanding = bills.reduce(
+    (sum, b) => sum + Math.max(0, b.total_amount - b.paid_amount),
+    0,
+  );
+  const totalBilled = bills.reduce((sum, b) => sum + b.total_amount, 0);
+
+  // Most recent bill per unit for the per-unit breakdown.
+  const latestBillByUnit = new Map<string, (typeof bills)[number]>();
+  for (const bill of bills) {
+    if (!latestBillByUnit.has(bill.unit_id)) {
+      latestBillByUnit.set(bill.unit_id, bill);
+    }
+  }
+
+  return {
+    units,
+    bills,
+    totalBilled,
+    totalOutstanding,
+    latestBillByUnit,
+  };
 }
 
 export async function AssociationDashboard({
@@ -253,46 +269,70 @@ export async function AssociationDashboard({
       );
     }
 
-    const bill = summary.latestBill;
+    const { units, totalOutstanding, totalBilled, latestBillByUnit } = summary;
+    const unitLabel = units.map((u) => u.unit_no).join(', ');
+    const hasBills = latestBillByUnit.size > 0;
 
     return (
       <div className="flex flex-col gap-4">
         <p className="text-muted-foreground text-sm">
-          Unit {summary.unit.unit_no}
+          {units.length === 1 ? `Unit ${unitLabel}` : `Units: ${unitLabel}`}
         </p>
 
-        {bill ? (
+        {hasBills ? (
           <div className="rounded-2xl bg-gradient-to-br from-[#0C1829] via-[#1A3A58] to-[#0F2440] p-6 text-white">
+            {/* Total outstanding across all units */}
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-[10px] font-bold tracking-wider text-white/45 uppercase">
                   Amount due
                 </div>
                 <div className="text-primary mt-1.5 text-3xl font-black tracking-tight">
-                  {formatINR(bill.total_amount - bill.paid_amount)}
+                  {formatINR(totalOutstanding)}
                 </div>
                 <div className="mt-1 text-xs text-white/50">
-                  Bill {bill.bill_no} &middot; {periodLabel(bill.period)}
+                  {formatINR(totalBilled)} billed across {units.length}{' '}
+                  {units.length === 1 ? 'unit' : 'units'}
                 </div>
               </div>
-
-              <Badge
-                variant="outline"
-                className={billStatusBadgeClassName(displayBillStatus(bill))}
-              >
-                {displayBillStatus(bill)}
-              </Badge>
             </div>
 
-            <div className="mt-4 flex gap-6 border-t border-white/10 pt-4">
-              <div>
-                <div className="text-[9px] font-bold tracking-wider text-white/40 uppercase">
-                  Due date
-                </div>
-                <div className="mt-0.5 text-sm font-semibold">
-                  {formatYmdLong(bill.due_date)}
-                </div>
-              </div>
+            {/* Per-unit breakdown */}
+            <div className="mt-4 flex flex-col gap-2 border-t border-white/10 pt-4">
+              {units.map((unit) => {
+                const bill = latestBillByUnit.get(unit.id);
+                if (!bill) return null;
+                const outstanding = bill.total_amount - bill.paid_amount;
+                const status = displayBillStatus(bill);
+
+                return (
+                  <div
+                    key={unit.id}
+                    className="flex items-center justify-between"
+                  >
+                    <div>
+                      <span className="text-sm font-semibold">
+                        Unit {unit.unit_no}
+                      </span>
+                      <span className="ml-2 text-xs text-white/50">
+                        Bill {bill.bill_no} &middot; {periodLabel(bill.period)}
+                        &middot; Due {formatYmdLong(bill.due_date)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold tabular-nums">
+                        {formatINR(outstanding)}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={billStatusBadgeClassName(status)}
+                      >
+                        {status}
+                      </Badge>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : (
@@ -476,12 +516,12 @@ export async function AssociationDashboard({
                 <Zap />
                 <AlertDescription>
                   MESCOM bill for {periodLabel(overview.period)} hasn&apos;t
-                  been uploaded yet.{' '}
+                  been added yet.{' '}
                   <Link
                     href={`/home/${account}/mescom`}
                     className="font-semibold underline"
                   >
-                    Upload Bill →
+                    Add Bill →
                   </Link>
                 </AlertDescription>
               </Alert>

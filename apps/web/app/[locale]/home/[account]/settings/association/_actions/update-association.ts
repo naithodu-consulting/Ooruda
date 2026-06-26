@@ -100,6 +100,34 @@ export async function updateAssociationAction(
   return { success: true };
 }
 
+export async function updateChargeTypeRateAction(
+  associationId: string,
+  id: string,
+  rate: number | null,
+): Promise<{ success: boolean; error?: string }> {
+  const role = await getAssociationRole(associationId);
+
+  if (role !== 'assoc_admin' && role !== 'billing_operator') {
+    return { success: false, error: 'Not authorized.' };
+  }
+
+  const client = getSupabaseServerClient();
+
+  const { error } = await client
+    .from('charge_types')
+    .update({ rate_or_amount: rate })
+    .eq('id', id)
+    .eq('association_id', associationId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
+
+  return { success: true };
+}
+
 export async function toggleChargeTypeAction(
   associationId: string,
   id: string,

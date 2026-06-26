@@ -24,6 +24,8 @@ import { Input } from '@kit/ui/input';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 
+import { formatPeriod } from '~/lib/format-period';
+
 import { recordMeterReadingsAction } from '../_lib/mescom-actions';
 import { RecordMeterReadingsSchema } from '../_lib/mescom-schema';
 import type { SubMeterRow } from './sub-meters-section';
@@ -60,7 +62,7 @@ export function BillReadingsDialog(props: {
 
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Meter readings · {props.period}</DialogTitle>
+          <DialogTitle>Meter readings · {formatPeriod(props.period)}</DialogTitle>
           <DialogDescription>
             Enter this month&apos;s closing reading for each meter. Consumption
             is calculated automatically and used to split the bill.

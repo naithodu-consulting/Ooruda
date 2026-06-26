@@ -161,7 +161,7 @@ export async function generateBillsAction(
 
   const { data: existingBills } = await client
     .from('bills')
-    .select('unit_id')
+    .select('unit_id, bill_no')
     .eq('association_id', associationId)
     .eq('period', period);
 
@@ -169,7 +169,13 @@ export async function generateBillsAction(
     (existingBills ?? []).map((b) => b.unit_id),
   );
 
-  let seq = (existingBills ?? []).length;
+  // Derive seq from the highest bill number already used for this period
+  // (not the count) so deleted bills don't cause collisions on regeneration.
+  let seq = 0;
+  for (const b of existingBills ?? []) {
+    const match = b.bill_no.match(/-(\d+)$/);
+    if (match) seq = Math.max(seq, parseInt(match[1]!, 10));
+  }
   let created = 0;
   const skipped = unitRows.filter((u) => alreadyBilledUnitIds.has(u.id)).length;
 

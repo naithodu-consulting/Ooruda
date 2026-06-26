@@ -188,6 +188,43 @@ export async function createMescomBillAction(
 }
 
 /**
+ * Delete a MESCOM bill.
+ */
+export async function deleteMescomBillAction(
+  associationId: string,
+  mescomBillId: string,
+): Promise<ActionResult> {
+  const roleError = await requireAssocAdmin(associationId);
+
+  if (roleError) {
+    return { success: false, error: roleError };
+  }
+
+  const client = getSupabaseServerClient();
+
+  const { error } = await client
+    .from('mescom_bills')
+    .delete()
+    .eq('id', mescomBillId)
+    .eq('association_id', associationId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  await logAuditEvent({
+    associationId,
+    action: 'mescom_bill.deleted',
+    entityType: 'mescom_bill',
+    summary: `Deleted MESCOM bill`,
+  });
+
+  revalidatePath(MESCOM_PATH, 'page');
+
+  return { success: true };
+}
+
+/**
  * Record (or update) meter readings for a MESCOM bill. There's no DB
  * constraint enforcing one reading per (sub_meter, bill) pair, so we check
  * for an existing row ourselves and update it instead of inserting a
