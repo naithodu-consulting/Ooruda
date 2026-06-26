@@ -20,7 +20,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@sentry/nextjs": "catalog:"
+    "@sentry/nextjs": "catalog:",
+    "@sentry/node-core": "catalog:"
   },
   "devDependencies": {
     "@kit/monitoring-core": "workspace:*",
