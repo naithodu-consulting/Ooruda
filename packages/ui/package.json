@@ -12,7 +12,7 @@
   },
   "exports": {
     "./accordion": "./src/shadcn/accordion.tsx",
-    "./alert-dialog": "./src/shadcn/alert-dialog.tsx",
+    "./alert-dialog": "./src/makerkit/alert-dialog.tsx",
     "./avatar": "./src/shadcn/avatar.tsx",
     "./button": "./src/shadcn/button.tsx",
     "./calendar": "./src/shadcn/calendar.tsx",
