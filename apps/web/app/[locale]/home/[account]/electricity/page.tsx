@@ -9,7 +9,7 @@ import { formatPeriod } from '~/lib/format-period';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
-import { BillsSection, type MescomBillRow } from './_components/bills-section';
+import { BillsSection, type ElectricityBillRow } from './_components/bills-section';
 import {
   SubMetersSection,
   type SubMeterRow,
@@ -19,7 +19,7 @@ interface Props {
   params: Promise<{ account: string }>;
 }
 
-export const metadata = { title: 'MESCOM & Meters' };
+export const metadata = { title: 'Electricity & Meters' };
 
 export default async function MescomPage({ params }: Props) {
   const { account } = await params;
@@ -78,7 +78,7 @@ export default async function MescomPage({ params }: Props) {
     .eq('association_id', association.id)
     .order('period', { ascending: false });
 
-  const billRows: MescomBillRow[] = bills ?? [];
+  const billRows: ElectricityBillRow[] = bills ?? [];
 
   const { data: readings } = activeSubMeterIds.length
     ? await client

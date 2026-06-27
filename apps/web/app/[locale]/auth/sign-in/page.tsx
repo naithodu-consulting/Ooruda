@@ -11,7 +11,7 @@ export default function SignInPage() {
   return (
     <div className="flex flex-col gap-y-7">
       <div className="flex flex-col gap-y-1.5">
-        <h2 className="text-[15px] font-bold text-white">Login/Register</h2>
+        <h2 className="text-[15px] font-bold text-[#1a1a1a]">Login/Register</h2>
       </div>
 
       <PhoneOtpSignInContainer />

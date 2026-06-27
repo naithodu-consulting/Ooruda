@@ -56,8 +56,8 @@ import { cn } from '@kit/ui/utils';
 import {
   createSubMeterAction,
   setSubMeterActiveAction,
-} from '../_lib/mescom-actions';
-import { CreateSubMeterSchema, SUB_METER_TYPES } from '../_lib/mescom-schema';
+} from '../_lib/electricity-actions';
+import { CreateSubMeterSchema, SUB_METER_TYPES } from '../_lib/electricity-schema';
 
 export interface SubMeterRow {
   id: string;

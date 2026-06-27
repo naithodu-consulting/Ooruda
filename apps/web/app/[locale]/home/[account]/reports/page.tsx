@@ -166,7 +166,7 @@ export default async function ReportsPage({ params }: Props) {
         description={
           billRows.length === 0
             ? 'No bills yet'
-            : `${collectionSummary.length} periods · ${outstandingDues.length} outstanding · ${electricityUsage.length} MESCOM bills`
+            : `${collectionSummary.length} periods · ${outstandingDues.length} outstanding · ${electricityUsage.length} Electricity bills`
         }
       />
 

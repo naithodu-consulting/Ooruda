@@ -44,7 +44,7 @@ const getRoutes = (account: string) => [
       },
       {
         label: 'association.nav.mescom',
-        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/mescom`,
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/electricity`,
         Icon: <Zap className={iconClasses} />,
       },
       {

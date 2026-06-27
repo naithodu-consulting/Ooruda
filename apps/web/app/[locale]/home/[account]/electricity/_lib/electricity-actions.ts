@@ -7,12 +7,12 @@ import { getAssociationRole } from '~/lib/rbac';
 
 import {
   type CreateMescomBillInput,
-  CreateMescomBillSchema,
+  CreateElectricityBillSchema,
   type CreateSubMeterInput,
   CreateSubMeterSchema,
   type RecordMeterReadingsInput,
   RecordMeterReadingsSchema,
-} from './mescom-schema';
+} from './electricity-schema';
 
 type ActionResult = { success: boolean; error?: string };
 
@@ -125,10 +125,10 @@ export async function setSubMeterActiveAction(
 }
 
 /**
- * Upload a MESCOM bill for a billing period. Admin-only — mirrors
+ * Upload a Electricity bill for a billing period. Admin-only — mirrors
  * `admin_insert` on `mescom_bills`.
  */
-export async function createMescomBillAction(
+export async function createElectricityBillAction(
   associationId: string,
   input: CreateMescomBillInput,
 ): Promise<ActionResult> {
@@ -138,7 +138,7 @@ export async function createMescomBillAction(
     return { success: false, error: roleError };
   }
 
-  const parsed = CreateMescomBillSchema.safeParse(input);
+  const parsed = CreateElectricityBillSchema.safeParse(input);
 
   if (!parsed.success) {
     return {
@@ -171,18 +171,18 @@ export async function createMescomBillAction(
     associationId,
     action: 'mescom_bill.created',
     entityType: 'mescom_bill',
-    summary: `Uploaded MESCOM bill for ${parsed.data.period}`,
+    summary: `Uploaded Electricity bill for ${parsed.data.period}`,
   });
 
   return { success: true };
 }
 
 /**
- * Delete a MESCOM bill.
+ * Delete a Electricity bill.
  */
-export async function deleteMescomBillAction(
+export async function deleteElectricityBillAction(
   associationId: string,
-  mescomBillId: string,
+  electricityBillId: string,
 ): Promise<ActionResult> {
   const roleError = await requireAssocAdmin(associationId);
 
@@ -195,7 +195,7 @@ export async function deleteMescomBillAction(
   const { error } = await client
     .from('mescom_bills')
     .delete()
-    .eq('id', mescomBillId)
+    .eq('id', electricityBillId)
     .eq('association_id', associationId);
 
   if (error) {
@@ -206,14 +206,14 @@ export async function deleteMescomBillAction(
     associationId,
     action: 'mescom_bill.deleted',
     entityType: 'mescom_bill',
-    summary: `Deleted MESCOM bill`,
+    summary: `Deleted Electricity bill`,
   });
 
   return { success: true };
 }
 
 /**
- * Record (or update) meter readings for a MESCOM bill. There's no DB
+ * Record (or update) meter readings for a Electricity bill. There's no DB
  * constraint enforcing one reading per (sub_meter, bill) pair, so we check
  * for an existing row ourselves and update it instead of inserting a
  * duplicate.
@@ -242,7 +242,7 @@ export async function recordMeterReadingsAction(
   const { data: bill } = await client
     .from('mescom_bills')
     .select('id, period')
-    .eq('id', parsed.data.mescomBillId)
+    .eq('id', parsed.data.electricityBillId)
     .eq('association_id', associationId)
     .maybeSingle();
 

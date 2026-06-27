@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { Button } from '@kit/ui/button';
 import { PageBody } from '@kit/ui/page';
 
-export default function MescomErrorPage({
+export default function ElectricityErrorPage({
   error,
   reset,
 }: {

@@ -35,10 +35,10 @@ async function requireBillingAccess(
  * overrides). Units that already have a bill for this period are skipped —
  * re-running for the same period only fills in the gaps.
  *
- * Electricity line items are only included if a MESCOM bill exists for the
+ * Electricity line items are only included if a Electricity bill exists for the
  * period; the rate used is the simple invoice ÷ block-units rate (no
  * carry-forward reconciliation yet, same provisional model used on the
- * MESCOM page).
+ * Electricity page).
  */
 export async function generateBillsAction(
   associationId: string,

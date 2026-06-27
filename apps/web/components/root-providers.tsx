@@ -44,9 +44,9 @@ export function RootProviders({
                 <AuthProvider>
                   <ThemeProvider
                     attribute="class"
-                    enableSystem
                     disableTransitionOnChange
                     defaultTheme={theme}
+                    forcedTheme="light"
                     enableColorScheme={false}
                     nonce={nonce}
                   >

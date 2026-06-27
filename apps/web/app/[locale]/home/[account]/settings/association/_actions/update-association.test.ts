@@ -70,7 +70,7 @@ function formDataFrom(fields: Record<string, string>) {
 const validFields = {
   status: 'Active',
   address: '123 MG Road, Mangaluru',
-  brand_colour: '#F59E0B',
+  brand_colour: '#FCD469',
   gstin: VALID_GSTIN,
   gst_enabled: 'on',
   mescom_consumer_no: 'MES-998877',
@@ -146,7 +146,7 @@ describe('updateAssociationAction — happy path', () => {
       expect.objectContaining({
         status: 'Active',
         address: '123 MG Road, Mangaluru',
-        brand_colour: '#F59E0B',
+        brand_colour: '#FCD469',
         gstin: VALID_GSTIN,
         gst_enabled: true,
         mescom_consumer_no: 'MES-998877',

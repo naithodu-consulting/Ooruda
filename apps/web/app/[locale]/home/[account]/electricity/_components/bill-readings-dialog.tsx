@@ -26,15 +26,15 @@ import { Spinner } from '@kit/ui/spinner';
 
 import { formatPeriod } from '~/lib/format-period';
 
-import { recordMeterReadingsAction } from '../_lib/mescom-actions';
-import { RecordMeterReadingsSchema } from '../_lib/mescom-schema';
+import { recordMeterReadingsAction } from '../_lib/electricity-actions';
+import { RecordMeterReadingsSchema } from '../_lib/electricity-schema';
 import type { SubMeterRow } from './sub-meters-section';
 
 const unitsFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
 
 export function BillReadingsDialog(props: {
   associationId: string;
-  mescomBillId: string;
+  electricityBillId: string;
   period: string;
   blockConsumptionUnits: number;
   activeSubMeters: SubMeterRow[];
@@ -78,7 +78,7 @@ export function BillReadingsDialog(props: {
         ) : (
           <ReadingsForm
             associationId={props.associationId}
-            mescomBillId={props.mescomBillId}
+            electricityBillId={props.electricityBillId}
             blockConsumptionUnits={props.blockConsumptionUnits}
             activeSubMeters={props.activeSubMeters}
             existingReadings={props.existingReadings}
@@ -93,7 +93,7 @@ export function BillReadingsDialog(props: {
 
 function ReadingsForm(props: {
   associationId: string;
-  mescomBillId: string;
+  electricityBillId: string;
   blockConsumptionUnits: number;
   activeSubMeters: SubMeterRow[];
   existingReadings: Record<
@@ -109,7 +109,7 @@ function ReadingsForm(props: {
   const form = useForm({
     resolver: zodResolver(RecordMeterReadingsSchema),
     defaultValues: {
-      mescomBillId: props.mescomBillId,
+      electricityBillId: props.electricityBillId,
       readings: props.activeSubMeters.map((meter) => {
         const existing = props.existingReadings[meter.id];
 
@@ -138,7 +138,7 @@ function ReadingsForm(props: {
     return sum + Math.max(0, curr - prev);
   }, 0);
 
-  // Sub-meters can never exceed the main MESCOM block meter. If they do, the
+  // Sub-meters can never exceed the main Electricity block meter. If they do, the
   // readings are wrong and any bill split would overcharge residents.
   const exceedsBlock = totalConsumption > props.blockConsumptionUnits;
   const overageUnits = totalConsumption - props.blockConsumptionUnits;
@@ -310,7 +310,7 @@ function ReadingsForm(props: {
               Sub-meter total exceeds the block consumption by{' '}
               <strong>{unitsFmt.format(overageUnits)} units</strong>. This is
               physically impossible — sub-meters cannot consume more than the
-              main MESCOM meter. Correct the readings before saving.
+              main Electricity meter. Correct the readings before saving.
             </AlertDescription>
           </Alert>
         ) : null}

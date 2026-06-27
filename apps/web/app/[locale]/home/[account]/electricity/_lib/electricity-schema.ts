@@ -16,7 +16,7 @@ export type CreateSubMeterInput = z.input<typeof CreateSubMeterSchema>;
 
 const PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 
-export const CreateMescomBillSchema = z.object({
+export const CreateElectricityBillSchema = z.object({
   period: z
     .string()
     .regex(PERIOD_REGEX, "Use the 'YYYY-MM' format, e.g. 2026-06"),
@@ -29,7 +29,7 @@ export const CreateMescomBillSchema = z.object({
     .int('Consumption units must be a full number'),
 });
 
-export type CreateMescomBillInput = z.input<typeof CreateMescomBillSchema>;
+export type CreateMescomBillInput = z.input<typeof CreateElectricityBillSchema>;
 
 export const MeterReadingEntrySchema = z
   .object({
@@ -43,7 +43,7 @@ export const MeterReadingEntrySchema = z
   });
 
 export const RecordMeterReadingsSchema = z.object({
-  mescomBillId: z.string().uuid(),
+  electricityBillId: z.string().uuid(),
   readings: z.array(MeterReadingEntrySchema).min(1, 'Add at least one reading'),
 });
 

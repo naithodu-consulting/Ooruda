@@ -107,12 +107,12 @@ export function AssociationForm({ association, billingSettings }: Props) {
         </CardContent>
       </Card>
 
-      {/* ── MESCOM ─────────────────────────────────── */}
+      {/* ── Electricity ─────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>MESCOM / Electricity</CardTitle>
+          <CardTitle>Electricity</CardTitle>
           <CardDescription>
-            BESCOM / MESCOM consumer details for electricity billing.
+            Electricity Board consumer details for electricity billing.
           </CardDescription>
         </CardHeader>
 

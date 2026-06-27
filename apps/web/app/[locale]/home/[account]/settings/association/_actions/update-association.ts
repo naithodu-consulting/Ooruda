@@ -16,7 +16,7 @@ const AssociationSchema = z.object({
   brand_colour: z
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/)
-    .default('#F59E0B'),
+    .default('#FCD469'),
   gstin: z
     .string()
     .regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/)
@@ -56,7 +56,7 @@ export async function updateAssociationAction(
   const assocResult = AssociationSchema.safeParse({
     status: formData.get('status'),
     address: formData.get('address') || undefined,
-    brand_colour: formData.get('brand_colour') || '#F59E0B',
+    brand_colour: formData.get('brand_colour') || '#FCD469',
     gstin: formData.get('gstin') || '',
     gst_enabled: formData.get('gst_enabled') === 'on',
     mescom_consumer_no: formData.get('mescom_consumer_no') || undefined,

@@ -34,7 +34,7 @@ const RESEND_COOLDOWN_SECONDS = 30;
 const MAX_VERIFY_ATTEMPTS = 3;
 
 const slotClass =
-  'h-13 w-11 rounded-md border-[#2E3F50] bg-[#1B293A] text-center text-[22px] font-black text-[#F59E0B] focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B] focus:outline-none md:h-14 md:w-12';
+  'h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-[22px] font-black text-[#1a1a1a] focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12';
 
 const EmailSchema = z.object({
   email: z.string().email({ message: 'auth.emailInvalidFormat' }),
@@ -164,10 +164,10 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
     return (
       <div className="flex flex-col gap-y-6">
         <div className="flex flex-col gap-y-1.5">
-          <h2 className="text-[15px] font-bold text-white">
+          <h2 className="text-[15px] font-bold text-[#1a1a1a]">
             <Trans i18nKey="auth.completeProfileHeading" />
           </h2>
-          <p className="text-sm text-[#6B88A4]">
+          <p className="text-sm text-[#6f6a5a]">
             <Trans i18nKey="auth.completeProfileSubheading" />
           </p>
         </div>
@@ -229,7 +229,7 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
   return (
     <Form {...otpForm}>
       <div className="flex w-full flex-col items-center gap-y-6">
-        <p className="text-center text-sm font-medium text-[#6B88A4]">
+        <p className="text-center text-sm font-medium text-[#6f6a5a]">
           <Trans i18nKey="auth.completeProfileOtpSentTo" values={{ email }} />
         </p>
 
@@ -263,7 +263,7 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
                       <InputOTPSlot index={1} className={slotClass} />
                       <InputOTPSlot index={2} className={slotClass} />
                     </InputOTPGroup>
-                    <InputOTPSeparator className="mx-1 font-bold text-[#2E3F50]" />
+                    <InputOTPSeparator className="mx-1 font-bold text-[#cbbd8e]" />
                     <InputOTPGroup className="gap-1.5 md:gap-2">
                       <InputOTPSlot index={3} className={slotClass} />
                       <InputOTPSlot index={4} className={slotClass} />
@@ -278,7 +278,7 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
 
           <Button
             type="submit"
-            className="mt-2 flex h-12 w-full items-center justify-center gap-2 border-0 bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-[13px] font-extrabold text-[#0F172A] shadow-[0_4px_16px_rgba(245,158,11,0.22)] transition-all hover:brightness-[1.03] active:scale-[0.98]"
+            className="mt-2 flex h-12 w-full items-center justify-center gap-2 border-0 !bg-[#1a1a1a] text-[13px] font-extrabold !text-white shadow-none transition-all hover:!bg-black active:scale-[0.98]"
             disabled={pending || tooManyAttempts}
             data-test="complete-profile-verify-button"
           >
@@ -300,7 +300,7 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
               type="button"
               variant="ghost"
               size="sm"
-              className="flex h-9 items-center gap-1.5 text-[#6B88A4] transition-all hover:bg-[#1B293A]/50 hover:text-white"
+              className="flex h-9 items-center gap-1.5 text-[#6f6a5a] transition-all hover:bg-[#FBF7E8] hover:text-[#1a1a1a]"
               onClick={() => {
                 setStep('email');
                 setError(null);
@@ -317,7 +317,7 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
               size="sm"
               disabled={resendSeconds > 0 || pending}
               onClick={handleResend}
-              className="h-9 text-[#6B88A4] transition-all hover:bg-[#1B293A]/50 hover:text-white disabled:text-[#6B88A4]/40 disabled:hover:bg-transparent"
+              className="h-9 text-[#6f6a5a] transition-all hover:bg-[#FBF7E8] hover:text-[#1a1a1a] disabled:text-[#6f6a5a]/40 disabled:hover:bg-transparent"
             >
               {resendSeconds > 0 ? (
                 <Trans

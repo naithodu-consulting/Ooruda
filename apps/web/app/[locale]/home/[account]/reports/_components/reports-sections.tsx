@@ -169,14 +169,14 @@ export function ElectricityUsageCard(props: { rows: ElectricityUsageRow[] }) {
       <CardHeader>
         <CardTitle>Electricity usage</CardTitle>
         <CardDescription>
-          MESCOM invoice amount and block consumption, by period.
+          Electricity invoice amount and block consumption, by period.
         </CardDescription>
       </CardHeader>
 
       <CardContent>
         {props.rows.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            No MESCOM bills uploaded yet.
+            No Electricity bills uploaded yet.
           </p>
         ) : (
           <div className="rounded-xl border">

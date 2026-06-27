@@ -517,10 +517,10 @@ export async function AssociationDashboard({
               <Alert className={alertExtras.info}>
                 <Zap />
                 <AlertDescription>
-                  MESCOM bill for {periodLabel(overview.period)} hasn&apos;t
+                  Electricity bill for {periodLabel(overview.period)} hasn&apos;t
                   been added yet.{' '}
                   <Link
-                    href={`/home/${account}/mescom`}
+                    href={`/home/${account}/electricity`}
                     className="font-semibold underline"
                   >
                     Add Bill →

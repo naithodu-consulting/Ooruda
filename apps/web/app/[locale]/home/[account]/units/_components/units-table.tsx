@@ -138,7 +138,7 @@ export function UnitsTable({
         ))}
       </div>
 
-      <div className="rounded-xl border">
+      <div className="bg-card w-full rounded-xl">
         <Table>
           <TableHeader>
             <TableRow>

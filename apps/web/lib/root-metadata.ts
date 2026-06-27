@@ -24,11 +24,13 @@ export const generateRootMetadata = async (): Promise<Metadata> => {
       siteName: appConfig.name,
       title: appConfig.title,
       description: appConfig.description,
+      images: ['/images/brand/og-image.png'],
     },
     twitter: {
       card: 'summary_large_image',
       title: appConfig.title,
       description: appConfig.description,
+      images: ['/images/brand/og-image.png'],
     },
     icons: {
       icon: '/images/favicon/favicon.ico',

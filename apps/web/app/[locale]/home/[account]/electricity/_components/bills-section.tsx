@@ -68,14 +68,14 @@ import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
 import {
-  createMescomBillAction,
-  deleteMescomBillAction,
-} from '../_lib/mescom-actions';
-import { CreateMescomBillSchema } from '../_lib/mescom-schema';
+  createElectricityBillAction,
+  deleteElectricityBillAction,
+} from '../_lib/electricity-actions';
+import { CreateElectricityBillSchema } from '../_lib/electricity-schema';
 import { BillReadingsDialog } from './bill-readings-dialog';
 import type { SubMeterRow } from './sub-meters-section';
 
-export interface MescomBillRow {
+export interface ElectricityBillRow {
   id: string;
   period: string;
   invoice_amount: number;
@@ -86,7 +86,7 @@ const unitsFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
 
 export function BillsSection(props: {
   associationId: string;
-  bills: MescomBillRow[];
+  bills: ElectricityBillRow[];
   activeSubMeters: SubMeterRow[];
   readingsByBill: Record<
     string,
@@ -100,7 +100,7 @@ export function BillsSection(props: {
     <Card className="border-0 shadow-none">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col space-y-1.5">
-          <CardTitle>MESCOM Bills</CardTitle>
+          <CardTitle>Electricity Bills</CardTitle>
           <CardDescription>
             Upload each month's electricity bill, then split it across meters
             using the readings you record.
@@ -117,7 +117,7 @@ export function BillsSection(props: {
       <CardContent>
         {props.bills.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            No MESCOM bills uploaded yet.
+            No Electricity bills uploaded yet.
           </p>
         ) : (
           <div className="w-full">
@@ -160,7 +160,7 @@ export function BillsSection(props: {
                           <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                             <BillReadingsDialog
                               associationId={props.associationId}
-                              mescomBillId={bill.id}
+                              electricityBillId={bill.id}
                               period={bill.period}
                               blockConsumptionUnits={
                                 bill.block_consumption_units
@@ -174,8 +174,8 @@ export function BillsSection(props: {
                                 {}
                               }
                             />
-                            <DeleteMescomBillButton
-                              mescomBillId={bill.id}
+                            <DeleteElectricityBillButton
+                              electricityBillId={bill.id}
                               period={bill.period}
                               associationId={props.associationId}
                             />
@@ -216,7 +216,7 @@ function AddBillDialog(props: { associationId: string }) {
 
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add a MESCOM bill</DialogTitle>
+          <DialogTitle>Add a Electricity bill</DialogTitle>
           <DialogDescription>
             Enter the amount and total consumption from this month's electricity
             bill.
@@ -255,7 +255,7 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
   const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   const form = useForm({
-    resolver: zodResolver(CreateMescomBillSchema),
+    resolver: zodResolver(CreateElectricityBillSchema),
     defaultValues: {
       period: defaultPeriod,
       invoiceAmount: '',
@@ -265,7 +265,7 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
 
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
-      const result = await createMescomBillAction(props.associationId, values);
+      const result = await createElectricityBillAction(props.associationId, values);
 
       if (!result.success) {
         toast.error(result.error ?? 'Could not add the bill.');
@@ -329,7 +329,7 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
                 <Input type="number" step="1" min="1" {...field} />
               </FormControl>
               <FormDescription>
-                The total units MESCOM billed you for, from the invoice.
+                The total units Electricity billed you for, from the invoice.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -350,8 +350,8 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
   );
 }
 
-function DeleteMescomBillButton(props: {
-  mescomBillId: string;
+function DeleteElectricityBillButton(props: {
+  electricityBillId: string;
   period: string;
   associationId: string;
 }) {
@@ -361,9 +361,9 @@ function DeleteMescomBillButton(props: {
 
   const onDelete = () => {
     startTransition(async () => {
-      const result = await deleteMescomBillAction(
+      const result = await deleteElectricityBillAction(
         props.associationId,
-        props.mescomBillId,
+        props.electricityBillId,
       );
 
       if (!result.success) {
@@ -372,7 +372,7 @@ function DeleteMescomBillButton(props: {
       }
 
       setOpen(false);
-      toast.success(`MESCOM bill for ${props.period} deleted.`);
+      toast.success(`Electricity bill for ${props.period} deleted.`);
       router.refresh();
     });
   };
@@ -396,7 +396,7 @@ function DeleteMescomBillButton(props: {
             Delete {formatPeriod(props.period)} bill?
           </AlertDialogTitle>
           <AlertDialogDescription>
-            This permanently removes the MESCOM bill and all its recorded meter
+            This permanently removes the Electricity bill and all its recorded meter
             readings. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>

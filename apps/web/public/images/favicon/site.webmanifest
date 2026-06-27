@@ -1,8 +1,8 @@
 {
   "name": "Ooruda",
   "short_name": "Ooruda",
-  "theme_color": "#F59E0B",
-  "background_color": "#0F172A",
+  "theme_color": "#FCD469",
+  "background_color": "#FFFDF5",
   "display": "fullscreen",
   "orientation": "portrait",
   "scope": "/",
