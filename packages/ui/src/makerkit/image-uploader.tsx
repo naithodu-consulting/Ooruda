@@ -4,11 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { Image as ImageIcon, Pencil, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-
-import { Button } from '../shadcn/button';
 import { ImageUploadInput } from './image-upload-input';
-import { Trans } from './trans';
-
 export function ImageUploader(
   props: React.PropsWithChildren<{
     value: string | null | undefined;

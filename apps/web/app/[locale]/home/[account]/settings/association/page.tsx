@@ -1,6 +1,5 @@
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
-import featuresFlagConfig from '~/config/feature-flags.config';
 import pathsConfig from '~/config/paths.config';
 import { requireRole } from '~/lib/rbac';
 

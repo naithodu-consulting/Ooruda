@@ -8,8 +8,6 @@ import * as z from 'zod';
 import { TeamAccountWorkspaceContextProvider } from '@kit/team-accounts/components';
 import { Page, PageNavigation } from '@kit/ui/page';
 import { SidebarProvider } from '@kit/ui/sidebar';
-
-import { AppLogo } from '~/components/app-logo';
 import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.config';
 
 // local imports
@@ -95,12 +93,6 @@ function HeaderLayout({
   account: string;
 }>) {
   const data = use(loadTeamWorkspace(account));
-
-  const accounts = data.accounts.map(({ name, slug, picture_url }) => ({
-    label: name,
-    value: slug,
-    image: picture_url,
-  }));
 
   return (
     <TeamAccountWorkspaceContextProvider value={data}>

@@ -3,8 +3,6 @@
 import { usePathname } from 'next/navigation';
 
 import { usePersonalAccountData } from '@kit/accounts/hooks/use-personal-account-data';
-import { Badge } from '@kit/ui/badge';
-import { ProfileAvatar } from '@kit/ui/profile-avatar';
 import { useSidebar } from '@kit/ui/sidebar';
 import { Trans } from '@kit/ui/trans';
 
