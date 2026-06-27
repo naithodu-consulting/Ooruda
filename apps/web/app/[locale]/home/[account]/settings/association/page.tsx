@@ -1,5 +1,4 @@
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { TeamAccountDangerZone } from '@kit/team-accounts/components';
 
 import featuresFlagConfig from '~/config/feature-flags.config';
 import pathsConfig from '~/config/paths.config';
@@ -115,11 +114,6 @@ export default async function AssociationSettingsPage({ params }: Props) {
         associationId={association.id}
       />
 
-      <TeamAccountDangerZone
-        primaryOwnerUserId={accountRow.primary_owner_user_id}
-        account={{ id: accountId, name: accountRow.name }}
-        features={{ enableTeamDeletion: featuresFlagConfig.enableTeamDeletion }}
-      />
     </div>
   );
 }

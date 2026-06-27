@@ -86,53 +86,52 @@ export function ImageUploader(
 
   return (
     <div className={'flex items-center space-x-4'}>
-      <label
-        className={
-          'border-border animate-in fade-in zoom-in-50 group/label relative h-20 w-20 cursor-pointer overflow-hidden rounded-full border'
-        }
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          decoding="async"
+      <div className="relative h-20 w-20 shrink-0">
+        <label
           className={
-            'h-full w-full object-cover transition-all duration-300 group-hover/label:opacity-50'
-          }
-          src={image}
-          alt={''}
-        />
-
-        <div
-          className={
-            'absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover/label:opacity-100'
+            'border-border animate-in fade-in zoom-in-50 group/label relative block h-20 w-20 cursor-pointer overflow-hidden rounded-full border'
           }
         >
-          <Pencil className={'text-foreground h-5 w-5'} />
-        </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            decoding="async"
+            className={
+              'h-full w-full object-cover transition-all duration-300'
+            }
+            src={image}
+            alt={''}
+          />
 
-        <ImageUploadInput
-          {...control}
-          accept={'image/*'}
-          className={'absolute h-full w-full'}
-          visible={false}
-          multiple={false}
-          onValueChange={onValueChange}
-        />
-      </label>
+          <div
+            className={
+              'absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover/label:opacity-100 bg-black/40'
+            }
+          >
+            <Pencil className={'text-white h-6 w-6 drop-shadow-md'} />
+          </div>
+
+          <ImageUploadInput
+            {...control}
+            accept={'image/*'}
+            className={'absolute h-full w-full'}
+            visible={false}
+            multiple={false}
+            onValueChange={onValueChange}
+          />
+        </label>
+
+        <button
+          type="button"
+          onClick={onClear}
+          className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm transition-transform hover:scale-105 z-10"
+          title="Remove image"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
 
       <div className="flex flex-col gap-2">
         {props.children}
-
-        <div>
-          <Button
-            onClick={onClear}
-            size={'sm'}
-            variant={'ghost'}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive -ml-3 h-8"
-          >
-            <X className={'mr-1 h-4 w-4'} />
-            <Trans i18nKey={'common.clear'} />
-          </Button>
-        </div>
       </div>
     </div>
   );

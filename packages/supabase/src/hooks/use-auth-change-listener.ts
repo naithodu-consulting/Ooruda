@@ -24,6 +24,13 @@ const PRIVATE_PATH_PREFIXES = [
  */
 const AUTH_PATHS = ['/auth'];
 
+// Module-level guard: prevents the auth listener from triggering a
+// navigation more than once within REDIRECT_COOLDOWN_MS. This breaks the
+// infinite-reload loop that occurs when Supabase fires repeated SIGNED_OUT
+// events (e.g. due to a race between cookie refresh and client state).
+const REDIRECT_COOLDOWN_MS = 5_000;
+let lastRedirectAt = 0;
+
 /**
  * @name useAuthChangeListener
  * @param privatePathPrefixes - A list of private path prefixes
@@ -59,6 +66,17 @@ export function useAuthChangeListener({
         !user && isPrivateRoute(pathName, privatePathPrefixes);
 
       if (shouldRedirectUser) {
+        const now = Date.now();
+
+        // Guard against rapid repeated redirects (e.g. a refresh-token race
+        // that causes Supabase to fire SIGNED_OUT → SIGNED_IN in quick
+        // succession). If we already redirected recently, skip this one.
+        if (now - lastRedirectAt < REDIRECT_COOLDOWN_MS) {
+          return;
+        }
+
+        lastRedirectAt = now;
+
         // send user away when signed out
         window.location.assign('/');
 

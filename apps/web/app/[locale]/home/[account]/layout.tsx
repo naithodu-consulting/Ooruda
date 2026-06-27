@@ -6,14 +6,13 @@ import { redirect } from 'next/navigation';
 import * as z from 'zod';
 
 import { TeamAccountWorkspaceContextProvider } from '@kit/team-accounts/components';
-import { Page, PageMobileNavigation, PageNavigation } from '@kit/ui/page';
+import { Page, PageNavigation } from '@kit/ui/page';
 import { SidebarProvider } from '@kit/ui/sidebar';
 
 import { AppLogo } from '~/components/app-logo';
 import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.config';
 
 // local imports
-import { TeamAccountLayoutMobileNavigation } from './_components/team-account-layout-mobile-navigation';
 import { TeamAccountLayoutSidebar } from './_components/team-account-layout-sidebar';
 import { TeamAccountNavigationMenu } from './_components/team-account-navigation-menu';
 import { TeamAccountTopbar } from './_components/team-account-topbar';
@@ -69,28 +68,17 @@ async function SidebarLayout({
             />
           </PageNavigation>
 
-          <PageMobileNavigation>
-            <AppLogo />
-
-            <div className={'flex'}>
-              <TeamAccountLayoutMobileNavigation
-                userId={data.user.id}
-                accounts={accounts}
+          <div className="dark:bg-background flex min-w-0 flex-1 flex-col bg-[#F0F4F8]">
+            <div className="sticky top-0 z-50">
+              <TeamAccountTopbar
                 account={account}
+                accountId={data.account.id}
+                userId={data.user.id}
                 role={data.account.role}
+                accounts={accounts}
+                user={data.user}
               />
             </div>
-          </PageMobileNavigation>
-
-          <div className="dark:bg-background flex min-w-0 flex-1 flex-col bg-[#F0F4F8]">
-            <TeamAccountTopbar
-              account={account}
-              accountId={data.account.id}
-              userId={data.user.id}
-              role={data.account.role}
-              accounts={accounts}
-              user={data.user}
-            />
 
             {children}
           </div>
@@ -120,21 +108,6 @@ function HeaderLayout({
         <PageNavigation>
           <TeamAccountNavigationMenu workspace={data} />
         </PageNavigation>
-
-        <PageMobileNavigation className={'flex items-center justify-between'}>
-          <div>
-            <AppLogo />
-          </div>
-
-          <div>
-            <TeamAccountLayoutMobileNavigation
-              userId={data.user.id}
-              accounts={accounts}
-              account={account}
-              role={data.account.role}
-            />
-          </div>
-        </PageMobileNavigation>
 
         {children}
       </Page>

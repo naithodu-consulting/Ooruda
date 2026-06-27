@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { usePersonalAccountData } from '@kit/accounts/hooks/use-personal-account-data';
 import { Badge } from '@kit/ui/badge';
 import { ProfileAvatar } from '@kit/ui/profile-avatar';
+import { useSidebar } from '@kit/ui/sidebar';
 import { Trans } from '@kit/ui/trans';
 
 import featureFlagsConfig from '~/config/feature-flags.config';
@@ -13,7 +14,7 @@ import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.co
 import { TeamAccountNotifications } from './team-account-notifications';
 
 import { useRouter } from 'next/navigation';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Menu } from 'lucide-react';
 import { Button } from '@kit/ui/button';
 import {
   DropdownMenu,
@@ -66,10 +67,21 @@ export function TeamAccountTopbar(props: {
         .toUpperCase()
     : '?';
 
+  const { toggleSidebar } = useSidebar();
+
   return (
-    <div className="bg-background hidden h-14 flex-shrink-0 items-center justify-between border-b px-4 lg:flex">
-      <div className="flex items-center gap-4">
-        <span className="text-sm font-bold tracking-tight">
+    <div className="bg-background sticky top-0 z-40 flex h-14 flex-shrink-0 items-center justify-between border-b px-4">
+      <div className="flex items-center gap-4 min-w-0">
+        <Button 
+          variant="ghost" 
+          size="icon-sm" 
+          className="lg:hidden shrink-0" 
+          onClick={toggleSidebar}
+        >
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">Toggle Sidebar</span>
+        </Button>
+        <span className="text-sm font-bold tracking-tight truncate">
           <Trans i18nKey={labelKey} />
         </span>
       </div>

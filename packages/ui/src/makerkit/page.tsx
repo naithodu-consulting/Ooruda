@@ -32,7 +32,7 @@ function PageWithSidebar(props: PageProps) {
 
   return (
     <div
-      className={cn('flex min-w-0 flex-1 overflow-x-hidden', props.className)}
+      className={cn('flex min-w-0 flex-1', props.className)}
     >
       {Navigation}
 
@@ -182,7 +182,7 @@ export function PageHeader({
       <div className={'flex min-w-0 flex-col gap-y-2'}>
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
           <If condition={displaySidebarTrigger}>
-            <SidebarTrigger className="text-muted-foreground hover:text-secondary-foreground h-4.5 w-4.5 cursor-pointer" />
+            <SidebarTrigger className="text-muted-foreground hover:text-secondary-foreground h-4.5 w-4.5 cursor-pointer hidden lg:flex" />
           </If>
 
           <If condition={description}>

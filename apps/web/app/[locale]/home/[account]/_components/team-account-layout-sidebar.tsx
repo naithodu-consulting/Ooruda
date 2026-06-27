@@ -30,7 +30,7 @@ export function TeamAccountLayoutSidebar(props: {
   role: string | null;
 }) {
   const { account, user, role } = props;
-  const { open: isSidebarOpen } = useSidebar();
+  const { open: isSidebarOpen, isMobile } = useSidebar();
   const signOutMutation = useSignOut();
   const { data: personalAccountData } = usePersonalAccountData(user.id);
 
@@ -39,7 +39,7 @@ export function TeamAccountLayoutSidebar(props: {
     role,
   );
   const collapsible = config.sidebarCollapsedStyle;
-  const collapsed = !isSidebarOpen;
+  const collapsed = !isSidebarOpen && !isMobile;
 
   const displayName = personalAccountData?.name ?? user.email ?? '';
   const initials = displayName

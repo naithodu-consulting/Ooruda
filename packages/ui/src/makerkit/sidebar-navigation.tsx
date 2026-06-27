@@ -275,8 +275,8 @@ function SidebarNavigationRouteChildItem({
           isActive={isActive}
           tooltip={tooltip}
           className={cn(
-            // Prototype active treatment: amber left accent bar + amber icon
-            'data-active:border-l-primary data-active:[&>svg]:text-primary data-active:rounded-l-sm data-active:border-l-2 data-active:font-semibold',
+            // Prototype active treatment: amber left accent bar
+            'data-active:border-l-primary data-active:rounded-l-sm data-active:border-l-2 data-active:font-semibold',
           )}
           render={
             <Link
@@ -388,17 +388,19 @@ export function SidebarNavigation({
 }>) {
   const currentLocale = useLocale();
   const currentPath = usePathname() ?? '';
-  const { open } = useSidebar();
+  const { open, isMobile } = useSidebar();
   const t = useTranslations();
 
+  const isNavigationExpanded = isMobile || open;
+
   return (
-    <div className={cn('flex flex-col', { 'gap-y-0': open, 'gap-y-1': !open })}>
+    <div className={cn('flex flex-col', { 'gap-y-0': isNavigationExpanded, 'gap-y-1': !isNavigationExpanded })}>
       {config.routes.map((item, index) => (
         <SidebarNavigationRouteItem
           key={'divider' in item ? `divider-${index}` : `collapsible-${index}`}
           item={item}
           index={index}
-          open={open}
+          open={isNavigationExpanded}
           currentLocale={currentLocale}
           currentPath={currentPath}
           t={t}
