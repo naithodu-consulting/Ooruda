@@ -88,6 +88,8 @@ async function SidebarLayout({
               accountId={data.account.id}
               userId={data.user.id}
               role={data.account.role}
+              accounts={accounts}
+              user={data.user}
             />
 
             {children}

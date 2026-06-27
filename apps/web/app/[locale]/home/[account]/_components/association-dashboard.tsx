@@ -166,18 +166,42 @@ async function loadAssociationOverview(accountId: string) {
   };
 }
 
+interface BillWithLineItems {
+  id: string;
+  bill_no: string;
+  period: string;
+  total_amount: number;
+  paid_amount: number;
+  status: string;
+  due_date: string;
+  unit_id: string;
+  bill_line_items: { amount: number; description: string }[];
+}
+
+interface PaymentWithBillAndReceipt {
+  id: string;
+  amount: number;
+  mode: string;
+  paid_at: string;
+  bill_id: string;
+  bills: { period: string; bill_no: string } | null;
+  receipts: { receipt_no: string }[] | null;
+}
+
 async function loadMyBillSummary(accountId: string, userId: string) {
   const client = getSupabaseServerClient();
 
   const { data: association } = await client
     .from('associations')
-    .select('id')
+    .select('id, accounts(name)')
     .eq('account_id', accountId)
-    .maybeSingle();
+    .single();
 
   if (!association) {
     return null;
   }
+
+  const assocName = (association.accounts as any)?.name ?? 'Association';
 
   // Fetch ALL units owned by this user in this association.
   const { data: ownedUnits } = await client
@@ -207,37 +231,69 @@ async function loadMyBillSummary(accountId: string, userId: string) {
     return null;
   }
 
-  // Fetch ALL bills for ALL owned units, newest period first.
+  // Fetch ALL bills for ALL owned units, newest period first, with line items
   const unitIds = units.map((u) => u.id);
   const { data: allBills } = await client
     .from('bills')
-    .select(
-      'id, bill_no, period, total_amount, paid_amount, status, due_date, unit_id',
-    )
+    .select(`
+      id,
+      bill_no,
+      period,
+      total_amount,
+      paid_amount,
+      status,
+      due_date,
+      unit_id,
+      bill_line_items (
+        amount,
+        description
+      )
+    `)
     .in('unit_id', unitIds)
     .order('period', { ascending: false });
 
-  const bills = allBills ?? [];
-  const totalOutstanding = bills.reduce(
-    (sum, b) => sum + Math.max(0, b.total_amount - b.paid_amount),
-    0,
-  );
-  const totalBilled = bills.reduce((sum, b) => sum + b.total_amount, 0);
+  const bills = (allBills as unknown as BillWithLineItems[]) ?? [];
 
   // Most recent bill per unit for the per-unit breakdown.
-  const latestBillByUnit = new Map<string, (typeof bills)[number]>();
+  const latestBillByUnit = new Map<string, BillWithLineItems>();
   for (const bill of bills) {
     if (!latestBillByUnit.has(bill.unit_id)) {
       latestBillByUnit.set(bill.unit_id, bill);
     }
   }
 
+  // Fetch payments for these bills
+  const billIds = bills.map((b) => b.id);
+  let payments: PaymentWithBillAndReceipt[] = [];
+  if (billIds.length > 0) {
+    const { data: paymentsData } = await client
+      .from('payments')
+      .select(`
+        id,
+        amount,
+        mode,
+        paid_at,
+        bill_id,
+        bills (
+          period,
+          bill_no
+        ),
+        receipts (
+          receipt_no
+        )
+      `)
+      .in('bill_id', billIds)
+      .order('paid_at', { ascending: false })
+      .limit(10);
+    payments = (paymentsData as unknown as PaymentWithBillAndReceipt[]) ?? [];
+  }
+
   return {
     units,
     bills,
-    totalBilled,
-    totalOutstanding,
     latestBillByUnit,
+    payments,
+    assocName,
   };
 }
 
@@ -271,81 +327,238 @@ export async function AssociationDashboard({
       );
     }
 
-    const { units, totalOutstanding, totalBilled, latestBillByUnit } = summary;
-    const unitLabel = units.map((u) => u.unit_no).join(', ');
-    const hasBills = latestBillByUnit.size > 0;
+    const { units, bills, latestBillByUnit, payments, assocName } = summary;
 
     return (
-      <div className="flex flex-col gap-4">
-        <p className="text-muted-foreground text-sm">
-          {units.length === 1 ? `Unit ${unitLabel}` : `Units: ${unitLabel}`}
-        </p>
+      <div className="flex flex-col gap-8">
+        {/* Page Header (Rendered once at the top) */}
+        <div className="flex flex-col">
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+            {role === 'prop_owner' ? 'Owner Dashboard' : 'Tenant Dashboard'}
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            {assocName}
+          </p>
+        </div>
 
-        {hasBills ? (
-          <div className="rounded-2xl bg-gradient-to-br from-[#0C1829] via-[#1A3A58] to-[#0F2440] p-4 text-white sm:p-6">
-            {/* Total outstanding across all units */}
-            <div className="flex min-w-0 items-start justify-between">
-              <div className="min-w-0">
-                <div className="text-[10px] font-bold tracking-wider text-white/45 uppercase">
-                  Amount due
-                </div>
-                <div className="text-primary mt-1.5 text-2xl font-black tracking-tight break-words sm:text-3xl">
-                  {formatINR(totalOutstanding)}
-                </div>
-                <div className="mt-1 text-xs text-white/50">
-                  {formatINR(totalBilled)} billed across {units.length}{' '}
-                  {units.length === 1 ? 'unit' : 'units'}
-                </div>
+        {units.map((unit, index) => {
+          const unitBills = bills.filter((b) => b.unit_id === unit.id);
+          const latestBill = latestBillByUnit.get(unit.id);
+          const unitPayments = payments.filter((p) => p.bill_id === latestBill?.id || unitBills.some((b: any) => b.id === p.bill_id));
+
+          const outstanding = latestBill ? Math.max(0, latestBill.total_amount - latestBill.paid_amount) : 0;
+          const status = latestBill ? displayBillStatus(latestBill) : 'Paid';
+
+          // Extract Maintenance and Electricity breakdown
+          let maintenanceAmount = 0;
+          let electricityAmount = 0;
+
+          if (latestBill && latestBill.bill_line_items) {
+            const items = latestBill.bill_line_items as any[];
+            const maint = items.find((i) =>
+              i.description.toLowerCase().includes('maintenance'),
+            );
+            const elec = items.find((i) =>
+              i.description.toLowerCase().includes('electricity'),
+            );
+            if (maint) maintenanceAmount = maint.amount;
+            if (elec) electricityAmount = elec.amount;
+          }
+
+          return (
+            <div
+              key={unit.id}
+              className={`flex flex-col gap-6 ${
+                index > 0
+                  ? 'border-t border-slate-100 dark:border-slate-900 pt-8'
+                  : ''
+              }`}
+            >
+              {/* Unit Header */}
+              <div className="flex flex-col">
+                <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+                  Unit {unit.unit_no}
+                </h2>
               </div>
-            </div>
 
-            {/* Per-unit breakdown */}
-            <div className="mt-4 flex flex-col gap-2 border-t border-white/10 pt-4">
-              {units.map((unit) => {
-                const bill = latestBillByUnit.get(unit.id);
-                if (!bill) return null;
-                const outstanding = bill.total_amount - bill.paid_amount;
-                const status = displayBillStatus(bill);
+              {/* Amount Due Card - Premium Prototype Style */}
+              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#11314f] via-[#0a1f33] to-[#05101a] p-6 text-white shadow-xl">
+                {/* Shiny Decorative Circle / Glow */}
+                <div className="absolute right-[-8%] top-[-15%] h-56 w-56 rounded-full bg-gradient-to-br from-[#1b4b76] to-transparent opacity-40 blur-xl pointer-events-none" />
+                <div className="absolute right-[-4%] top-[-8%] h-40 w-40 rounded-full bg-gradient-to-br from-[#246197] to-transparent opacity-30 blur-lg pointer-events-none" />
 
-                return (
-                  <div
-                    key={unit.id}
-                    className="flex min-w-0 flex-col gap-2 rounded-lg border border-white/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:border-0 sm:p-0"
-                  >
-                    <div className="min-w-0">
-                      <span className="block text-sm font-semibold sm:inline">
-                        Unit {unit.unit_no}
-                      </span>
-                      <span className="mt-1 block text-xs break-words text-white/50 sm:mt-0 sm:ml-2 sm:inline">
-                        Bill {bill.bill_no} &middot; {periodLabel(bill.period)}
-                        &middot; Due {formatYmdLong(bill.due_date)}
-                      </span>
+                <div className="relative z-10 flex items-start justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold tracking-wider text-white/40 uppercase">
+                      Amount Due
+                    </span>
+                    <div className="mt-1 text-5xl font-black text-[#F59E0B] tracking-tight">
+                      {formatINR(outstanding)}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                      <span className="text-sm font-semibold tabular-nums">
-                        {formatINR(outstanding)}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className={billStatusBadgeClassName(status)}
+                    {latestBill && (
+                      <div className="mt-2 text-xs text-white/50">
+                        Bill {latestBill.bill_no} &middot; {periodLabel(latestBill.period)}
+                      </div>
+                    )}
+                  </div>
+
+                  {latestBill && (
+                    <div className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold shadow-sm">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          status === 'Paid'
+                            ? 'bg-green-600'
+                            : status === 'Partial'
+                              ? 'bg-amber-500'
+                              : 'bg-red-600'
+                        }`}
+                      />
+                      <span
+                        className={
+                          status === 'Paid'
+                            ? 'text-green-700'
+                            : status === 'Partial'
+                              ? 'text-amber-700'
+                              : 'text-red-700'
+                        }
                       >
                         {status}
-                      </Badge>
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {latestBill && (
+                  <div className="relative z-10 mt-6 grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
+                    <div>
+                      <span className="block text-[10px] font-bold tracking-wider text-white/40 uppercase">
+                        Due Date
+                      </span>
+                      <span className="mt-1 block text-sm font-semibold text-white">
+                        {formatYmdLong(latestBill.due_date)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-bold tracking-wider text-white/40 uppercase">
+                        Maintenance
+                      </span>
+                      <span className="mt-1 block text-sm font-semibold text-white">
+                        {formatINR(maintenanceAmount)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-bold tracking-wider text-white/40 uppercase">
+                        Electricity
+                      </span>
+                      <span className="mt-1 block text-sm font-semibold text-white">
+                        {formatINR(electricityAmount)}
+                      </span>
                     </div>
                   </div>
-                );
-              })}
+                )}
+              </div>
+
+              {/* Quick Actions */}
+              {latestBill && outstanding > 0 && (
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href={`/home/${account}/payments?billId=${latestBill.id}`}
+                    className="inline-flex items-center justify-center rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-orange-700 active:bg-orange-800 shadow-sm"
+                  >
+                    Pay now
+                  </Link>
+                  <Link
+                    href={`/home/${account}/billing/receipts/${latestBill.id}`}
+                    className="inline-flex items-center justify-center rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 active:bg-slate-100"
+                  >
+                    Download bill
+                  </Link>
+                </div>
+              )}
+
+              {/* Grid for History & Payments */}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {/* Bill History */}
+                <Card className="border-slate-100 dark:border-slate-800 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-bold">Bill history</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    {unitBills.length === 0 ? (
+                      <p className="text-muted-foreground py-4 text-center text-xs">
+                        No bill history yet.
+                      </p>
+                    ) : (
+                      unitBills.slice(0, 3).map((b) => {
+                        const billStatus = displayBillStatus(b);
+                        return (
+                          <div
+                            key={b.id}
+                            className="flex items-center justify-between border-b border-slate-50 dark:border-slate-900 pb-3 last:border-0 last:pb-0"
+                          >
+                            <div>
+                              <span className="block text-sm font-semibold text-slate-800 dark:text-slate-200">
+                                {periodLabel(b.period)}
+                              </span>
+                              <span className="block text-xs text-slate-400">
+                                {b.bill_no}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Badge className={billStatusBadgeClassName(billStatus)}>
+                                {billStatus} &middot; {formatINR(b.total_amount)}
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* My Payments */}
+                <Card className="border-slate-100 dark:border-slate-800 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-bold">My payments</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    {unitPayments.length === 0 ? (
+                      <p className="text-muted-foreground py-4 text-center text-xs">
+                        No payments recorded yet.
+                      </p>
+                    ) : (
+                      unitPayments.slice(0, 3).map((p) => {
+                        const receiptNo = p.receipts?.[0]?.receipt_no || `RCP-${p.id.slice(0, 4).toUpperCase()}`;
+                        return (
+                          <div
+                            key={p.id}
+                            className="flex items-center justify-between border-b border-slate-50 dark:border-slate-900 pb-3 last:border-0 last:pb-0"
+                          >
+                            <div>
+                              <span className="block text-sm font-semibold text-slate-800 dark:text-slate-200">
+                                {receiptNo} &middot; {periodLabel(p.bills?.period || '')}
+                              </span>
+                              <span className="block text-xs text-slate-400">
+                                {p.mode} &middot; {new Date(p.paid_at).toLocaleDateString('en-IN', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
+                              </span>
+                            </div>
+                            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                              {formatINR(p.amount)}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
-          </div>
-        ) : (
-          <Card>
-            <CardContent className="py-10 text-center">
-              <p className="text-muted-foreground text-sm">
-                You don&apos;t have any bills yet.
-              </p>
-            </CardContent>
-          </Card>
-        )}
+          );
+        })}
       </div>
     );
   }
