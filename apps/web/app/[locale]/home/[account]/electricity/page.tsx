@@ -9,7 +9,10 @@ import { formatPeriod } from '~/lib/format-period';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
-import { BillsSection, type ElectricityBillRow } from './_components/bills-section';
+import {
+  BillsSection,
+  type ElectricityBillRow,
+} from './_components/bills-section';
 import {
   SubMetersSection,
   type SubMeterRow,

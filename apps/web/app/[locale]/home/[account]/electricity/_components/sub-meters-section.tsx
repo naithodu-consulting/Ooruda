@@ -57,7 +57,10 @@ import {
   createSubMeterAction,
   setSubMeterActiveAction,
 } from '../_lib/electricity-actions';
-import { CreateSubMeterSchema, SUB_METER_TYPES } from '../_lib/electricity-schema';
+import {
+  CreateSubMeterSchema,
+  SUB_METER_TYPES,
+} from '../_lib/electricity-schema';
 
 export interface SubMeterRow {
   id: string;

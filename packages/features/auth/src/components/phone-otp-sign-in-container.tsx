@@ -72,6 +72,7 @@ export function PhoneOtpSignInContainer() {
   const [step, setStep] = useState<Step>('identifier');
   // The identifier the OTP was sent to: an E.164 phone ('+91…') or an email.
   const [sentTo, setSentTo] = useState('');
+  const [emailValue, setEmailValue] = useState('');
   const [resendSeconds, setResendSeconds] = useState(0);
   const [verifyAttempts, setVerifyAttempts] = useState(0);
   const [localError, setLocalError] = useState<string | Error | null>(null);
@@ -231,6 +232,7 @@ export function PhoneOtpSignInContainer() {
     verifyMutation.reset();
     phoneForm.reset();
     emailForm.reset();
+    setEmailValue('');
     otpForm.reset();
   };
 
@@ -296,24 +298,46 @@ export function PhoneOtpSignInContainer() {
       <Form {...emailForm}>
         <form
           className="flex flex-col gap-y-4"
-          onSubmit={emailForm.handleSubmit(handleSendEmail)}
+          onSubmit={(event) => {
+            event.preventDefault();
+
+            const parsed = EmailSchema.safeParse({ email: emailValue });
+
+            if (!parsed.success) {
+              emailForm.setError('email', {
+                message: 'auth.emailInvalidFormat',
+              });
+
+              return;
+            }
+
+            emailForm.clearErrors('email');
+            void handleSendEmail(parsed.data);
+          }}
         >
           <AuthErrorAlert error={localError || signInMutation.error} />
 
           <FormField
             name="email"
             control={emailForm.control}
-            render={({ field }) => (
+            render={() => (
               <FormItem>
                 <FormLabel>
                   <Trans i18nKey="auth.emailInputLabel" />
                 </FormLabel>
                 <FormControl>
                   <Input
-                    {...field}
-                    type="email"
+                    name="email"
+                    value={emailValue}
+                    onChange={(event) => {
+                      setEmailValue(event.currentTarget.value);
+                      emailForm.clearErrors('email');
+                    }}
+                    type="text"
                     inputMode="email"
                     autoComplete="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     placeholder={t('emailInputPlaceholder')}
                     autoFocus
                     data-test="email-input"
@@ -479,7 +503,10 @@ export function PhoneOtpSignInContainer() {
                 setLocalError(null);
                 signInMutation.reset();
                 if (channel === 'phone') phoneForm.reset();
-                else emailForm.reset();
+                else {
+                  emailForm.reset();
+                  setEmailValue('');
+                }
               }}
             >
               <ArrowLeft className="h-[14px] w-[14px]" strokeWidth={2.5} />

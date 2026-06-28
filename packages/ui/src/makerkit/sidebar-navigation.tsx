@@ -394,7 +394,12 @@ export function SidebarNavigation({
   const isNavigationExpanded = isMobile || open;
 
   return (
-    <div className={cn('flex flex-col', { 'gap-y-0': isNavigationExpanded, 'gap-y-1': !isNavigationExpanded })}>
+    <div
+      className={cn('flex flex-col', {
+        'gap-y-0': isNavigationExpanded,
+        'gap-y-1': !isNavigationExpanded,
+      })}
+    >
       {config.routes.map((item, index) => (
         <SidebarNavigationRouteItem
           key={'divider' in item ? `divider-${index}` : `collapsible-${index}`}

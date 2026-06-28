@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { Image as ImageIcon, Pencil, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+
 import { ImageUploadInput } from './image-upload-input';
 export function ImageUploader(
   props: React.PropsWithChildren<{
@@ -91,19 +92,17 @@ export function ImageUploader(
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             decoding="async"
-            className={
-              'h-full w-full object-cover transition-all duration-300'
-            }
+            className={'h-full w-full object-cover transition-all duration-300'}
             src={image}
             alt={''}
           />
 
           <div
             className={
-              'absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover/label:opacity-100 bg-black/40'
+              'absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-300 group-hover/label:opacity-100'
             }
           >
-            <Pencil className={'text-white h-6 w-6 drop-shadow-md'} />
+            <Pencil className={'h-6 w-6 text-white drop-shadow-md'} />
           </div>
 
           <ImageUploadInput
@@ -119,16 +118,14 @@ export function ImageUploader(
         <button
           type="button"
           onClick={onClear}
-          className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm transition-transform hover:scale-105 z-10"
+          className="bg-destructive text-destructive-foreground absolute -top-1 -right-1 z-10 flex h-6 w-6 items-center justify-center rounded-full shadow-sm transition-transform hover:scale-105"
           title="Remove image"
         >
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      <div className="flex flex-col gap-2">
-        {props.children}
-      </div>
+      <div className="flex flex-col gap-2">{props.children}</div>
     </div>
   );
 }

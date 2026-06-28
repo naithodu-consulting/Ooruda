@@ -1,18 +1,11 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+
+import { ChevronDown, Menu } from 'lucide-react';
 
 import { usePersonalAccountData } from '@kit/accounts/hooks/use-personal-account-data';
-import { useSidebar } from '@kit/ui/sidebar';
-import { Trans } from '@kit/ui/trans';
-
-import featureFlagsConfig from '~/config/feature-flags.config';
-import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.config';
-
-import { TeamAccountNotifications } from './team-account-notifications';
-
-import { useRouter } from 'next/navigation';
-import { ChevronDown, Menu } from 'lucide-react';
 import { Button } from '@kit/ui/button';
 import {
   DropdownMenu,
@@ -20,8 +13,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@kit/ui/dropdown-menu';
-import pathsConfig from '~/config/paths.config';
+import { useSidebar } from '@kit/ui/sidebar';
+import { Trans } from '@kit/ui/trans';
+
 import type { AccountModel } from '~/components/workspace-dropdown';
+import featureFlagsConfig from '~/config/feature-flags.config';
+import pathsConfig from '~/config/paths.config';
+import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.config';
+
+import { TeamAccountNotifications } from './team-account-notifications';
 
 function useCurrentNavLabel(account: string): string {
   const pathname = usePathname();
@@ -69,17 +69,17 @@ export function TeamAccountTopbar(props: {
 
   return (
     <div className="bg-background sticky top-0 z-40 flex h-14 flex-shrink-0 items-center justify-between border-b px-4">
-      <div className="flex items-center gap-4 min-w-0">
-        <Button 
-          variant="ghost" 
-          size="icon-sm" 
-          className="lg:hidden shrink-0" 
+      <div className="flex min-w-0 items-center gap-4">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0 lg:hidden"
           onClick={toggleSidebar}
         >
           <Menu className="h-5 w-5" />
           <span className="sr-only">Toggle Sidebar</span>
         </Button>
-        <span className="text-sm font-bold tracking-tight truncate">
+        <span className="truncate text-sm font-bold tracking-tight">
           <Trans i18nKey={labelKey} />
         </span>
       </div>
@@ -110,7 +110,9 @@ function AssociationSwitcher(props: {
   selectedAccount: string;
 }) {
   const router = useRouter();
-  const currentTeam = props.accounts.find((a) => a.value === props.selectedAccount);
+  const currentTeam = props.accounts.find(
+    (a) => a.value === props.selectedAccount,
+  );
   const currentLabel = currentTeam?.label ?? props.selectedAccount;
   const initials = currentLabel
     ? currentLabel
@@ -132,7 +134,7 @@ function AssociationSwitcher(props: {
           <Button
             variant="outline"
             size="sm"
-            className="flex h-9 items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-bold text-slate-800 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+            className="flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             <div className="flex h-5 w-5 items-center justify-center rounded bg-[#f59e0b] text-[9px] font-black text-slate-950">
               {initials}
@@ -157,9 +159,9 @@ function AssociationSwitcher(props: {
             <DropdownMenuItem
               key={acc.value}
               onClick={() => acc.value && switchToTeam(acc.value)}
-              className={`flex items-center gap-2 cursor-pointer text-xs ${
+              className={`flex cursor-pointer items-center gap-2 text-xs ${
                 acc.value === props.selectedAccount
-                  ? 'bg-slate-100 dark:bg-slate-800 font-bold'
+                  ? 'bg-slate-100 font-bold dark:bg-slate-800'
                   : ''
               }`}
             >

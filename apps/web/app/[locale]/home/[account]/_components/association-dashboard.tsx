@@ -336,17 +336,21 @@ export async function AssociationDashboard({
           <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
             {role === 'prop_owner' ? 'Owner Dashboard' : 'Tenant Dashboard'}
           </h1>
-          <p className="text-muted-foreground text-sm">
-            {assocName}
-          </p>
+          <p className="text-muted-foreground text-sm">{assocName}</p>
         </div>
 
         {units.map((unit, index) => {
           const unitBills = bills.filter((b) => b.unit_id === unit.id);
           const latestBill = latestBillByUnit.get(unit.id);
-          const unitPayments = payments.filter((p) => p.bill_id === latestBill?.id || unitBills.some((b: any) => b.id === p.bill_id));
+          const unitPayments = payments.filter(
+            (p) =>
+              p.bill_id === latestBill?.id ||
+              unitBills.some((b: any) => b.id === p.bill_id),
+          );
 
-          const outstanding = latestBill ? Math.max(0, latestBill.total_amount - latestBill.paid_amount) : 0;
+          const outstanding = latestBill
+            ? Math.max(0, latestBill.total_amount - latestBill.paid_amount)
+            : 0;
           const status = latestBill ? displayBillStatus(latestBill) : 'Paid';
 
           // Extract Maintenance and Electricity breakdown
@@ -370,7 +374,7 @@ export async function AssociationDashboard({
               key={unit.id}
               className={`flex flex-col gap-6 ${
                 index > 0
-                  ? 'border-t border-slate-100 dark:border-slate-900 pt-8'
+                  ? 'border-t border-slate-100 pt-8 dark:border-slate-900'
                   : ''
               }`}
             >
@@ -384,20 +388,21 @@ export async function AssociationDashboard({
               {/* Amount Due Card - Premium Prototype Style */}
               <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#11314f] via-[#0a1f33] to-[#05101a] p-6 text-white shadow-xl">
                 {/* Shiny Decorative Circle / Glow */}
-                <div className="absolute right-[-8%] top-[-15%] h-56 w-56 rounded-full bg-gradient-to-br from-[#1b4b76] to-transparent opacity-40 blur-xl pointer-events-none" />
-                <div className="absolute right-[-4%] top-[-8%] h-40 w-40 rounded-full bg-gradient-to-br from-[#246197] to-transparent opacity-30 blur-lg pointer-events-none" />
+                <div className="pointer-events-none absolute top-[-15%] right-[-8%] h-56 w-56 rounded-full bg-gradient-to-br from-[#1b4b76] to-transparent opacity-40 blur-xl" />
+                <div className="pointer-events-none absolute top-[-8%] right-[-4%] h-40 w-40 rounded-full bg-gradient-to-br from-[#246197] to-transparent opacity-30 blur-lg" />
 
                 <div className="relative z-10 flex items-start justify-between">
                   <div>
                     <span className="text-[10px] font-bold tracking-wider text-white/40 uppercase">
                       Amount Due
                     </span>
-                    <div className="mt-1 text-5xl font-black text-[#F59E0B] tracking-tight">
+                    <div className="mt-1 text-5xl font-black tracking-tight text-[#F59E0B]">
                       {formatINR(outstanding)}
                     </div>
                     {latestBill && (
                       <div className="mt-2 text-xs text-white/50">
-                        Bill {latestBill.bill_no} &middot; {periodLabel(latestBill.period)}
+                        Bill {latestBill.bill_no} &middot;{' '}
+                        {periodLabel(latestBill.period)}
                       </div>
                     )}
                   </div>
@@ -463,13 +468,13 @@ export async function AssociationDashboard({
                 <div className="flex flex-wrap gap-3">
                   <Link
                     href={`/home/${account}/payments?billId=${latestBill.id}`}
-                    className="inline-flex items-center justify-center rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-orange-700 active:bg-orange-800 shadow-sm"
+                    className="inline-flex items-center justify-center rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-orange-700 active:bg-orange-800"
                   >
                     Pay now
                   </Link>
                   <Link
                     href={`/home/${account}/billing/receipts/${latestBill.id}`}
-                    className="inline-flex items-center justify-center rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 active:bg-slate-100"
+                    className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
                     Download bill
                   </Link>
@@ -479,9 +484,11 @@ export async function AssociationDashboard({
               {/* Grid for History & Payments */}
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 {/* Bill History */}
-                <Card className="border-slate-100 dark:border-slate-800 shadow-sm">
+                <Card className="border-slate-100 shadow-sm dark:border-slate-800">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-bold">Bill history</CardTitle>
+                    <CardTitle className="text-sm font-bold">
+                      Bill history
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
                     {unitBills.length === 0 ? (
@@ -494,7 +501,7 @@ export async function AssociationDashboard({
                         return (
                           <div
                             key={b.id}
-                            className="flex items-center justify-between border-b border-slate-50 dark:border-slate-900 pb-3 last:border-0 last:pb-0"
+                            className="flex items-center justify-between border-b border-slate-50 pb-3 last:border-0 last:pb-0 dark:border-slate-900"
                           >
                             <div>
                               <span className="block text-sm font-semibold text-slate-800 dark:text-slate-200">
@@ -505,8 +512,11 @@ export async function AssociationDashboard({
                               </span>
                             </div>
                             <div className="flex items-center gap-3">
-                              <Badge className={billStatusBadgeClassName(billStatus)}>
-                                {billStatus} &middot; {formatINR(b.total_amount)}
+                              <Badge
+                                className={billStatusBadgeClassName(billStatus)}
+                              >
+                                {billStatus} &middot;{' '}
+                                {formatINR(b.total_amount)}
                               </Badge>
                             </div>
                           </div>
@@ -517,9 +527,11 @@ export async function AssociationDashboard({
                 </Card>
 
                 {/* My Payments */}
-                <Card className="border-slate-100 dark:border-slate-800 shadow-sm">
+                <Card className="border-slate-100 shadow-sm dark:border-slate-800">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-bold">My payments</CardTitle>
+                    <CardTitle className="text-sm font-bold">
+                      My payments
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
                     {unitPayments.length === 0 ? (
@@ -528,22 +540,29 @@ export async function AssociationDashboard({
                       </p>
                     ) : (
                       unitPayments.slice(0, 3).map((p) => {
-                        const receiptNo = p.receipts?.[0]?.receipt_no || `RCP-${p.id.slice(0, 4).toUpperCase()}`;
+                        const receiptNo =
+                          p.receipts?.[0]?.receipt_no ||
+                          `RCP-${p.id.slice(0, 4).toUpperCase()}`;
                         return (
                           <div
                             key={p.id}
-                            className="flex items-center justify-between border-b border-slate-50 dark:border-slate-900 pb-3 last:border-0 last:pb-0"
+                            className="flex items-center justify-between border-b border-slate-50 pb-3 last:border-0 last:pb-0 dark:border-slate-900"
                           >
                             <div>
                               <span className="block text-sm font-semibold text-slate-800 dark:text-slate-200">
-                                {receiptNo} &middot; {periodLabel(p.bills?.period || '')}
+                                {receiptNo} &middot;{' '}
+                                {periodLabel(p.bills?.period || '')}
                               </span>
                               <span className="block text-xs text-slate-400">
-                                {p.mode} &middot; {new Date(p.paid_at).toLocaleDateString('en-IN', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric',
-                                })}
+                                {p.mode} &middot;{' '}
+                                {new Date(p.paid_at).toLocaleDateString(
+                                  'en-IN',
+                                  {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                  },
+                                )}
                               </span>
                             </div>
                             <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
@@ -730,8 +749,8 @@ export async function AssociationDashboard({
               <Alert className={alertExtras.info}>
                 <Zap />
                 <AlertDescription>
-                  Electricity bill for {periodLabel(overview.period)} hasn&apos;t
-                  been added yet.{' '}
+                  Electricity bill for {periodLabel(overview.period)}{' '}
+                  hasn&apos;t been added yet.{' '}
                   <Link
                     href={`/home/${account}/electricity`}
                     className="font-semibold underline"

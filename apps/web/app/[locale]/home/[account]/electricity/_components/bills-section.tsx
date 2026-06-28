@@ -265,7 +265,10 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
 
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
-      const result = await createElectricityBillAction(props.associationId, values);
+      const result = await createElectricityBillAction(
+        props.associationId,
+        values,
+      );
 
       if (!result.success) {
         toast.error(result.error ?? 'Could not add the bill.');
@@ -396,8 +399,8 @@ function DeleteElectricityBillButton(props: {
             Delete {formatPeriod(props.period)} bill?
           </AlertDialogTitle>
           <AlertDialogDescription>
-            This permanently removes the Electricity bill and all its recorded meter
-            readings. This action cannot be undone.
+            This permanently removes the Electricity bill and all its recorded
+            meter readings. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
 

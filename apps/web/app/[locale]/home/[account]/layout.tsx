@@ -8,6 +8,7 @@ import * as z from 'zod';
 import { TeamAccountWorkspaceContextProvider } from '@kit/team-accounts/components';
 import { Page, PageNavigation } from '@kit/ui/page';
 import { SidebarProvider } from '@kit/ui/sidebar';
+
 import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.config';
 
 // local imports

@@ -112,7 +112,6 @@ export default async function AssociationSettingsPage({ params }: Props) {
         chargeTypes={chargeTypes ?? []}
         associationId={association.id}
       />
-
     </div>
   );
 }
