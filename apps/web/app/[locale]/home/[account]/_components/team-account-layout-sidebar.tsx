@@ -66,11 +66,11 @@ export function TeamAccountLayoutSidebar(props: {
         <TeamAccountSidebarBrand />
       </SidebarHeader>
 
-      <SidebarContent className="h-[calc(100%-160px)] overflow-y-auto">
+      <SidebarContent className="no-scrollbar">
         <TeamAccountLayoutSidebarNavigation config={config} />
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-[#1F2D3D] bg-[#050B14] p-3">
+      <SidebarFooter className="border-t border-[#1F2D3D] bg-[#050B14] px-3 py-3">
         {collapsed ? (
           <div className="flex items-center justify-center">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f59e0b] text-sm font-black text-slate-950">

@@ -68,3 +68,7 @@ After implementation, always run:
 2. `pnpm lint:fix`
 3. `pnpm format:fix`
 4. Run /reviewer skill
+
+## Git Workflow Constraints
+
+- **CRITICAL RULE:** Never perform any Git commands (such as `git add`, `git commit`, `git checkout`, `git merge`, or `git push/pull`) without obtaining the user's explicit permission first. Always ask the user first and wait for approval.

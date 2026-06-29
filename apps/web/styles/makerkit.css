@@ -58,6 +58,19 @@
 }
 
 /*
+ * Hide scrollbar utility used by SidebarContent.
+ * Tailwind v4 doesn't ship no-scrollbar by default. Defined as a @utility so
+ * it participates in the utility layer and isn't overridden by other rules.
+ */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/*
  * Sidebar active vs hover distinction.
  * Upstream shadcn uses --sidebar-accent for BOTH hover and the active item, so
  * with a single gold token they look identical. We keep --sidebar-accent as a
