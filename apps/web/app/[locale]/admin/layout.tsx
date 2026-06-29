@@ -2,11 +2,12 @@ import { use } from 'react';
 
 import { cookies } from 'next/headers';
 
-import { Page, PageMobileNavigation, PageNavigation } from '@kit/ui/page';
+import { Page, PageNavigation } from '@kit/ui/page';
 import { SidebarProvider } from '@kit/ui/sidebar';
 
 import { AdminSidebar } from '~/admin/_components/admin-sidebar';
 import { AdminMobileNavigation } from '~/admin/_components/mobile-navigation';
+import { AppLogo } from '~/components/app-logo';
 
 export const metadata = {
   title: `Super Admin`,
@@ -24,11 +25,16 @@ export default function AdminLayout(props: React.PropsWithChildren) {
           <AdminSidebar />
         </PageNavigation>
 
-        <PageMobileNavigation>
-          <AdminMobileNavigation />
-        </PageMobileNavigation>
+        {/* Children slot: mobile topbar + page content */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Mobile-only topbar — hidden on lg+ where the sidebar is visible */}
+          <div className="flex items-center justify-between border-b px-4 py-2 lg:hidden">
+            <AppLogo href="/admin" />
+            <AdminMobileNavigation />
+          </div>
 
-        {props.children}
+          {props.children}
+        </div>
       </Page>
     </SidebarProvider>
   );

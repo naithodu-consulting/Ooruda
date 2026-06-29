@@ -1,29 +1,43 @@
-import Link from 'next/link';
+'use client';
 
 import { Menu } from 'lucide-react';
 
+import { useSignOut } from '@kit/supabase/hooks/use-sign-out';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@kit/ui/dropdown-menu';
 
+import {
+  MobileNavDropdownLink,
+  MobileNavSignOutItem,
+} from '~/components/mobile-navigation-shared';
+
 export function AdminMobileNavigation() {
+  const signOut = useSignOut();
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger>
-        <Menu className={'h-8 w-8'} />
+        <Menu className={'h-9'} />
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent>
-        <DropdownMenuItem>
-          <Link href={'/admin'}>Home</Link>
-        </DropdownMenuItem>
+      <DropdownMenuContent className={'w-screen rounded-none'}>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Super Admin</DropdownMenuLabel>
 
-        <DropdownMenuItem>
-          <Link href={'/admin/accounts'}>Accounts</Link>
-        </DropdownMenuItem>
+          <MobileNavDropdownLink path={'/admin'} label={'Dashboard'} />
+
+          <MobileNavDropdownLink path={'/admin/accounts'} label={'Accounts'} />
+        </DropdownMenuGroup>
+
+        <DropdownMenuSeparator />
+
+        <MobileNavSignOutItem onSignOut={() => signOut.mutateAsync()} />
       </DropdownMenuContent>
     </DropdownMenu>
   );

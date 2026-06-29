@@ -1,11 +1,7 @@
 'use client';
 
-import { LogOut } from 'lucide-react';
-
 import { usePersonalAccountData } from '@kit/accounts/hooks/use-personal-account-data';
-import { useSignOut } from '@kit/supabase/hooks/use-sign-out';
 import { JWTUserData } from '@kit/supabase/types';
-import { Button } from '@kit/ui/button';
 import {
   Sidebar,
   SidebarContent,
@@ -32,7 +28,6 @@ export function TeamAccountLayoutSidebar(props: {
 }) {
   const { account, user, role } = props;
   const { open: isSidebarOpen, isMobile } = useSidebar();
-  const signOutMutation = useSignOut();
   const { data: personalAccountData } = usePersonalAccountData(user.id);
 
   const config = filterSidebarConfigByRole(
@@ -75,24 +70,18 @@ export function TeamAccountLayoutSidebar(props: {
         <TeamAccountLayoutSidebarNavigation config={config} />
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-[#1F2D3D] bg-[#050B14] p-4">
+      <SidebarFooter className="border-t border-[#1F2D3D] bg-[#050B14] p-3">
         {collapsed ? (
           <div className="flex items-center justify-center">
-            <Button
-              variant="ghost"
-              className="animate-in fade-in zoom-in-95 flex h-9 w-9 items-center justify-center rounded-full bg-[#f59e0b] p-0 text-sm font-black text-slate-950 duration-200"
-              disabled={signOutMutation.isPending}
-              onClick={() => signOutMutation.mutate()}
-              title={`Sign Out (${displayName})`}
-            >
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f59e0b] text-sm font-black text-slate-950">
               {initials}
-            </Button>
+            </div>
           </div>
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-2 flex items-center justify-between gap-3 duration-200">
             <div className="flex min-w-0 items-center gap-3">
               {/* Initials Circle */}
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f59e0b] text-sm font-black text-slate-950">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f59e0b] text-sm font-black text-slate-950">
                 {initials}
               </div>
               {/* User Info */}
@@ -105,17 +94,6 @@ export function TeamAccountLayoutSidebar(props: {
                 </span>
               </div>
             </div>
-            {/* Sign Out Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 rounded-lg text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
-              disabled={signOutMutation.isPending}
-              onClick={() => signOutMutation.mutate()}
-              title="Sign Out"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
           </div>
         )}
       </SidebarFooter>

@@ -1,16 +1,17 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
-import { ChevronDown, Menu } from 'lucide-react';
+import { ChevronDown, LogOut, Menu } from 'lucide-react';
 
 import { usePersonalAccountData } from '@kit/accounts/hooks/use-personal-account-data';
+import { useSignOut } from '@kit/supabase/hooks/use-sign-out';
 import { Button } from '@kit/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@kit/ui/dropdown-menu';
 import { useSidebar } from '@kit/ui/sidebar';
@@ -54,6 +55,7 @@ export function TeamAccountTopbar(props: {
 }) {
   const labelKey = useCurrentNavLabel(props.account);
   const { data: personalAccount } = usePersonalAccountData(props.userId);
+  const signOutMutation = useSignOut();
 
   const displayName = personalAccount?.name ?? '';
   const initials = displayName
@@ -64,7 +66,6 @@ export function TeamAccountTopbar(props: {
         .slice(0, 2)
         .toUpperCase()
     : '?';
-
   const { toggleSidebar } = useSidebar();
 
   return (
@@ -97,9 +98,38 @@ export function TeamAccountTopbar(props: {
           />
         ) : null}
 
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f59e0b] text-xs font-black text-slate-950">
-          {initials}
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <button
+                type="button"
+                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-[#f59e0b] text-xs font-black text-slate-950 transition-transform hover:scale-105 focus:ring-2 focus:ring-[#f59e0b]/50 focus:outline-none"
+                title={`Account options (${displayName})`}
+              >
+                {initials}
+              </button>
+            }
+          />
+          <DropdownMenuContent align="end" className="w-56">
+            <div className="flex flex-col px-2 py-1.5 text-left">
+              <span className="text-foreground truncate text-sm leading-none font-semibold">
+                {displayName}
+              </span>
+              <span className="text-muted-foreground mt-1 truncate text-xs leading-none">
+                {props.user?.email}
+              </span>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:bg-destructive/10 focus:text-destructive flex cursor-pointer items-center gap-2 text-xs"
+              disabled={signOutMutation.isPending}
+              onClick={() => signOutMutation.mutate()}
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Sign Out</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
