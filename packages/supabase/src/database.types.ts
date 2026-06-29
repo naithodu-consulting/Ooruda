@@ -407,21 +407,18 @@ export type Database = {
           association_id: string
           due_day_of_month: number
           id: string
-          minimum_electricity_charge: number
           reminder_schedule_json: Json
         }
         Insert: {
           association_id: string
           due_day_of_month?: number
           id?: string
-          minimum_electricity_charge?: number
           reminder_schedule_json?: Json
         }
         Update: {
           association_id?: string
           due_day_of_month?: number
           id?: string
-          minimum_electricity_charge?: number
           reminder_schedule_json?: Json
         }
         Relationships: [
@@ -747,6 +744,7 @@ export type Database = {
           current_reading: number
           id: string
           mescom_bill_id: string
+          minimum_charge: number
           period: string
           previous_reading: number
           sub_meter_id: string
@@ -757,6 +755,7 @@ export type Database = {
           current_reading: number
           id?: string
           mescom_bill_id: string
+          minimum_charge?: number
           period: string
           previous_reading: number
           sub_meter_id: string
@@ -767,6 +766,7 @@ export type Database = {
           current_reading?: number
           id?: string
           mescom_bill_id?: string
+          minimum_charge?: number
           period?: string
           previous_reading?: number
           sub_meter_id?: string
@@ -1138,6 +1138,54 @@ export type Database = {
             columns: ["bill_id"]
             isOneToOne: false
             referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pending_other_charges: {
+        Row: {
+          amount: number
+          association_id: string
+          created_at: string
+          id: string
+          label: string
+          period: string
+          split_mode: string | null
+          unit_id: string | null
+        }
+        Insert: {
+          amount: number
+          association_id: string
+          created_at?: string
+          id?: string
+          label: string
+          period: string
+          split_mode?: string | null
+          unit_id?: string | null
+        }
+        Update: {
+          amount?: number
+          association_id?: string
+          created_at?: string
+          id?: string
+          label?: string
+          period?: string
+          split_mode?: string | null
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_other_charges_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_other_charges_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
         ]
@@ -1603,6 +1651,7 @@ export type Database = {
           id: number
           invite_token: string
           invited_by: string
+          invitee_name: string | null
           phone: string | null
           role: string
           updated_at: string
@@ -1714,17 +1763,27 @@ export type Database = {
         }
         Returns: boolean
       }
-      invite_to_association_by_phone: {
-        Args: {
-          account_slug: string
-          invited_by: string
-          p_phone: string
-          p_role: string
-          p_name?: string
-          p_email?: string
-        }
-        Returns: string
-      }
+      invite_to_association_by_phone:
+        | {
+            Args: {
+              account_slug: string
+              invited_by: string
+              p_phone: string
+              p_role: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              account_slug: string
+              invited_by: string
+              p_email?: string
+              p_name?: string
+              p_phone: string
+              p_role: string
+            }
+            Returns: string
+          }
       is_aal2: { Args: never; Returns: boolean }
       is_account_owner: { Args: { account_id: string }; Returns: boolean }
       is_account_team_member: {
@@ -1981,6 +2040,101 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      iceberg_namespaces: {
+        Row: {
+          bucket_name: string
+          catalog_id: string
+          created_at: string
+          id: string
+          metadata: Json
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          bucket_name: string
+          catalog_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          bucket_name?: string
+          catalog_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iceberg_namespaces_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "buckets_analytics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      iceberg_tables: {
+        Row: {
+          bucket_name: string
+          catalog_id: string
+          created_at: string
+          id: string
+          location: string
+          name: string
+          namespace_id: string
+          remote_table_id: string | null
+          shard_id: string | null
+          shard_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          bucket_name: string
+          catalog_id: string
+          created_at?: string
+          id?: string
+          location: string
+          name: string
+          namespace_id: string
+          remote_table_id?: string | null
+          shard_id?: string | null
+          shard_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bucket_name?: string
+          catalog_id?: string
+          created_at?: string
+          id?: string
+          location?: string
+          name?: string
+          namespace_id?: string
+          remote_table_id?: string | null
+          shard_id?: string | null
+          shard_key?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iceberg_tables_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "buckets_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "iceberg_tables_namespace_id_fkey"
+            columns: ["namespace_id"]
+            isOneToOne: false
+            referencedRelation: "iceberg_namespaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       migrations: {
         Row: {
@@ -2495,3 +2649,4 @@ export const Constants = {
     },
   },
 } as const
+

@@ -64,7 +64,7 @@ export default async function AssociationSettingsPage({ params }: Props) {
 
   const { data: billingSettings } = await client
     .from('billing_settings')
-    .select('due_day_of_month, minimum_electricity_charge')
+    .select('due_day_of_month')
     .eq('association_id', association.id)
     .single();
 

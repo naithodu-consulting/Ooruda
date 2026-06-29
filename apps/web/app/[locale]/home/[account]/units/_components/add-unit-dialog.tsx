@@ -170,12 +170,12 @@ export function AddUnitDialog({ associationId }: { associationId: string }) {
               />
             </div>
 
-            <DialogFooter>
+            <div className="flex justify-end pt-2">
               <Button type="submit" disabled={isPending}>
                 {isPending && <Spinner className="mr-2 h-4 w-4" />}
                 Add Unit
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </Form>
       </DialogContent>

@@ -37,6 +37,36 @@ export default async function BillingPage({ params }: Props) {
     throw new Error('Unable to load the association for this account.');
   }
 
+  const { data: units } = await client
+    .from('units')
+    .select('id, unit_no')
+    .eq('association_id', association.id)
+    .order('unit_no');
+
+  const unitRows = (units ?? []) as { id: string; unit_no: string }[];
+  const unitNoById = new Map(unitRows.map((u) => [u.id, u.unit_no]));
+
+  // Generate period options: current month + 6 previous months (YYYY-MM)
+  const periodOptions: string[] = [];
+  const now = new Date();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    periodOptions.push(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+    );
+  }
+
+  const { data: pendingChargesRaw } = await client
+    .from('pending_other_charges')
+    .select('id, unit_id, period, label, amount, split_mode')
+    .eq('association_id', association.id)
+    .order('created_at', { ascending: false });
+
+  const pendingCharges = (pendingChargesRaw ?? []).map((pc) => ({
+    ...pc,
+    unit_no: pc.unit_id ? (unitNoById.get(pc.unit_id) ?? null) : null,
+  }));
+
   const { data: bills } = await client
     .from('bills')
     .select(
@@ -123,6 +153,9 @@ export default async function BillingPage({ params }: Props) {
           bills={billRows}
           canManage={canManage}
           canDelete={canDelete}
+          units={unitRows}
+          pendingCharges={pendingCharges}
+          periodOptions={periodOptions}
         />
       </div>
     </PageBody>

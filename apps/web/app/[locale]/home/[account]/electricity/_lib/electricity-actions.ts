@@ -212,6 +212,203 @@ export async function deleteElectricityBillAction(
   return { success: true };
 }
 
+export type MeterReadingImportRow = {
+  unit_no: string;
+  sub_meter_no: string;
+  current_reading: number;
+  period: string; // YYYY-MM, validated client-side
+};
+
+export type MeterReadingImportSkipped = {
+  row: number;
+  sub_meter_no: string;
+  reason: string;
+};
+
+export type MeterReadingImportResult = {
+  success: boolean;
+  imported: number;
+  skipped: MeterReadingImportSkipped[];
+  error?: string;
+};
+
+/**
+ * Bulk-import meter readings from CSV. Each row is matched to a sub_meter by
+ * (unit_no + meter_label). For CommonArea meters the unit_no column is ignored
+ * and the match falls back to meter_label only. The mescom_bill for the row's
+ * period must already exist; rows that don't match a bill or a sub_meter are
+ * collected in `skipped`.
+ */
+export async function bulkImportMeterReadingsAction(
+  associationId: string,
+  rows: MeterReadingImportRow[],
+): Promise<MeterReadingImportResult> {
+  const roleError = await requireAssocAdmin(associationId);
+
+  if (roleError) {
+    return { success: false, imported: 0, skipped: [], error: roleError };
+  }
+
+  const client = getSupabaseServerClient();
+
+  // Fetch all units for this association (for unit_no → id lookup)
+  const { data: units } = await client
+    .from('units')
+    .select('id, unit_no')
+    .eq('association_id', associationId);
+
+  const unitByNo = new Map<string, string>(
+    (units ?? []).map((u) => [u.unit_no.toLowerCase(), u.id]),
+  );
+
+  // Fetch all active sub_meters linked to these units
+  const unitIds = (units ?? []).map((u) => u.id);
+
+  const { data: subMeters } = unitIds.length
+    ? await client
+        .from('sub_meters')
+        .select('id, meter_label, meter_type, unit_id')
+        .in('unit_id', unitIds)
+        .eq('is_active', true)
+    : { data: [] };
+
+  const smList = subMeters ?? [];
+
+  // Fetch all bills for this association (period → bill lookup)
+  const { data: bills } = await client
+    .from('mescom_bills')
+    .select('id, period')
+    .eq('association_id', associationId);
+
+  const billByPeriod = new Map<string, string>(
+    (bills ?? []).map((b) => [b.period, b.id]),
+  );
+
+  // Fetch last known reading per sub_meter (to carry forward as previous)
+  const smIds = smList.map((s) => s.id);
+  const { data: lastReadings } = smIds.length
+    ? await client
+        .from('meter_readings')
+        .select('sub_meter_id, period, current_reading')
+        .in('sub_meter_id', smIds)
+        .order('period', { ascending: false })
+    : { data: [] };
+
+  // For each sub_meter, group readings by sub_meter_id, sorted desc — first entry is the latest
+  const lastReadingBySm = new Map<string, { period: string; current_reading: number }[]>();
+  for (const r of lastReadings ?? []) {
+    if (!lastReadingBySm.has(r.sub_meter_id)) {
+      lastReadingBySm.set(r.sub_meter_id, []);
+    }
+    lastReadingBySm.get(r.sub_meter_id)!.push({ period: r.period, current_reading: r.current_reading });
+  }
+
+  const skipped: MeterReadingImportSkipped[] = [];
+
+  // Resolve valid rows first, then upsert in one batch call.
+  type UpsertRow = {
+    sub_meter_id: string;
+    mescom_bill_id: string;
+    period: string;
+    previous_reading: number;
+    current_reading: number;
+  };
+  const toUpsert: UpsertRow[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    const rowNum = i + 1;
+
+    // Resolve bill
+    const billId = billByPeriod.get(row.period);
+    if (!billId) {
+      skipped.push({
+        row: rowNum,
+        sub_meter_no: row.sub_meter_no,
+        reason: `No bill found for period ${row.period}. Add the bill first.`,
+      });
+      continue;
+    }
+
+    // Resolve sub_meter
+    const labelLower = row.sub_meter_no.toLowerCase();
+    let subMeter = smList.find(
+      (s) =>
+        s.meter_label.toLowerCase() === labelLower &&
+        s.unit_id === unitByNo.get(row.unit_no.toLowerCase()),
+    );
+
+    // Fallback: CommonArea meters — match by label only
+    if (!subMeter) {
+      const candidates = smList.filter(
+        (s) =>
+          s.meter_label.toLowerCase() === labelLower &&
+          s.meter_type === 'CommonArea',
+      );
+      if (candidates.length === 1) {
+        subMeter = candidates[0];
+      } else if (candidates.length > 1) {
+        skipped.push({
+          row: rowNum,
+          sub_meter_no: row.sub_meter_no,
+          reason: `Multiple common-area meters with label "${row.sub_meter_no}" found. Specify unit_no to disambiguate.`,
+        });
+        continue;
+      }
+    }
+
+    if (!subMeter) {
+      skipped.push({
+        row: rowNum,
+        sub_meter_no: row.sub_meter_no,
+        reason: `Sub-meter "${row.sub_meter_no}" not found or not active for unit "${row.unit_no}".`,
+      });
+      continue;
+    }
+
+    // Determine previous reading: latest current_reading strictly before this period
+    const prevReadings = (lastReadingBySm.get(subMeter.id) ?? []).filter(
+      (r) => r.period < row.period,
+    );
+    const previousReading = prevReadings.length > 0 ? prevReadings[0]!.current_reading : 0;
+
+    toUpsert.push({
+      sub_meter_id: subMeter.id,
+      mescom_bill_id: billId,
+      period: row.period,
+      previous_reading: previousReading,
+      current_reading: row.current_reading,
+    });
+  }
+
+  let imported = 0;
+
+  if (toUpsert.length > 0) {
+    const { error } = await client
+      .from('meter_readings')
+      .upsert(toUpsert, { onConflict: 'mescom_bill_id,sub_meter_id' });
+
+    if (error) {
+      return { success: false, error: error.message, imported: 0, skipped };
+    }
+
+    imported = toUpsert.length;
+  }
+
+  if (imported > 0) {
+    const periods = [...new Set(rows.map((r) => r.period))].join(', ');
+    await logAuditEvent({
+      associationId,
+      action: 'meter_readings.bulk_imported',
+      entityType: 'mescom_bill',
+      entityId: associationId,
+      summary: `Bulk imported ${imported} meter reading(s) via CSV for ${periods}`,
+    });
+  }
+
+  return { success: true, imported, skipped };
+}
+
 /**
  * Record (or update) meter readings for a Electricity bill. There's no DB
  * constraint enforcing one reading per (sub_meter, bill) pair, so we check
@@ -268,6 +465,7 @@ export async function recordMeterReadingsAction(
         .update({
           previous_reading: reading.previousReading,
           current_reading: reading.currentReading,
+          minimum_charge: reading.minimumCharge,
         })
         .eq('id', existingId);
 
@@ -281,6 +479,7 @@ export async function recordMeterReadingsAction(
         period: bill.period,
         previous_reading: reading.previousReading,
         current_reading: reading.currentReading,
+        minimum_charge: reading.minimumCharge,
       });
 
       if (error) {

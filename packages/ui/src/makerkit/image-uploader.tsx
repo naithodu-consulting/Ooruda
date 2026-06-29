@@ -118,7 +118,7 @@ export function ImageUploader(
         <button
           type="button"
           onClick={onClear}
-          className="bg-destructive text-destructive-foreground absolute -top-1 -right-1 z-10 flex h-6 w-6 items-center justify-center rounded-full shadow-sm transition-transform hover:scale-105"
+          className="absolute right-0 top-0 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-background text-muted-foreground shadow-sm ring-1 ring-border transition-all hover:scale-105 hover:bg-destructive hover:text-destructive-foreground hover:ring-destructive"
           title="Remove image"
         >
           <X className="h-3.5 w-3.5" />

@@ -76,7 +76,7 @@ export async function generateBillsAction(
   const { data: chargeTypes } = await client
     .from('charge_types')
     .select(
-      'id, name, calc_method, rate_or_amount, default_payer, gst_applicable',
+      'id, key, name, calc_method, rate_or_amount, default_payer, gst_applicable',
     )
     .eq('association_id', associationId)
     .eq('is_active', true);
@@ -102,14 +102,32 @@ export async function generateBillsAction(
 
   const { data: billingSettings } = await client
     .from('billing_settings')
-    .select('due_day_of_month, minimum_electricity_charge')
+    .select('due_day_of_month')
     .eq('association_id', associationId)
     .single();
 
   const dueDayOfMonth = billingSettings?.due_day_of_month ?? 10;
-  const minimumElectricityCharge =
-    billingSettings?.minimum_electricity_charge ?? 0;
   const dueDate = `${period}-${String(dueDayOfMonth).padStart(2, '0')}`;
+
+  // Fetch the other_charges charge type (may be inactive, so look beyond activeChargeTypes).
+  const otherChargesCT = activeChargeTypes.find(
+    (c) => c.key === 'other_charges',
+  ) ?? (await client
+    .from('charge_types')
+    .select('id, key, name, default_payer, gst_applicable')
+    .eq('association_id', associationId)
+    .eq('key', 'other_charges')
+    .maybeSingle()
+    .then(({ data }) => data));
+
+  // Load all pending other charges for this period.
+  const { data: pendingCharges } = await client
+    .from('pending_other_charges')
+    .select('id, unit_id, label, amount, split_mode')
+    .eq('association_id', associationId)
+    .eq('period', period);
+
+  const pendingRows = pendingCharges ?? [];
 
   const hasElectricityChargeType = activeChargeTypes.some(
     (c) => c.calc_method === 'electricity',
@@ -210,7 +228,7 @@ export async function generateBillsAction(
         }
 
         const consumed = consumedByUnit[unit.id] ?? 0;
-        amount = Math.max(consumed * blockRate, minimumElectricityCharge);
+        amount = consumed * blockRate;
       } else {
         const rate =
           override?.rate_or_amount_override ?? chargeType.rate_or_amount;
@@ -230,6 +248,32 @@ export async function generateBillsAction(
         gst_applicable: chargeType.gst_applicable,
         amount: roundToTwoDecimals(amount),
       });
+    }
+
+    // Append staged other charges for this unit.
+    if (otherChargesCT) {
+      for (const pc of pendingRows) {
+        if (pc.unit_id !== null && pc.unit_id !== unit.id) continue;
+
+        let pcAmount: number;
+        if (pc.unit_id === null) {
+          // Bulk charge: split_mode determines per-unit amount
+          pcAmount =
+            pc.split_mode === 'per_sqft'
+              ? roundToTwoDecimals(pc.amount * unit.area_sqft)
+              : roundToTwoDecimals(pc.amount);
+        } else {
+          pcAmount = roundToTwoDecimals(pc.amount);
+        }
+
+        lineItems.push({
+          charge_type_id: otherChargesCT.id,
+          description: pc.label,
+          payer: otherChargesCT.default_payer ?? 'Owner',
+          gst_applicable: otherChargesCT.gst_applicable ?? false,
+          amount: pcAmount,
+        });
+      }
     }
 
     if (lineItems.length === 0) {
@@ -320,5 +364,111 @@ export async function deleteBillAction(
 
   revalidatePath(BILLING_PATH, 'page');
 
+  return { success: true };
+}
+
+export interface PendingOtherCharge {
+  id: string;
+  unit_id: string | null;
+  label: string;
+  amount: number;
+  split_mode: string | null;
+}
+
+/**
+ * Stage an other charge for a single unit before bill generation.
+ */
+export async function addOtherChargeToUnitAction(
+  associationId: string,
+  input: { unit_id: string; period: string; label: string; amount: number },
+): Promise<ActionResult> {
+  const roleError = await requireBillingAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  if (!input.label.trim()) return { success: false, error: 'Label is required.' };
+  if (input.amount <= 0) return { success: false, error: 'Amount must be positive.' };
+
+  const client = getSupabaseServerClient();
+
+  // Verify the unit belongs to this association before staging the charge.
+  const { data: unit, error: unitError } = await client
+    .from('units')
+    .select('id')
+    .eq('id', input.unit_id)
+    .eq('association_id', associationId)
+    .single();
+
+  if (unitError || !unit) {
+    return { success: false, error: 'Unit not found in this association.' };
+  }
+
+  const { error } = await client.from('pending_other_charges').insert({
+    association_id: associationId,
+    unit_id: input.unit_id,
+    period: input.period,
+    label: input.label.trim(),
+    amount: input.amount,
+    split_mode: null,
+  });
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(BILLING_PATH, 'page');
+  return { success: true };
+}
+
+/**
+ * Stage an other charge for ALL units in the association before bill generation.
+ * split_mode='flat' → each unit gets `amount`
+ * split_mode='per_sqft' → each unit gets `amount * unit.area_sqft`
+ */
+export async function bulkAddOtherChargeAction(
+  associationId: string,
+  input: {
+    period: string;
+    label: string;
+    amount: number;
+    split_mode: 'flat' | 'per_sqft';
+  },
+): Promise<ActionResult> {
+  const roleError = await requireBillingAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  if (!input.label.trim()) return { success: false, error: 'Label is required.' };
+  if (input.amount <= 0) return { success: false, error: 'Amount must be positive.' };
+
+  const client = getSupabaseServerClient();
+  const { error } = await client.from('pending_other_charges').insert({
+    association_id: associationId,
+    unit_id: null,
+    period: input.period,
+    label: input.label.trim(),
+    amount: input.amount,
+    split_mode: input.split_mode,
+  });
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(BILLING_PATH, 'page');
+  return { success: true };
+}
+
+/**
+ * Remove a staged other charge (only before bill generation).
+ */
+export async function removePendingOtherChargeAction(
+  associationId: string,
+  chargeId: string,
+): Promise<ActionResult> {
+  const roleError = await requireBillingAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  const client = getSupabaseServerClient();
+  const { error } = await client
+    .from('pending_other_charges')
+    .delete()
+    .eq('id', chargeId)
+    .eq('association_id', associationId);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(BILLING_PATH, 'page');
   return { success: true };
 }

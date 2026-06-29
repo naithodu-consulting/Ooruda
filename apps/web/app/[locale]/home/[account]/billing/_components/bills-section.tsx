@@ -61,12 +61,17 @@ import { cn } from '@kit/ui/utils';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
 
-import { deleteBillAction, generateBillsAction } from '../_lib/billing-actions';
+import {
+  deleteBillAction,
+  generateBillsAction,
+  type PendingOtherCharge,
+} from '../_lib/billing-actions';
 import { GenerateBillsSchema } from '../_lib/billing-schema';
 import {
   BillLineItemsDialog,
   type BillLineItemRow,
 } from './bill-line-items-dialog';
+import { OtherChargesDialog } from './other-charges-dialog';
 
 type BillFilter = 'all' | 'unpaid' | 'paid' | 'partial' | 'overdue';
 
@@ -90,11 +95,19 @@ export interface BillRow {
   lineItems: BillLineItemRow[];
 }
 
+interface PendingChargeWithUnit extends PendingOtherCharge {
+  unit_no?: string | null;
+  period: string;
+}
+
 export function BillsSection(props: {
   associationId: string;
   bills: BillRow[];
   canManage: boolean;
   canDelete: boolean;
+  units?: { id: string; unit_no: string }[];
+  pendingCharges?: PendingChargeWithUnit[];
+  periodOptions?: string[];
 }) {
   const [filter, setFilter] = useState<BillFilter>('all');
 
@@ -127,7 +140,15 @@ export function BillsSection(props: {
         </div>
 
         {props.canManage ? (
-          <div className="sm:shrink-0">
+          <div className="flex items-center gap-2 sm:shrink-0">
+            {props.units && props.periodOptions && (
+              <OtherChargesDialog
+                associationId={props.associationId}
+                units={props.units}
+                pendingCharges={props.pendingCharges ?? []}
+                periods={props.periodOptions}
+              />
+            )}
             <GenerateBillsDialog associationId={props.associationId} />
           </div>
         ) : null}

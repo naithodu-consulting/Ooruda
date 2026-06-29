@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@kit/ui/dialog';
-import { Form, FormControl, FormField, FormItem } from '@kit/ui/form';
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
@@ -40,9 +40,10 @@ export function BillReadingsDialog(props: {
   activeSubMeters: SubMeterRow[];
   existingReadings: Record<
     string,
-    { previous_reading: number; current_reading: number }
+    { previous_reading: number; current_reading: number; minimum_charge: number }
   >;
   lastKnownReadingBySubMeter: Record<string, number>;
+  lastMinChargeBySubMeter: Record<string, number>;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -83,6 +84,7 @@ export function BillReadingsDialog(props: {
             activeSubMeters={props.activeSubMeters}
             existingReadings={props.existingReadings}
             lastKnownReadingBySubMeter={props.lastKnownReadingBySubMeter}
+            lastMinChargeBySubMeter={props.lastMinChargeBySubMeter}
             onSaved={() => setOpen(false)}
           />
         )}
@@ -98,9 +100,10 @@ function ReadingsForm(props: {
   activeSubMeters: SubMeterRow[];
   existingReadings: Record<
     string,
-    { previous_reading: number; current_reading: number }
+    { previous_reading: number; current_reading: number; minimum_charge: number }
   >;
   lastKnownReadingBySubMeter: Record<string, number>;
+  lastMinChargeBySubMeter: Record<string, number>;
   onSaved: () => void;
 }) {
   const router = useRouter();
@@ -120,6 +123,12 @@ function ReadingsForm(props: {
             props.lastKnownReadingBySubMeter[meter.id] ??
             0,
           currentReading: existing?.current_reading ?? 0,
+          // Pre-fill from this bill's saved value, then fall back to the most
+          // recent minimum charge recorded for this sub-meter in a prior period.
+          minimumCharge:
+            existing?.minimum_charge ??
+            props.lastMinChargeBySubMeter[meter.id] ??
+            0,
         };
       }),
     },
@@ -136,6 +145,10 @@ function ReadingsForm(props: {
     const curr = Number(row?.currentReading) || 0;
 
     return sum + Math.max(0, curr - prev);
+  }, 0);
+
+  const totalMinCharge = (watched ?? []).reduce((sum, row) => {
+    return sum + (Number(row?.minimumCharge) || 0);
   }, 0);
 
   // Sub-meters can never exceed the main Electricity block meter. If they do, the
@@ -176,12 +189,13 @@ function ReadingsForm(props: {
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <div className="overflow-hidden rounded-xl border">
           {/* Column headers */}
-          <div className="bg-muted/50 text-muted-foreground hidden grid-cols-[minmax(0,1fr)_5rem_1rem_5rem_5.5rem] items-center gap-x-2 border-b px-3 py-2 text-xs font-medium sm:grid">
+          <div className="bg-muted/50 text-muted-foreground hidden grid-cols-[minmax(0,1fr)_5rem_1rem_5rem_5.5rem_5.5rem] items-center gap-x-2 border-b px-3 py-2 text-xs font-medium sm:grid">
             <span>Meter</span>
             <span className="text-center">Previous</span>
             <span />
             <span className="text-center">Current</span>
             <span className="text-right">Consumption</span>
+            <span className="text-right">Min. Charge (₹)</span>
           </div>
 
           <div className="divide-y">
@@ -198,7 +212,7 @@ function ReadingsForm(props: {
 
               return (
                 <div key={field.id} className="px-3 py-2.5">
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_5rem_1rem_5rem_5.5rem] sm:items-center sm:gap-x-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_5rem_1rem_5rem_5.5rem_5.5rem] sm:items-center sm:gap-x-2">
                     <div className="col-span-2 min-w-0 sm:col-span-1">
                       <p className="truncate text-sm font-medium">
                         {meter?.meter_label}
@@ -276,6 +290,33 @@ function ReadingsForm(props: {
                         </span>
                       )}
                     </div>
+
+                    <FormField
+                      name={`readings.${index}.minimumCharge`}
+                      render={({ field: f }) => (
+                        <FormItem className="col-span-2 sm:col-span-1">
+                          <div className="flex items-center justify-between sm:block">
+                            <span className="text-muted-foreground text-sm sm:hidden">
+                              Min. Charge (₹)
+                            </span>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                min="0"
+                                placeholder="0"
+                                aria-label={`${meter?.meter_label} minimum charge`}
+                                className="h-9 w-24 text-right tabular-nums sm:w-full"
+                                onFocus={(e) => e.currentTarget.select()}
+                                {...f}
+                              />
+                            </FormControl>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
 
                   {errorMessage ? (
@@ -288,17 +329,24 @@ function ReadingsForm(props: {
             })}
           </div>
 
-          {/* Running total row — turns red when it exceeds block consumption */}
+          {/* Running totals row */}
           <div
             className={`flex flex-col gap-1 border-t px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between ${exceedsBlock ? 'bg-destructive/5' : 'bg-muted/50'}`}
           >
             <span className="text-sm font-medium">Total metered</span>
-            <span
-              className={`text-sm font-semibold tabular-nums ${exceedsBlock ? 'text-destructive' : ''}`}
-            >
-              {unitsFmt.format(totalConsumption)} /{' '}
-              {unitsFmt.format(props.blockConsumptionUnits)} units
-            </span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span
+                className={`text-sm font-semibold tabular-nums ${exceedsBlock ? 'text-destructive' : ''}`}
+              >
+                {unitsFmt.format(totalConsumption)} /{' '}
+                {unitsFmt.format(props.blockConsumptionUnits)} units
+              </span>
+              {totalMinCharge > 0 && (
+                <span className="text-muted-foreground text-sm tabular-nums">
+                  Min. charges: ₹{unitsFmt.format(totalMinCharge)}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

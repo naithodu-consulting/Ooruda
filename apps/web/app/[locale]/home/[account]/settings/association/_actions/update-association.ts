@@ -28,7 +28,6 @@ const AssociationSchema = z.object({
 
 const BillingSettingsSchema = z.object({
   due_day_of_month: z.coerce.number().int().min(1).max(28).default(10),
-  minimum_electricity_charge: z.coerce.number().min(0).default(0),
 });
 
 export type UpdateAssociationState = {
@@ -68,7 +67,6 @@ export async function updateAssociationAction(
 
   const billingResult = BillingSettingsSchema.safeParse({
     due_day_of_month: formData.get('due_day_of_month'),
-    minimum_electricity_charge: formData.get('minimum_electricity_charge'),
   });
 
   if (!billingResult.success) {
@@ -116,6 +114,34 @@ export async function updateChargeTypeRateAction(
   const { error } = await client
     .from('charge_types')
     .update({ rate_or_amount: rate })
+    .eq('id', id)
+    .eq('association_id', associationId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
+
+  return { success: true };
+}
+
+export async function updateChargeTypeCalcMethodAction(
+  associationId: string,
+  id: string,
+  calcMethod: 'per_sqft' | 'per_unit',
+): Promise<{ success: boolean; error?: string }> {
+  const role = await getAssociationRole(associationId);
+
+  if (role !== 'assoc_admin' && role !== 'billing_operator') {
+    return { success: false, error: 'Not authorized.' };
+  }
+
+  const client = getSupabaseServerClient();
+
+  const { error } = await client
+    .from('charge_types')
+    .update({ calc_method: calcMethod })
     .eq('id', id)
     .eq('association_id', associationId);
 

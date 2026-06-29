@@ -12,9 +12,21 @@ import {
 import { Input } from '@kit/ui/input';
 import { toast } from '@kit/ui/sonner';
 import { Switch } from '@kit/ui/switch';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@kit/ui/alert-dialog';
 
 import {
   toggleChargeTypeAction,
+  updateChargeTypeCalcMethodAction,
   updateChargeTypeRateAction,
 } from '../_actions/update-association';
 
@@ -28,7 +40,7 @@ const CALC_METHOD_LABELS: Record<string, string> = {
 const RATE_PLACEHOLDER: Record<string, string> = {
   per_sqft: 'e.g. 14',
   flat: 'e.g. 500',
-  per_unit: 'e.g. 200',
+  per_unit: 'e.g. 500',
 };
 
 interface ChargeType {
@@ -51,7 +63,7 @@ interface Props {
 export function ChargeTypesCard({ chargeTypes, associationId }: Props) {
   const [optimistic, setOptimistic] = useOptimistic<
     ChargeType[],
-    { id: string; is_active?: boolean; rate_or_amount?: number | null }
+    { id: string; is_active?: boolean; rate_or_amount?: number | null; calc_method?: string }
   >(chargeTypes, (state, patch) =>
     state.map((ct) => (ct.id === patch.id ? { ...ct, ...patch } : ct)),
   );
@@ -62,6 +74,17 @@ export function ChargeTypesCard({ chargeTypes, associationId }: Props) {
     startTransition(async () => {
       setOptimistic({ id, is_active: checked });
       await toggleChargeTypeAction(associationId, id, checked);
+    });
+  };
+
+  const handleCalcMethodToggle = (ct: ChargeType) => {
+    const next = ct.calc_method === 'per_sqft' ? 'per_unit' : 'per_sqft';
+    startTransition(async () => {
+      setOptimistic({ id: ct.id, calc_method: next });
+      const result = await updateChargeTypeCalcMethodAction(associationId, ct.id, next);
+      if (!result.success) {
+        toast.error(result.error ?? 'Could not update calculation method.');
+      }
     });
   };
 
@@ -103,8 +126,10 @@ export function ChargeTypesCard({ chargeTypes, associationId }: Props) {
         <div className="divide-y">
           {optimistic.map((ct) => {
             const isElectricity = ct.calc_method === 'electricity';
+            const isOtherCharges = ct.key === 'other_charges';
+            const isMaintenance = ct.key === 'maintenance';
             const needsRate =
-              !isElectricity && ct.is_active && !ct.rate_or_amount;
+              !isElectricity && !isOtherCharges && ct.is_active && !ct.rate_or_amount;
 
             return (
               <div key={ct.id} className="flex items-center gap-4 py-3">
@@ -123,17 +148,49 @@ export function ChargeTypesCard({ chargeTypes, associationId }: Props) {
                       </span>
                     )}
                   </div>
-                  <span className="text-muted-foreground text-xs">
-                    {CALC_METHOD_LABELS[ct.calc_method] ?? ct.calc_method}
-                    {' · '}
-                    {ct.frequency}
-                    {' · '}
-                    {ct.default_payer}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-xs">
+                      {CALC_METHOD_LABELS[ct.calc_method] ?? ct.calc_method}
+                      {' · '}
+                      {ct.frequency}
+                    </span>
+                    {/* Maintenance calc method toggle */}
+                    {isMaintenance && (ct.calc_method === 'per_sqft' || ct.calc_method === 'per_unit') && (
+                      <AlertDialog>
+                        <AlertDialogTrigger
+                          render={
+                            <button
+                              type="button"
+                              className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-blue-600 uppercase transition-colors hover:bg-blue-100"
+                            >
+                              Switch to {ct.calc_method === 'per_sqft' ? '₹/unit' : '₹/sq.ft'}
+                            </button>
+                          }
+                        />
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Change Maintenance Method</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This changes how future maintenance bills are calculated for the entire association. Are you sure you want to proceed?
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              variant="destructive"
+                              onClick={() => handleCalcMethodToggle(ct)}
+                            >
+                              Switch Method
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
                 </div>
 
-                {/* Rate input (non-electricity only) */}
-                {!isElectricity ? (
+                {/* Rate input */}
+                {!isElectricity && !isOtherCharges ? (
                   <div className="flex w-28 items-center">
                     <span className="text-muted-foreground mr-1 text-sm">
                       ₹
@@ -147,6 +204,10 @@ export function ChargeTypesCard({ chargeTypes, associationId }: Props) {
                       className="h-8 text-sm"
                       onBlur={(e) => handleRateBlur(ct, e.target.value)}
                     />
+                  </div>
+                ) : isOtherCharges ? (
+                  <div className="w-28 text-right">
+                    <span className="text-muted-foreground text-xs">Ad-hoc</span>
                   </div>
                 ) : (
                   <div className="w-28" />

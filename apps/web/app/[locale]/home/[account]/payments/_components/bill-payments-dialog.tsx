@@ -75,7 +75,7 @@ export function BillPaymentsDialog(props: {
         }
       />
 
-      <DialogContent>
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Payments for {props.billNo}</DialogTitle>
           <DialogDescription>

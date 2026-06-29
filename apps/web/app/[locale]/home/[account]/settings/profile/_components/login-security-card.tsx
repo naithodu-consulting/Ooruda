@@ -8,6 +8,7 @@ import { Mail, Smartphone } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { AuthErrorAlert } from '@kit/auth/sign-in';
+import { normalizePhoneNumber } from '@kit/shared/utils';
 import { useSupabase } from '@kit/supabase/hooks/use-supabase';
 import { Button } from '@kit/ui/button';
 import {
@@ -18,6 +19,7 @@ import {
   CardTitle,
 } from '@kit/ui/card';
 import { Input } from '@kit/ui/input';
+import { PhoneInput } from '@kit/ui/phone-input';
 import {
   InputOTP,
   InputOTPGroup,
@@ -126,11 +128,13 @@ function IdentityUpdater({
   };
 
   const normalize = (raw: string) =>
-    kind === 'phone' ? `+91${raw.trim()}` : raw.trim().toLowerCase();
+    kind === 'phone'
+      ? (normalizePhoneNumber(raw.trim()) ?? raw.trim())
+      : raw.trim().toLowerCase();
 
   const validate = (raw: string) =>
     kind === 'phone'
-      ? /^[6-9]\d{9}$/.test(raw.trim())
+      ? normalizePhoneNumber(raw.trim()) !== null
       : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.trim());
 
   const sendCode = async (identifier: string) => {
@@ -247,21 +251,13 @@ function IdentityUpdater({
       {step === 'input' ? (
         <div className="flex flex-col gap-3">
           {kind === 'phone' ? (
-            <div className="flex items-center gap-2">
-              <span className="bg-muted text-muted-foreground flex h-10 items-center rounded-md border px-3 text-sm font-medium select-none">
-                +91
-              </span>
-              <Input
-                type="tel"
-                inputMode="numeric"
-                maxLength={10}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder={t('auth.phoneInputPlaceholder')}
-                autoFocus
-                data-test={`new-${kind}-input`}
-              />
-            </div>
+            <PhoneInput
+              value={value}
+              onChange={(v) => setValue(v)}
+              placeholder={t('auth.phoneInputPlaceholder')}
+              autoFocus
+              data-test={`new-${kind}-input`}
+            />
           ) : (
             <Input
               type="email"

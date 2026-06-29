@@ -7,8 +7,8 @@ export const CreateSubMeterSchema = z.object({
   meterLabel: z
     .string()
     .trim()
-    .min(1, 'Meter label is required')
-    .max(50, 'Meter label is too long'),
+    .min(1, 'Meter Number is required')
+    .max(50, 'Meter Number is too long'),
   meterType: z.enum(SUB_METER_TYPES),
 });
 
@@ -36,6 +36,7 @@ export const MeterReadingEntrySchema = z
     subMeterId: z.string().uuid(),
     previousReading: z.coerce.number().min(0, "Reading can't be negative"),
     currentReading: z.coerce.number().min(0, "Reading can't be negative"),
+    minimumCharge: z.coerce.number().min(0, "Minimum charge can't be negative"),
   })
   .refine((v) => v.currentReading >= v.previousReading, {
     message: 'Current reading must be at least the previous reading',

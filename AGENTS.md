@@ -72,3 +72,4 @@ After implementation, always run:
 ## Git Workflow Constraints
 
 - **CRITICAL RULE:** Never perform any Git commands (such as `git add`, `git commit`, `git checkout`, `git merge`, or `git push/pull`) without obtaining the user's explicit permission first. Always ask the user first and wait for approval.
+- **BRANCHING RULE:** When explicitly asked to commit and push to a specific branch, DO THAT ONLY. Do not update or merge into other branches (e.g., to keep them up to date) unless explicitly asked to do so, to avoid accidentally propagating feature branch bugs to the main branch.

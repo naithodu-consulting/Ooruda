@@ -4,13 +4,14 @@ import React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { Phone, Plus, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useAction } from 'next-safe-action/hooks';
 import { useFieldArray, useForm } from 'react-hook-form';
 
 import { Alert, AlertDescription } from '@kit/ui/alert';
 import { Button } from '@kit/ui/button';
+import { PhoneInput } from '@kit/ui/phone-input';
 import {
   Dialog,
   DialogContent,
@@ -29,11 +30,6 @@ import {
 import { useAsyncDialog } from '@kit/ui/hooks/use-async-dialog';
 import { If } from '@kit/ui/if';
 import { Input } from '@kit/ui/input';
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from '@kit/ui/input-group';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import {
@@ -234,52 +230,25 @@ function InviteMembersForm({
                 key={field.id}
               >
                 <div className={'flex items-center gap-x-2'}>
-                  <InputGroup className={'min-w-0 flex-1'}>
-                    <InputGroupAddon align="inline-start">
-                      <Phone className="h-4 w-4" />
-                      <span className="text-muted-foreground text-sm font-medium">
-                        +91
-                      </span>
-                    </InputGroupAddon>
-
-                    <FormField
-                      name={phoneInputName}
-                      render={({ field }) => {
-                        return (
-                          <FormItem className="w-full">
-                            <FormControl>
-                              {/*
-                                India-locked: fixed +91 prefix, 10-digit national
-                                number only. The backend accepts any country, but
-                                entry is constrained to India for now.
-                              */}
-                              <InputGroupInput
-                                data-test={'invite-phone-input'}
-                                placeholder={t('phonePlaceholder')}
-                                type="tel"
-                                inputMode="numeric"
-                                maxLength={10}
-                                required
-                                name={field.name}
-                                ref={field.ref}
-                                onBlur={field.onBlur}
-                                value={field.value}
-                                onChange={(e) =>
-                                  field.onChange(
-                                    e.target.value
-                                      .replace(/\D/g, '')
-                                      .slice(0, 10),
-                                  )
-                                }
-                              />
-                            </FormControl>
-
-                            <FormMessage />
-                          </FormItem>
-                        );
-                      }}
-                    />
-                  </InputGroup>
+                  <FormField
+                    name={phoneInputName}
+                    render={({ field }) => (
+                      <FormItem className="min-w-0 flex-1">
+                        <FormControl>
+                          <PhoneInput
+                            data-test={'invite-phone-input'}
+                            placeholder={t('phonePlaceholder')}
+                            name={field.name}
+                            ref={field.ref}
+                            onBlur={field.onBlur}
+                            value={field.value}
+                            onChange={field.onChange}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   <FormField
                     name={roleInputName}

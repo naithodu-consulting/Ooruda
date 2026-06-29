@@ -87,7 +87,7 @@ export default async function MescomPage({ params }: Props) {
     ? await client
         .from('meter_readings')
         .select(
-          'sub_meter_id, mescom_bill_id, period, previous_reading, current_reading',
+          'sub_meter_id, mescom_bill_id, period, previous_reading, current_reading, minimum_charge',
         )
         .in('sub_meter_id', activeSubMeterIds)
         .order('period', { ascending: true })
@@ -97,7 +97,14 @@ export default async function MescomPage({ params }: Props) {
 
   const readingsByBill: Record<
     string,
-    Record<string, { previous_reading: number; current_reading: number }>
+    Record<
+      string,
+      {
+        previous_reading: number;
+        current_reading: number;
+        minimum_charge: number;
+      }
+    >
   > = {};
 
   const consumedByBill: Record<string, number> = {};
@@ -107,6 +114,7 @@ export default async function MescomPage({ params }: Props) {
     readingsByBill[r.mescom_bill_id]![r.sub_meter_id] = {
       previous_reading: r.previous_reading,
       current_reading: r.current_reading,
+      minimum_charge: r.minimum_charge ?? 0,
     };
 
     consumedByBill[r.mescom_bill_id] =
@@ -124,12 +132,22 @@ export default async function MescomPage({ params }: Props) {
     string,
     Record<string, number>
   > = {};
+  // Last minimum_charge recorded for each sub-meter strictly before each
+  // bill's period — used to pre-fill the min charge field so admins only need
+  // to edit it when the charge actually changes.
+  const lastMinChargeBeforePeriodByBill: Record<
+    string,
+    Record<string, number>
+  > = {};
   for (const bill of billRows) {
     lastReadingBeforePeriodByBill[bill.id] = {};
+    lastMinChargeBeforePeriodByBill[bill.id] = {};
     for (const r of allReadings) {
       if (r.period < bill.period) {
         lastReadingBeforePeriodByBill[bill.id]![r.sub_meter_id] =
           r.current_reading;
+        lastMinChargeBeforePeriodByBill[bill.id]![r.sub_meter_id] =
+          r.minimum_charge ?? 0;
       }
     }
   }
@@ -212,6 +230,7 @@ export default async function MescomPage({ params }: Props) {
             readingsByBill={readingsByBill}
             consumedByBill={consumedByBill}
             lastReadingBeforePeriodByBill={lastReadingBeforePeriodByBill}
+            lastMinChargeBeforePeriodByBill={lastMinChargeBeforePeriodByBill}
             canManage={canManage}
           />
         </div>

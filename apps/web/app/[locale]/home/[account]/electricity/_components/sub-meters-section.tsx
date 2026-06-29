@@ -297,7 +297,7 @@ function AddSubMeterForm(props: {
           name="meterLabel"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Meter label</FormLabel>
+              <FormLabel>Meter Number</FormLabel>
               <FormControl>
                 <Input placeholder="e.g. SM-1 or Common-Lift" {...field} />
               </FormControl>

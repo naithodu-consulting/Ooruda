@@ -73,6 +73,7 @@ import {
 } from '../_lib/electricity-actions';
 import { CreateElectricityBillSchema } from '../_lib/electricity-schema';
 import { BillReadingsDialog } from './bill-readings-dialog';
+import { ImportMeterReadingsDialog } from './import-meter-readings-dialog';
 import type { SubMeterRow } from './sub-meters-section';
 
 export interface ElectricityBillRow {
@@ -90,10 +91,18 @@ export function BillsSection(props: {
   activeSubMeters: SubMeterRow[];
   readingsByBill: Record<
     string,
-    Record<string, { previous_reading: number; current_reading: number }>
+    Record<
+      string,
+      {
+        previous_reading: number;
+        current_reading: number;
+        minimum_charge: number;
+      }
+    >
   >;
   consumedByBill: Record<string, number>;
   lastReadingBeforePeriodByBill: Record<string, Record<string, number>>;
+  lastMinChargeBeforePeriodByBill: Record<string, Record<string, number>>;
   canManage: boolean;
 }) {
   return (
@@ -108,7 +117,8 @@ export function BillsSection(props: {
         </div>
 
         {props.canManage ? (
-          <div className="sm:shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
+            <ImportMeterReadingsDialog associationId={props.associationId} />
             <AddBillDialog associationId={props.associationId} />
           </div>
         ) : null}
@@ -172,6 +182,11 @@ export function BillsSection(props: {
                               lastKnownReadingBySubMeter={
                                 props.lastReadingBeforePeriodByBill[bill.id] ??
                                 {}
+                              }
+                              lastMinChargeBySubMeter={
+                                props.lastMinChargeBeforePeriodByBill[
+                                  bill.id
+                                ] ?? {}
                               }
                             />
                             <DeleteElectricityBillButton

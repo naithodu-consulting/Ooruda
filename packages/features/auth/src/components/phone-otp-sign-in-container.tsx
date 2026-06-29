@@ -10,7 +10,7 @@ import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { getSafeRedirectPath } from '@kit/shared/utils';
+import { normalizePhoneNumber, getSafeRedirectPath } from '@kit/shared/utils';
 import { useSignInWithOtp } from '@kit/supabase/hooks/use-sign-in-with-otp';
 import { useVerifyOtp } from '@kit/supabase/hooks/use-verify-otp';
 import { Button } from '@kit/ui/button';
@@ -24,6 +24,7 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
+import { PhoneInput } from '@kit/ui/phone-input';
 import {
   InputOTP,
   InputOTPGroup,
@@ -52,7 +53,9 @@ type Step = 'identifier' | 'otp';
 const PhoneSchema = z.object({
   phone: z
     .string()
-    .regex(/^[6-9]\d{9}$/, { message: 'auth.phoneInvalidFormat' }),
+    .refine((v) => normalizePhoneNumber(v) !== null, {
+      message: 'auth.phoneInvalidFormat',
+    }),
 });
 
 const EmailSchema = z.object({
@@ -153,7 +156,7 @@ export function PhoneOtpSignInContainer() {
   const handleSendPhone = async ({
     phone: rawPhone,
   }: z.output<typeof PhoneSchema>) => {
-    const e164 = `+91${rawPhone}`;
+    const e164 = normalizePhoneNumber(rawPhone) ?? rawPhone;
 
     try {
       const ok = await sendOtpTo('phone', e164);
@@ -254,21 +257,16 @@ export function PhoneOtpSignInContainer() {
                   <Trans i18nKey="auth.phoneInputLabel" />
                 </FormLabel>
                 <FormControl>
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-10 items-center rounded-md border border-[#EADFB0] bg-white px-3 text-sm font-medium text-[#1a1a1a] select-none">
-                      +91
-                    </span>
-                    <Input
-                      {...field}
-                      type="tel"
-                      inputMode="numeric"
-                      maxLength={10}
-                      placeholder={t('phoneInputPlaceholder')}
-                      autoFocus
-                      data-test="phone-input"
-                      className="border-[#EADFB0] bg-white"
-                    />
-                  </div>
+                  <PhoneInput
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                    placeholder={t('phoneInputPlaceholder')}
+                    autoFocus
+                    data-test="phone-input"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

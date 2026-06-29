@@ -204,182 +204,184 @@ export function ImportUnitsDialog({
         }
       />
 
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Bulk import — CSV / Excel</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <div className="flex flex-col gap-6 p-6">
+          <DialogHeader>
+            <DialogTitle>Bulk import — CSV / Excel</DialogTitle>
+          </DialogHeader>
 
-        <div className="flex flex-col gap-6">
-          {/* File input */}
-          {!result && (
-            <div>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".csv,text/csv"
-                className="hidden"
-                id="csv-upload"
-                onChange={handleFileChange}
-                data-test="csv-file-input"
-              />
-              <label
-                htmlFor="csv-upload"
-                className="flex w-full cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed border-orange-500/50 px-6 py-10 text-center transition-colors hover:bg-orange-50/50 dark:hover:bg-orange-950/20"
-              >
-                <CloudUpload
-                  className="h-10 w-10 text-orange-500"
-                  strokeWidth={1.5}
+          <div className="flex flex-col gap-6">
+            {/* File input */}
+            {!result && (
+              <div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  id="csv-upload"
+                  onChange={handleFileChange}
+                  data-test="csv-file-input"
                 />
-                <p className="font-medium text-orange-600">
-                  {fileName
-                    ? fileName
-                    : 'Drop CSV or Excel here, or click to browse'}
-                </p>
-              </label>
-            </div>
-          )}
-
-          {/* Template download and instructions */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <p className="text-muted-foreground text-sm">
-              Columns:{' '}
-              <span className="font-medium">unit_no, type, area_sqft</span>{' '}
-              (required)
-              <br />
-              Optional: <span className="font-medium">floor</span>
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={downloadTemplate}
-              type="button"
-              className="shrink-0"
-            >
-              <Download className="mr-1.5 h-4 w-4" />
-              Template
-            </Button>
-          </div>
-
-          {/* Header error */}
-          {hasHeaderError && rows[0]?._error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{rows[0]._error}</AlertDescription>
-            </Alert>
-          )}
-
-          {/* Preview table */}
-          {!hasHeaderError && rows.length > 0 && !result && (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Preview</span>
-                <Badge variant="default" className="text-xs">
-                  {validRows.length} valid
-                </Badge>
-                {invalidRows.length > 0 && (
-                  <Badge variant="destructive" className="text-xs">
-                    {invalidRows.length} invalid
-                  </Badge>
-                )}
+                <label
+                  htmlFor="csv-upload"
+                  className="flex w-full cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed border-orange-500/50 px-6 py-10 text-center transition-colors hover:bg-orange-50/50 dark:hover:bg-orange-950/20"
+                >
+                  <CloudUpload
+                    className="h-10 w-10 text-orange-500"
+                    strokeWidth={1.5}
+                  />
+                  <p className="font-medium text-orange-600">
+                    {fileName
+                      ? fileName
+                      : 'Drop CSV or Excel here, or click to browse'}
+                  </p>
+                </label>
               </div>
+            )}
 
-              <div className="max-h-60 overflow-auto rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10">#</TableHead>
-                      <TableHead>Unit No</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Floor</TableHead>
-                      <TableHead>Area (sq.ft)</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((row) => (
-                      <TableRow
-                        key={row._row}
-                        className={row._error ? 'bg-destructive/5' : ''}
-                      >
-                        <TableCell className="text-muted-foreground text-xs">
-                          {row._row}
-                        </TableCell>
-                        <TableCell>{row.unit_no || '—'}</TableCell>
-                        <TableCell>{row.type || '—'}</TableCell>
-                        <TableCell>
-                          {row.floor === null || row.floor === ''
-                            ? '—'
-                            : row.floor}
-                        </TableCell>
-                        <TableCell>{row.area_sqft || '—'}</TableCell>
-                        <TableCell>
-                          {row._error ? (
-                            <span className="text-destructive flex items-center gap-1 text-xs">
-                              <AlertCircle className="h-3 w-3 shrink-0" />
-                              {row._error}
-                            </span>
-                          ) : (
-                            <CheckCircle2 className="text-success h-4 w-4" />
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {invalidRows.length > 0 && validRows.length > 0 && (
-                <p className="text-muted-foreground text-xs">
-                  Invalid rows will be skipped. Only valid rows will be
-                  imported.
-                </p>
-              )}
+            {/* Template download and instructions */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <p className="text-muted-foreground text-sm">
+                Columns:{' '}
+                <span className="font-medium">unit_no, type, area_sqft</span>{' '}
+                (required)
+                <br />
+                Optional: <span className="font-medium">floor</span>
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={downloadTemplate}
+                type="button"
+                className="shrink-0"
+              >
+                <Download className="mr-1.5 h-4 w-4" />
+                Template
+              </Button>
             </div>
-          )}
 
-          {/* Results */}
-          {result && (
-            <div className="flex flex-col gap-3">
-              <Alert>
-                <CheckCircle2 className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>{result.imported}</strong> unit(s) imported
-                  successfully.
-                  {result.skipped.length > 0 && (
-                    <> {result.skipped.length} row(s) were skipped.</>
-                  )}
-                </AlertDescription>
+            {/* Header error */}
+            {hasHeaderError && rows[0]?._error && (
+              <Alert variant="destructive" className="bg-transparent">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{rows[0]._error}</AlertDescription>
               </Alert>
+            )}
 
-              {result.skipped.length > 0 && (
-                <div className="max-h-40 overflow-auto rounded-md border">
+            {/* Preview table */}
+            {!hasHeaderError && rows.length > 0 && !result && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Preview</span>
+                  <Badge variant="default" className="text-xs">
+                    {validRows.length} valid
+                  </Badge>
+                  {invalidRows.length > 0 && (
+                    <Badge variant="destructive" className="text-xs">
+                      {invalidRows.length} invalid
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="max-h-60 overflow-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Row</TableHead>
+                        <TableHead className="w-10">#</TableHead>
                         <TableHead>Unit No</TableHead>
-                        <TableHead>Reason</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Floor</TableHead>
+                        <TableHead>Area (sq.ft)</TableHead>
+                        <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {result.skipped.map((s) => (
-                        <TableRow key={s.row} className="bg-destructive/5">
-                          <TableCell className="text-xs">{s.row}</TableCell>
-                          <TableCell>{s.unit_no}</TableCell>
-                          <TableCell className="text-destructive text-xs">
-                            {s.reason}
+                      {rows.map((row) => (
+                        <TableRow
+                          key={row._row}
+                          className={row._error ? 'bg-destructive/5' : ''}
+                        >
+                          <TableCell className="text-muted-foreground text-xs">
+                            {row._row}
+                          </TableCell>
+                          <TableCell>{row.unit_no || '—'}</TableCell>
+                          <TableCell>{row.type || '—'}</TableCell>
+                          <TableCell>
+                            {row.floor === null || row.floor === ''
+                              ? '—'
+                              : row.floor}
+                          </TableCell>
+                          <TableCell>{row.area_sqft || '—'}</TableCell>
+                          <TableCell>
+                            {row._error ? (
+                              <span className="text-destructive flex items-center gap-1 text-xs">
+                                <AlertCircle className="h-3 w-3 shrink-0" />
+                                {row._error}
+                              </span>
+                            ) : (
+                              <CheckCircle2 className="text-success h-4 w-4" />
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
-              )}
-            </div>
-          )}
+
+                {invalidRows.length > 0 && validRows.length > 0 && (
+                  <p className="text-muted-foreground text-xs">
+                    Invalid rows will be skipped. Only valid rows will be
+                    imported.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Results */}
+            {result && (
+              <div className="flex flex-col gap-3">
+                <Alert className="bg-transparent">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>{result.imported}</strong> unit(s) imported
+                    successfully.
+                    {result.skipped.length > 0 && (
+                      <> {result.skipped.length} row(s) were skipped.</>
+                    )}
+                  </AlertDescription>
+                </Alert>
+
+                {result.skipped.length > 0 && (
+                  <div className="max-h-40 overflow-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Row</TableHead>
+                          <TableHead>Unit No</TableHead>
+                          <TableHead>Reason</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {result.skipped.map((s) => (
+                          <TableRow key={s.row} className="bg-destructive/5">
+                            <TableCell className="text-xs">{s.row}</TableCell>
+                            <TableCell>{s.unit_no}</TableCell>
+                            <TableCell className="text-destructive text-xs">
+                              {s.reason}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="bg-muted mx-0 mb-0 flex gap-2 rounded-none border-t px-6 py-4 sm:flex-row sm:justify-end">
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             {result ? 'Close' : 'Cancel'}
           </Button>

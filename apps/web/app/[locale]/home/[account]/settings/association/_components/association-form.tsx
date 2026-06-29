@@ -39,7 +39,6 @@ interface Props {
   };
   billingSettings: {
     due_day_of_month: number;
-    minimum_electricity_charge: number;
   } | null;
 }
 
@@ -168,11 +167,11 @@ export function AssociationForm({ association, billingSettings }: Props) {
         <CardHeader>
           <CardTitle>Billing Defaults</CardTitle>
           <CardDescription>
-            Default due dates and minimum charges applied across all bills.
+            Default due date applied across all generated bills.
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+        <CardContent>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="due_day_of_month">Due Day of Month (1–28)</Label>
             <Input
@@ -183,21 +182,6 @@ export function AssociationForm({ association, billingSettings }: Props) {
               max={28}
               defaultValue={billingSettings?.due_day_of_month ?? 10}
               className="max-w-[120px]"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="minimum_electricity_charge">
-              Min. Electricity Charge (₹)
-            </Label>
-            <Input
-              id="minimum_electricity_charge"
-              name="minimum_electricity_charge"
-              type="number"
-              min={0}
-              step="0.01"
-              defaultValue={billingSettings?.minimum_electricity_charge ?? 0}
-              className="max-w-[160px]"
             />
           </div>
         </CardContent>
