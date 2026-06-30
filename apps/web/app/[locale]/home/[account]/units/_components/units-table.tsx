@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 
 import { Trash2 } from 'lucide-react';
 
-import { personLabel } from '~/lib/person-label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +32,8 @@ import {
   TableRow,
 } from '@kit/ui/table';
 import { cn } from '@kit/ui/utils';
+
+import { personLabel } from '~/lib/person-label';
 
 import { deleteUnitAction } from '../_lib/units-actions';
 import { EditUnitDialog } from './edit-unit-dialog';

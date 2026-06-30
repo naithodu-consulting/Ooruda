@@ -1,6 +1,8 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+
+import { usePathname, useRouter } from 'next/navigation';
 
 import { Menu } from 'lucide-react';
 
@@ -46,10 +48,16 @@ export const TeamAccountLayoutMobileNavigation = (
   }>,
 ) => {
   const router = useRouter();
+  const pathname = usePathname();
   const signOut = useSignOut();
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger>
         <Menu className={'h-9'} />
       </DropdownMenuTrigger>

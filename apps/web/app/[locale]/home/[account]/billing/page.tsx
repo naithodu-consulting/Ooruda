@@ -43,6 +43,15 @@ export default async function BillingPage({ params }: Props) {
     .eq('association_id', association.id)
     .order('unit_no');
 
+  const { data: otherChargesCT } = await client
+    .from('charge_types')
+    .select('is_active')
+    .eq('association_id', association.id)
+    .eq('key', 'other_charges')
+    .maybeSingle();
+
+  const isOtherChargesActive = otherChargesCT?.is_active ?? false;
+
   const unitRows = (units ?? []) as { id: string; unit_no: string }[];
   const unitNoById = new Map(unitRows.map((u) => [u.id, u.unit_no]));
 
@@ -156,6 +165,7 @@ export default async function BillingPage({ params }: Props) {
           units={unitRows}
           pendingCharges={pendingCharges}
           periodOptions={periodOptions}
+          isOtherChargesActive={isOtherChargesActive}
         />
       </div>
     </PageBody>

@@ -109,23 +109,19 @@ export async function generateBillsAction(
   const dueDayOfMonth = billingSettings?.due_day_of_month ?? 10;
   const dueDate = `${period}-${String(dueDayOfMonth).padStart(2, '0')}`;
 
-  // Fetch the other_charges charge type (may be inactive, so look beyond activeChargeTypes).
-  const otherChargesCT =
-    activeChargeTypes.find((c) => c.key === 'other_charges') ??
-    (await client
-      .from('charge_types')
-      .select('id, key, name, default_payer, gst_applicable')
-      .eq('association_id', associationId)
-      .eq('key', 'other_charges')
-      .maybeSingle()
-      .then(({ data }) => data));
+  // Fetch the other_charges charge type only if it is active.
+  const otherChargesCT = activeChargeTypes.find(
+    (c) => c.key === 'other_charges',
+  );
 
-  // Load all pending other charges for this period.
-  const { data: pendingCharges } = await client
-    .from('pending_other_charges')
-    .select('id, unit_id, label, amount, split_mode')
-    .eq('association_id', associationId)
-    .eq('period', period);
+  // Load all pending other charges for this period if other_charges is active.
+  const { data: pendingCharges } = otherChargesCT
+    ? await client
+        .from('pending_other_charges')
+        .select('id, unit_id, label, amount, split_mode')
+        .eq('association_id', associationId)
+        .eq('period', period)
+    : { data: [] };
 
   const pendingRows = pendingCharges ?? [];
 

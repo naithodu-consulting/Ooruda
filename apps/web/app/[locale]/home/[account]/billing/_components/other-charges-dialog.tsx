@@ -94,10 +94,10 @@ function getPeriodOptions(periods: string[]) {
 }
 
 export function OtherChargesDialog(props: Props) {
-  const [open, setOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger
         render={
           <Button
@@ -123,6 +123,7 @@ export function OtherChargesDialog(props: Props) {
             associationId={props.associationId}
             units={props.units}
             periods={props.periods}
+            onSuccess={() => setIsOpen(false)}
           />
 
           {props.pendingCharges.length > 0 && (
@@ -141,6 +142,7 @@ function AddChargeForm(props: {
   associationId: string;
   units: UnitOption[];
   periods: string[];
+  onSuccess: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -187,7 +189,7 @@ function AddChargeForm(props: {
         return;
       }
 
-      toast.success('Other charge staged.');
+      toast.success('Other Charges Added.');
       form.reset({
         scope: values.scope,
         period: values.period,
@@ -196,6 +198,7 @@ function AddChargeForm(props: {
         split_mode: values.split_mode,
       });
       router.refresh();
+      props.onSuccess();
     });
   });
 
@@ -212,7 +215,13 @@ function AddChargeForm(props: {
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger className="h-9 text-sm">
-                      <SelectValue />
+                      <SelectValue>
+                        {(value: string) => {
+                          if (value === 'unit') return 'Specific Unit';
+                          if (value === 'all') return 'All Units';
+                          return '';
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -234,7 +243,12 @@ function AddChargeForm(props: {
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger className="h-9 text-sm">
-                      <SelectValue />
+                      <SelectValue>
+                        {(value: string) =>
+                          periodOptions.find((opt) => opt.value === value)
+                            ?.label ?? 'Select period'
+                        }
+                      </SelectValue>
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -263,12 +277,17 @@ function AddChargeForm(props: {
                 >
                   <FormControl>
                     <SelectTrigger className="h-9 text-sm">
-                      <SelectValue placeholder="Select a unit" />
+                      <SelectValue placeholder="Select a unit">
+                        {(value: string) =>
+                          props.units.find((u) => u.id === value)?.unit_no ??
+                          'Select a unit'
+                        }
+                      </SelectValue>
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     {props.units.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
+                      <SelectItem key={u.id} value={u.id} label={u.unit_no}>
                         {u.unit_no}
                       </SelectItem>
                     ))}
@@ -292,7 +311,13 @@ function AddChargeForm(props: {
                 >
                   <FormControl>
                     <SelectTrigger className="h-9 text-sm">
-                      <SelectValue />
+                      <SelectValue>
+                        {(value: string) => {
+                          if (value === 'flat') return 'Flat Amount';
+                          if (value === 'per_sqft') return 'Per sqft';
+                          return 'Flat Amount';
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>

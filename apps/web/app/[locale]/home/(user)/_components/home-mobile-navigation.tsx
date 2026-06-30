@@ -1,5 +1,9 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+
+import { usePathname } from 'next/navigation';
+
 import { Menu } from 'lucide-react';
 
 import { useSignOut } from '@kit/supabase/hooks/use-sign-out';
@@ -26,10 +30,16 @@ import { HomeAccountSelector } from '../_components/home-account-selector';
 import type { UserWorkspace } from '../_lib/server/load-user-workspace';
 
 export function HomeMobileNavigation(props: { workspace: UserWorkspace }) {
+  const pathname = usePathname();
   const signOut = useSignOut();
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger>
         <Menu className={'h-9'} />
       </DropdownMenuTrigger>

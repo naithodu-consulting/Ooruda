@@ -254,7 +254,7 @@ export function ImportMeterReadingsDialog({
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <div className="flex flex-col gap-6 p-6">
           <DialogHeader>
-            <DialogTitle>Import meter readings — CSV</DialogTitle>
+            <DialogTitle>Import meter readings</DialogTitle>
           </DialogHeader>
 
           <div className="flex flex-col gap-5">

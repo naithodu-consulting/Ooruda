@@ -33,8 +33,8 @@ export const generateRootMetadata = async (): Promise<Metadata> => {
       images: ['/images/brand/og-image.png'],
     },
     icons: {
-      icon: '/images/favicon/favicon.ico',
-      apple: '/images/favicon/apple-touch-icon.png',
+      icon: '/images/brand/ooruda-favicon.svg',
+      apple: '/images/brand/ooruda-favicon.svg',
     },
   };
 };

@@ -8,8 +8,8 @@ import { Badge } from '@kit/ui/badge';
 import { badgeExtras } from '@kit/ui/badge-extras';
 import { PageBody } from '@kit/ui/page';
 
-import { requireRole } from '~/lib/rbac';
 import { personLabel } from '~/lib/person-label';
+import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../../_components/team-account-layout-page-header';
 import { TenancyTimeline } from './_components/tenancy-timeline';
@@ -120,8 +120,7 @@ export default async function UnitDetailPage({ params }: Props) {
   const tenancyRows = allTenancies.map((t) => ({
     id: t.id,
     tenant_id: t.tenant_id,
-    tenantLabel:
-      personLabel(profiles[t.tenant_id]) ?? t.tenant_id.slice(0, 8),
+    tenantLabel: personLabel(profiles[t.tenant_id]) ?? t.tenant_id.slice(0, 8),
     start_date: t.start_date,
     end_date: t.end_date,
     status: t.status as 'active' | 'ended',

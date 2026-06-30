@@ -289,7 +289,7 @@ export async function bulkImportMeterReadingsAction(
   const { data: lastReadings } = smIds.length
     ? await client
         .from('meter_readings')
-        .select('sub_meter_id, period, current_reading')
+        .select('sub_meter_id, period, current_reading, minimum_charge')
         .in('sub_meter_id', smIds)
         .order('period', { ascending: false })
     : { data: [] };
@@ -297,15 +297,17 @@ export async function bulkImportMeterReadingsAction(
   // For each sub_meter, group readings by sub_meter_id, sorted desc — first entry is the latest
   const lastReadingBySm = new Map<
     string,
-    { period: string; current_reading: number }[]
+    { period: string; current_reading: number; minimum_charge: number }[]
   >();
   for (const r of lastReadings ?? []) {
     if (!lastReadingBySm.has(r.sub_meter_id)) {
       lastReadingBySm.set(r.sub_meter_id, []);
     }
-    lastReadingBySm
-      .get(r.sub_meter_id)!
-      .push({ period: r.period, current_reading: r.current_reading });
+    lastReadingBySm.get(r.sub_meter_id)!.push({
+      period: r.period,
+      current_reading: r.current_reading,
+      minimum_charge: r.minimum_charge ?? 0,
+    });
   }
 
   const skipped: MeterReadingImportSkipped[] = [];
@@ -317,6 +319,7 @@ export async function bulkImportMeterReadingsAction(
     period: string;
     previous_reading: number;
     current_reading: number;
+    minimum_charge?: number;
   };
   const toUpsert: UpsertRow[] = [];
 
@@ -377,6 +380,8 @@ export async function bulkImportMeterReadingsAction(
     );
     const previousReading =
       prevReadings.length > 0 ? prevReadings[0]!.current_reading : 0;
+    const previousMinimumCharge =
+      prevReadings.length > 0 ? prevReadings[0]!.minimum_charge : 0;
 
     toUpsert.push({
       sub_meter_id: subMeter.id,
@@ -384,6 +389,7 @@ export async function bulkImportMeterReadingsAction(
       period: row.period,
       previous_reading: previousReading,
       current_reading: row.current_reading,
+      minimum_charge: previousMinimumCharge,
     });
   }
 

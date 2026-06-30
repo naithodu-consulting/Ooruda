@@ -73,9 +73,9 @@ export async function getOrGenerateBillPdf(
     const logger = await getLogger();
     const admin = getSupabaseServerAdminClient();
 
-    // Fetch the bill using the admin client to ensure we get the full 
+    // Fetch the bill using the admin client to ensure we get the full
     // nested association + accounts join (which might otherwise be filtered
-    // by RLS for non-members, obscuring the logo). We manually authorize 
+    // by RLS for non-members, obscuring the logo). We manually authorize
     // the user via `canAccessUnit` immediately below.
     const { data: bill, error: billError } = await admin
       .from('bills')
@@ -88,111 +88,111 @@ export async function getOrGenerateBillPdf(
       .eq('id', billId)
       .maybeSingle();
 
-  if (billError) {
-    logger.error(
-      { billId, error: billError },
-      'Failed to fetch bill for PDF generation',
-    );
-    return null;
-  }
-
-  if (!bill || !bill.units || !bill.associations) {
-    logger.warn(
-      { billId, found: !!bill },
-      'Bill not found, or missing unit/association join, when generating PDF',
-    );
-    return null;
-  }
-
-  if (!(await canAccessUnit(bill.association_id, bill.unit_id))) {
-    logger.warn(
-      { billId, associationId: bill.association_id, unitId: bill.unit_id },
-      "Caller is not authorized to access this bill's unit",
-    );
-    return null;
-  }
-
-  const filename = `${bill.bill_no}.pdf`;
-
-  if (bill.pdf_url) {
-    const { data: cached } = await admin.storage
-      .from(BUCKET)
-      .download(bill.pdf_url);
-
-    if (cached) {
-      return { bytes: Buffer.from(await cached.arrayBuffer()), filename };
+    if (billError) {
+      logger.error(
+        { billId, error: billError },
+        'Failed to fetch bill for PDF generation',
+      );
+      return null;
     }
-    // Cached object went missing (e.g. bucket cleared) — fall through and regenerate.
-  }
 
-  const association = bill.associations;
-  const lineItems = bill.bill_line_items ?? [];
+    if (!bill || !bill.units || !bill.associations) {
+      logger.warn(
+        { billId, found: !!bill },
+        'Bill not found, or missing unit/association join, when generating PDF',
+      );
+      return null;
+    }
 
-  let bytes: Buffer;
+    if (!(await canAccessUnit(bill.association_id, bill.unit_id))) {
+      logger.warn(
+        { billId, associationId: bill.association_id, unitId: bill.unit_id },
+        "Caller is not authorized to access this bill's unit",
+      );
+      return null;
+    }
 
-  try {
-    bytes = await renderBillPdf({
-      association: {
-        name: association.accounts?.name ?? 'Association',
-        address: association.address,
-        gstin: association.gstin,
-        logoUrl: association.accounts?.picture_url ?? null,
-        gstEnabled: association.gst_enabled,
-        gstRate: association.gst_rate,
-      },
-      unit: { unitNo: bill.units.unit_no },
-      bill: {
-        billNo: bill.bill_no,
-        period: bill.period,
-        dueDate: bill.due_date,
-        generatedAt: bill.generated_at,
-        totalAmount: bill.total_amount,
-        paidAmount: bill.paid_amount,
-        status: bill.status,
-      },
-      lineItems: lineItems.map((item) => ({
-        description: item.description,
-        payer: item.payer as 'Owner' | 'Tenant',
-        gstApplicable: item.gst_applicable,
-        amount: item.amount,
-      })),
-    });
-  } catch (error) {
-    logger.error({ billId, error }, 'Failed to render bill PDF');
-    throw error;
-  }
+    const filename = `${bill.bill_no}.pdf`;
 
-  const storagePath = `bills/${bill.association_id}/${bill.id}.pdf`;
+    if (bill.pdf_url) {
+      const { data: cached } = await admin.storage
+        .from(BUCKET)
+        .download(bill.pdf_url);
 
-  const { error: uploadError } = await admin.storage
-    .from(BUCKET)
-    .upload(storagePath, bytes, {
-      contentType: 'application/pdf',
-      upsert: true,
-    });
+      if (cached) {
+        return { bytes: Buffer.from(await cached.arrayBuffer()), filename };
+      }
+      // Cached object went missing (e.g. bucket cleared) — fall through and regenerate.
+    }
 
-  if (uploadError) {
-    logger.error(
-      { billId, storagePath, error: uploadError },
-      'Failed to cache generated bill PDF in storage',
-    );
-  } else {
-    await admin
-      .from('bills')
-      .update({
-        pdf_url: storagePath,
-        pdf_generated_at: new Date().toISOString(),
-      })
-      .eq('id', billId);
+    const association = bill.associations;
+    const lineItems = bill.bill_line_items ?? [];
 
-    await logAuditEvent({
-      associationId: bill.association_id,
-      action: 'bill.pdf_generated',
-      entityType: 'bill',
-      entityId: billId,
-      summary: `Generated PDF for bill ${bill.bill_no}`,
-    });
-  }
+    let bytes: Buffer;
+
+    try {
+      bytes = await renderBillPdf({
+        association: {
+          name: association.accounts?.name ?? 'Association',
+          address: association.address,
+          gstin: association.gstin,
+          logoUrl: association.accounts?.picture_url ?? null,
+          gstEnabled: association.gst_enabled,
+          gstRate: association.gst_rate,
+        },
+        unit: { unitNo: bill.units.unit_no },
+        bill: {
+          billNo: bill.bill_no,
+          period: bill.period,
+          dueDate: bill.due_date,
+          generatedAt: bill.generated_at,
+          totalAmount: bill.total_amount,
+          paidAmount: bill.paid_amount,
+          status: bill.status,
+        },
+        lineItems: lineItems.map((item) => ({
+          description: item.description,
+          payer: item.payer as 'Owner' | 'Tenant',
+          gstApplicable: item.gst_applicable,
+          amount: item.amount,
+        })),
+      });
+    } catch (error) {
+      logger.error({ billId, error }, 'Failed to render bill PDF');
+      throw error;
+    }
+
+    const storagePath = `bills/${bill.association_id}/${bill.id}.pdf`;
+
+    const { error: uploadError } = await admin.storage
+      .from(BUCKET)
+      .upload(storagePath, bytes, {
+        contentType: 'application/pdf',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      logger.error(
+        { billId, storagePath, error: uploadError },
+        'Failed to cache generated bill PDF in storage',
+      );
+    } else {
+      await admin
+        .from('bills')
+        .update({
+          pdf_url: storagePath,
+          pdf_generated_at: new Date().toISOString(),
+        })
+        .eq('id', billId);
+
+      await logAuditEvent({
+        associationId: bill.association_id,
+        action: 'bill.pdf_generated',
+        entityType: 'bill',
+        entityId: billId,
+        summary: `Generated PDF for bill ${bill.bill_no}`,
+      });
+    }
 
     return { bytes, filename };
   };
@@ -221,9 +221,9 @@ export async function getOrGenerateReceiptPdf(
     const logger = await getLogger();
     const admin = getSupabaseServerAdminClient();
 
-    // Fetch the payment using the admin client to ensure we get the full 
+    // Fetch the payment using the admin client to ensure we get the full
     // nested association + accounts join (which might otherwise be filtered
-    // by RLS for non-members, obscuring the logo). We manually authorize 
+    // by RLS for non-members, obscuring the logo). We manually authorize
     // the user via `canAccessUnit` immediately below.
     const { data: payment, error: paymentError } = await admin
       .from('payments')
@@ -235,112 +235,112 @@ export async function getOrGenerateReceiptPdf(
       .eq('id', paymentId)
       .maybeSingle();
 
-  if (paymentError) {
-    logger.error(
-      { paymentId, error: paymentError },
-      'Failed to fetch payment for receipt PDF generation',
-    );
-    return null;
-  }
-
-  const receipt = payment?.receipts;
-
-  if (
-    !payment ||
-    !payment.bills ||
-    !payment.bills.units ||
-    !payment.bills.associations ||
-    !receipt
-  ) {
-    logger.warn(
-      { paymentId, found: !!payment, hasReceipt: !!receipt },
-      'Payment not found, missing bill/unit/association join, or no receipt, when generating receipt PDF',
-    );
-    return null;
-  }
-
-  if (!(await canAccessUnit(payment.association_id, payment.bills.unit_id))) {
-    logger.warn(
-      {
-        paymentId,
-        associationId: payment.association_id,
-        unitId: payment.bills.unit_id,
-      },
-      "Caller is not authorized to access this payment's unit",
-    );
-    return null;
-  }
-
-  const filename = `${receipt.receipt_no}.pdf`;
-
-  if (receipt.pdf_url) {
-    const { data: cached } = await admin.storage
-      .from(BUCKET)
-      .download(receipt.pdf_url);
-
-    if (cached) {
-      return { bytes: Buffer.from(await cached.arrayBuffer()), filename };
+    if (paymentError) {
+      logger.error(
+        { paymentId, error: paymentError },
+        'Failed to fetch payment for receipt PDF generation',
+      );
+      return null;
     }
-  }
 
-  const association = payment.bills.associations;
+    const receipt = payment?.receipts;
 
-  let bytes: Buffer;
+    if (
+      !payment ||
+      !payment.bills ||
+      !payment.bills.units ||
+      !payment.bills.associations ||
+      !receipt
+    ) {
+      logger.warn(
+        { paymentId, found: !!payment, hasReceipt: !!receipt },
+        'Payment not found, missing bill/unit/association join, or no receipt, when generating receipt PDF',
+      );
+      return null;
+    }
 
-  try {
-    bytes = await renderReceiptPdf({
-      association: {
-        name: association.accounts?.name ?? 'Association',
-        address: association.address,
-        gstin: association.gstin,
-        logoUrl: association.accounts?.picture_url ?? null,
-      },
-      unit: { unitNo: payment.bills.units.unit_no },
-      bill: { billNo: payment.bills.bill_no, period: payment.bills.period },
-      receipt: {
-        receiptNo: receipt.receipt_no,
-        generatedAt: receipt.generated_at,
-      },
-      payment: {
-        amount: payment.amount,
-        mode: payment.mode,
-        paidByRole: payment.paid_by_role as 'Owner' | 'Tenant',
-        paidAt: payment.paid_at,
-      },
-    });
-  } catch (error) {
-    logger.error({ paymentId, error }, 'Failed to render receipt PDF');
-    throw error;
-  }
+    if (!(await canAccessUnit(payment.association_id, payment.bills.unit_id))) {
+      logger.warn(
+        {
+          paymentId,
+          associationId: payment.association_id,
+          unitId: payment.bills.unit_id,
+        },
+        "Caller is not authorized to access this payment's unit",
+      );
+      return null;
+    }
 
-  const storagePath = `receipts/${payment.association_id}/${payment.id}.pdf`;
+    const filename = `${receipt.receipt_no}.pdf`;
 
-  const { error: uploadError } = await admin.storage
-    .from(BUCKET)
-    .upload(storagePath, bytes, {
-      contentType: 'application/pdf',
-      upsert: true,
-    });
+    if (receipt.pdf_url) {
+      const { data: cached } = await admin.storage
+        .from(BUCKET)
+        .download(receipt.pdf_url);
 
-  if (uploadError) {
-    logger.error(
-      { paymentId, storagePath, error: uploadError },
-      'Failed to cache generated receipt PDF in storage',
-    );
-  } else {
-    await admin
-      .from('receipts')
-      .update({ pdf_url: storagePath })
-      .eq('id', receipt.id);
+      if (cached) {
+        return { bytes: Buffer.from(await cached.arrayBuffer()), filename };
+      }
+    }
 
-    await logAuditEvent({
-      associationId: payment.association_id,
-      action: 'receipt.pdf_generated',
-      entityType: 'receipt',
-      entityId: receipt.id,
-      summary: `Generated PDF for receipt ${receipt.receipt_no}`,
-    });
-  }
+    const association = payment.bills.associations;
+
+    let bytes: Buffer;
+
+    try {
+      bytes = await renderReceiptPdf({
+        association: {
+          name: association.accounts?.name ?? 'Association',
+          address: association.address,
+          gstin: association.gstin,
+          logoUrl: association.accounts?.picture_url ?? null,
+        },
+        unit: { unitNo: payment.bills.units.unit_no },
+        bill: { billNo: payment.bills.bill_no, period: payment.bills.period },
+        receipt: {
+          receiptNo: receipt.receipt_no,
+          generatedAt: receipt.generated_at,
+        },
+        payment: {
+          amount: payment.amount,
+          mode: payment.mode,
+          paidByRole: payment.paid_by_role as 'Owner' | 'Tenant',
+          paidAt: payment.paid_at,
+        },
+      });
+    } catch (error) {
+      logger.error({ paymentId, error }, 'Failed to render receipt PDF');
+      throw error;
+    }
+
+    const storagePath = `receipts/${payment.association_id}/${payment.id}.pdf`;
+
+    const { error: uploadError } = await admin.storage
+      .from(BUCKET)
+      .upload(storagePath, bytes, {
+        contentType: 'application/pdf',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      logger.error(
+        { paymentId, storagePath, error: uploadError },
+        'Failed to cache generated receipt PDF in storage',
+      );
+    } else {
+      await admin
+        .from('receipts')
+        .update({ pdf_url: storagePath })
+        .eq('id', receipt.id);
+
+      await logAuditEvent({
+        associationId: payment.association_id,
+        action: 'receipt.pdf_generated',
+        entityType: 'receipt',
+        entityId: receipt.id,
+        summary: `Generated PDF for receipt ${receipt.receipt_no}`,
+      });
+    }
 
     return { bytes, filename };
   };

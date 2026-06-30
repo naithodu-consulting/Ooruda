@@ -93,10 +93,7 @@ export function TenancyTimeline({ tenancies }: { tenancies: TenancyEntry[] }) {
       {timeline.map((item, idx) => {
         if (isGap(item)) {
           return (
-            <div
-              key={`gap-${idx}`}
-              className="flex items-stretch gap-3"
-            >
+            <div key={`gap-${idx}`} className="flex items-stretch gap-3">
               {/* Vacancy connector - stretches fully to connect with adjacent items */}
               <div className="flex w-7 flex-col items-center">
                 <div className="border-border flex-1 border-l-2 border-dashed" />

@@ -21,13 +21,7 @@ import {
 } from '@kit/ui/alert-dialog';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@kit/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -109,6 +103,7 @@ export function BillsSection(props: {
   units?: { id: string; unit_no: string }[];
   pendingCharges?: PendingChargeWithUnit[];
   periodOptions?: string[];
+  isOtherChargesActive: boolean;
 }) {
   const [filter, setFilter] = useState<BillFilter>('all');
 
@@ -134,22 +129,20 @@ export function BillsSection(props: {
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col space-y-1.5">
           <CardTitle>Bills</CardTitle>
-          <CardDescription>
-            Generate bills for a period from your active charge types, then
-            track what's outstanding.
-          </CardDescription>
         </div>
 
         {props.canManage ? (
           <div className="flex items-center gap-2 sm:shrink-0">
-            {props.units && props.periodOptions && (
-              <OtherChargesDialog
-                associationId={props.associationId}
-                units={props.units}
-                pendingCharges={props.pendingCharges ?? []}
-                periods={props.periodOptions}
-              />
-            )}
+            {props.isOtherChargesActive &&
+              props.units &&
+              props.periodOptions && (
+                <OtherChargesDialog
+                  associationId={props.associationId}
+                  units={props.units}
+                  pendingCharges={props.pendingCharges ?? []}
+                  periods={props.periodOptions}
+                />
+              )}
             <GenerateBillsDialog associationId={props.associationId} />
           </div>
         ) : null}
