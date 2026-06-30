@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import { Trash2 } from 'lucide-react';
@@ -90,6 +91,7 @@ export function UnitsTable({
   eligibleOwners,
   eligibleTenants,
   overdueUnitIds,
+  accountSlug,
 }: {
   units: UnitRow[];
   people: Record<string, OwnerInfo>;
@@ -99,6 +101,8 @@ export function UnitsTable({
   eligibleOwners: MemberOption[];
   eligibleTenants: MemberOption[];
   overdueUnitIds: string[];
+  /** Account slug used to build the unit detail link, e.g. "my-hoa" */
+  accountSlug: string;
 }) {
   const [filter, setFilter] = useState<UnitFilter>('all');
   const overdueSet = new Set(overdueUnitIds);
@@ -168,7 +172,14 @@ export function UnitsTable({
 
               return (
                 <TableRow key={unit.id}>
-                  <TableCell className="font-medium">{unit.unit_no}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link
+                      href={`/home/${accountSlug}/units/${unit.id}`}
+                      className="hover:text-primary transition-colors"
+                    >
+                      {unit.unit_no}
+                    </Link>
+                  </TableCell>
                   <TableCell>{unit.type}</TableCell>
                   <TableCell>{unit.floor ?? '—'}</TableCell>
                   <TableCell className="text-right tabular-nums">

@@ -12,5 +12,7 @@ const paiseFormatter = new Intl.NumberFormat('en-IN', {
 });
 
 export function formatINR(amount: number): string {
-  return amount % 1 === 0 ? wholeFormatter.format(amount) : paiseFormatter.format(amount);
+  return amount % 1 === 0
+    ? wholeFormatter.format(amount)
+    : paiseFormatter.format(amount);
 }

@@ -58,6 +58,7 @@ import {
 } from '@kit/ui/table';
 import { cn } from '@kit/ui/utils';
 
+import { DownloadPdfButton } from '~/components/download-pdf-button';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
 
@@ -262,6 +263,13 @@ export function BillsSection(props: {
                               billNo={bill.bill_no}
                               period={bill.period}
                               lineItems={bill.lineItems}
+                            />
+
+                            <DownloadPdfButton
+                              href={`/api/billing/bills/${bill.id}/pdf`}
+                              label="Download bill PDF"
+                              dataTest={`download-bill-${bill.id}`}
+                              showLabel
                             />
 
                             {props.canDelete ? (

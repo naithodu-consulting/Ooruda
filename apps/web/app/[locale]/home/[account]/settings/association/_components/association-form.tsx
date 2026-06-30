@@ -35,6 +35,7 @@ interface Props {
     brand_colour: string;
     gstin: string | null;
     gst_enabled: boolean;
+    gst_rate: number | null;
     mescom_consumer_no: string | null;
   };
   billingSettings: {
@@ -158,6 +159,25 @@ export function AssociationForm({ association, billingSettings }: Props) {
               placeholder="29AABCS1429B1ZB"
               className="max-w-xs font-mono uppercase"
             />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="gst_rate">GST Rate (%)</Label>
+            <Input
+              id="gst_rate"
+              name="gst_rate"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              defaultValue={association.gst_rate ?? ''}
+              placeholder="e.g. 18"
+              className="max-w-xs"
+            />
+            <p className="text-muted-foreground text-xs">
+              Split evenly into CGST + SGST on generated bill PDFs. Only applied
+              when GST is applicable above.
+            </p>
           </div>
         </CardContent>
       </Card>

@@ -52,18 +52,16 @@ const TEMPLATE_CSV = [
   'COMMON,Common-Lift,320',
 ].join('\n');
 
-const REQUIRED_COLUMNS = ['unit_no', 'sub_meter_no', 'current_reading'] as const;
+const REQUIRED_COLUMNS = [
+  'unit_no',
+  'sub_meter_no',
+  'current_reading',
+] as const;
 
 /** Returns YYYY-MM for the DB from a MM/YYYY display value */
 function toDbPeriod(mmYyyy: string): string {
   const [mm, yyyy] = mmYyyy.split('/');
   return `${yyyy}-${mm}`;
-}
-
-/** Returns MM/YYYY display string from YYYY-MM */
-function toDisplayPeriod(yyyyMm: string): string {
-  const [yyyy, mm] = yyyyMm.split('-');
-  return `${mm}/${yyyy}`;
 }
 
 /** Generates the last N months including current, as MM/YYYY strings */
@@ -138,7 +136,11 @@ function parseCSV(text: string): ParsedRow[] {
     let error: string | undefined;
     if (!unit_no) error = 'unit_no is required';
     else if (!sub_meter_no) error = 'sub_meter_no is required';
-    else if (!currentReadingRaw || Number.isNaN(currentReading) || currentReading < 0)
+    else if (
+      !currentReadingRaw ||
+      Number.isNaN(currentReading) ||
+      currentReading < 0
+    )
       error = 'current_reading must be a non-negative number';
 
     return {
@@ -226,7 +228,9 @@ export function ImportMeterReadingsDialog({
       setResult({ imported: res.imported, skipped: res.skipped });
 
       if (res.imported > 0) {
-        toast.success(`${res.imported} reading(s) imported for ${selectedPeriod}.`);
+        toast.success(
+          `${res.imported} reading(s) imported for ${selectedPeriod}.`,
+        );
         router.refresh();
       }
     });
@@ -236,7 +240,11 @@ export function ImportMeterReadingsDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
-          <Button variant="outline" size="sm" data-test="import-readings-trigger">
+          <Button
+            variant="outline"
+            size="sm"
+            data-test="import-readings-trigger"
+          >
             <Upload className="h-4 w-4" />
             Import Readings
           </Button>
@@ -270,8 +278,9 @@ export function ImportMeterReadingsDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-muted-foreground text-xs">
-                  All readings in this import will be recorded for the selected month.
-                  Previous readings are auto-filled from the last recorded bill.
+                  All readings in this import will be recorded for the selected
+                  month. Previous readings are auto-filled from the last
+                  recorded bill.
                 </p>
               </div>
             )}
@@ -393,7 +402,8 @@ export function ImportMeterReadingsDialog({
 
                 {invalidRows.length > 0 && validRows.length > 0 && (
                   <p className="text-muted-foreground text-xs">
-                    Invalid rows will be skipped. Only valid rows will be imported.
+                    Invalid rows will be skipped. Only valid rows will be
+                    imported.
                   </p>
                 )}
               </div>
@@ -406,8 +416,7 @@ export function ImportMeterReadingsDialog({
                   <CheckCircle2 className="h-4 w-4" />
                   <AlertDescription>
                     <strong>{result.imported}</strong> reading(s) imported
-                    successfully for{' '}
-                    <strong>{selectedPeriod}</strong>.
+                    successfully for <strong>{selectedPeriod}</strong>.
                     {result.skipped.length > 0 && (
                       <> {result.skipped.length} row(s) were skipped.</>
                     )}

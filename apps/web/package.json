@@ -45,6 +45,7 @@
     "@kit/monitoring": "workspace:*",
     "@kit/next": "workspace:*",
     "@kit/notifications": "workspace:*",
+    "@kit/pdf-templates": "workspace:*",
     "@kit/shared": "workspace:*",
     "@kit/sms": "workspace:*",
     "@kit/supabase": "workspace:*",

@@ -23,6 +23,7 @@ const AssociationSchema = z.object({
     .optional()
     .or(z.literal('')),
   gst_enabled: z.boolean().default(false),
+  gst_rate: z.coerce.number().min(0).max(100).nullable(),
   mescom_consumer_no: z.string().max(50).optional(),
 });
 
@@ -58,6 +59,7 @@ export async function updateAssociationAction(
     brand_colour: formData.get('brand_colour') || '#FCD469',
     gstin: formData.get('gstin') || '',
     gst_enabled: formData.get('gst_enabled') === 'on',
+    gst_rate: formData.get('gst_rate') || null,
     mescom_consumer_no: formData.get('mescom_consumer_no') || undefined,
   });
 

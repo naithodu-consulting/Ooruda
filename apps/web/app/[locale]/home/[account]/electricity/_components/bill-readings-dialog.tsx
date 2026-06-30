@@ -19,7 +19,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@kit/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormMessage } from '@kit/ui/form';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
@@ -40,7 +46,11 @@ export function BillReadingsDialog(props: {
   activeSubMeters: SubMeterRow[];
   existingReadings: Record<
     string,
-    { previous_reading: number; current_reading: number; minimum_charge: number }
+    {
+      previous_reading: number;
+      current_reading: number;
+      minimum_charge: number;
+    }
   >;
   lastKnownReadingBySubMeter: Record<string, number>;
   lastMinChargeBySubMeter: Record<string, number>;
@@ -100,7 +110,11 @@ function ReadingsForm(props: {
   activeSubMeters: SubMeterRow[];
   existingReadings: Record<
     string,
-    { previous_reading: number; current_reading: number; minimum_charge: number }
+    {
+      previous_reading: number;
+      current_reading: number;
+      minimum_charge: number;
+    }
   >;
   lastKnownReadingBySubMeter: Record<string, number>;
   lastMinChargeBySubMeter: Record<string, number>;

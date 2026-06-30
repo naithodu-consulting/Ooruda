@@ -11,7 +11,6 @@ import { useFieldArray, useForm } from 'react-hook-form';
 
 import { Alert, AlertDescription } from '@kit/ui/alert';
 import { Button } from '@kit/ui/button';
-import { PhoneInput } from '@kit/ui/phone-input';
 import {
   Dialog,
   DialogContent,
@@ -30,6 +29,7 @@ import {
 import { useAsyncDialog } from '@kit/ui/hooks/use-async-dialog';
 import { If } from '@kit/ui/if';
 import { Input } from '@kit/ui/input';
+import { PhoneInput } from '@kit/ui/phone-input';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import {

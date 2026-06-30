@@ -18,6 +18,7 @@ import { badgeExtras } from '@kit/ui/badge-extras';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import { MetricCard } from '@kit/ui/metric-card';
 
+import { DownloadPdfButton } from '~/components/download-pdf-button';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import {
   daysBetweenYmd,
@@ -185,7 +186,8 @@ interface PaymentWithBillAndReceipt {
   paid_at: string;
   bill_id: string;
   bills: { period: string; bill_no: string } | null;
-  receipts: { receipt_no: string }[] | null;
+  // payments -> receipts is to-one: receipts.payment_id is unique.
+  receipts: { receipt_no: string } | null;
 }
 
 async function loadMyBillSummary(accountId: string, userId: string) {
@@ -472,12 +474,14 @@ export async function AssociationDashboard({
                   >
                     Pay now
                   </Link>
-                  <Link
-                    href={`/home/${account}/billing/receipts/${latestBill.id}`}
+                  <a
+                    href={`/api/billing/bills/${latestBill.id}/pdf`}
+                    download
+                    data-test="download-latest-bill"
                     className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
                     Download bill
-                  </Link>
+                  </a>
                 </div>
               )}
 
@@ -518,6 +522,13 @@ export async function AssociationDashboard({
                                 {billStatus} &middot;{' '}
                                 {formatINR(b.total_amount)}
                               </Badge>
+                              <DownloadPdfButton
+                                href={`/api/billing/bills/${b.id}/pdf`}
+                                label="Download bill PDF"
+                                dataTest={`download-bill-${b.id}`}
+                                variant="ghost"
+                                iconSize="icon-xs"
+                              />
                             </div>
                           </div>
                         );
@@ -541,7 +552,7 @@ export async function AssociationDashboard({
                     ) : (
                       unitPayments.slice(0, 3).map((p) => {
                         const receiptNo =
-                          p.receipts?.[0]?.receipt_no ||
+                          p.receipts?.receipt_no ||
                           `RCP-${p.id.slice(0, 4).toUpperCase()}`;
                         return (
                           <div
@@ -565,9 +576,18 @@ export async function AssociationDashboard({
                                 )}
                               </span>
                             </div>
-                            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                              {formatINR(p.amount)}
-                            </span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                                {formatINR(p.amount)}
+                              </span>
+                              <DownloadPdfButton
+                                href={`/api/billing/receipts/${p.id}/pdf`}
+                                label="Download receipt PDF"
+                                dataTest={`download-receipt-${p.id}`}
+                                variant="ghost"
+                                iconSize="icon-xs"
+                              />
+                            </div>
                           </div>
                         );
                       })

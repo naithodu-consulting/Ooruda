@@ -110,15 +110,15 @@ export async function generateBillsAction(
   const dueDate = `${period}-${String(dueDayOfMonth).padStart(2, '0')}`;
 
   // Fetch the other_charges charge type (may be inactive, so look beyond activeChargeTypes).
-  const otherChargesCT = activeChargeTypes.find(
-    (c) => c.key === 'other_charges',
-  ) ?? (await client
-    .from('charge_types')
-    .select('id, key, name, default_payer, gst_applicable')
-    .eq('association_id', associationId)
-    .eq('key', 'other_charges')
-    .maybeSingle()
-    .then(({ data }) => data));
+  const otherChargesCT =
+    activeChargeTypes.find((c) => c.key === 'other_charges') ??
+    (await client
+      .from('charge_types')
+      .select('id, key, name, default_payer, gst_applicable')
+      .eq('association_id', associationId)
+      .eq('key', 'other_charges')
+      .maybeSingle()
+      .then(({ data }) => data));
 
   // Load all pending other charges for this period.
   const { data: pendingCharges } = await client
@@ -385,8 +385,10 @@ export async function addOtherChargeToUnitAction(
   const roleError = await requireBillingAccess(associationId);
   if (roleError) return { success: false, error: roleError };
 
-  if (!input.label.trim()) return { success: false, error: 'Label is required.' };
-  if (input.amount <= 0) return { success: false, error: 'Amount must be positive.' };
+  if (!input.label.trim())
+    return { success: false, error: 'Label is required.' };
+  if (input.amount <= 0)
+    return { success: false, error: 'Amount must be positive.' };
 
   const client = getSupabaseServerClient();
 
@@ -433,8 +435,10 @@ export async function bulkAddOtherChargeAction(
   const roleError = await requireBillingAccess(associationId);
   if (roleError) return { success: false, error: roleError };
 
-  if (!input.label.trim()) return { success: false, error: 'Label is required.' };
-  if (input.amount <= 0) return { success: false, error: 'Amount must be positive.' };
+  if (!input.label.trim())
+    return { success: false, error: 'Label is required.' };
+  if (input.amount <= 0)
+    return { success: false, error: 'Amount must be positive.' };
 
   const client = getSupabaseServerClient();
   const { error } = await client.from('pending_other_charges').insert({

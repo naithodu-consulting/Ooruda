@@ -28,6 +28,7 @@ catalog:
   '@next/bundle-analyzer': 16.2.7
   '@nosecone/next': 1.4.0
   '@playwright/test': ^1.60.0
+  '@react-pdf/renderer': 4.5.1
   '@sentry/nextjs': 10.55.0
   '@sentry/node-core': 10.55.0
   '@stripe/react-stripe-js': 6.5.0

@@ -210,6 +210,7 @@ export type Database = {
           brand_colour: string
           created_at: string
           gst_enabled: boolean
+          gst_rate: number | null
           gstin: string | null
           id: string
           logo_url: string | null
@@ -223,6 +224,7 @@ export type Database = {
           brand_colour?: string
           created_at?: string
           gst_enabled?: boolean
+          gst_rate?: number | null
           gstin?: string | null
           id?: string
           logo_url?: string | null
@@ -236,6 +238,7 @@ export type Database = {
           brand_colour?: string
           created_at?: string
           gst_enabled?: boolean
+          gst_rate?: number | null
           gstin?: string | null
           id?: string
           logo_url?: string | null
@@ -440,6 +443,8 @@ export type Database = {
           generated_by: string | null
           id: string
           paid_amount: number
+          pdf_generated_at: string | null
+          pdf_url: string | null
           period: string
           status: string
           total_amount: number
@@ -453,6 +458,8 @@ export type Database = {
           generated_by?: string | null
           id?: string
           paid_amount?: number
+          pdf_generated_at?: string | null
+          pdf_url?: string | null
           period: string
           status?: string
           total_amount?: number
@@ -466,6 +473,8 @@ export type Database = {
           generated_by?: string | null
           id?: string
           paid_amount?: number
+          pdf_generated_at?: string | null
+          pdf_url?: string | null
           period?: string
           status?: string
           total_amount?: number

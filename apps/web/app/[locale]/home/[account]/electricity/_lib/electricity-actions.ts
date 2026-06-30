@@ -295,12 +295,17 @@ export async function bulkImportMeterReadingsAction(
     : { data: [] };
 
   // For each sub_meter, group readings by sub_meter_id, sorted desc — first entry is the latest
-  const lastReadingBySm = new Map<string, { period: string; current_reading: number }[]>();
+  const lastReadingBySm = new Map<
+    string,
+    { period: string; current_reading: number }[]
+  >();
   for (const r of lastReadings ?? []) {
     if (!lastReadingBySm.has(r.sub_meter_id)) {
       lastReadingBySm.set(r.sub_meter_id, []);
     }
-    lastReadingBySm.get(r.sub_meter_id)!.push({ period: r.period, current_reading: r.current_reading });
+    lastReadingBySm
+      .get(r.sub_meter_id)!
+      .push({ period: r.period, current_reading: r.current_reading });
   }
 
   const skipped: MeterReadingImportSkipped[] = [];
@@ -370,7 +375,8 @@ export async function bulkImportMeterReadingsAction(
     const prevReadings = (lastReadingBySm.get(subMeter.id) ?? []).filter(
       (r) => r.period < row.period,
     );
-    const previousReading = prevReadings.length > 0 ? prevReadings[0]!.current_reading : 0;
+    const previousReading =
+      prevReadings.length > 0 ? prevReadings[0]!.current_reading : 0;
 
     toUpsert.push({
       sub_meter_id: subMeter.id,

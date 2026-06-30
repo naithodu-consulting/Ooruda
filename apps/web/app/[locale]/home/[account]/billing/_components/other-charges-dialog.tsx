@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useWatch } from 'react-hook-form';
 
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Trash2 } from 'lucide-react';
+import { useWatch } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -66,8 +66,6 @@ const ChargeSchema = z
     }
   });
 
-type ChargeFormValues = z.infer<typeof ChargeSchema>;
-
 interface UnitOption {
   id: string;
   unit_no: string;
@@ -102,7 +100,11 @@ export function OtherChargesDialog(props: Props) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button size="sm" variant="outline" data-test="other-charges-dialog-trigger">
+          <Button
+            size="sm"
+            variant="outline"
+            data-test="other-charges-dialog-trigger"
+          >
             Other Charges
           </Button>
         }
@@ -284,7 +286,10 @@ function AddChargeForm(props: {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Split method</FormLabel>
-                <Select value={field.value ?? 'flat'} onValueChange={field.onChange}>
+                <Select
+                  value={field.value ?? 'flat'}
+                  onValueChange={field.onChange}
+                >
                   <FormControl>
                     <SelectTrigger className="h-9 text-sm">
                       <SelectValue />
@@ -382,19 +387,20 @@ function PendingChargesList(props: {
     });
   };
 
-  const byPeriod = props.charges.reduce<Record<string, PendingChargeWithUnit[]>>(
-    (acc, c) => {
-      (acc[c.period] ??= []).push(c);
-      return acc;
-    },
-    {},
-  );
+  const byPeriod = props.charges.reduce<
+    Record<string, PendingChargeWithUnit[]>
+  >((acc, c) => {
+    (acc[c.period] ??= []).push(c);
+    return acc;
+  }, {});
 
-  const sortedPeriods = Object.keys(byPeriod).sort((a, b) => b.localeCompare(a));
+  const sortedPeriods = Object.keys(byPeriod).sort((a, b) =>
+    b.localeCompare(a),
+  );
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+      <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
         Staged charges
       </p>
 

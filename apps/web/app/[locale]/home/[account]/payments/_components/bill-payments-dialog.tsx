@@ -37,6 +37,7 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
+import { DownloadPdfButton } from '~/components/download-pdf-button';
 import { formatTimestampDateDMY } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 
@@ -110,7 +111,20 @@ export function BillPaymentsDialog(props: {
                   <TableCell className="text-right tabular-nums">
                     {formatINR(payment.amount)}
                   </TableCell>
-                  <TableCell>{payment.receipt_no ?? '—'}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <span>{payment.receipt_no ?? '—'}</span>
+                      {payment.receipt_no ? (
+                        <DownloadPdfButton
+                          href={`/api/billing/receipts/${payment.id}/pdf`}
+                          label="Download receipt PDF"
+                          dataTest={`download-receipt-${payment.id}`}
+                          variant="ghost"
+                          iconSize="icon-xs"
+                        />
+                      ) : null}
+                    </div>
+                  </TableCell>
                   {props.canVoid ? (
                     <TableCell>
                       <VoidPaymentButton

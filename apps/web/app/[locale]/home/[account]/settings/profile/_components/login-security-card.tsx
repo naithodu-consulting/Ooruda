@@ -19,13 +19,13 @@ import {
   CardTitle,
 } from '@kit/ui/card';
 import { Input } from '@kit/ui/input';
-import { PhoneInput } from '@kit/ui/phone-input';
 import {
   InputOTP,
   InputOTPGroup,
   InputOTPSeparator,
   InputOTPSlot,
 } from '@kit/ui/input-otp';
+import { PhoneInput } from '@kit/ui/phone-input';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import { Trans } from '@kit/ui/trans';

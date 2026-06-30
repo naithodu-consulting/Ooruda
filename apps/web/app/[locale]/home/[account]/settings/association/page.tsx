@@ -103,6 +103,7 @@ export default async function AssociationSettingsPage({ params }: Props) {
           brand_colour: association.brand_colour,
           gstin: association.gstin,
           gst_enabled: association.gst_enabled,
+          gst_rate: association.gst_rate,
           mescom_consumer_no: association.mescom_consumer_no,
         }}
         billingSettings={billingSettings ?? null}

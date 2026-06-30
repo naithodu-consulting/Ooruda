@@ -229,6 +229,7 @@ export default async function UnitsPage({ params }: Props) {
             eligibleOwners={eligibleOwners}
             eligibleTenants={eligibleTenants}
             overdueUnitIds={[...overdueUnitIds]}
+            accountSlug={account}
           />
         ) : (
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed py-20 text-center">

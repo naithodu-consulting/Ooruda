@@ -25,6 +25,7 @@ const INTERNAL_PACKAGES = [
   '@kit/monitoring',
   '@kit/next',
   '@kit/notifications',
+  '@kit/pdf-templates',
 ];
 
 /** @type {import('next').NextConfig} */
@@ -38,7 +39,7 @@ const config = {
       fullUrl: true,
     },
   },
-  serverExternalPackages: [],
+  serverExternalPackages: ['@react-pdf/renderer'],
   // needed for supporting dynamic imports for local content
   outputFileTracingIncludes: {
     '/*': ['./content/**/*'],

@@ -24,13 +24,13 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
-import { PhoneInput } from '@kit/ui/phone-input';
 import {
   InputOTP,
   InputOTPGroup,
   InputOTPSeparator,
   InputOTPSlot,
 } from '@kit/ui/input-otp';
+import { PhoneInput } from '@kit/ui/phone-input';
 import { Spinner } from '@kit/ui/spinner';
 import { Trans } from '@kit/ui/trans';
 
@@ -51,11 +51,9 @@ type Channel = keyof typeof CHANNEL_CONFIG;
 type Step = 'identifier' | 'otp';
 
 const PhoneSchema = z.object({
-  phone: z
-    .string()
-    .refine((v) => normalizePhoneNumber(v) !== null, {
-      message: 'auth.phoneInvalidFormat',
-    }),
+  phone: z.string().refine((v) => normalizePhoneNumber(v) !== null, {
+    message: 'auth.phoneInvalidFormat',
+  }),
 });
 
 const EmailSchema = z.object({

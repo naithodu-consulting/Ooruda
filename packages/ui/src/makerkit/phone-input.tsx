@@ -10,19 +10,19 @@ import {
 } from 'libphonenumber-js';
 
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from '#components/input-group';
-import { cn } from '#lib/utils';
-
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '../shadcn/select';
+
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '#components/input-group';
+import { cn } from '#lib/utils';
 
 /** Convert a 2-letter country code to its flag emoji. */
 function countryFlag(code: string): string {
@@ -75,11 +75,10 @@ function parseE164(value: string): { country: CountryCode; national: string } {
   return { country: DEFAULT_COUNTRY, national: '' };
 }
 
-export interface PhoneInputProps
-  extends Omit<
-    React.ComponentProps<typeof InputGroupInput>,
-    'value' | 'onChange' | 'type'
-  > {
+export interface PhoneInputProps extends Omit<
+  React.ComponentProps<typeof InputGroupInput>,
+  'value' | 'onChange' | 'type'
+> {
   /** E.164 value (e.g. `+919911000006`), or empty string / undefined. */
   value?: string;
   /** Called with the full E.164 string on every change. */
