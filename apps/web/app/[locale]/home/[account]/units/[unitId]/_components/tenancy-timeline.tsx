@@ -95,23 +95,25 @@ export function TenancyTimeline({ tenancies }: { tenancies: TenancyEntry[] }) {
           return (
             <div
               key={`gap-${idx}`}
-              className="flex items-center gap-3 py-2 pl-4"
+              className="flex items-stretch gap-3"
             >
-              {/* Vacancy connector */}
-              <div className="flex flex-col items-center self-stretch">
-                <div className="bg-border w-px flex-1" />
-                <div className="border-border bg-background my-1 h-2 w-2 rounded-full border border-dashed" />
-                <div className="bg-border w-px flex-1" />
+              {/* Vacancy connector - stretches fully to connect with adjacent items */}
+              <div className="flex w-7 flex-col items-center">
+                <div className="border-border flex-1 border-l-2 border-dashed" />
+                <div className="border-border bg-background my-2 h-2 w-2 flex-none rounded-full border-2 border-dashed" />
+                <div className="border-border flex-1 border-l-2 border-dashed" />
               </div>
-              <p className="text-muted-foreground py-1 text-xs italic">
-                Vacant ·{' '}
-                <span className="font-medium">
-                  {item.days} day{item.days !== 1 ? 's' : ''}
-                </span>{' '}
-                <span className="opacity-70">
-                  ({formatDateDMY(item.from)} → {formatDateDMY(item.to)})
-                </span>
-              </p>
+              <div className="flex items-center py-4 pl-3">
+                <p className="text-muted-foreground text-xs italic">
+                  Vacant ·{' '}
+                  <span className="font-medium">
+                    {item.days} day{item.days !== 1 ? 's' : ''}
+                  </span>{' '}
+                  <span className="opacity-70">
+                    ({formatDateDMY(item.from)} → {formatDateDMY(item.to)})
+                  </span>
+                </p>
+              </div>
             </div>
           );
         }
@@ -123,21 +125,21 @@ export function TenancyTimeline({ tenancies }: { tenancies: TenancyEntry[] }) {
         return (
           <div key={item.id} className="flex gap-3">
             {/* Timeline spine + dot */}
-            <div className="flex flex-col items-center" style={{ width: 28 }}>
+            <div className="flex w-7 flex-col items-center">
               {/* Top connector — hidden for first item */}
               <div
                 className={cn(
                   'bg-border w-px',
-                  isFirst ? 'invisible' : 'h-4 flex-none',
+                  isFirst ? 'invisible' : 'h-5 flex-none',
                 )}
               />
               {/* Dot */}
               <div
                 className={cn(
-                  'z-10 my-1 h-3 w-3 flex-none rounded-full border-2',
+                  'z-10 h-3 w-3 flex-none rounded-full border-2',
                   isActive
                     ? 'border-primary bg-primary'
-                    : 'border-muted-foreground/30 bg-muted',
+                    : 'border-muted-foreground/40 bg-muted',
                 )}
               />
               {/* Bottom connector — hidden for last item */}
@@ -152,10 +154,10 @@ export function TenancyTimeline({ tenancies }: { tenancies: TenancyEntry[] }) {
             {/* Content card */}
             <div
               className={cn(
-                'mb-2 flex-1 rounded-lg border p-3',
+                'mb-1 flex-1 rounded-lg border p-4 shadow-sm',
                 isActive
                   ? 'border-primary/30 bg-primary/5'
-                  : 'border-border bg-muted/30',
+                  : 'border-border bg-muted/20',
               )}
             >
               {/* Header: name + badge */}

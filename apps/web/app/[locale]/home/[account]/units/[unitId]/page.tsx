@@ -3,13 +3,13 @@ import { notFound } from 'next/navigation';
 
 import { ArrowLeft, Building2, Ruler, User } from 'lucide-react';
 
-import { formatPhoneNumber } from '@kit/shared/utils';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Badge } from '@kit/ui/badge';
 import { badgeExtras } from '@kit/ui/badge-extras';
 import { PageBody } from '@kit/ui/page';
 
 import { requireRole } from '~/lib/rbac';
+import { personLabel } from '~/lib/person-label';
 
 import { TeamAccountLayoutPageHeader } from '../../_components/team-account-layout-page-header';
 import { TenancyTimeline } from './_components/tenancy-timeline';
@@ -34,13 +34,9 @@ export async function generateMetadata({ params }: Props) {
   };
 }
 
-function personLabel(
-  full_name: string | null,
-  mobile_number: string | null,
-): string | null {
-  if (full_name?.trim()) return full_name.trim();
-  return mobile_number ? formatPhoneNumber(mobile_number) : null;
-}
+// removed duplicate personLabel
+
+const areaFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
 export default async function UnitDetailPage({ params }: Props) {
   const { account, unitId } = await params;
@@ -78,7 +74,7 @@ export default async function UnitDetailPage({ params }: Props) {
   const { data: tenancies } = await client
     .from('tenancies')
     .select('id, tenant_id, start_date, end_date, status')
-    .eq('unit_id', unitId)
+    .eq('unit_id', unit.id)
     .order('start_date', { ascending: false });
 
   const allTenancies = tenancies ?? [];
@@ -111,20 +107,13 @@ export default async function UnitDetailPage({ params }: Props) {
   }
 
   const ownerLabel = unit.owner_id
-    ? (personLabel(
-        profiles[unit.owner_id]?.full_name ?? null,
-        profiles[unit.owner_id]?.mobile_number ?? null,
-      ) ?? 'Owner')
+    ? (personLabel(profiles[unit.owner_id]) ?? 'Owner')
     : null;
 
-  const areaFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
   const unitsPath = `/home/${account}/units`;
   const activeTenancy = allTenancies.find((t) => t.status === 'active');
   const activeTenantLabel = activeTenancy
-    ? (personLabel(
-        profiles[activeTenancy.tenant_id]?.full_name ?? null,
-        profiles[activeTenancy.tenant_id]?.mobile_number ?? null,
-      ) ?? null)
+    ? (personLabel(profiles[activeTenancy.tenant_id]) ?? null)
     : null;
 
   // Build enriched tenancy rows for the timeline
@@ -132,10 +121,7 @@ export default async function UnitDetailPage({ params }: Props) {
     id: t.id,
     tenant_id: t.tenant_id,
     tenantLabel:
-      personLabel(
-        profiles[t.tenant_id]?.full_name ?? null,
-        profiles[t.tenant_id]?.mobile_number ?? null,
-      ) ?? t.tenant_id.slice(0, 8),
+      personLabel(profiles[t.tenant_id]) ?? t.tenant_id.slice(0, 8),
     start_date: t.start_date,
     end_date: t.end_date,
     status: t.status as 'active' | 'ended',

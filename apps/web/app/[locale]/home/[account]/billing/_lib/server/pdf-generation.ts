@@ -6,8 +6,11 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole } from '~/lib/rbac';
+import { checkUnitAccess } from '~/lib/unit-access';
 
 const BUCKET = 'billing-documents';
+
+const pendingPdfGenerations = new Map<string, Promise<GeneratedPdf | null>>();
 
 export interface GeneratedPdf {
   bytes: Buffer;
@@ -46,25 +49,7 @@ async function canAccessUnit(
     return false;
   }
 
-  const { data: owned } = await client
-    .from('units')
-    .select('id')
-    .eq('id', unitId)
-    .eq('owner_id', user.id)
-    .maybeSingle();
-
-  if (owned) {
-    return true;
-  }
-
-  const { data: tenancy } = await client
-    .from('tenancies')
-    .select('id')
-    .eq('unit_id', unitId)
-    .eq('tenant_id', user.id)
-    .maybeSingle();
-
-  return !!tenancy;
+  return checkUnitAccess(client, unitId, user.id);
 }
 
 /**
@@ -79,19 +64,29 @@ async function canAccessUnit(
 export async function getOrGenerateBillPdf(
   billId: string,
 ): Promise<GeneratedPdf | null> {
-  const logger = await getLogger();
-  const client = getSupabaseServerClient();
+  const cacheKey = `bill_${billId}`;
+  if (pendingPdfGenerations.has(cacheKey)) {
+    return pendingPdfGenerations.get(cacheKey)!;
+  }
 
-  const { data: bill, error: billError } = await client
-    .from('bills')
-    .select(
-      `id, association_id, unit_id, period, bill_no, total_amount, paid_amount, status, due_date, generated_at, pdf_url,
-       units(unit_no),
-       bill_line_items(description, payer, gst_applicable, amount),
-       associations(address, gstin, gst_enabled, gst_rate, accounts(name, picture_url))`,
-    )
-    .eq('id', billId)
-    .maybeSingle();
+  const generate = async (): Promise<GeneratedPdf | null> => {
+    const logger = await getLogger();
+    const admin = getSupabaseServerAdminClient();
+
+    // Fetch the bill using the admin client to ensure we get the full 
+    // nested association + accounts join (which might otherwise be filtered
+    // by RLS for non-members, obscuring the logo). We manually authorize 
+    // the user via `canAccessUnit` immediately below.
+    const { data: bill, error: billError } = await admin
+      .from('bills')
+      .select(
+        `id, association_id, unit_id, period, bill_no, total_amount, paid_amount, status, due_date, generated_at, pdf_url,
+         units(unit_no),
+         bill_line_items(description, payer, gst_applicable, amount),
+         associations(address, gstin, gst_enabled, gst_rate, accounts(name, picture_url))`,
+      )
+      .eq('id', billId)
+      .maybeSingle();
 
   if (billError) {
     logger.error(
@@ -118,7 +113,6 @@ export async function getOrGenerateBillPdf(
   }
 
   const filename = `${bill.bill_no}.pdf`;
-  const admin = getSupabaseServerAdminClient();
 
   if (bill.pdf_url) {
     const { data: cached } = await admin.storage
@@ -200,7 +194,16 @@ export async function getOrGenerateBillPdf(
     });
   }
 
-  return { bytes, filename };
+    return { bytes, filename };
+  };
+
+  const promise = generate();
+  pendingPdfGenerations.set(cacheKey, promise);
+  try {
+    return await promise;
+  } finally {
+    pendingPdfGenerations.delete(cacheKey);
+  }
 }
 
 /**
@@ -209,18 +212,28 @@ export async function getOrGenerateBillPdf(
 export async function getOrGenerateReceiptPdf(
   paymentId: string,
 ): Promise<GeneratedPdf | null> {
-  const logger = await getLogger();
-  const client = getSupabaseServerClient();
+  const cacheKey = `receipt_${paymentId}`;
+  if (pendingPdfGenerations.has(cacheKey)) {
+    return pendingPdfGenerations.get(cacheKey)!;
+  }
 
-  const { data: payment, error: paymentError } = await client
-    .from('payments')
-    .select(
-      `id, association_id, amount, mode, paid_by_role, paid_at,
-       bills(bill_no, period, unit_id, units(unit_no), associations(address, gstin, accounts(name, picture_url))),
-       receipts(id, receipt_no, pdf_url, generated_at)`,
-    )
-    .eq('id', paymentId)
-    .maybeSingle();
+  const generate = async (): Promise<GeneratedPdf | null> => {
+    const logger = await getLogger();
+    const admin = getSupabaseServerAdminClient();
+
+    // Fetch the payment using the admin client to ensure we get the full 
+    // nested association + accounts join (which might otherwise be filtered
+    // by RLS for non-members, obscuring the logo). We manually authorize 
+    // the user via `canAccessUnit` immediately below.
+    const { data: payment, error: paymentError } = await admin
+      .from('payments')
+      .select(
+        `id, association_id, amount, mode, paid_by_role, paid_at,
+         bills(bill_no, period, unit_id, units(unit_no), associations(address, gstin, accounts(name, picture_url))),
+         receipts(id, receipt_no, pdf_url, generated_at)`,
+      )
+      .eq('id', paymentId)
+      .maybeSingle();
 
   if (paymentError) {
     logger.error(
@@ -259,7 +272,6 @@ export async function getOrGenerateReceiptPdf(
   }
 
   const filename = `${receipt.receipt_no}.pdf`;
-  const admin = getSupabaseServerAdminClient();
 
   if (receipt.pdf_url) {
     const { data: cached } = await admin.storage
@@ -330,5 +342,14 @@ export async function getOrGenerateReceiptPdf(
     });
   }
 
-  return { bytes, filename };
+    return { bytes, filename };
+  };
+
+  const promise = generate();
+  pendingPdfGenerations.set(cacheKey, promise);
+  try {
+    return await promise;
+  } finally {
+    pendingPdfGenerations.delete(cacheKey);
+  }
 }

@@ -27,6 +27,7 @@ import {
 } from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
+import { getAccessibleUnits } from '~/lib/unit-access';
 import { type PropOpsRole, hasMinimumRole } from '~/lib/rbac';
 
 function currentPeriod(): string {
@@ -205,29 +206,7 @@ async function loadMyBillSummary(accountId: string, userId: string) {
 
   const assocName = (association.accounts as any)?.name ?? 'Association';
 
-  // Fetch ALL units owned by this user in this association.
-  const { data: ownedUnits } = await client
-    .from('units')
-    .select('id, unit_no')
-    .eq('association_id', association.id)
-    .eq('owner_id', userId)
-    .order('unit_no');
-
-  let units: { id: string; unit_no: string }[] = ownedUnits ?? [];
-
-  // Fallback: tenant with no owned units — find all active tenancy units in this association.
-  if (units.length === 0) {
-    const { data: tenancies } = await client
-      .from('tenancies')
-      .select('units!inner(id, unit_no, association_id)')
-      .eq('tenant_id', userId)
-      .eq('status', 'active')
-      .eq('units.association_id', association.id);
-
-    units = (tenancies ?? [])
-      .map((t) => t.units as { id: string; unit_no: string } | null)
-      .filter((u): u is { id: string; unit_no: string } => u !== null);
-  }
+  const units = await getAccessibleUnits(client, association.id, userId);
 
   if (units.length === 0) {
     return null;

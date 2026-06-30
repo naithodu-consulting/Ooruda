@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 
 import { Trash2 } from 'lucide-react';
 
-import { formatPhoneNumber } from '@kit/shared/utils';
+import { personLabel } from '~/lib/person-label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -76,11 +76,7 @@ export interface TenancyInfo {
 
 const areaFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
-function personLabel(info: OwnerInfo | undefined): string | null {
-  if (info?.full_name?.trim()) return info.full_name.trim();
-
-  return info?.mobile_number ? formatPhoneNumber(info.mobile_number) : null;
-}
+// removed duplicate personLabel
 
 export function UnitsTable({
   units,
