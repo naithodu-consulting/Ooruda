@@ -18,7 +18,7 @@ export default function UnitNotFound() {
         data-test="unit-not-found-back"
         className="text-primary hover:text-primary/80 mt-2 text-sm font-medium underline underline-offset-4 transition-colors"
       >
-        ← Back to units
+        ← Back
       </Link>
     </div>
   );

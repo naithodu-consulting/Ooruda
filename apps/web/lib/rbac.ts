@@ -61,6 +61,11 @@ export async function requireRole(
     notFound();
   }
 
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+  if (isSuperAdmin) {
+    return { role: 'assoc_admin', accountId: account.id, userId: user.id };
+  }
+
   const { data: membership } = await client
     .from('accounts_memberships')
     .select('account_role')
@@ -109,6 +114,11 @@ export async function getAssociationRole(
 
   if (!association) {
     return null;
+  }
+
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+  if (isSuperAdmin) {
+    return 'assoc_admin';
   }
 
   const { data: membership } = await client

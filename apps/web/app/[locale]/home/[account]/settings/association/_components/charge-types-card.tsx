@@ -58,9 +58,14 @@ interface ChargeType {
 interface Props {
   chargeTypes: ChargeType[];
   associationId: string;
+  isSuperAdmin?: boolean;
 }
 
-export function ChargeTypesCard({ chargeTypes, associationId }: Props) {
+export function ChargeTypesCard({
+  chargeTypes,
+  associationId,
+  isSuperAdmin,
+}: Props) {
   const [optimistic, setOptimistic] = useOptimistic<
     ChargeType[],
     {
@@ -167,7 +172,8 @@ export function ChargeTypesCard({ chargeTypes, associationId }: Props) {
                       {ct.frequency}
                     </span>
                     {/* Maintenance calc method toggle */}
-                    {isMaintenance &&
+                    {isSuperAdmin &&
+                      isMaintenance &&
                       (ct.calc_method === 'per_sqft' ||
                         ct.calc_method === 'per_unit') && (
                         <AlertDialog>

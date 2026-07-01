@@ -89,6 +89,7 @@ export function UnitsTable({
   eligibleTenants,
   overdueUnitIds,
   accountSlug,
+  isSuperAdmin = false,
 }: {
   units: UnitRow[];
   people: Record<string, OwnerInfo>;
@@ -100,6 +101,7 @@ export function UnitsTable({
   overdueUnitIds: string[];
   /** Account slug used to build the unit detail link, e.g. "my-hoa" */
   accountSlug: string;
+  isSuperAdmin?: boolean;
 }) {
   const [filter, setFilter] = useState<UnitFilter>('all');
   const overdueSet = new Set(overdueUnitIds);
@@ -222,10 +224,12 @@ export function UnitsTable({
                           eligibleOwners={eligibleOwners}
                           eligibleTenants={eligibleTenants}
                         />
-                        <DeleteUnitButton
-                          unit={unit}
-                          associationId={associationId}
-                        />
+                        {isSuperAdmin && (
+                          <DeleteUnitButton
+                            unit={unit}
+                            associationId={associationId}
+                          />
+                        )}
                       </div>
                     </TableCell>
                   ) : null}

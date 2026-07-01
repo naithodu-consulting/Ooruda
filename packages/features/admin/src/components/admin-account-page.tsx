@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { BadgeX, Ban, ShieldPlus, VenetianMask } from 'lucide-react';
 
 import { normalizePhoneNumber } from '@kit/shared/utils';
@@ -232,7 +234,15 @@ async function TeamAccountPage(props: {
             }}
           />
         }
-      />
+      >
+        <div className={'flex gap-x-2.5'}>
+          <Link href={`/home/${props.account.slug}`} target="_blank">
+            <Button size={'sm'} variant={'outline'}>
+              Open Association Workspace
+            </Button>
+          </Link>
+        </div>
+      </PageHeader>
 
       <div className={'flex justify-between'}>
         <div className={'flex items-center gap-x-4'}>

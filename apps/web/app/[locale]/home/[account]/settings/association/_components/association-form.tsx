@@ -39,7 +39,9 @@ interface Props {
     mescom_consumer_no: string | null;
   };
   billingSettings: {
-    due_day_of_month: number;
+    electricity_due_day: number;
+    maintenance_due_day: number;
+    other_charges_due_day: number;
   } | null;
 }
 
@@ -187,20 +189,52 @@ export function AssociationForm({ association, billingSettings }: Props) {
         <CardHeader>
           <CardTitle>Billing Defaults</CardTitle>
           <CardDescription>
-            Default due date applied across all generated bills.
+            Configure default due days for different bill types.
           </CardDescription>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="due_day_of_month">Due Day of Month (1–28)</Label>
+            <Label htmlFor="electricity_due_day">
+              Electricity Due Day (1–28)
+            </Label>
             <Input
-              id="due_day_of_month"
-              name="due_day_of_month"
+              id="electricity_due_day"
+              name="electricity_due_day"
               type="number"
               min={1}
               max={28}
-              defaultValue={billingSettings?.due_day_of_month ?? 10}
+              defaultValue={billingSettings?.electricity_due_day ?? 10}
+              className="max-w-[120px]"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="maintenance_due_day">
+              Maintenance Due Day (1–28)
+            </Label>
+            <Input
+              id="maintenance_due_day"
+              name="maintenance_due_day"
+              type="number"
+              min={1}
+              max={28}
+              defaultValue={billingSettings?.maintenance_due_day ?? 10}
+              className="max-w-[120px]"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="other_charges_due_day">
+              Other Charges Due Day (1–28)
+            </Label>
+            <Input
+              id="other_charges_due_day"
+              name="other_charges_due_day"
+              type="number"
+              min={1}
+              max={28}
+              defaultValue={billingSettings?.other_charges_due_day ?? 10}
               className="max-w-[120px]"
             />
           </div>

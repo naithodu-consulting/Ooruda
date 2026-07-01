@@ -119,12 +119,18 @@ function UnitDetailsForm(props: {
     },
   });
 
+  const unitType = form.watch('type');
+
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
+      const payload = { ...values };
+      if (payload.type === 'Common Area') {
+        payload.area_sqft = 0;
+      }
       const result = await updateUnitAction(
         props.unit.id,
         props.associationId,
-        values,
+        payload,
       );
 
       if (!result.success) {
@@ -184,18 +190,26 @@ function UnitDetailsForm(props: {
           />
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <FormField
-              name="area_sqft"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Area (sq.ft)</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="1" min="0" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {unitType !== 'Common Area' && (
+              <FormField
+                name="area_sqft"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Area (sq.ft)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="1"
+                        min="0"
+                        placeholder="e.g. 450"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               name="floor"

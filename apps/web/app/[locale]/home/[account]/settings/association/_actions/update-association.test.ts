@@ -74,7 +74,9 @@ const validFields = {
   gstin: VALID_GSTIN,
   gst_enabled: 'on',
   mescom_consumer_no: 'MES-998877',
-  due_day_of_month: '15',
+  electricity_due_day: '15',
+  maintenance_due_day: '15',
+  other_charges_due_day: '15',
   minimum_electricity_charge: '250',
 };
 
@@ -157,7 +159,9 @@ describe('updateAssociationAction — happy path', () => {
     // billing_settings updated, scoped to association_id, with coerced numbers.
     expect(fromMock).toHaveBeenNthCalledWith(2, 'billing_settings');
     expect(updateMock).toHaveBeenNthCalledWith(2, {
-      due_day_of_month: 15,
+      electricity_due_day: 15,
+      maintenance_due_day: 15,
+      other_charges_due_day: 15,
       minimum_electricity_charge: 250,
     });
     expect(eqMock).toHaveBeenNthCalledWith(2, 'association_id', ASSOCIATION_ID);
@@ -228,7 +232,7 @@ describe('updateAssociationAction — validation', () => {
     const result = await updateAssociationAction(
       ASSOCIATION_ID,
       null,
-      formDataFrom({ ...validFields, due_day_of_month: '31' }),
+      formDataFrom({ ...validFields, electricity_due_day: '31' }),
     );
 
     expect(result).toEqual({

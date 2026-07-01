@@ -55,9 +55,15 @@ export function AddUnitDialog({ associationId }: { associationId: string }) {
     },
   });
 
+  const unitType = form.watch('type');
+
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
-      const result = await createUnitAction(associationId, values);
+      const payload = { ...values };
+      if (payload.type === 'Common Area') {
+        payload.area_sqft = 0;
+      }
+      const result = await createUnitAction(associationId, payload);
 
       if (!result.success) {
         toast.error(result.error ?? 'Could not add the unit.');
@@ -130,24 +136,26 @@ export function AddUnitDialog({ associationId }: { associationId: string }) {
             />
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                name="area_sqft"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Area (sq.ft)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="1"
-                        min="0"
-                        placeholder="e.g. 450"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {unitType !== 'Common Area' && (
+                <FormField
+                  name="area_sqft"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Area (sq.ft)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="1"
+                          min="0"
+                          placeholder="e.g. 450"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 name="floor"

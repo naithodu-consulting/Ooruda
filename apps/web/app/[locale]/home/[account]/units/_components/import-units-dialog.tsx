@@ -40,7 +40,7 @@ import {
 } from '../_lib/units-actions';
 import { UNIT_TYPES } from '../_lib/units-schema';
 
-const TEMPLATE_CSV = `unit_no,type,floor,area_sqft\nG-01,Shop,0,450\nG-02,Shop,0,380\n1-01,Office,1,600\n`;
+const TEMPLATE_CSV = `unit_no,type,floor,area_sqft\nG-01,Shop,0,450\nG-02,Shop,0,380\n1-01,Office,1,600\nCA-01,Common Area,,0\n`;
 
 const REQUIRED_COLUMNS = ['unit_no', 'type', 'area_sqft'] as const;
 
@@ -92,7 +92,7 @@ function parseCSV(text: string): ParsedRow[] {
     const unit_no = get('unit_no');
     const type = get('type');
     const floor = get('floor');
-    const area_sqft = get('area_sqft');
+    let area_sqft = get('area_sqft');
 
     const validType = UNIT_TYPES.includes(type as (typeof UNIT_TYPES)[number]);
 
@@ -100,9 +100,24 @@ function parseCSV(text: string): ParsedRow[] {
     if (!unit_no) error = 'unit_no is required';
     else if (!validType)
       error = `type must be one of: ${UNIT_TYPES.join(', ')}`;
-    else if (!area_sqft || Number(area_sqft) <= 0)
-      error = 'area_sqft must be a positive number';
-    else if (
+    else {
+      if (type === 'Common Area' && (!area_sqft || area_sqft === '')) {
+        area_sqft = '0';
+      }
+      if (
+        !area_sqft ||
+        Number(area_sqft) < 0 ||
+        (type !== 'Common Area' && Number(area_sqft) <= 0)
+      ) {
+        error =
+          type === 'Common Area'
+            ? 'area_sqft must be 0 or a positive number'
+            : 'area_sqft must be greater than 0';
+      }
+    }
+
+    if (
+      !error &&
       floor !== '' &&
       floor !== undefined &&
       (Number.isNaN(Number(floor)) || Number(floor) < -5 || Number(floor) > 200)

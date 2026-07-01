@@ -28,7 +28,9 @@ const AssociationSchema = z.object({
 });
 
 const BillingSettingsSchema = z.object({
-  due_day_of_month: z.coerce.number().int().min(1).max(28).default(10),
+  electricity_due_day: z.coerce.number().min(1).max(28).default(10),
+  maintenance_due_day: z.coerce.number().int().min(1).max(28).default(10),
+  other_charges_due_day: z.coerce.number().int().min(1).max(28).default(10),
 });
 
 export type UpdateAssociationState = {
@@ -68,7 +70,9 @@ export async function updateAssociationAction(
   }
 
   const billingResult = BillingSettingsSchema.safeParse({
-    due_day_of_month: formData.get('due_day_of_month'),
+    electricity_due_day: formData.get('electricity_due_day'),
+    maintenance_due_day: formData.get('maintenance_due_day'),
+    other_charges_due_day: formData.get('other_charges_due_day'),
   });
 
   if (!billingResult.success) {
@@ -133,13 +137,15 @@ export async function updateChargeTypeCalcMethodAction(
   id: string,
   calcMethod: 'per_sqft' | 'per_unit',
 ): Promise<{ success: boolean; error?: string }> {
-  const role = await getAssociationRole(associationId);
-
-  if (role !== 'assoc_admin' && role !== 'billing_operator') {
-    return { success: false, error: 'Not authorized.' };
-  }
-
   const client = getSupabaseServerClient();
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+
+  if (!isSuperAdmin) {
+    return {
+      success: false,
+      error: 'Not authorized. Super admin access required.',
+    };
+  }
 
   const { error } = await client
     .from('charge_types')

@@ -2,10 +2,11 @@
 
 import { useState, useTransition } from 'react';
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
 import {
@@ -39,7 +40,13 @@ import {
   FormControl,
   FormMessage,
 } from '@kit/ui/form';
-import { Input } from '@kit/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@kit/ui/select';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import {
@@ -57,7 +64,6 @@ import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
 
 import {
-  deleteBillAction,
   generateBillsAction,
   type PendingOtherCharge,
 } from '../_lib/billing-actions';
@@ -67,17 +73,6 @@ import {
   type BillLineItemRow,
 } from './bill-line-items-dialog';
 import { OtherChargesDialog } from './other-charges-dialog';
-
-type BillFilter = 'all' | 'unpaid' | 'paid' | 'partial' | 'overdue';
-
-const FILTERS: { id: BillFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'unpaid', label: 'Unpaid' },
-  { id: 'paid', label: 'Paid' },
-  { id: 'partial', label: 'Partial' },
-  { id: 'overdue', label: 'Overdue' },
-];
-
 export interface BillRow {
   id: string;
   period: string;
@@ -104,25 +99,36 @@ export function BillsSection(props: {
   pendingCharges?: PendingChargeWithUnit[];
   periodOptions?: string[];
   isOtherChargesActive: boolean;
+  page?: number;
+  totalPages?: number;
+  totalCount?: number;
+  accountSlug?: string;
 }) {
-  const [filter, setFilter] = useState<BillFilter>('all');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const filteredBills = props.bills.filter((bill) => {
-    const status = displayBillStatus(bill);
+  const page = props.page ?? 1;
+  const totalPages = props.totalPages ?? 1;
+  const totalCount = props.totalCount ?? 0;
+  const baseUrl = `/home/${props.accountSlug}/billing`;
 
-    switch (filter) {
-      case 'unpaid':
-        return status === 'Unpaid';
-      case 'paid':
-        return status === 'Paid';
-      case 'partial':
-        return status === 'Partial';
-      case 'overdue':
-        return status === 'Overdue';
-      default:
-        return true;
-    }
-  });
+  const statusVal = searchParams.get('status') ?? 'all';
+  const typeVal = searchParams.get('type') ?? 'all';
+  const durationVal = searchParams.get('duration') ?? 'all';
+
+  const updateFilters = (newParams: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(newParams).forEach(([key, val]) => {
+      if (val === null || val === 'all') {
+        params.delete(key);
+      } else {
+        params.set(key, val);
+      }
+    });
+    params.set('page', '1');
+    router.push(`${pathname}?${params.toString()}`);
+  };
 
   return (
     <Card className="border-0 shadow-none">
@@ -149,28 +155,84 @@ export function BillsSection(props: {
       </CardHeader>
 
       <CardContent className="flex flex-col gap-3.5">
-        {props.bills.length === 0 ? (
+        {totalCount === 0 &&
+        statusVal === 'all' &&
+        typeVal === 'all' &&
+        durationVal === 'all' ? (
           <p className="text-muted-foreground text-sm">
             No bills generated yet.
           </p>
         ) : (
           <>
-            <div className="flex flex-wrap gap-1.5">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setFilter(f.id)}
-                  className={cn(
-                    'rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors',
-                    filter === f.id
-                      ? 'border-primary/40 bg-primary/10 text-primary'
-                      : 'border-border text-muted-foreground hover:border-primary/30 hover:bg-primary/5',
-                  )}
+            <div className="flex flex-wrap items-center gap-4 border-b pb-4">
+              {/* Payment Status Filter */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+                  Payment Status
+                </span>
+                <Select
+                  value={statusVal}
+                  onValueChange={(val) => updateFilters({ status: val })}
                 >
-                  {f.label}
-                </button>
-              ))}
+                  <SelectTrigger className="bg-background h-9 w-[150px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="unpaid">Unpaid</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="partial">Partial</SelectItem>
+                    <SelectItem value="overdue">Overdue</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Bill Type Filter */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+                  Bill Type
+                </span>
+                <Select
+                  value={typeVal}
+                  onValueChange={(val) => updateFilters({ type: val })}
+                >
+                  <SelectTrigger className="bg-background h-9 w-[150px]">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="electricity">Electricity</SelectItem>
+                    <SelectItem value="maintenance">Maintenance</SelectItem>
+                    <SelectItem value="other_charges">Other Charges</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Duration Filter */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+                  Duration
+                </span>
+                <Select
+                  value={durationVal}
+                  onValueChange={(val) => updateFilters({ duration: val })}
+                >
+                  <SelectTrigger className="bg-background h-9 w-[180px]">
+                    <SelectValue placeholder="Duration" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="current_month">Current Month</SelectItem>
+                    <SelectItem value="prev_month">Previous Month</SelectItem>
+                    <SelectItem value="last_3m">Last 3 Months</SelectItem>
+                    <SelectItem value="last_6m">Last 6 Months</SelectItem>
+                    <SelectItem value="this_fy">This Financial Year</SelectItem>
+                    <SelectItem value="prev_fy">
+                      Previous Financial Year
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="w-full">
@@ -188,7 +250,7 @@ export function BillsSection(props: {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredBills.map((bill) => {
+                  {props.bills.map((bill) => {
                     const status = displayBillStatus(bill);
                     const maintenanceLine = bill.lineItems.find((li) =>
                       li.description.toLowerCase().includes('maintenance'),
@@ -205,12 +267,12 @@ export function BillsSection(props: {
                         <TableCell className="font-semibold">
                           {bill.unit_no}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="text-right font-semibold tabular-nums">
                           {maintenanceLine
                             ? formatINR(maintenanceLine.amount)
                             : '—'}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="text-right font-semibold tabular-nums">
                           {electricityLine
                             ? formatINR(electricityLine.amount)
                             : '—'}
@@ -218,14 +280,8 @@ export function BillsSection(props: {
                         <TableCell className="text-right font-bold tabular-nums">
                           {formatINR(bill.total_amount)}
                         </TableCell>
-                        <TableCell className="text-muted-foreground text-right font-medium tabular-nums">
-                          {bill.paid_amount > 0 ? (
-                            <span className="text-green-600">
-                              {formatINR(bill.paid_amount)}
-                            </span>
-                          ) : (
-                            '0'
-                          )}
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {formatINR(bill.paid_amount)}
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -264,14 +320,6 @@ export function BillsSection(props: {
                               dataTest={`download-bill-${bill.id}`}
                               showLabel
                             />
-
-                            {props.canDelete ? (
-                              <DeleteBillButton
-                                billId={bill.id}
-                                billNo={bill.bill_no}
-                                associationId={props.associationId}
-                              />
-                            ) : null}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -280,6 +328,73 @@ export function BillsSection(props: {
                 </TableBody>
               </Table>
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="bg-muted/10 rounded-b-lg border-t px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-muted-foreground text-sm">
+                    Showing{' '}
+                    <span className="text-foreground font-medium">
+                      {(page - 1) * 25 + 1}–{Math.min(page * 25, totalCount)}
+                    </span>{' '}
+                    of{' '}
+                    <span className="text-foreground font-medium">
+                      {totalCount}
+                    </span>{' '}
+                    bills
+                  </p>
+
+                  <div className="flex items-center gap-1">
+                    {page > 1 ? (
+                      <Link
+                        href={`${baseUrl}?${(() => {
+                          const params = new URLSearchParams(
+                            searchParams.toString(),
+                          );
+                          params.set('page', String(page - 1));
+                          return params.toString();
+                        })()}`}
+                        className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Link>
+                    ) : (
+                      <span className="border-input text-muted-foreground inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-md border px-3 text-sm font-medium opacity-50">
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </span>
+                    )}
+
+                    <span className="text-muted-foreground px-3 text-sm">
+                      {page} / {totalPages}
+                    </span>
+
+                    {page < totalPages ? (
+                      <Link
+                        href={`${baseUrl}?${(() => {
+                          const params = new URLSearchParams(
+                            searchParams.toString(),
+                          );
+                          params.set('page', String(page + 1));
+                          return params.toString();
+                        })()}`}
+                        className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Link>
+                    ) : (
+                      <span className="border-input text-muted-foreground inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-md border px-3 text-sm font-medium opacity-50">
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -310,8 +425,7 @@ function GenerateBillsDialog(props: { associationId: string }) {
         <DialogHeader>
           <DialogTitle>Generate bills for a period</DialogTitle>
           <DialogDescription>
-            Creates a bill for every unit that doesn't already have one for this
-            period, from your active charge types.
+            Creates a bill for every unit for the selected period and bill type.
           </DialogDescription>
         </DialogHeader>
 
@@ -334,9 +448,18 @@ function GenerateBillsForm(props: {
   const now = new Date();
   const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
+  // Generate a list of periods: last 6 months to next 6 months
+  const periodOptions = Array.from({ length: 13 }).map((_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - 6 + i, 1);
+    return {
+      value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      label: d.toLocaleString('en-US', { month: 'short', year: 'numeric' }),
+    };
+  });
+
   const form = useForm({
     resolver: zodResolver(GenerateBillsSchema),
-    defaultValues: { period: defaultPeriod },
+    defaultValues: { period: defaultPeriod, billType: 'All' },
   });
 
   const onSubmit = form.handleSubmit((values) => {
@@ -362,12 +485,52 @@ function GenerateBillsForm(props: {
     <Form {...form}>
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <FormField
+          name="billType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Bill Type</FormLabel>
+              <FormControl>
+                <Select
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Bill Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Bills</SelectItem>
+                    <SelectItem value="Maintenance">Maintenance</SelectItem>
+                    <SelectItem value="Electricity">Electricity</SelectItem>
+                    <SelectItem value="Other Charges">Other Charges</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
           name="period"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Period</FormLabel>
               <FormControl>
-                <Input placeholder="YYYY-MM, e.g. 2026-06" {...field} />
+                <Select
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {periodOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </FormControl>
               <FormDescription>
                 Units that already have a bill for this period are skipped.
@@ -377,76 +540,38 @@ function GenerateBillsForm(props: {
           )}
         />
 
-        <Button
-          type="submit"
-          disabled={isPending}
-          size="sm"
-          className="self-start"
-        >
-          {isPending && <Spinner className="mr-2 h-4 w-4" />}
-          Generate
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger
+            render={
+              <Button size="sm" className="self-start">
+                Generate
+              </Button>
+            }
+          />
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Generate Bills</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to generate bills for this period? Once
+                generated, bills cannot be deleted or modified.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onSubmit();
+                }}
+              >
+                {isPending && <Spinner className="mr-2 h-4 w-4" />}
+                Confirm Generation
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </form>
     </Form>
-  );
-}
-
-function DeleteBillButton(props: {
-  billId: string;
-  billNo: string;
-  associationId: string;
-}) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
-
-  const onDelete = () => {
-    startTransition(async () => {
-      const result = await deleteBillAction(props.billId, props.associationId);
-
-      if (!result.success) {
-        toast.error(result.error ?? 'Could not delete the bill.');
-        return;
-      }
-
-      toast.success(`Bill ${props.billNo} deleted.`);
-      setOpen(false);
-      router.refresh();
-    });
-  };
-
-  return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger
-        render={
-          <Button size="sm" variant="destructive">
-            Delete
-          </Button>
-        }
-      />
-
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete bill {props.billNo}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This deletes the bill and its line items. This can't be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={isPending}
-            onClick={(event) => {
-              event.preventDefault();
-              onDelete();
-            }}
-          >
-            {isPending && <Spinner className="mr-2 h-4 w-4" />}
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   );
 }

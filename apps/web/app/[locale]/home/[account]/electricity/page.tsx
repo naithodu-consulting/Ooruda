@@ -22,7 +22,7 @@ interface Props {
   params: Promise<{ account: string }>;
 }
 
-export const metadata = { title: 'Electricity & Meters' };
+export const metadata = { title: 'Electricity' };
 
 export default async function MescomPage({ params }: Props) {
   const { account } = await params;

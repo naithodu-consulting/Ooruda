@@ -67,7 +67,7 @@ async function SidebarLayout({
             />
           </PageNavigation>
 
-          <div className="dark:bg-background flex min-w-0 flex-1 flex-col bg-[#F0F4F8]">
+          <div className="dark:bg-background bg-muted/20 flex min-w-0 flex-1 flex-col">
             <div className="sticky top-0 z-50">
               <TeamAccountTopbar
                 account={account}

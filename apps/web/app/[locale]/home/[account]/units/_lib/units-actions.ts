@@ -183,13 +183,12 @@ export async function deleteUnitAction(
   unitId: string,
   associationId: string,
 ): Promise<ActionResult> {
-  const roleError = await requireAssocAdmin(associationId);
-
-  if (roleError) {
-    return { success: false, error: roleError };
-  }
-
   const client = getSupabaseServerClient();
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+
+  if (!isSuperAdmin) {
+    return { success: false, error: 'Only a super admin can delete units.' };
+  }
 
   const { data: unit } = await client
     .from('units')

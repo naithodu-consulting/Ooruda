@@ -1,0 +1,398 @@
+'use client';
+
+import { useState, useTransition } from 'react';
+
+import { useRouter } from 'next/navigation';
+
+import {
+  Upload,
+  AlertCircle,
+  FileSpreadsheet,
+  CheckCircle2,
+  ChevronRight,
+} from 'lucide-react';
+
+import { Button } from '@kit/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@kit/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@kit/ui/select';
+import { toast } from '@kit/ui/sonner';
+import { Spinner } from '@kit/ui/spinner';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@kit/ui/table';
+
+import { bulkImportOtherChargesAction } from '../_lib/billing-actions';
+
+const TEMPLATE_CSV = [
+  'unit_no,label,amount',
+  'G-01,Clubhouse Access fee,500',
+  '1-02,Water charges excess,250',
+  '2-03,Repairs reimbursement,1200',
+].join('\n');
+
+const REQUIRED_COLUMNS = ['unit_no', 'label', 'amount'] as const;
+
+function getPeriodOptions(periods: string[]) {
+  return periods.map((p) => ({
+    value: p,
+    label: new Date(`${p}-01T00:00:00`).toLocaleString('en-IN', {
+      month: 'long',
+      year: 'numeric',
+    }),
+  }));
+}
+
+type ParsedRow = {
+  _row: number;
+  unit_no: string;
+  label: string;
+  amount: number;
+  _error?: string;
+};
+
+interface Props {
+  associationId: string;
+  periods: string[];
+  onSuccess?: () => void;
+}
+
+export function ImportOtherChargesDialog(props: Props) {
+  const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
+  const [period, setPeriod] = useState<string>(props.periods[0] ?? '');
+  const [_file, setFile] = useState<File | null>(null);
+  const [fileName, setFileName] = useState<string>('');
+  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [isPending, startTransition] = useTransition();
+
+  const periodOptions = getPeriodOptions(props.periods);
+  const hasErrors = rows.some((r) => r._error);
+  const canSubmit = rows.length > 0 && !hasErrors && period;
+
+  function downloadTemplate() {
+    const blob = new Blob([TEMPLATE_CSV], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'other-charges-import-template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function parseCSV(text: string): ParsedRow[] {
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    if (lines.length < 2) return [];
+
+    const headers = lines[0]!.split(',').map((h) => h.trim().toLowerCase());
+    const unitNoIdx = headers.indexOf('unit_no');
+    const labelIdx = headers.indexOf('label');
+    const amountIdx = headers.indexOf('amount');
+
+    if (unitNoIdx === -1 || labelIdx === -1 || amountIdx === -1) {
+      toast.error(`CSV must contain columns: ${REQUIRED_COLUMNS.join(', ')}`);
+      return [];
+    }
+
+    const parsed: ParsedRow[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i]!.split(',').map((c) => c.trim());
+      const unit_no = cols[unitNoIdx] ?? '';
+      const label = cols[labelIdx] ?? '';
+      const amountRaw = cols[amountIdx] ?? '';
+      const amount = parseFloat(amountRaw);
+
+      let err: string | undefined;
+      if (!unit_no) {
+        err = 'Unit No is missing';
+      } else if (!label) {
+        err = 'Label is missing';
+      } else if (isNaN(amount) || amount <= 0) {
+        err = 'Amount must be positive';
+      }
+
+      parsed.push({
+        _row: i + 1,
+        unit_no,
+        label,
+        amount: isNaN(amount) ? 0 : amount,
+        _error: err,
+      });
+    }
+    return parsed;
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+
+    setFile(selected);
+    setFileName(selected.name);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (text) {
+        setRows(parseCSV(text));
+      }
+    };
+    reader.readAsText(selected);
+  };
+
+  const handleImport = () => {
+    if (!canSubmit) return;
+
+    startTransition(async () => {
+      const data = rows.map((r) => ({
+        unit_no: r.unit_no,
+        label: r.label,
+        amount: r.amount,
+      }));
+
+      const res = await bulkImportOtherChargesAction(
+        props.associationId,
+        period,
+        data,
+      );
+
+      if (!res.success) {
+        toast.error(res.error ?? 'Failed to import other charges.');
+        return;
+      }
+
+      if (res.skipped.length > 0) {
+        toast.warning(
+          `Imported ${res.imported} charges. ${res.skipped.length} rows skipped: \n` +
+            res.skipped.slice(0, 5).join('\n'),
+        );
+      } else {
+        toast.success(`Successfully imported ${res.imported} other charges.`);
+      }
+
+      // reset state
+      setFile(null);
+      setFileName('');
+      setRows([]);
+      setIsOpen(false);
+      if (props.onSuccess) props.onSuccess();
+      router.refresh();
+    });
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger
+        render={
+          <Button size="sm" variant="outline" className="gap-1.5">
+            <Upload className="h-4 w-4" /> Import CSV
+          </Button>
+        }
+      />
+
+      <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="h-5 w-5 text-blue-500" />
+            Import Other Charges CSV
+          </DialogTitle>
+          <DialogDescription>
+            Bulk import ad-hoc other charges for specific units from a CSV file.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
+          {/* Step 1: Billing Period */}
+          <div className="bg-muted/20 flex flex-col gap-2 rounded-lg border p-3.5">
+            <h4 className="text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] text-white">
+                1
+              </span>
+              Select Target Billing Period
+            </h4>
+            <div className="mt-1 w-64">
+              <Select
+                value={period}
+                onValueChange={(val) => setPeriod(val ?? '')}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Select period" />
+                </SelectTrigger>
+                <SelectContent>
+                  {periodOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Step 2: Upload CSV */}
+          <div className="bg-muted/20 flex flex-col gap-2 rounded-lg border p-3.5">
+            <div className="flex items-center justify-between">
+              <h4 className="text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase">
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] text-white">
+                  2
+                </span>
+                Upload CSV File
+              </h4>
+              <button
+                type="button"
+                onClick={downloadTemplate}
+                className="text-xs font-semibold text-blue-600 hover:underline"
+              >
+                Download CSV Template
+              </button>
+            </div>
+
+            <div className="mt-1">
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                id="other-charges-csv-upload"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <label
+                htmlFor="other-charges-csv-upload"
+                className="border-muted-foreground/30 hover:bg-muted/10 flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed py-8 text-center transition-colors"
+              >
+                <Upload className="text-muted-foreground/60 mb-2 h-8 w-8" />
+                <span className="text-sm font-medium">
+                  {fileName ? fileName : 'Drop CSV here, or click to browse'}
+                </span>
+                <span className="text-muted-foreground mt-1 text-xs">
+                  Required columns: unit_no, label, amount
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Step 3: Review Rows */}
+          {rows.length > 0 && (
+            <div className="flex min-h-[200px] flex-1 flex-col gap-2 rounded-lg border p-3.5">
+              <h4 className="text-muted-foreground flex items-center justify-between text-xs font-bold tracking-wider uppercase">
+                <span className="flex items-center gap-1.5">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] text-white">
+                    3
+                  </span>
+                  Review Import Rows ({rows.length})
+                </span>
+                {hasErrors ? (
+                  <span className="flex items-center gap-1 font-semibold text-red-600">
+                    <AlertCircle className="h-3.5 w-3.5" /> Resolve errors
+                    before importing
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 font-semibold text-green-600">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> All rows are valid!
+                  </span>
+                )}
+              </h4>
+
+              <div className="mt-2 max-h-[250px] overflow-hidden overflow-y-auto rounded-md border">
+                <Table>
+                  <TableHeader className="bg-muted/50 sticky top-0">
+                    <TableRow>
+                      <TableHead className="w-[80px]">Row</TableHead>
+                      <TableHead>Unit No</TableHead>
+                      <TableHead>Label</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Status/Error</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((row) => (
+                      <TableRow
+                        key={row._row}
+                        className={
+                          row._error ? 'bg-red-50/50 dark:bg-red-950/20' : ''
+                        }
+                      >
+                        <TableCell className="font-mono text-xs">
+                          {row._row}
+                        </TableCell>
+                        <TableCell className="font-bold">
+                          {row.unit_no}
+                        </TableCell>
+                        <TableCell>{row.label}</TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums">
+                          ₹{row.amount}
+                        </TableCell>
+                        <TableCell>
+                          {row._error ? (
+                            <span className="flex items-center gap-1 text-xs font-medium text-red-600">
+                              <AlertCircle className="h-3 w-3 shrink-0" />{' '}
+                              {row._error}
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-xs font-medium text-green-600">
+                              <CheckCircle2 className="h-3 w-3 shrink-0" />{' '}
+                              Ready
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-2 flex justify-end gap-2 border-t pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setFile(null);
+              setFileName('');
+              setRows([]);
+              setIsOpen(false);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={handleImport}
+            disabled={!canSubmit || isPending}
+            className="gap-1.5"
+          >
+            {isPending ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              <>
+                Import {rows.length} Charges{' '}
+                <ChevronRight className="h-4 w-4" />
+              </>
+            )}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

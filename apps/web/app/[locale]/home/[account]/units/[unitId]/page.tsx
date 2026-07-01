@@ -146,7 +146,7 @@ export default async function UnitDetailPage({ params }: Props) {
           className="text-muted-foreground hover:text-foreground flex w-fit items-center gap-1.5 text-sm transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back to units
+          Back
         </Link>
 
         {/* Unit summary card */}

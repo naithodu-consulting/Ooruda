@@ -54,17 +54,17 @@ export default async function AssociationSettingsPage({ params }: Props) {
     association = data;
   }
 
-  // If the row still can't be loaded or created, fail loudly rather than
-  // dereferencing null further down. Next.js renders the nearest error UI.
   if (!association) {
     throw new Error(
       'Unable to load the association record. Please try again or contact support.',
     );
   }
 
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+
   const { data: billingSettings } = await client
     .from('billing_settings')
-    .select('due_day_of_month')
+    .select('electricity_due_day, maintenance_due_day, other_charges_due_day')
     .eq('association_id', association.id)
     .single();
 
@@ -112,6 +112,7 @@ export default async function AssociationSettingsPage({ params }: Props) {
       <ChargeTypesCard
         chargeTypes={chargeTypes ?? []}
         associationId={association.id}
+        isSuperAdmin={!!isSuperAdmin}
       />
     </div>
   );

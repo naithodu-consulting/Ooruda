@@ -36,6 +36,7 @@ export default async function UnitsPage({ params }: Props) {
   ]);
 
   const client = getSupabaseServerClient();
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
   const { data: association } = await client
     .from('associations')
@@ -225,6 +226,7 @@ export default async function UnitsPage({ params }: Props) {
             people={people}
             tenancyByUnit={tenancyByUnit}
             canManage={canManage}
+            isSuperAdmin={!!isSuperAdmin}
             associationId={association.id}
             eligibleOwners={eligibleOwners}
             eligibleTenants={eligibleTenants}

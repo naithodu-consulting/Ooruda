@@ -46,6 +46,7 @@ import {
   removePendingOtherChargeAction,
   type PendingOtherCharge,
 } from '../_lib/billing-actions';
+import { ImportOtherChargesDialog } from './import-other-charges-dialog';
 
 const ChargeSchema = z
   .object({
@@ -112,7 +113,14 @@ export function OtherChargesDialog(props: Props) {
 
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Other Charges</DialogTitle>
+          <div className="flex items-center justify-between pr-6">
+            <DialogTitle>Other Charges</DialogTitle>
+            <ImportOtherChargesDialog
+              associationId={props.associationId}
+              periods={props.periods}
+              onSuccess={() => setIsOpen(false)}
+            />
+          </div>
           <DialogDescription>
             Add ad-hoc charges before generating bills for the period.
           </DialogDescription>

@@ -409,19 +409,28 @@ export type Database = {
         Row: {
           association_id: string
           due_day_of_month: number
+          electricity_due_day: number
           id: string
+          maintenance_due_day: number
+          other_charges_due_day: number
           reminder_schedule_json: Json
         }
         Insert: {
           association_id: string
           due_day_of_month?: number
+          electricity_due_day?: number
           id?: string
+          maintenance_due_day?: number
+          other_charges_due_day?: number
           reminder_schedule_json?: Json
         }
         Update: {
           association_id?: string
           due_day_of_month?: number
+          electricity_due_day?: number
           id?: string
+          maintenance_due_day?: number
+          other_charges_due_day?: number
           reminder_schedule_json?: Json
         }
         Relationships: [

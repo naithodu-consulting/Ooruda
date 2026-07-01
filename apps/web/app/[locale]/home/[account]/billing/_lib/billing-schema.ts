@@ -6,6 +6,9 @@ export const GenerateBillsSchema = z.object({
   period: z
     .string()
     .regex(PERIOD_REGEX, "Use the 'YYYY-MM' format, e.g. 2026-06"),
+  billType: z
+    .enum(['All', 'Maintenance', 'Electricity', 'Other Charges'])
+    .default('All'),
 });
 
 export type GenerateBillsInput = z.input<typeof GenerateBillsSchema>;
