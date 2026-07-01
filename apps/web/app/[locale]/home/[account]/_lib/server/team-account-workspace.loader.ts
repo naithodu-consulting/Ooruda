@@ -31,7 +31,7 @@ async function workspaceLoader(accountSlug: string) {
   const [workspace, user, { data: isSuperAdmin }] = await Promise.all([
     api.getAccountWorkspace(accountSlug),
     requireUserInServerComponent(),
-    client.rpc('is_super_admin')
+    client.rpc('is_super_admin'),
   ]);
 
   if (isSuperAdmin) {
@@ -42,11 +42,11 @@ async function workspaceLoader(accountSlug: string) {
         .select('id, name, picture_url, slug, primary_owner_user_id')
         .eq('slug', accountSlug)
         .single();
-        
+
       if (!rawAccount) return redirect(pathsConfig.app.home);
-      
+
       const { data: accounts } = await client.from('user_accounts').select('*');
-      
+
       workspace.data = {
         account: {
           id: rawAccount.id,

@@ -263,6 +263,7 @@ export function ImportMeterReadingsDialog({
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="billing-month-select">Billing month</Label>
                 <Select
+                  items={periodOptions}
                   value={selectedPeriod}
                   onValueChange={(v) => v && setSelectedPeriod(v)}
                 >

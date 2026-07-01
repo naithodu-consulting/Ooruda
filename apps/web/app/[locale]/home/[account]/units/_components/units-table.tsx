@@ -217,7 +217,7 @@ export function UnitsTable({
                             tenancy
                               ? {
                                   ...tenancy,
-                                  label: tenantLabel ?? tenancy.tenant_id,
+                                  label: tenantLabel ?? 'Unnamed tenant',
                                 }
                               : null
                           }

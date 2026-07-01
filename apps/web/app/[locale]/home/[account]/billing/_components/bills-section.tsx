@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
@@ -9,17 +9,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@kit/ui/alert-dialog';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
@@ -60,6 +49,11 @@ import {
 import { cn } from '@kit/ui/utils';
 
 import { DownloadPdfButton } from '~/components/download-pdf-button';
+import {
+  BILL_STATUS_ITEMS,
+  BILL_TYPE_FILTER_ITEMS,
+  getDurationItems,
+} from '~/lib/bill-filter-items';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
 
@@ -73,6 +67,14 @@ import {
   type BillLineItemRow,
 } from './bill-line-items-dialog';
 import { OtherChargesDialog } from './other-charges-dialog';
+
+const BILL_TYPE_ITEMS = {
+  All: 'All Bills',
+  Maintenance: 'Maintenance',
+  Electricity: 'Electricity',
+  'Other Charges': 'Other Charges',
+};
+
 export interface BillRow {
   id: string;
   period: string;
@@ -116,6 +118,7 @@ export function BillsSection(props: {
   const statusVal = searchParams.get('status') ?? 'all';
   const typeVal = searchParams.get('type') ?? 'all';
   const durationVal = searchParams.get('duration') ?? 'all';
+  const durationItems = useMemo(() => getDurationItems(), []);
 
   const updateFilters = (newParams: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -171,6 +174,7 @@ export function BillsSection(props: {
                   Payment Status
                 </span>
                 <Select
+                  items={BILL_STATUS_ITEMS}
                   value={statusVal}
                   onValueChange={(val) => updateFilters({ status: val })}
                 >
@@ -193,6 +197,7 @@ export function BillsSection(props: {
                   Bill Type
                 </span>
                 <Select
+                  items={BILL_TYPE_FILTER_ITEMS}
                   value={typeVal}
                   onValueChange={(val) => updateFilters({ type: val })}
                 >
@@ -214,6 +219,7 @@ export function BillsSection(props: {
                   Duration
                 </span>
                 <Select
+                  items={durationItems}
                   value={durationVal}
                   onValueChange={(val) => updateFilters({ duration: val })}
                 >
@@ -226,9 +232,11 @@ export function BillsSection(props: {
                     <SelectItem value="prev_month">Previous Month</SelectItem>
                     <SelectItem value="last_3m">Last 3 Months</SelectItem>
                     <SelectItem value="last_6m">Last 6 Months</SelectItem>
-                    <SelectItem value="this_fy">This Financial Year</SelectItem>
+                    <SelectItem value="this_fy">
+                      {durationItems.this_fy}
+                    </SelectItem>
                     <SelectItem value="prev_fy">
-                      Previous Financial Year
+                      {durationItems.prev_fy}
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -409,9 +417,16 @@ export function BillsSection(props: {
 
 function GenerateBillsDialog(props: { associationId: string }) {
   const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setConfirming(false);
+      }}
+    >
       <DialogTrigger
         render={
           <Button size="sm" data-test="generate-bills-trigger">
@@ -422,16 +437,24 @@ function GenerateBillsDialog(props: { associationId: string }) {
       />
 
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Generate bills for a period</DialogTitle>
-          <DialogDescription>
-            Creates a bill for every unit for the selected period and bill type.
-          </DialogDescription>
-        </DialogHeader>
+        {!confirming && (
+          <DialogHeader>
+            <DialogTitle>Generate bills for a period</DialogTitle>
+            <DialogDescription>
+              Creates a bill for every unit for the selected period and bill
+              type.
+            </DialogDescription>
+          </DialogHeader>
+        )}
 
         <GenerateBillsForm
           associationId={props.associationId}
-          onDone={() => setOpen(false)}
+          confirming={confirming}
+          setConfirming={setConfirming}
+          onDone={() => {
+            setOpen(false);
+            setConfirming(false);
+          }}
         />
       </DialogContent>
     </Dialog>
@@ -440,22 +463,29 @@ function GenerateBillsDialog(props: { associationId: string }) {
 
 function GenerateBillsForm(props: {
   associationId: string;
+  confirming: boolean;
+  setConfirming: (value: boolean) => void;
   onDone: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const { confirming, setConfirming } = props;
 
   const now = new Date();
   const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  // Generate a list of periods: last 6 months to next 6 months
-  const periodOptions = Array.from({ length: 13 }).map((_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 6 + i, 1);
-    return {
-      value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-      label: d.toLocaleString('en-US', { month: 'short', year: 'numeric' }),
-    };
-  });
+  // Generate a list of periods: last 6 months through the current month.
+  // Bills can't be generated for a period that hasn't happened yet.
+  const periodOptions = useMemo(() => {
+    const base = new Date();
+    return Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date(base.getFullYear(), base.getMonth() - 6 + i, 1);
+      return {
+        value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        label: d.toLocaleString('en-US', { month: 'short', year: 'numeric' }),
+      };
+    });
+  }, []);
 
   const form = useForm({
     resolver: zodResolver(GenerateBillsSchema),
@@ -481,9 +511,51 @@ function GenerateBillsForm(props: {
     });
   });
 
+  if (confirming) {
+    return (
+      <div className="flex flex-col gap-4" role="alertdialog" aria-modal="true">
+        <div className="flex flex-col gap-1.5">
+          <h3 className="text-base leading-snug font-medium">Generate Bills</h3>
+          <p className="text-muted-foreground text-sm">
+            Are you sure you want to generate bills for this period? Once
+            generated, bills cannot be deleted or modified.
+          </p>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isPending}
+            onClick={() => setConfirming(false)}
+            data-test="generate-bills-cancel"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={isPending}
+            onClick={onSubmit}
+            data-test="generate-bills-confirm"
+          >
+            {isPending && <Spinner className="mr-2 h-4 w-4" />}
+            Confirm Generation
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Form {...form}>
-      <form onSubmit={onSubmit} className="flex flex-col gap-4">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          form.trigger().then((valid) => {
+            if (valid) setConfirming(true);
+          });
+        }}
+        className="flex flex-col gap-4"
+      >
         <FormField
           name="billType"
           render={({ field }) => (
@@ -491,6 +563,7 @@ function GenerateBillsForm(props: {
               <FormLabel>Bill Type</FormLabel>
               <FormControl>
                 <Select
+                  items={BILL_TYPE_ITEMS}
                   onValueChange={field.onChange}
                   defaultValue={field.value}
                 >
@@ -517,6 +590,7 @@ function GenerateBillsForm(props: {
               <FormLabel>Period</FormLabel>
               <FormControl>
                 <Select
+                  items={periodOptions}
                   onValueChange={field.onChange}
                   defaultValue={field.value}
                 >
@@ -540,37 +614,9 @@ function GenerateBillsForm(props: {
           )}
         />
 
-        <AlertDialog>
-          <AlertDialogTrigger
-            render={
-              <Button size="sm" className="self-start">
-                Generate
-              </Button>
-            }
-          />
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Generate Bills</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to generate bills for this period? Once
-                generated, bills cannot be deleted or modified.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                disabled={isPending}
-                onClick={(e) => {
-                  e.preventDefault();
-                  onSubmit();
-                }}
-              >
-                {isPending && <Spinner className="mr-2 h-4 w-4" />}
-                Confirm Generation
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button type="submit" size="sm" className="self-start">
+          Generate
+        </Button>
       </form>
     </Form>
   );

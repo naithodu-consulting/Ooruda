@@ -232,6 +232,7 @@ export function ImportOtherChargesDialog(props: Props) {
             </h4>
             <div className="mt-1 w-64">
               <Select
+                items={periodOptions}
                 value={period}
                 onValueChange={(val) => setPeriod(val ?? '')}
               >

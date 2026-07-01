@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 
 import { Button } from '@kit/ui/button';
 import {
@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@kit/ui/select';
+import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import { Switch } from '@kit/ui/switch';
 
@@ -53,6 +54,14 @@ export function AssociationForm({ association, billingSettings }: Props) {
   >(boundAction, null);
 
   const [brandColour, setBrandColour] = useState(association.brand_colour);
+
+  useEffect(() => {
+    if (state?.success) {
+      toast.success('Settings saved.');
+    } else if (state?.error) {
+      toast.error(state.error);
+    }
+  }, [state]);
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
@@ -247,13 +256,6 @@ export function AssociationForm({ association, billingSettings }: Props) {
           {isPending && <Spinner className="mr-2 h-4 w-4" />}
           Save Changes
         </Button>
-
-        {state?.success && (
-          <p className="text-sm text-green-600">Settings saved.</p>
-        )}
-        {state?.error && (
-          <p className="text-destructive text-sm">{state.error}</p>
-        )}
       </div>
     </form>
   );

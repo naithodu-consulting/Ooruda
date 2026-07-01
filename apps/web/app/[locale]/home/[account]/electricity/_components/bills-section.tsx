@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useMemo, useState, useTransition } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -104,6 +104,7 @@ export function BillsSection(props: {
   lastReadingBeforePeriodByBill: Record<string, Record<string, number>>;
   lastMinChargeBeforePeriodByBill: Record<string, Record<string, number>>;
   canManage: boolean;
+  isSuperAdmin?: boolean;
 }) {
   return (
     <Card className="border-0 shadow-none">
@@ -189,11 +190,13 @@ export function BillsSection(props: {
                                 ] ?? {}
                               }
                             />
-                            <DeleteElectricityBillButton
-                              electricityBillId={bill.id}
-                              period={bill.period}
-                              associationId={props.associationId}
-                            />
+                            {props.isSuperAdmin && (
+                              <DeleteElectricityBillButton
+                                electricityBillId={bill.id}
+                                period={bill.period}
+                                associationId={props.associationId}
+                              />
+                            )}
                           </div>
                         </TableCell>
                       ) : null}
@@ -269,6 +272,8 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
   const now = new Date();
   const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
+  const periodOptions = useMemo(() => getPeriodOptions(), []);
+
   const form = useForm({
     resolver: zodResolver(CreateElectricityBillSchema),
     defaultValues: {
@@ -305,14 +310,18 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Period</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select
+                items={periodOptions}
+                onValueChange={field.onChange}
+                defaultValue={field.value}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a period" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {getPeriodOptions().map((opt) => (
+                  {periodOptions.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>

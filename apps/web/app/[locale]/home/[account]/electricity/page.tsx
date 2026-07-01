@@ -33,11 +33,14 @@ export default async function MescomPage({ params }: Props) {
 
   const client = getSupabaseServerClient();
 
-  const { data: association } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const [{ data: association }, { data: isSuperAdmin }] = await Promise.all([
+    client
+      .from('associations')
+      .select('id')
+      .eq('account_id', accountId)
+      .single(),
+    client.rpc('is_super_admin'),
+  ]);
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');
@@ -232,6 +235,7 @@ export default async function MescomPage({ params }: Props) {
             lastReadingBeforePeriodByBill={lastReadingBeforePeriodByBill}
             lastMinChargeBeforePeriodByBill={lastMinChargeBeforePeriodByBill}
             canManage={canManage}
+            isSuperAdmin={!!isSuperAdmin}
           />
         </div>
       </div>

@@ -13,7 +13,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -267,12 +266,12 @@ function UnitDetailsForm(props: {
 
       {props.children}
 
-      <DialogFooter>
+      <div className="bg-popover sticky bottom-0 flex border-t pt-4">
         <Button type="submit" form="unit-details-form" disabled={isPending}>
           {isPending && <Spinner className="mr-2 h-4 w-4" />}
           Save details
         </Button>
-      </DialogFooter>
+      </div>
     </div>
   );
 }

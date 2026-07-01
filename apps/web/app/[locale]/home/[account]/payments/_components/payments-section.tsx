@@ -1,5 +1,7 @@
 'use client';
 
+import { useMemo } from 'react';
+
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 
@@ -30,6 +32,11 @@ import {
 } from '@kit/ui/table';
 import { cn } from '@kit/ui/utils';
 
+import {
+  BILL_STATUS_ITEMS,
+  BILL_TYPE_FILTER_ITEMS,
+  getDurationItems,
+} from '~/lib/bill-filter-items';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
@@ -73,6 +80,7 @@ export function PaymentsSection(props: {
   const statusVal = searchParams.get('status') ?? 'all';
   const typeVal = searchParams.get('type') ?? 'all';
   const durationVal = searchParams.get('duration') ?? 'all';
+  const durationItems = useMemo(() => getDurationItems(), []);
 
   const updateFilters = (newParams: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -105,6 +113,7 @@ export function PaymentsSection(props: {
               Payment Status
             </span>
             <Select
+              items={BILL_STATUS_ITEMS}
               value={statusVal}
               onValueChange={(val) => updateFilters({ status: val })}
             >
@@ -127,6 +136,7 @@ export function PaymentsSection(props: {
               Bill Type
             </span>
             <Select
+              items={BILL_TYPE_FILTER_ITEMS}
               value={typeVal}
               onValueChange={(val) => updateFilters({ type: val })}
             >
@@ -148,6 +158,7 @@ export function PaymentsSection(props: {
               Duration
             </span>
             <Select
+              items={durationItems}
               value={durationVal}
               onValueChange={(val) => updateFilters({ duration: val })}
             >
@@ -160,8 +171,8 @@ export function PaymentsSection(props: {
                 <SelectItem value="prev_month">Previous Month</SelectItem>
                 <SelectItem value="last_3m">Last 3 Months</SelectItem>
                 <SelectItem value="last_6m">Last 6 Months</SelectItem>
-                <SelectItem value="this_fy">This Financial Year</SelectItem>
-                <SelectItem value="prev_fy">Previous Financial Year</SelectItem>
+                <SelectItem value="this_fy">{durationItems.this_fy}</SelectItem>
+                <SelectItem value="prev_fy">{durationItems.prev_fy}</SelectItem>
               </SelectContent>
             </Select>
           </div>

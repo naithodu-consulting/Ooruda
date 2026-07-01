@@ -95,20 +95,24 @@ export async function generateBillsAction(
     .eq('association_id', associationId)
     .single();
 
-  const { data: account, error: accountError } = await client
-    .from('accounts')
-    .select('slug')
+  // `associationId` is `associations.id`, not `accounts.id` — the slug lives
+  // on the linked account, so resolve it through `associations.account_id`.
+  const { data: association, error: associationError } = await client
+    .from('associations')
+    .select('accounts(slug)')
     .eq('id', associationId)
     .single();
 
-  if (accountError || !account?.slug) {
+  const accountSlug = association?.accounts?.slug;
+
+  if (associationError || !accountSlug) {
     return {
       success: false,
       error: 'Association slug is required to generate bills.',
     };
   }
 
-  const slugPart = account.slug.substring(0, 3).toUpperCase();
+  const slugPart = accountSlug.substring(0, 3).toUpperCase();
   const uuidPart = associationId.substring(0, 4).toUpperCase();
   const prefix = `${slugPart}${uuidPart}`;
   const calculateDueDate = (day: number) =>

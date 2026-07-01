@@ -178,19 +178,22 @@ export async function createElectricityBillAction(
 }
 
 /**
- * Delete a Electricity bill.
+ * Delete a Electricity bill. Super-admin only — mirrors the delete-unit
+ * restriction, since removing a bill also drops its meter readings.
  */
 export async function deleteElectricityBillAction(
   associationId: string,
   electricityBillId: string,
 ): Promise<ActionResult> {
-  const roleError = await requireAssocAdmin(associationId);
-
-  if (roleError) {
-    return { success: false, error: roleError };
-  }
-
   const client = getSupabaseServerClient();
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+
+  if (!isSuperAdmin) {
+    return {
+      success: false,
+      error: 'Only a super admin can delete electricity bills.',
+    };
+  }
 
   const { error } = await client
     .from('mescom_bills')
