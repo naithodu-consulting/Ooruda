@@ -69,6 +69,10 @@ After implementation, always run:
 3. `pnpm format:fix`
 4. Run /reviewer skill
 
+## Release Notes
+
+**REQUIRED before every push:** Update `RELEASE_NOTES.md` with a summary of all changes in the current batch — new features, bug fixes, migrations, and UX changes. Add new migrations to the Migrations Changelog table. Update the `Last updated` date at the bottom.
+
 ## Git Workflow Constraints
 
 - **CRITICAL RULE:** Never perform any Git commands (such as `git add`, `git commit`, `git checkout`, `git merge`, or `git push/pull`) without obtaining the user's explicit permission first. Always ask the user first and wait for approval.

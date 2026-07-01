@@ -13,7 +13,10 @@ const BUCKET = 'billing-documents';
 const pendingPdfGenerations = new Map<string, Promise<GeneratedPdf | null>>();
 
 export interface GeneratedPdf {
-  bytes: Buffer;
+  /** Raw bytes — set when the PDF was just rendered (cache miss). */
+  bytes?: Buffer;
+  /** Signed Storage URL — set when the PDF was already cached (cache hit). Redirect the browser here directly to avoid proxying through Next.js. */
+  signedUrl?: string;
   filename: string;
 }
 
@@ -115,14 +118,14 @@ export async function getOrGenerateBillPdf(
     const filename = `${bill.bill_no}.pdf`;
 
     if (bill.pdf_url) {
-      const { data: cached } = await admin.storage
+      const { data: signed } = await admin.storage
         .from(BUCKET)
-        .download(bill.pdf_url);
+        .createSignedUrl(bill.pdf_url, 300);
 
-      if (cached) {
-        return { bytes: Buffer.from(await cached.arrayBuffer()), filename };
+      if (signed?.signedUrl) {
+        return { signedUrl: signed.signedUrl, filename };
       }
-      // Cached object went missing (e.g. bucket cleared) — fall through and regenerate.
+      // Signed URL creation failed (e.g. object missing) — fall through and regenerate.
     }
 
     const association = bill.associations;
@@ -274,13 +277,14 @@ export async function getOrGenerateReceiptPdf(
     const filename = `${receipt.receipt_no}.pdf`;
 
     if (receipt.pdf_url) {
-      const { data: cached } = await admin.storage
+      const { data: signed } = await admin.storage
         .from(BUCKET)
-        .download(receipt.pdf_url);
+        .createSignedUrl(receipt.pdf_url, 300);
 
-      if (cached) {
-        return { bytes: Buffer.from(await cached.arrayBuffer()), filename };
+      if (signed?.signedUrl) {
+        return { signedUrl: signed.signedUrl, filename };
       }
+      // Signed URL creation failed (e.g. object missing) — fall through and regenerate.
     }
 
     const association = payment.bills.associations;

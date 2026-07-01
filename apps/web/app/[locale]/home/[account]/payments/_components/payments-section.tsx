@@ -1,9 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
-
-import Link from 'next/link';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useMemo, useState } from 'react';
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -37,7 +34,9 @@ import {
   BILL_TYPE_FILTER_ITEMS,
   getDurationItems,
 } from '~/lib/bill-filter-items';
+import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
+import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
@@ -48,6 +47,7 @@ export interface BillPaymentRow {
   id: string;
   period: string;
   bill_no: string;
+  bill_type: string;
   unit_no: string;
   total_amount: number;
   paid_amount: number;
@@ -56,6 +56,8 @@ export interface BillPaymentRow {
   payments: PaymentRow[];
 }
 
+const PAGE_SIZE = 25;
+
 export function PaymentsSection(props: {
   associationId: string;
   bills: BillPaymentRow[];
@@ -63,37 +65,84 @@ export function PaymentsSection(props: {
   canVoid: boolean;
   title?: string;
   description?: string;
-  page?: number;
-  totalPages?: number;
-  totalCount?: number;
   accountSlug?: string;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const [statusVal, setStatusVal] = useState('all');
+  const [typeVal, setTypeVal] = useState('all');
+  const [durationVal, setDurationVal] = useState('all');
+  const [page, setPage] = useState(1);
 
-  const page = props.page ?? 1;
-  const totalPages = props.totalPages ?? 1;
-  const totalCount = props.totalCount ?? 0;
-  const baseUrl = `/home/${props.accountSlug}/payments`;
-
-  const statusVal = searchParams.get('status') ?? 'all';
-  const typeVal = searchParams.get('type') ?? 'all';
-  const durationVal = searchParams.get('duration') ?? 'all';
   const durationItems = useMemo(() => getDurationItems(), []);
+  const today = useMemo(() => todayInBillingZone(), []);
 
-  const updateFilters = (newParams: Record<string, string | null>) => {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(newParams).forEach(([key, val]) => {
-      if (val === null || val === 'all') {
-        params.delete(key);
-      } else {
-        params.set(key, val);
+  // Derived: filtered rows (instant — no network)
+  const filtered = useMemo(() => {
+    let rows = props.bills;
+
+    if (statusVal !== 'all') {
+      if (statusVal === 'paid') {
+        rows = rows.filter((b) => b.status === 'Paid');
+      } else if (statusVal === 'unpaid') {
+        rows = rows.filter((b) => b.status === 'Unpaid' && b.due_date >= today);
+      } else if (statusVal === 'partial') {
+        rows = rows.filter(
+          (b) => b.status === 'Partial' && b.due_date >= today,
+        );
+      } else if (statusVal === 'overdue') {
+        rows = rows.filter(
+          (b) =>
+            (b.status === 'Unpaid' || b.status === 'Partial') &&
+            b.due_date < today,
+        );
       }
-    });
-    params.set('page', '1');
-    router.push(`${pathname}?${params.toString()}`);
+    }
+
+    if (typeVal !== 'all') {
+      rows = rows.filter((b) => b.bill_type === typeVal);
+    }
+
+    if (durationVal !== 'all') {
+      const periods = getPeriodsForDuration(durationVal);
+      if (periods) {
+        const set = new Set(periods);
+        rows = rows.filter((b) => set.has(b.period));
+      }
+    }
+
+    return rows;
+  }, [props.bills, statusVal, typeVal, durationVal, today]);
+
+  // Derived: summary metrics
+  const metrics = useMemo(() => {
+    const totalBilled = filtered.reduce((s, b) => s + b.total_amount, 0);
+    const totalCollected = filtered.reduce((s, b) => s + b.paid_amount, 0);
+    const paymentCount = filtered.reduce((s, b) => s + b.payments.length, 0);
+    return {
+      totalBilled,
+      totalCollected,
+      totalOutstanding: totalBilled - totalCollected,
+      paymentCount,
+    };
+  }, [filtered]);
+
+  // Derived: paginated rows
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage],
+  );
+
+  const setFilter = (setter: (v: string) => void) => (val: string | null) => {
+    setter(val ?? 'all');
+    setPage(1);
   };
+
+  const isEmpty =
+    props.bills.length === 0 &&
+    statusVal === 'all' &&
+    typeVal === 'all' &&
+    durationVal === 'all';
 
   return (
     <Card className="border-0 shadow-none">
@@ -106,8 +155,8 @@ export function PaymentsSection(props: {
       </CardHeader>
 
       <CardContent className="flex flex-col gap-3.5">
+        {/* Filters always visible */}
         <div className="flex flex-wrap items-center gap-4 border-b pb-4">
-          {/* Payment Status Filter */}
           <div className="flex flex-col gap-1.5">
             <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
               Payment Status
@@ -115,7 +164,7 @@ export function PaymentsSection(props: {
             <Select
               items={BILL_STATUS_ITEMS}
               value={statusVal}
-              onValueChange={(val) => updateFilters({ status: val })}
+              onValueChange={setFilter(setStatusVal)}
             >
               <SelectTrigger className="bg-background h-9 w-[150px]">
                 <SelectValue placeholder="Status" />
@@ -130,7 +179,6 @@ export function PaymentsSection(props: {
             </Select>
           </div>
 
-          {/* Bill Type Filter */}
           <div className="flex flex-col gap-1.5">
             <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
               Bill Type
@@ -138,7 +186,7 @@ export function PaymentsSection(props: {
             <Select
               items={BILL_TYPE_FILTER_ITEMS}
               value={typeVal}
-              onValueChange={(val) => updateFilters({ type: val })}
+              onValueChange={setFilter(setTypeVal)}
             >
               <SelectTrigger className="bg-background h-9 w-[150px]">
                 <SelectValue placeholder="Type" />
@@ -152,7 +200,6 @@ export function PaymentsSection(props: {
             </Select>
           </div>
 
-          {/* Duration Filter */}
           <div className="flex flex-col gap-1.5">
             <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
               Duration
@@ -160,7 +207,7 @@ export function PaymentsSection(props: {
             <Select
               items={durationItems}
               value={durationVal}
-              onValueChange={(val) => updateFilters({ duration: val })}
+              onValueChange={setFilter(setDurationVal)}
             >
               <SelectTrigger className="bg-background h-9 w-[180px]">
                 <SelectValue placeholder="Duration" />
@@ -176,13 +223,44 @@ export function PaymentsSection(props: {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Live metrics strip */}
+          {filtered.length > 0 && (
+            <div className="text-muted-foreground ml-auto flex flex-wrap items-center gap-4 text-sm">
+              <span>
+                <span className="text-foreground font-semibold">
+                  {filtered.length}
+                </span>{' '}
+                bills
+              </span>
+              <span>
+                <span className="text-foreground font-semibold">
+                  {formatINR(metrics.totalCollected)}
+                </span>{' '}
+                collected
+              </span>
+              <span>
+                <span className="text-foreground font-semibold">
+                  {formatINR(metrics.totalOutstanding)}
+                </span>{' '}
+                outstanding
+              </span>
+              <span>
+                <span className="text-foreground font-semibold">
+                  {metrics.paymentCount}
+                </span>{' '}
+                payments
+              </span>
+            </div>
+          )}
         </div>
 
-        {totalCount === 0 &&
-        statusVal === 'all' &&
-        typeVal === 'all' &&
-        durationVal === 'all' ? (
+        {isEmpty ? (
           <p className="text-muted-foreground text-sm">No bills to show yet.</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-muted-foreground py-6 text-center text-sm">
+            No bills match the selected filters.
+          </p>
         ) : (
           <div className="w-full">
             <Table>
@@ -199,7 +277,7 @@ export function PaymentsSection(props: {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {props.bills.map((bill) => {
+                {paginated.map((bill) => {
                   const status = displayBillStatus(bill);
                   const outstanding = bill.total_amount - bill.paid_amount;
 
@@ -245,7 +323,7 @@ export function PaymentsSection(props: {
                                     ? 'bg-orange-500'
                                     : 'bg-yellow-500',
                             )}
-                          ></span>
+                          />
                           {status}
                         </Badge>
                       </TableCell>
@@ -257,7 +335,6 @@ export function PaymentsSection(props: {
                           payments={bill.payments}
                         />
                       </TableCell>
-
                       <TableCell className="w-[1%] text-right whitespace-nowrap">
                         {props.canManage && outstanding > 0 ? (
                           <RecordPaymentDialog
@@ -274,68 +351,46 @@ export function PaymentsSection(props: {
               </TableBody>
             </Table>
 
-            {/* Pagination Controls */}
             {totalPages > 1 && (
               <div className="bg-muted/10 mt-4 rounded-b-lg border-t px-4 py-3">
                 <div className="flex items-center justify-between">
                   <p className="text-muted-foreground text-sm">
                     Showing{' '}
                     <span className="text-foreground font-medium">
-                      {(page - 1) * 25 + 1}–{Math.min(page * 25, totalCount)}
+                      {(safePage - 1) * PAGE_SIZE + 1}–
+                      {Math.min(safePage * PAGE_SIZE, filtered.length)}
                     </span>{' '}
                     of{' '}
                     <span className="text-foreground font-medium">
-                      {totalCount}
+                      {filtered.length}
                     </span>{' '}
                     bills
                   </p>
 
                   <div className="flex items-center gap-1">
-                    {page > 1 ? (
-                      <Link
-                        href={`${baseUrl}?${(() => {
-                          const params = new URLSearchParams(
-                            searchParams.toString(),
-                          );
-                          params.set('page', String(page - 1));
-                          return params.toString();
-                        })()}`}
-                        className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
-                      </Link>
-                    ) : (
-                      <span className="border-input text-muted-foreground inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-md border px-3 text-sm font-medium opacity-50">
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
-                      </span>
-                    )}
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={safePage === 1}
+                      className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </button>
 
                     <span className="text-muted-foreground px-3 text-sm">
-                      {page} / {totalPages}
+                      {safePage} / {totalPages}
                     </span>
 
-                    {page < totalPages ? (
-                      <Link
-                        href={`${baseUrl}?${(() => {
-                          const params = new URLSearchParams(
-                            searchParams.toString(),
-                          );
-                          params.set('page', String(page + 1));
-                          return params.toString();
-                        })()}`}
-                        className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors"
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    ) : (
-                      <span className="border-input text-muted-foreground inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-md border px-3 text-sm font-medium opacity-50">
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </span>
-                    )}
+                    <button
+                      onClick={() =>
+                        setPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      disabled={safePage === totalPages}
+                      className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               </div>

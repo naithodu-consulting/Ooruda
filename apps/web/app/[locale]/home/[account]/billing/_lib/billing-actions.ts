@@ -338,6 +338,13 @@ export async function generateBillsAction(
         items.reduce((sum, li) => sum + li.amount, 0),
       );
 
+      const billType =
+        typePrefix === 'ELEC'
+          ? 'electricity'
+          : typePrefix === 'OTHR'
+            ? 'other_charges'
+            : 'maintenance';
+
       const { error: rpcError } = await client.rpc(
         'create_bill_with_items' as any,
         {
@@ -348,6 +355,7 @@ export async function generateBillsAction(
           p_due_date: dueDate,
           p_total_amount: totalAmount,
           p_line_items: items,
+          p_bill_type: billType,
         },
       );
 

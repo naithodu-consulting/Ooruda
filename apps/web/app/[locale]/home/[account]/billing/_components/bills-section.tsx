@@ -2,11 +2,10 @@
 
 import { useMemo, useState, useTransition } from 'react';
 
-import Link from 'next/link';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
 import { Badge } from '@kit/ui/badge';
@@ -22,11 +21,11 @@ import {
 } from '@kit/ui/dialog';
 import {
   Form,
+  FormControl,
   FormDescription,
   FormField,
   FormItem,
   FormLabel,
-  FormControl,
   FormMessage,
 } from '@kit/ui/form';
 import {
@@ -54,7 +53,9 @@ import {
   BILL_TYPE_FILTER_ITEMS,
   getDurationItems,
 } from '~/lib/bill-filter-items';
+import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
+import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
 
 import {
@@ -75,10 +76,13 @@ const BILL_TYPE_ITEMS = {
   'Other Charges': 'Other Charges',
 };
 
+const PAGE_SIZE = 25;
+
 export interface BillRow {
   id: string;
   period: string;
   bill_no: string;
+  bill_type: string;
   total_amount: number;
   paid_amount: number;
   status: string;
@@ -101,37 +105,84 @@ export function BillsSection(props: {
   pendingCharges?: PendingChargeWithUnit[];
   periodOptions?: string[];
   isOtherChargesActive: boolean;
-  page?: number;
-  totalPages?: number;
-  totalCount?: number;
   accountSlug?: string;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const [statusVal, setStatusVal] = useState('all');
+  const [typeVal, setTypeVal] = useState('all');
+  const [durationVal, setDurationVal] = useState('all');
+  const [page, setPage] = useState(1);
 
-  const page = props.page ?? 1;
-  const totalPages = props.totalPages ?? 1;
-  const totalCount = props.totalCount ?? 0;
-  const baseUrl = `/home/${props.accountSlug}/billing`;
-
-  const statusVal = searchParams.get('status') ?? 'all';
-  const typeVal = searchParams.get('type') ?? 'all';
-  const durationVal = searchParams.get('duration') ?? 'all';
   const durationItems = useMemo(() => getDurationItems(), []);
+  const today = useMemo(() => todayInBillingZone(), []);
 
-  const updateFilters = (newParams: Record<string, string | null>) => {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(newParams).forEach(([key, val]) => {
-      if (val === null || val === 'all') {
-        params.delete(key);
-      } else {
-        params.set(key, val);
+  // Derived: filtered rows (instant — no network)
+  const filtered = useMemo(() => {
+    let rows = props.bills;
+
+    if (statusVal !== 'all') {
+      if (statusVal === 'paid') {
+        rows = rows.filter((b) => b.status === 'Paid');
+      } else if (statusVal === 'unpaid') {
+        rows = rows.filter((b) => b.status === 'Unpaid' && b.due_date >= today);
+      } else if (statusVal === 'partial') {
+        rows = rows.filter(
+          (b) => b.status === 'Partial' && b.due_date >= today,
+        );
+      } else if (statusVal === 'overdue') {
+        rows = rows.filter(
+          (b) =>
+            (b.status === 'Unpaid' || b.status === 'Partial') &&
+            b.due_date < today,
+        );
       }
-    });
-    params.set('page', '1');
-    router.push(`${pathname}?${params.toString()}`);
+    }
+
+    if (typeVal !== 'all') {
+      rows = rows.filter((b) => b.bill_type === typeVal);
+    }
+
+    if (durationVal !== 'all') {
+      const periods = getPeriodsForDuration(durationVal);
+      if (periods) {
+        const set = new Set(periods);
+        rows = rows.filter((b) => set.has(b.period));
+      }
+    }
+
+    return rows;
+  }, [props.bills, statusVal, typeVal, durationVal, today]);
+
+  // Derived: summary metrics over filtered set
+  const metrics = useMemo(() => {
+    const totalBilled = filtered.reduce((s, b) => s + b.total_amount, 0);
+    const totalCollected = filtered.reduce((s, b) => s + b.paid_amount, 0);
+    return {
+      totalBilled,
+      totalCollected,
+      totalOutstanding: totalBilled - totalCollected,
+      overdueCount: filtered.filter((b) => displayBillStatus(b) === 'Overdue')
+        .length,
+    };
+  }, [filtered]);
+
+  // Derived: current page rows
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage],
+  );
+
+  const setFilter = (setter: (v: string) => void) => (val: string | null) => {
+    setter(val ?? 'all');
+    setPage(1);
   };
+
+  const isEmpty =
+    props.bills.length === 0 &&
+    statusVal === 'all' &&
+    typeVal === 'all' &&
+    durationVal === 'all';
 
   return (
     <Card className="border-0 shadow-none">
@@ -158,17 +209,14 @@ export function BillsSection(props: {
       </CardHeader>
 
       <CardContent className="flex flex-col gap-3.5">
-        {totalCount === 0 &&
-        statusVal === 'all' &&
-        typeVal === 'all' &&
-        durationVal === 'all' ? (
+        {isEmpty ? (
           <p className="text-muted-foreground text-sm">
             No bills generated yet.
           </p>
         ) : (
           <>
+            {/* Filters */}
             <div className="flex flex-wrap items-center gap-4 border-b pb-4">
-              {/* Payment Status Filter */}
               <div className="flex flex-col gap-1.5">
                 <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
                   Payment Status
@@ -176,7 +224,7 @@ export function BillsSection(props: {
                 <Select
                   items={BILL_STATUS_ITEMS}
                   value={statusVal}
-                  onValueChange={(val) => updateFilters({ status: val })}
+                  onValueChange={setFilter(setStatusVal)}
                 >
                   <SelectTrigger className="bg-background h-9 w-[150px]">
                     <SelectValue placeholder="Status" />
@@ -191,7 +239,6 @@ export function BillsSection(props: {
                 </Select>
               </div>
 
-              {/* Bill Type Filter */}
               <div className="flex flex-col gap-1.5">
                 <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
                   Bill Type
@@ -199,7 +246,7 @@ export function BillsSection(props: {
                 <Select
                   items={BILL_TYPE_FILTER_ITEMS}
                   value={typeVal}
-                  onValueChange={(val) => updateFilters({ type: val })}
+                  onValueChange={setFilter(setTypeVal)}
                 >
                   <SelectTrigger className="bg-background h-9 w-[150px]">
                     <SelectValue placeholder="Type" />
@@ -213,7 +260,6 @@ export function BillsSection(props: {
                 </Select>
               </div>
 
-              {/* Duration Filter */}
               <div className="flex flex-col gap-1.5">
                 <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
                   Duration
@@ -221,7 +267,7 @@ export function BillsSection(props: {
                 <Select
                   items={durationItems}
                   value={durationVal}
-                  onValueChange={(val) => updateFilters({ duration: val })}
+                  onValueChange={setFilter(setDurationVal)}
                 >
                   <SelectTrigger className="bg-background h-9 w-[180px]">
                     <SelectValue placeholder="Duration" />
@@ -241,174 +287,193 @@ export function BillsSection(props: {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
 
-            <div className="w-full">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Bill No.</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead className="text-right">Maintenance</TableHead>
-                    <TableHead className="text-right">Electricity</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">Paid</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {props.bills.map((bill) => {
-                    const status = displayBillStatus(bill);
-                    const maintenanceLine = bill.lineItems.find((li) =>
-                      li.description.toLowerCase().includes('maintenance'),
-                    );
-                    const electricityLine = bill.lineItems.find((li) =>
-                      li.description.toLowerCase().includes('electricity'),
-                    );
-
-                    return (
-                      <TableRow key={bill.id}>
-                        <TableCell className="text-muted-foreground font-medium">
-                          {bill.bill_no}
-                        </TableCell>
-                        <TableCell className="font-semibold">
-                          {bill.unit_no}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">
-                          {maintenanceLine
-                            ? formatINR(maintenanceLine.amount)
-                            : '—'}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">
-                          {electricityLine
-                            ? formatINR(electricityLine.amount)
-                            : '—'}
-                        </TableCell>
-                        <TableCell className="text-right font-bold tabular-nums">
-                          {formatINR(bill.total_amount)}
-                        </TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">
-                          {formatINR(bill.paid_amount)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              billStatusBadgeClassName(status),
-                              'border-0 bg-transparent px-0 font-bold shadow-none',
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                'mr-2 inline-block h-2 w-2 rounded-full',
-                                status === 'Paid'
-                                  ? 'bg-green-500'
-                                  : status === 'Overdue'
-                                    ? 'bg-red-500'
-                                    : status === 'Partial'
-                                      ? 'bg-orange-500'
-                                      : 'bg-yellow-500',
-                              )}
-                            ></span>
-                            {status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-end gap-2">
-                            <BillLineItemsDialog
-                              billNo={bill.bill_no}
-                              period={bill.period}
-                              lineItems={bill.lineItems}
-                            />
-
-                            <DownloadPdfButton
-                              href={`/api/billing/bills/${bill.id}/pdf`}
-                              label="Download bill PDF"
-                              dataTest={`download-bill-${bill.id}`}
-                              showLabel
-                            />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="bg-muted/10 rounded-b-lg border-t px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-muted-foreground text-sm">
-                    Showing{' '}
-                    <span className="text-foreground font-medium">
-                      {(page - 1) * 25 + 1}–{Math.min(page * 25, totalCount)}
-                    </span>{' '}
-                    of{' '}
-                    <span className="text-foreground font-medium">
-                      {totalCount}
+              {/* Live metrics strip */}
+              {filtered.length > 0 && (
+                <div className="text-muted-foreground ml-auto flex flex-wrap items-center gap-4 text-sm">
+                  <span>
+                    <span className="text-foreground font-semibold">
+                      {filtered.length}
                     </span>{' '}
                     bills
-                  </p>
-
-                  <div className="flex items-center gap-1">
-                    {page > 1 ? (
-                      <Link
-                        href={`${baseUrl}?${(() => {
-                          const params = new URLSearchParams(
-                            searchParams.toString(),
-                          );
-                          params.set('page', String(page - 1));
-                          return params.toString();
-                        })()}`}
-                        className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
-                      </Link>
-                    ) : (
-                      <span className="border-input text-muted-foreground inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-md border px-3 text-sm font-medium opacity-50">
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
-                      </span>
-                    )}
-
-                    <span className="text-muted-foreground px-3 text-sm">
-                      {page} / {totalPages}
+                  </span>
+                  <span>
+                    <span className="text-foreground font-semibold">
+                      {formatINR(metrics.totalCollected)}
+                    </span>{' '}
+                    collected
+                  </span>
+                  <span>
+                    <span className="text-foreground font-semibold">
+                      {formatINR(metrics.totalOutstanding)}
+                    </span>{' '}
+                    outstanding
+                  </span>
+                  {metrics.overdueCount > 0 && (
+                    <span className="font-semibold text-red-600">
+                      {metrics.overdueCount} overdue
                     </span>
-
-                    {page < totalPages ? (
-                      <Link
-                        href={`${baseUrl}?${(() => {
-                          const params = new URLSearchParams(
-                            searchParams.toString(),
-                          );
-                          params.set('page', String(page + 1));
-                          return params.toString();
-                        })()}`}
-                        className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors"
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    ) : (
-                      <span className="border-input text-muted-foreground inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-md border px-3 text-sm font-medium opacity-50">
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </div>
-              </div>
+              )}
+            </div>
+
+            {filtered.length === 0 ? (
+              <p className="text-muted-foreground py-6 text-center text-sm">
+                No bills match the selected filters.
+              </p>
+            ) : (
+              <>
+                <div className="w-full">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Bill No.</TableHead>
+                        <TableHead>Unit</TableHead>
+                        <TableHead className="text-right">
+                          Maintenance
+                        </TableHead>
+                        <TableHead className="text-right">
+                          Electricity
+                        </TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-right">Paid</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginated.map((bill) => {
+                        const status = displayBillStatus(bill);
+                        const maintenanceLine = bill.lineItems.find((li) =>
+                          li.description.toLowerCase().includes('maintenance'),
+                        );
+                        const electricityLine = bill.lineItems.find((li) =>
+                          li.description.toLowerCase().includes('electricity'),
+                        );
+
+                        return (
+                          <TableRow key={bill.id}>
+                            <TableCell className="text-muted-foreground font-medium">
+                              {bill.bill_no}
+                            </TableCell>
+                            <TableCell className="font-semibold">
+                              {bill.unit_no}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums">
+                              {maintenanceLine
+                                ? formatINR(maintenanceLine.amount)
+                                : '—'}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums">
+                              {electricityLine
+                                ? formatINR(electricityLine.amount)
+                                : '—'}
+                            </TableCell>
+                            <TableCell className="text-right font-bold tabular-nums">
+                              {formatINR(bill.total_amount)}
+                            </TableCell>
+                            <TableCell className="text-right font-medium tabular-nums">
+                              {formatINR(bill.paid_amount)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  billStatusBadgeClassName(status),
+                                  'border-0 bg-transparent px-0 font-bold shadow-none',
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    'mr-2 inline-block h-2 w-2 rounded-full',
+                                    status === 'Paid'
+                                      ? 'bg-green-500'
+                                      : status === 'Overdue'
+                                        ? 'bg-red-500'
+                                        : status === 'Partial'
+                                          ? 'bg-orange-500'
+                                          : 'bg-yellow-500',
+                                  )}
+                                />
+                                {status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center justify-end gap-2">
+                                <BillLineItemsDialog
+                                  billNo={bill.bill_no}
+                                  period={bill.period}
+                                  lineItems={bill.lineItems}
+                                />
+                                <DownloadPdfButton
+                                  href={`/api/billing/bills/${bill.id}/pdf`}
+                                  label="Download bill PDF"
+                                  dataTest={`download-bill-${bill.id}`}
+                                  showLabel
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="bg-muted/10 rounded-b-lg border-t px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-muted-foreground text-sm">
+                        Showing{' '}
+                        <span className="text-foreground font-medium">
+                          {(safePage - 1) * PAGE_SIZE + 1}–
+                          {Math.min(safePage * PAGE_SIZE, filtered.length)}
+                        </span>{' '}
+                        of{' '}
+                        <span className="text-foreground font-medium">
+                          {filtered.length}
+                        </span>{' '}
+                        bills
+                      </p>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          disabled={safePage === 1}
+                          className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          Previous
+                        </button>
+
+                        <span className="text-muted-foreground px-3 text-sm">
+                          {safePage} / {totalPages}
+                        </span>
+
+                        <button
+                          onClick={() =>
+                            setPage((p) => Math.min(totalPages, p + 1))
+                          }
+                          disabled={safePage === totalPages}
+                          className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Next
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
 
         <p className="text-muted-foreground mt-3 text-xs">
           Electricity line items use the simple invoice ÷ block-units rate from
-          MESCOM Bills. Carry-forward reconciliation isn't built yet.
+          MESCOM Bills. Carry-forward reconciliation isn&apos;t built yet.
         </p>
       </CardContent>
     </Card>
@@ -474,8 +539,6 @@ function GenerateBillsForm(props: {
   const now = new Date();
   const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  // Generate a list of periods: last 6 months through the current month.
-  // Bills can't be generated for a period that hasn't happened yet.
   const periodOptions = useMemo(() => {
     const base = new Date();
     return Array.from({ length: 7 }).map((_, i) => {

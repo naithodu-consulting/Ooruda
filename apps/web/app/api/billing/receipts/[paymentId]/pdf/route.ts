@@ -34,7 +34,11 @@ export const GET = enhanceRouteHandler(
       );
     }
 
-    return new NextResponse(new Uint8Array(pdf.bytes), {
+    if (pdf.signedUrl) {
+      return NextResponse.redirect(pdf.signedUrl);
+    }
+
+    return new NextResponse(new Uint8Array(pdf.bytes!), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${pdf.filename}"`,

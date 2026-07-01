@@ -1,8 +1,11 @@
 'use client';
 
-import { Download } from 'lucide-react';
+import { useState } from 'react';
+
+import { Download, Loader2 } from 'lucide-react';
 
 import { Button } from '@kit/ui/button';
+import { toast } from '@kit/ui/sonner';
 import {
   Tooltip,
   TooltipContent,
@@ -26,6 +29,9 @@ interface DownloadPdfButtonProps {
  * control — every download affordance in the billing/payments UI goes
  * through this component so it's always either a labeled button or an
  * icon button with a tooltip + aria-label, never a naked icon link.
+ *
+ * Uses fetch + Blob to trigger the download programmatically so we can show
+ * a loading spinner during the (potentially slow) PDF generation request.
  */
 export function DownloadPdfButton({
   href,
@@ -35,16 +41,60 @@ export function DownloadPdfButton({
   showLabel = false,
   iconSize = 'icon-sm',
 }: DownloadPdfButtonProps) {
+  const [loading, setLoading] = useState(false);
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (loading) return;
+
+    setLoading(true);
+
+    try {
+      const res = await fetch(href);
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+
+      // Extract filename from Content-Disposition header when available.
+      const disposition = res.headers.get('Content-Disposition') ?? '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      a.download = match?.[1] ?? label;
+
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Could not download the PDF. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const icon = loading ? (
+    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+  ) : (
+    <Download className="h-3.5 w-3.5" />
+  );
+
   if (showLabel) {
     return (
       <Button
         size="sm"
         variant={variant}
         data-test={dataTest}
-        render={<a href={href} download />}
+        disabled={loading}
+        onClick={handleDownload}
+        className="w-[110px] justify-center"
       >
-        <Download className="h-3.5 w-3.5" />
-        Download
+        {icon}
+        {loading ? 'Generating…' : 'Download'}
       </Button>
     );
   }
@@ -58,14 +108,15 @@ export function DownloadPdfButton({
               size={iconSize}
               variant={variant}
               data-test={dataTest}
-              aria-label={label}
-              render={<a href={href} download />}
+              aria-label={loading ? 'Generating PDF…' : label}
+              disabled={loading}
+              onClick={handleDownload}
             >
-              <Download className="h-3.5 w-3.5" />
+              {icon}
             </Button>
           }
         />
-        <TooltipContent>{label}</TooltipContent>
+        <TooltipContent>{loading ? 'Generating PDF…' : label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

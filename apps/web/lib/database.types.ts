@@ -447,6 +447,7 @@ export type Database = {
         Row: {
           association_id: string
           bill_no: string
+          bill_type: string
           due_date: string
           generated_at: string
           generated_by: string | null
@@ -462,6 +463,7 @@ export type Database = {
         Insert: {
           association_id: string
           bill_no: string
+          bill_type?: string
           due_date: string
           generated_at?: string
           generated_by?: string | null
@@ -477,6 +479,7 @@ export type Database = {
         Update: {
           association_id?: string
           bill_no?: string
+          bill_type?: string
           due_date?: string
           generated_at?: string
           generated_by?: string | null
@@ -1781,27 +1784,17 @@ export type Database = {
         }
         Returns: boolean
       }
-      invite_to_association_by_phone:
-        | {
-            Args: {
-              account_slug: string
-              invited_by: string
-              p_phone: string
-              p_role: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              account_slug: string
-              invited_by: string
-              p_email?: string
-              p_name?: string
-              p_phone: string
-              p_role: string
-            }
-            Returns: string
-          }
+      invite_to_association_by_phone: {
+        Args: {
+          account_slug: string
+          invited_by: string
+          p_email?: string
+          p_name?: string
+          p_phone: string
+          p_role: string
+        }
+        Returns: string
+      }
       is_aal2: { Args: never; Returns: boolean }
       is_account_owner: { Args: { account_id: string }; Returns: boolean }
       is_account_team_member: {
