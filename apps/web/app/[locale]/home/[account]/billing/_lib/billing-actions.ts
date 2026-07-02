@@ -154,15 +154,12 @@ export async function generateBillsAction(
   if (hasElectricityChargeType) {
     const { data: mescomBill } = await client
       .from('mescom_bills')
-      .select('invoice_amount, block_consumption_units')
+      .select('invoice_amount')
       .eq('association_id', associationId)
       .eq('period', period)
       .maybeSingle();
 
-    if (mescomBill && mescomBill.block_consumption_units > 0) {
-      blockRate =
-        mescomBill.invoice_amount / mescomBill.block_consumption_units;
-
+    if (mescomBill && mescomBill.invoice_amount > 0) {
       const { data: subMeters } = await client
         .from('sub_meters')
         .select('id, unit_id')
@@ -182,11 +179,21 @@ export async function generateBillsAction(
 
         for (const r of readings ?? []) {
           const unitId = unitIdBySubMeter.get(r.sub_meter_id);
-
           if (unitId) {
             consumedByUnit[unitId] =
               (consumedByUnit[unitId] ?? 0) + (r.consumed_units ?? 0);
           }
+        }
+
+        // Use total sub-meter consumption (not MESCOM's block_consumption_units)
+        // as the denominator so transmission losses are shared proportionally
+        // and the full invoice is always recovered in the same month.
+        const totalSubMeterUnits = Object.values(consumedByUnit).reduce(
+          (sum, u) => sum + u,
+          0,
+        );
+        if (totalSubMeterUnits > 0) {
+          blockRate = mescomBill.invoice_amount / totalSubMeterUnits;
         }
       }
     }

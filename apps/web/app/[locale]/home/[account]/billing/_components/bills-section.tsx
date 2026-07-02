@@ -474,8 +474,9 @@ export function BillsSection(props: {
         )}
 
         <p className="text-muted-foreground mt-3 text-xs">
-          Electricity line items use the simple invoice ÷ block-units rate from
-          MESCOM Bills. Carry-forward reconciliation isn&apos;t built yet.
+          Electricity charges are computed by dividing the MESCOM invoice amount
+          equally across all sub-meter consumption. Transmission losses are
+          shared proportionally so the full invoice is always recovered.
         </p>
       </CardContent>
     </Card>

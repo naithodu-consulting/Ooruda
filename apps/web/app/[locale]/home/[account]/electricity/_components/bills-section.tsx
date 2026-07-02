@@ -209,9 +209,9 @@ export function BillsSection(props: {
         )}
 
         <p className="text-muted-foreground mt-3 text-xs">
-          Block rate is the simple invoice ÷ block-units rate. Carry-forward
-          reconciliation across periods isn't built yet. This is provisional
-          until billing runs are in place.
+          Block rate = MESCOM invoice ÷ total sub-meter consumption.
+          Transmission losses are shared proportionally so the full invoice is
+          always recovered each month.
         </p>
       </CardContent>
     </Card>

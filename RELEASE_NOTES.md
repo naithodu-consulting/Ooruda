@@ -361,6 +361,10 @@ Branch: `week-3-part-1`
 
 - Cached bill and receipt PDFs now download near-instantly. The download button shows a loading indicator while a PDF is being generated.
 
+### Electricity: Proportional Transmission Losses
+
+- Electricity block rates are now computed by dividing the MESCOM invoice amount by the total actual sub-meter consumption (rather than MESCOM's block units). This automatically distributes transmission losses proportionally across all sub-meters, ensuring the full invoice is always recovered in the same month.
+
 ### Association Settings: Page Load
 
 - Billing Settings page now loads significantly faster — database queries are parallelised and a loading spinner is shown while the page fetches data.
