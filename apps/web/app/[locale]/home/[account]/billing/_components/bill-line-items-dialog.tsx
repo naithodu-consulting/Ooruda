@@ -35,8 +35,14 @@ export function BillLineItemsDialog(props: {
   billNo: string;
   period: string;
   lineItems: BillLineItemRow[];
+  gstAmount?: number | null;
 }) {
   const [open, setOpen] = useState(false);
+
+  const subtotal = props.lineItems.reduce((sum, li) => sum + li.amount, 0);
+  const gst = props.gstAmount ?? 0;
+  const halfGst = gst / 2;
+  const total = subtotal + gst;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -75,14 +81,7 @@ export function BillLineItemsDialog(props: {
           <TableBody>
             {props.lineItems.map((li) => (
               <TableRow key={li.id}>
-                <TableCell>
-                  {li.description}
-                  {li.gst_applicable ? (
-                    <span className="text-muted-foreground ml-1 text-xs">
-                      (GST)
-                    </span>
-                  ) : null}
-                </TableCell>
+                <TableCell>{li.description}</TableCell>
                 <TableCell>{li.payer}</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {formatINR(li.amount)}
@@ -91,6 +90,28 @@ export function BillLineItemsDialog(props: {
             ))}
           </TableBody>
         </Table>
+
+        {/* Compact GST summary — only shown when GST was applied */}
+        {gst > 0 && (
+          <div className="border-t pt-3">
+            <div className="text-muted-foreground flex flex-col gap-1 text-xs">
+              <div className="flex justify-between">
+                <span>Subtotal</span>
+                <span className="tabular-nums">{formatINR(subtotal)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>CGST + SGST</span>
+                <span className="tabular-nums">
+                  {formatINR(halfGst)} + {formatINR(halfGst)}
+                </span>
+              </div>
+            </div>
+            <div className="mt-2 flex justify-between text-sm font-semibold">
+              <span>Total (GST inclusive)</span>
+              <span className="tabular-nums">{formatINR(total)}</span>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

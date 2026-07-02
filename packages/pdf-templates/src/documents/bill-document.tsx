@@ -29,6 +29,8 @@ export interface BillPdfData {
     dueDate: string;
     generatedAt: string;
     totalAmount: number;
+    /** Stored GST total (CGST + SGST) included in totalAmount. Null for pre-GST or non-GST bills. */
+    gstAmount: number | null;
     paidAmount: number;
     status: string;
   };
@@ -41,16 +43,26 @@ export function BillDocument({
   bill,
   lineItems,
 }: BillPdfData) {
-  const taxableAmount = lineItems
-    .filter((item) => item.gstApplicable)
-    .reduce((sum, item) => sum + item.amount, 0);
+  // Line item amounts are always pre-GST base amounts.
+  const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
 
-  const showGst =
-    association.gstEnabled && association.gstRate != null && taxableAmount > 0;
+  // Use stored gst_amount when available (new bills). Fall back to computing
+  // from line items for legacy bills that pre-date the gst_amount column.
+  const gstTotal =
+    bill.gstAmount ??
+    (() => {
+      if (!association.gstEnabled || association.gstRate == null) return 0;
+      const taxable = lineItems
+        .filter((item) => item.gstApplicable)
+        .reduce((sum, item) => sum + item.amount, 0);
+      return taxable > 0 ? (taxable * association.gstRate) / 100 : 0;
+    })();
+
+  const showGst = gstTotal > 0 && association.gstRate != null;
   const halfRate = showGst ? association.gstRate! / 2 : 0;
-  const cgst = showGst ? (taxableAmount * halfRate) / 100 : 0;
-  const sgst = cgst;
-  const grandTotalWithGst = bill.totalAmount + cgst + sgst;
+  const cgst = Math.round((gstTotal / 2) * 100) / 100;
+  const sgst = Math.round((gstTotal - cgst) * 100) / 100;
+  // totalAmount already includes GST for new bills; use it as the payable amount.
   const outstanding = Math.max(0, bill.totalAmount - bill.paidAmount);
 
   return (
@@ -107,7 +119,7 @@ export function BillDocument({
         <View style={styles.summaryBlock}>
           <View style={styles.summaryRow}>
             <Text>Subtotal</Text>
-            <Text>{formatINR(bill.totalAmount)}</Text>
+            <Text>{formatINR(subtotal)}</Text>
           </View>
 
           {showGst ? (
@@ -119,10 +131,6 @@ export function BillDocument({
               <View style={styles.summaryRow}>
                 <Text>SGST @ {halfRate}%</Text>
                 <Text>{formatINR(sgst)}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text>Total incl. GST (reference)</Text>
-                <Text>{formatINR(grandTotalWithGst)}</Text>
               </View>
             </>
           ) : null}

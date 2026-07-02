@@ -23,28 +23,26 @@ export default async function AssociationSettingsPage({ params }: Props) {
 
   const client = getSupabaseServerClient();
 
-  // The association logo is the MakerKit team account image (accounts.picture_url).
-  // Name/slug/owner are fetched here too so the name-edit and danger-zone
-  // sections (moved from the old, now-redirected /settings tab) can render
-  // alongside the rest of the association's identity on this single page.
-  const { data: accountRow } = await client
-    .from('accounts')
-    .select('name, slug, picture_url, primary_owner_user_id')
-    .eq('id', accountId)
-    .single();
+  // Fire accounts and associations queries in parallel — both only need accountId.
+  const [{ data: accountRow }, { data: associationRow }] = await Promise.all([
+    client
+      .from('accounts')
+      .select('name, slug, picture_url, primary_owner_user_id')
+      .eq('id', accountId)
+      .single(),
+    client
+      .from('associations')
+      .select('*')
+      .eq('account_id', accountId)
+      .single(),
+  ]);
 
   if (!accountRow) {
     throw new Error('Unable to load the association account record.');
   }
 
-  // Load or create the associations row (safety net — the row is normally
-  // auto-created by the create-team trigger).
-  let { data: association } = await client
-    .from('associations')
-    .select('*')
-    .eq('account_id', accountId)
-    .single();
-
+  // Safety net: auto-create the associations row if the trigger didn't fire.
+  let association = associationRow;
   if (!association) {
     const { data } = await client
       .from('associations')
@@ -60,22 +58,27 @@ export default async function AssociationSettingsPage({ params }: Props) {
     );
   }
 
-  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
-
-  const { data: billingSettings } = await client
-    .from('billing_settings')
-    .select('electricity_due_day, maintenance_due_day, other_charges_due_day')
-    .eq('association_id', association.id)
-    .single();
-
-  const { data: chargeTypes } = await client
-    .from('charge_types')
-    .select(
-      'id, key, name, is_builtin, calc_method, frequency, default_payer, is_active, rate_or_amount',
-    )
-    .eq('association_id', association.id)
-    .order('is_builtin', { ascending: false })
-    .order('name');
+  // Fire all remaining independent queries in parallel.
+  const [
+    { data: isSuperAdmin },
+    { data: billingSettings },
+    { data: chargeTypes },
+  ] = await Promise.all([
+    client.rpc('is_super_admin'),
+    client
+      .from('billing_settings')
+      .select('electricity_due_day, maintenance_due_day, other_charges_due_day')
+      .eq('association_id', association.id)
+      .single(),
+    client
+      .from('charge_types')
+      .select(
+        'id, key, name, is_builtin, calc_method, frequency, default_payer, is_active, rate_or_amount, gst_applicable',
+      )
+      .eq('association_id', association.id)
+      .order('is_builtin', { ascending: false })
+      .order('name'),
+  ]);
 
   return (
     <div className="flex max-w-2xl flex-1 flex-col gap-6">
@@ -100,6 +103,7 @@ export default async function AssociationSettingsPage({ params }: Props) {
           id: association.id,
           status: association.status,
           address: association.address,
+          registration_number: association.registration_number ?? null,
           brand_colour: association.brand_colour,
           gstin: association.gstin,
           gst_enabled: association.gst_enabled,
@@ -113,6 +117,7 @@ export default async function AssociationSettingsPage({ params }: Props) {
         chargeTypes={chargeTypes ?? []}
         associationId={association.id}
         isSuperAdmin={!!isSuperAdmin}
+        gstEnabled={!!association.gst_enabled}
       />
     </div>
   );

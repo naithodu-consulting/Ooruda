@@ -215,6 +215,7 @@ export type Database = {
           id: string
           logo_url: string | null
           mescom_consumer_no: string | null
+          registration_number: string | null
           status: string
           updated_at: string
         }
@@ -229,6 +230,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           mescom_consumer_no?: string | null
+          registration_number?: string | null
           status?: string
           updated_at?: string
         }
@@ -243,6 +245,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           mescom_consumer_no?: string | null
+          registration_number?: string | null
           status?: string
           updated_at?: string
         }
@@ -451,6 +454,7 @@ export type Database = {
           due_date: string
           generated_at: string
           generated_by: string | null
+          gst_amount: number | null
           id: string
           paid_amount: number
           pdf_generated_at: string | null
@@ -467,6 +471,7 @@ export type Database = {
           due_date: string
           generated_at?: string
           generated_by?: string | null
+          gst_amount?: number | null
           id?: string
           paid_amount?: number
           pdf_generated_at?: string | null
@@ -483,6 +488,7 @@ export type Database = {
           due_date?: string
           generated_at?: string
           generated_by?: string | null
+          gst_amount?: number | null
           id?: string
           paid_amount?: number
           pdf_generated_at?: string | null
@@ -1650,18 +1656,46 @@ export type Database = {
         Args: { target_team_account_id: string; target_user_id: string }
         Returns: boolean
       }
-      create_bill_with_items: {
-        Args: {
-          p_association_id: string
-          p_bill_no: string
-          p_due_date: string
-          p_line_items: Json
-          p_period: string
-          p_total_amount: number
-          p_unit_id: string
-        }
-        Returns: string
-      }
+      create_bill_with_items:
+        | {
+            Args: {
+              p_association_id: string
+              p_bill_no: string
+              p_due_date: string
+              p_line_items: Json
+              p_period: string
+              p_total_amount: number
+              p_unit_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_association_id: string
+              p_bill_no: string
+              p_bill_type?: string
+              p_due_date: string
+              p_line_items: Json
+              p_period: string
+              p_total_amount: number
+              p_unit_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_association_id: string
+              p_bill_no: string
+              p_bill_type?: string
+              p_due_date: string
+              p_gst_amount?: number
+              p_line_items: Json
+              p_period: string
+              p_total_amount: number
+              p_unit_id: string
+            }
+            Returns: string
+          }
       create_invitation: {
         Args: { account_id: string; email: string; role: string }
         Returns: {

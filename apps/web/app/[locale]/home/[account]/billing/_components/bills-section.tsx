@@ -88,6 +88,7 @@ export interface BillRow {
   status: string;
   due_date: string;
   unit_no: string;
+  gst_amount: number | null;
   lineItems: BillLineItemRow[];
 }
 
@@ -405,6 +406,7 @@ export function BillsSection(props: {
                                   billNo={bill.bill_no}
                                   period={bill.period}
                                   lineItems={bill.lineItems}
+                                  gstAmount={bill.gst_amount}
                                 />
                                 <DownloadPdfButton
                                   href={`/api/billing/bills/${bill.id}/pdf`}

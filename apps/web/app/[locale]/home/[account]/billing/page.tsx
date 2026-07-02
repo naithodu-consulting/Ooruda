@@ -38,7 +38,7 @@ export default async function BillingPage({ params }: Props) {
       client
         .from('bills')
         .select(
-          'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, units(unit_no), bill_line_items(id, description, payer, gst_applicable, amount)',
+          'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, gst_amount, units(unit_no), bill_line_items(id, description, payer, gst_applicable, amount)',
         )
         .eq('association_id', association.id)
         .order('period', { ascending: false })
@@ -94,6 +94,7 @@ export default async function BillingPage({ params }: Props) {
     status: b.status,
     due_date: b.due_date,
     unit_no: (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
+    gst_amount: b.gst_amount != null ? Number(b.gst_amount) : null,
     lineItems: b.bill_line_items,
   }));
 
