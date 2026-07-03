@@ -388,6 +388,33 @@ Branch: `week-3-part-1`
 
 ---
 
+## Release v3.2 — GST, Bulk Invite & Electricity Reconciliation (Jul 3, 2026)
+
+### GST Support
+
+- **Association-level GST toggle**: Enable GST for the entire association via Settings → Association → GST Enabled. Set GSTIN and GST rate (%).
+- **Per-charge-type GST flag**: Each charge type has an independent "GST applicable" toggle. Electricity is always excluded (pass-through billing). Maintenance and other charges default to enabled when association GST is on.
+- **GST inclusive billing**: When GST is enabled and applicable to a line item, `gst_amount` is stored on the bill. The bill breakdown popup shows subtotal, CGST + SGST split, and GST-inclusive total.
+- **PDF updates**: Bill PDF shows a GST column per line item and a summary block with CGST/SGST rates and amounts.
+
+### Association Settings
+
+- **Registration number**: Associations can now store an official registration number; shown in PDF headers.
+- **Charge Types card improvements**: Column headers (GST / Active) added; both toggles are now `Switch` components (consistent UI); electricity shows a dash with tooltip instead of a GST toggle.
+- **Billing Settings parallelisation**: Settings page queries now run with `Promise.all` instead of sequentially — reduces page load time.
+- **Loading state**: `loading.tsx` added to the association settings route for a spinner during navigation.
+
+### Super Admin: Bulk Member Invite
+
+- **CSV bulk invite**: Super admins can upload a CSV (`name`, `phone`, `role`) to create and invite multiple users at once. Name is mandatory. Invalid rows are skipped with per-row error reporting.
+- **Pre-built phone→user map**: User lookup is now done with a single paginated scan of `auth.users` before the import loop (instead of per-row calls), fixing a bug where only the first 50 users were checked.
+
+### Electricity: Adjusted Block Rate
+
+- **Proportional transmission-loss recovery**: The effective electricity rate is now computed as `invoice_amount ÷ sum_of_all_sub_meter_units` (instead of MESCOM's `block_consumption_units`). This ensures the full MESCOM invoice is recovered every month, with transmission losses shared proportionally across all units. No carry-forward reconciliation needed.
+
+---
+
 ## Migrations Changelog
 
 | Migration | Date | Description |
@@ -436,6 +463,7 @@ Branch: `week-3-part-1`
 | `20260702000002_associations_registration_number.sql` | Jul 2 | Add `registration_number` column to `associations` |
 | `20260702000004_razorpay_gateway.sql` | Jul 2 | `association_payment_gateways` table; add `razorpay_order_id`, `payment_batch_id` to `payments`; update `record_payment()` RPC to support owner/tenant Razorpay payments |
 | `20260702000003_charge_types_gst_applicable_defaults.sql` | Jul 2 | Fix `gst_applicable` defaults: maintenance + other_charges → `true`, fix seed trigger |
+| `20260703000001_drop_old_record_payment_overload.sql` | Jul 3 | Drop stale 5-arg overload of `record_payment` (fixes PGRST203 ambiguity with Razorpay 8-arg overload) |
 
 ---
 
