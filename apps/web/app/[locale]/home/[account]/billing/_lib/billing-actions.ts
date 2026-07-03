@@ -150,11 +150,12 @@ export async function generateBillsAction(
 
   let blockRate: number | null = null;
   const consumedByUnit: Record<string, number> = {};
+  const minimumChargeByUnit: Record<string, number> = {};
 
   if (hasElectricityChargeType) {
     const { data: mescomBill } = await client
       .from('mescom_bills')
-      .select('invoice_amount')
+      .select('invoice_amount, block_consumption_units')
       .eq('association_id', associationId)
       .eq('period', period)
       .maybeSingle();
@@ -173,7 +174,7 @@ export async function generateBillsAction(
       if (subMeterIds.length > 0) {
         const { data: readings } = await client
           .from('meter_readings')
-          .select('sub_meter_id, consumed_units')
+          .select('sub_meter_id, consumed_units, minimum_charge')
           .eq('period', period)
           .in('sub_meter_id', subMeterIds);
 
@@ -182,18 +183,13 @@ export async function generateBillsAction(
           if (unitId) {
             consumedByUnit[unitId] =
               (consumedByUnit[unitId] ?? 0) + (r.consumed_units ?? 0);
+            minimumChargeByUnit[unitId] =
+              (minimumChargeByUnit[unitId] ?? 0) + (r.minimum_charge ?? 0);
           }
         }
 
-        // Use total sub-meter consumption (not MESCOM's block_consumption_units)
-        // as the denominator so transmission losses are shared proportionally
-        // and the full invoice is always recovered in the same month.
-        const totalSubMeterUnits = Object.values(consumedByUnit).reduce(
-          (sum, u) => sum + u,
-          0,
-        );
-        if (totalSubMeterUnits > 0) {
-          blockRate = mescomBill.invoice_amount / totalSubMeterUnits;
+        if ((mescomBill.block_consumption_units ?? 0) > 0) {
+          blockRate = mescomBill.invoice_amount / mescomBill.block_consumption_units!;
         }
       }
     }
@@ -271,7 +267,8 @@ export async function generateBillsAction(
       if (chargeType.calc_method === 'electricity') {
         if (blockRate === null) continue;
         const consumed = consumedByUnit[unit.id] ?? 0;
-        amount = consumed * blockRate;
+        const minCharge = minimumChargeByUnit[unit.id] ?? 0;
+        amount = consumed * blockRate + minCharge;
 
         elecItems.push({
           charge_type_id: chargeType.id,

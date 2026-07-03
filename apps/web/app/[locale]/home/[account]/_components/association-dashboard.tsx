@@ -322,33 +322,49 @@ export async function AssociationDashboard({
 
         {units.map((unit, index) => {
           const unitBills = bills.filter((b) => b.unit_id === unit.id);
-          const latestBill = latestBillByUnit.get(unit.id);
-          const unitPayments = payments.filter(
-            (p) =>
-              p.bill_id === latestBill?.id ||
-              unitBills.some((b: any) => b.id === p.bill_id),
+          const latestPeriod = unitBills.length > 0 ? unitBills[0]!.period : null;
+          const currentPeriodBills = unitBills.filter(
+            (b) => b.period === latestPeriod,
+          );
+          const unitPayments = payments.filter((p) =>
+            unitBills.some((b) => b.id === p.bill_id),
           );
 
-          const outstanding = latestBill
-            ? Math.max(0, latestBill.total_amount - latestBill.paid_amount)
-            : 0;
-          const status = latestBill ? displayBillStatus(latestBill) : 'Paid';
+          // Sum outstanding across ALL bills in the latest period
+          const outstanding = currentPeriodBills.reduce(
+            (sum, b) => sum + Math.max(0, b.total_amount - b.paid_amount),
+            0,
+          );
 
-          // Extract Maintenance and Electricity breakdown
+          // Status: Unpaid if any unpaid, Partial if any partial, else Paid
+          const anyUnpaid = currentPeriodBills.some((b) => b.status === 'Unpaid');
+          const anyPartial = currentPeriodBills.some((b) => b.status === 'Partial');
+          const status = anyUnpaid ? 'Unpaid' : anyPartial ? 'Partial' : 'Paid';
+
+          // Due date: earliest across current-period bills
+          const dueDateBill = currentPeriodBills.reduce<BillWithLineItems | null>(
+            (earliest, b) =>
+              !earliest || b.due_date < earliest.due_date ? b : earliest,
+            null,
+          );
+
+          // Maintenance and electricity amounts from their respective bills
           let maintenanceAmount = 0;
           let electricityAmount = 0;
-
-          if (latestBill && latestBill.bill_line_items) {
-            const items = latestBill.bill_line_items as any[];
-            const maint = items.find((i) =>
-              i.description.toLowerCase().includes('maintenance'),
-            );
-            const elec = items.find((i) =>
-              i.description.toLowerCase().includes('electricity'),
-            );
-            if (maint) maintenanceAmount = maint.amount;
-            if (elec) electricityAmount = elec.amount;
+          for (const bill of currentPeriodBills) {
+            for (const item of bill.bill_line_items ?? []) {
+              const desc = item.description.toLowerCase();
+              if (desc.includes('maintenance')) maintenanceAmount += item.amount;
+              if (desc.includes('electricity')) electricityAmount += item.amount;
+            }
           }
+
+          // Primary bill for download: electricity > maintenance > first available
+          const primaryBill =
+            currentPeriodBills.find((b) => b.bill_no.includes('-ELEC-')) ??
+            currentPeriodBills.find((b) => b.bill_no.includes('-MANT-')) ??
+            currentPeriodBills[0] ??
+            null;
 
           return (
             <div
@@ -380,15 +396,15 @@ export async function AssociationDashboard({
                     <div className="mt-1 text-5xl font-black tracking-tight text-[#F59E0B]">
                       {formatINR(outstanding)}
                     </div>
-                    {latestBill && (
+                    {latestPeriod && (
                       <div className="mt-2 text-xs text-white/50">
-                        Bill {latestBill.bill_no} &middot;{' '}
-                        {periodLabel(latestBill.period)}
+                        {currentPeriodBills.length} bill{currentPeriodBills.length !== 1 ? 's' : ''} &middot;{' '}
+                        {periodLabel(latestPeriod)}
                       </div>
                     )}
                   </div>
 
-                  {latestBill && (
+                  {currentPeriodBills.length > 0 && (
                     <div className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold shadow-sm">
                       <span
                         className={`h-2 w-2 rounded-full ${
@@ -414,14 +430,14 @@ export async function AssociationDashboard({
                   )}
                 </div>
 
-                {latestBill && (
+                {currentPeriodBills.length > 0 && (
                   <div className="relative z-10 mt-6 grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
                     <div>
                       <span className="block text-[10px] font-bold tracking-wider text-white/40 uppercase">
                         Due Date
                       </span>
                       <span className="mt-1 block text-sm font-semibold text-white">
-                        {formatYmdLong(latestBill.due_date)}
+                        {dueDateBill ? formatYmdLong(dueDateBill.due_date) : '—'}
                       </span>
                     </div>
                     <div>
@@ -445,22 +461,24 @@ export async function AssociationDashboard({
               </div>
 
               {/* Quick Actions */}
-              {latestBill && outstanding > 0 && (
+              {outstanding > 0 && (
                 <div className="flex flex-wrap gap-3">
                   <Link
-                    href={`/home/${account}/payments?billId=${latestBill.id}`}
+                    href={`/home/${account}/payments?unit=${unit.unit_no}`}
                     className="inline-flex items-center justify-center rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-orange-700 active:bg-orange-800"
                   >
                     Pay now
                   </Link>
-                  <a
-                    href={`/api/billing/bills/${latestBill.id}/pdf`}
-                    download
-                    data-test="download-latest-bill"
-                    className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                  >
-                    Download bill
-                  </a>
+                  {primaryBill && (
+                    <a
+                      href={`/api/billing/bills/${primaryBill.id}/pdf`}
+                      download
+                      data-test="download-latest-bill"
+                      className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      Download bill
+                    </a>
+                  )}
                 </div>
               )}
 
