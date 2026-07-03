@@ -163,7 +163,12 @@ export async function createElectricityBillAction(
         error: `A bill for ${parsed.data.period} already exists.`,
       };
     }
-
+    await logAuditEvent({
+      associationId,
+      action: 'mescom_bill.create.failed',
+      entityType: 'mescom_bill',
+      summary: `Failed to create electricity bill for ${parsed.data.period}: ${error.message}`,
+    });
     return { success: false, error: error.message };
   }
 
@@ -202,6 +207,13 @@ export async function deleteElectricityBillAction(
     .eq('association_id', associationId);
 
   if (error) {
+    await logAuditEvent({
+      associationId,
+      action: 'mescom_bill.delete.failed',
+      entityType: 'mescom_bill',
+      entityId: electricityBillId,
+      summary: `Failed to delete electricity bill: ${error.message}`,
+    });
     return { success: false, error: error.message };
   }
 
@@ -404,6 +416,12 @@ export async function bulkImportMeterReadingsAction(
       .upsert(toUpsert, { onConflict: 'mescom_bill_id,sub_meter_id' });
 
     if (error) {
+      await logAuditEvent({
+        associationId,
+        action: 'meter_readings.bulk_import.failed',
+        entityType: 'mescom_bill',
+        summary: `Failed to bulk import meter readings: ${error.message}`,
+      });
       return { success: false, error: error.message, imported: 0, skipped };
     }
 
@@ -485,6 +503,13 @@ export async function recordMeterReadingsAction(
         .eq('id', existingId);
 
       if (error) {
+        await logAuditEvent({
+          associationId,
+          action: 'meter_readings.record.failed',
+          entityType: 'mescom_bill',
+          entityId: bill.id,
+          summary: `Failed to record meter readings for ${bill.period}: ${error.message}`,
+        });
         return { success: false, error: error.message };
       }
     } else {
@@ -498,6 +523,13 @@ export async function recordMeterReadingsAction(
       });
 
       if (error) {
+        await logAuditEvent({
+          associationId,
+          action: 'meter_readings.record.failed',
+          entityType: 'mescom_bill',
+          entityId: bill.id,
+          summary: `Failed to record meter readings for ${bill.period}: ${error.message}`,
+        });
         return { success: false, error: error.message };
       }
     }
