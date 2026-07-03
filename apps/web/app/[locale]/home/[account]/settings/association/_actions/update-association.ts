@@ -13,6 +13,11 @@ const ASSOCIATION_SETTINGS_PATH = '/home/[account]/settings/association';
 const AssociationSchema = z.object({
   status: z.enum(['Setup', 'Active', 'Suspended']),
   address: z.string().max(500).optional(),
+  registration_number: z
+    .string()
+    .max(100)
+    .nullable()
+    .transform((v) => v || null),
   brand_colour: z
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/)
@@ -20,15 +25,15 @@ const AssociationSchema = z.object({
   gstin: z
     .string()
     .regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/)
-    .optional()
-    .or(z.literal('')),
+    .nullable()
+    .or(z.literal('').transform(() => null)),
   gst_enabled: z.boolean().default(false),
   gst_rate: z.coerce.number().min(0).max(100).nullable(),
   mescom_consumer_no: z.string().max(50).optional(),
 });
 
 const BillingSettingsSchema = z.object({
-  electricity_due_day: z.coerce.number().min(1).max(28).default(10),
+  electricity_due_day: z.coerce.number().int().min(1).max(28).default(10),
   maintenance_due_day: z.coerce.number().int().min(1).max(28).default(10),
   other_charges_due_day: z.coerce.number().int().min(1).max(28).default(10),
 });
@@ -58,6 +63,7 @@ export async function updateAssociationAction(
   const assocResult = AssociationSchema.safeParse({
     status: formData.get('status'),
     address: formData.get('address') || undefined,
+    registration_number: formData.get('registration_number') || null,
     brand_colour: formData.get('brand_colour') || '#FCD469',
     gstin: formData.get('gstin') || '',
     gst_enabled: formData.get('gst_enabled') === 'on',
@@ -150,6 +156,34 @@ export async function updateChargeTypeCalcMethodAction(
   const { error } = await client
     .from('charge_types')
     .update({ calc_method: calcMethod })
+    .eq('id', id)
+    .eq('association_id', associationId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
+
+  return { success: true };
+}
+
+export async function updateChargeTypeGstApplicableAction(
+  associationId: string,
+  id: string,
+  gstApplicable: boolean,
+): Promise<{ success: boolean; error?: string }> {
+  const role = await getAssociationRole(associationId);
+
+  if (role !== 'assoc_admin' && role !== 'billing_operator') {
+    return { success: false, error: 'Not authorized.' };
+  }
+
+  const client = getSupabaseServerClient();
+
+  const { error } = await client
+    .from('charge_types')
+    .update({ gst_applicable: gstApplicable })
     .eq('id', id)
     .eq('association_id', associationId);
 

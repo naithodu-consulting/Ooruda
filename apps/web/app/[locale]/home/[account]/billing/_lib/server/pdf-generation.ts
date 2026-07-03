@@ -83,10 +83,10 @@ export async function getOrGenerateBillPdf(
     const { data: bill, error: billError } = await admin
       .from('bills')
       .select(
-        `id, association_id, unit_id, period, bill_no, total_amount, paid_amount, status, due_date, generated_at, pdf_url,
+        `id, association_id, unit_id, period, bill_no, total_amount, gst_amount, paid_amount, status, due_date, generated_at, pdf_url,
          units(unit_no),
          bill_line_items(description, payer, gst_applicable, amount),
-         associations(address, gstin, gst_enabled, gst_rate, accounts(name, picture_url))`,
+         associations(address, gstin, registration_number, gst_enabled, gst_rate, accounts(name, picture_url))`,
       )
       .eq('id', billId)
       .maybeSingle();
@@ -139,6 +139,7 @@ export async function getOrGenerateBillPdf(
           name: association.accounts?.name ?? 'Association',
           address: association.address,
           gstin: association.gstin,
+          registrationNumber: association.registration_number ?? null,
           logoUrl: association.accounts?.picture_url ?? null,
           gstEnabled: association.gst_enabled,
           gstRate: association.gst_rate,
@@ -150,6 +151,7 @@ export async function getOrGenerateBillPdf(
           dueDate: bill.due_date,
           generatedAt: bill.generated_at,
           totalAmount: bill.total_amount,
+          gstAmount: bill.gst_amount ?? null,
           paidAmount: bill.paid_amount,
           status: bill.status,
         },
@@ -232,7 +234,7 @@ export async function getOrGenerateReceiptPdf(
       .from('payments')
       .select(
         `id, association_id, amount, mode, paid_by_role, paid_at,
-         bills(bill_no, period, unit_id, units(unit_no), associations(address, gstin, accounts(name, picture_url))),
+         bills(bill_no, period, unit_id, units(unit_no), associations(address, gstin, registration_number, accounts(name, picture_url))),
          receipts(id, receipt_no, pdf_url, generated_at)`,
       )
       .eq('id', paymentId)
@@ -297,6 +299,7 @@ export async function getOrGenerateReceiptPdf(
           name: association.accounts?.name ?? 'Association',
           address: association.address,
           gstin: association.gstin,
+          registrationNumber: association.registration_number ?? null,
           logoUrl: association.accounts?.picture_url ?? null,
         },
         unit: { unitNo: payment.bills.units.unit_no },

@@ -99,7 +99,7 @@ export async function generateBillsAction(
   // on the linked account, so resolve it through `associations.account_id`.
   const { data: association, error: associationError } = await client
     .from('associations')
-    .select('accounts(slug)')
+    .select('gst_enabled, gst_rate, accounts(slug)')
     .eq('id', associationId)
     .single();
 
@@ -111,6 +111,9 @@ export async function generateBillsAction(
       error: 'Association slug is required to generate bills.',
     };
   }
+
+  const gstEnabled = association?.gst_enabled ?? false;
+  const gstRate = association?.gst_rate ?? 0;
 
   const slugPart = accountSlug.substring(0, 3).toUpperCase();
   const uuidPart = associationId.substring(0, 4).toUpperCase();
@@ -151,15 +154,12 @@ export async function generateBillsAction(
   if (hasElectricityChargeType) {
     const { data: mescomBill } = await client
       .from('mescom_bills')
-      .select('invoice_amount, block_consumption_units')
+      .select('invoice_amount')
       .eq('association_id', associationId)
       .eq('period', period)
       .maybeSingle();
 
-    if (mescomBill && mescomBill.block_consumption_units > 0) {
-      blockRate =
-        mescomBill.invoice_amount / mescomBill.block_consumption_units;
-
+    if (mescomBill && mescomBill.invoice_amount > 0) {
       const { data: subMeters } = await client
         .from('sub_meters')
         .select('id, unit_id')
@@ -179,11 +179,21 @@ export async function generateBillsAction(
 
         for (const r of readings ?? []) {
           const unitId = unitIdBySubMeter.get(r.sub_meter_id);
-
           if (unitId) {
             consumedByUnit[unitId] =
               (consumedByUnit[unitId] ?? 0) + (r.consumed_units ?? 0);
           }
+        }
+
+        // Use total sub-meter consumption (not MESCOM's block_consumption_units)
+        // as the denominator so transmission losses are shared proportionally
+        // and the full invoice is always recovered in the same month.
+        const totalSubMeterUnits = Object.values(consumedByUnit).reduce(
+          (sum, u) => sum + u,
+          0,
+        );
+        if (totalSubMeterUnits > 0) {
+          blockRate = mescomBill.invoice_amount / totalSubMeterUnits;
         }
       }
     }
@@ -305,10 +315,12 @@ export async function generateBillsAction(
 
         let pcAmount: number;
         if (pc.unit_id === null) {
-          pcAmount =
-            pc.split_mode === 'per_sqft'
-              ? roundToTwoDecimals(pc.amount * unit.area_sqft)
-              : roundToTwoDecimals(pc.amount);
+          if (pc.split_mode === 'per_sqft') {
+            if (unit.area_sqft == null) continue; // can't split without area
+            pcAmount = roundToTwoDecimals(pc.amount * unit.area_sqft);
+          } else {
+            pcAmount = roundToTwoDecimals(pc.amount);
+          }
         } else {
           pcAmount = roundToTwoDecimals(pc.amount);
         }
@@ -334,11 +346,25 @@ export async function generateBillsAction(
 
       nextSeq += 1;
       const billNo = `${prefix}-${typePrefix}-${yyMM}-${String(nextSeq).padStart(3, '0')}`;
-      const totalAmount = roundToTwoDecimals(
+
+      const baseTotal = roundToTwoDecimals(
         items.reduce((sum, li) => sum + li.amount, 0),
       );
 
-      const billType =
+      // Compute GST on taxable line items when the association is GST-registered.
+      let gstAmount: number | null = null;
+      if (gstEnabled && gstRate > 0) {
+        const taxableBase = items
+          .filter((li) => li.gst_applicable)
+          .reduce((sum, li) => sum + li.amount, 0);
+        if (taxableBase > 0) {
+          gstAmount = roundToTwoDecimals((taxableBase * gstRate) / 100);
+        }
+      }
+
+      const totalAmount = roundToTwoDecimals(baseTotal + (gstAmount ?? 0));
+
+      const billCategory =
         typePrefix === 'ELEC'
           ? 'electricity'
           : typePrefix === 'OTHR'
@@ -355,7 +381,8 @@ export async function generateBillsAction(
           p_due_date: dueDate,
           p_total_amount: totalAmount,
           p_line_items: items,
-          p_bill_type: billType,
+          p_bill_type: billCategory,
+          p_gst_amount: gstAmount,
         },
       );
 
@@ -563,6 +590,15 @@ export async function bulkImportOtherChargesAction(
   period: string,
   rows: OtherChargeImportRow[],
 ): Promise<OtherChargeImportResult> {
+  if (!/^\d{4}-\d{2}$/.test(period)) {
+    return {
+      success: false,
+      imported: 0,
+      skipped: [],
+      error: 'Invalid period format. Expected YYYY-MM.',
+    };
+  }
+
   const roleError = await requireBillingAccess(associationId);
   if (roleError) {
     return { success: false, imported: 0, skipped: [], error: roleError };

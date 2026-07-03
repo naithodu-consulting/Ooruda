@@ -27,6 +27,7 @@ import { Switch } from '@kit/ui/switch';
 import {
   toggleChargeTypeAction,
   updateChargeTypeCalcMethodAction,
+  updateChargeTypeGstApplicableAction,
   updateChargeTypeRateAction,
 } from '../_actions/update-association';
 
@@ -53,18 +54,21 @@ interface ChargeType {
   default_payer: string;
   is_active: boolean;
   rate_or_amount: number | null;
+  gst_applicable: boolean;
 }
 
 interface Props {
   chargeTypes: ChargeType[];
   associationId: string;
   isSuperAdmin?: boolean;
+  gstEnabled?: boolean;
 }
 
 export function ChargeTypesCard({
   chargeTypes,
   associationId,
   isSuperAdmin,
+  gstEnabled,
 }: Props) {
   const [optimistic, setOptimistic] = useOptimistic<
     ChargeType[],
@@ -73,6 +77,7 @@ export function ChargeTypesCard({
       is_active?: boolean;
       rate_or_amount?: number | null;
       calc_method?: string;
+      gst_applicable?: boolean;
     }
   >(chargeTypes, (state, patch) =>
     state.map((ct) => (ct.id === patch.id ? { ...ct, ...patch } : ct)),
@@ -98,6 +103,20 @@ export function ChargeTypesCard({
       );
       if (!result.success) {
         toast.error(result.error ?? 'Could not update calculation method.');
+      }
+    });
+  };
+
+  const handleGstToggle = (id: string, checked: boolean) => {
+    startTransition(async () => {
+      setOptimistic({ id, gst_applicable: checked });
+      const result = await updateChargeTypeGstApplicableAction(
+        associationId,
+        id,
+        checked,
+      );
+      if (!result.success) {
+        toast.error(result.error ?? 'Could not update GST setting.');
       }
     });
   };
@@ -137,6 +156,20 @@ export function ChargeTypesCard({
       </CardHeader>
 
       <CardContent>
+        {/* Column headers */}
+        <div className="flex items-center gap-4 border-b pb-2">
+          <div className="flex-1" />
+          <div className="w-28" />
+          {gstEnabled && (
+            <span className="text-muted-foreground w-12 text-center text-[11px] font-medium tracking-wide">
+              GST
+            </span>
+          )}
+          <span className="text-muted-foreground w-12 text-center text-[11px] font-medium tracking-wide">
+            Active
+          </span>
+        </div>
+
         <div className="divide-y">
           {optimistic.map((ct) => {
             const isElectricity = ct.calc_method === 'electricity';
@@ -242,12 +275,36 @@ export function ChargeTypesCard({
                   <div className="w-28" />
                 )}
 
-                {/* Toggle */}
-                <Switch
-                  checked={ct.is_active}
-                  onCheckedChange={(checked) => handleToggle(ct.id, checked)}
-                  aria-label={`Toggle ${ct.name}`}
-                />
+                {/* GST switch - hidden for electricity (pass-through billing) */}
+                {gstEnabled && (
+                  <div className="flex w-12 justify-center">
+                    {!isElectricity ? (
+                      <Switch
+                        checked={ct.gst_applicable}
+                        onCheckedChange={(checked) =>
+                          handleGstToggle(ct.id, checked)
+                        }
+                        aria-label={`GST applicable for ${ct.name}`}
+                      />
+                    ) : (
+                      <span
+                        className="text-muted-foreground/40 text-xs"
+                        title="Electricity is pass-through billing. GST not applicable"
+                      >
+                        —
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Active toggle */}
+                <div className="flex w-12 justify-center">
+                  <Switch
+                    checked={ct.is_active}
+                    onCheckedChange={(checked) => handleToggle(ct.id, checked)}
+                    aria-label={`Toggle ${ct.name}`}
+                  />
+                </div>
               </div>
             );
           })}

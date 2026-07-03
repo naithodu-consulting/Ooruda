@@ -29,7 +29,7 @@ import { ResetPasswordSchema } from './schema/reset-password.schema';
 import { createAdminAccountsService } from './services/admin-accounts.service';
 import { createAdminAuthUserService } from './services/admin-auth-user.service';
 import { adminActionClient } from './utils/admin-action-client';
-import { isUserSuperAdmin } from './utils/is-super-admin';
+import { isSuperAdmin, isUserSuperAdmin } from './utils/is-super-admin';
 
 function friendlyAuthError(message: string): string {
   const msg = message.toLowerCase();
@@ -541,6 +541,194 @@ export const setAssocAdminPermissionsAction = adminActionClient
 
     return { success: true };
   });
+
+export interface BulkInviteRow {
+  phone: string;
+  name?: string;
+  email?: string;
+  role: string;
+  association_name: string;
+}
+
+export interface BulkInviteResult {
+  imported: number;
+  skipped: { row: number; phone: string; reason: string }[];
+}
+
+/**
+ * Bulk-invite multiple members via CSV. Each row specifies phone, name, email
+ * (optional), role, and association_name. Bad rows are skipped; a summary is
+ * returned so the caller can display what succeeded and what failed.
+ */
+export async function bulkInviteMembersAction(
+  rows: BulkInviteRow[],
+): Promise<BulkInviteResult> {
+  const adminClient = getSupabaseServerAdminClient();
+  const logger = await getLogger();
+
+  const serverClient = getSupabaseServerClient();
+  if (!(await isSuperAdmin(serverClient))) {
+    throw new Error('Only super admins can perform bulk invites.');
+  }
+
+  // Resolve all association names up-front to avoid N+1 queries.
+  const { data: accounts } = await adminClient
+    .from('accounts')
+    .select('id, name')
+    .eq('is_personal_account', false);
+
+  const assocIdByName = new Map<string, string>(
+    (accounts ?? []).map((a) => [(a.name ?? '').trim().toLowerCase(), a.id]),
+  );
+
+  // Build a phone → userId map from all existing auth users up-front to avoid
+  // an O(n) series of listUsers() calls (each returning only the first page).
+  const existingUserByPhone = new Map<string, string>();
+  let page = 1;
+  while (true) {
+    const { data: pageData } = await adminClient.auth.admin.listUsers({
+      page,
+      perPage: 1000,
+    });
+    for (const u of pageData?.users ?? []) {
+      if (u.phone) existingUserByPhone.set(u.phone, u.id);
+    }
+    if ((pageData?.users ?? []).length < 1000) break;
+    page++;
+  }
+
+  let imported = 0;
+  const skipped: BulkInviteResult['skipped'] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    const rowNum = i + 1;
+
+    const normalised = normalizePhoneNumber(row.phone);
+    if (!normalised) {
+      skipped.push({
+        row: rowNum,
+        phone: row.phone,
+        reason: 'Invalid phone number',
+      });
+      continue;
+    }
+
+    const associationId = assocIdByName.get(
+      row.association_name.trim().toLowerCase(),
+    );
+    if (!associationId) {
+      skipped.push({
+        row: rowNum,
+        phone: normalised,
+        reason: `Association "${row.association_name}" not found`,
+      });
+      continue;
+    }
+
+    const validRoles = [
+      'assoc_admin',
+      'billing_operator',
+      'prop_owner',
+      'tenant',
+    ];
+    if (!validRoles.includes(row.role)) {
+      skipped.push({
+        row: rowNum,
+        phone: normalised,
+        reason: `Invalid role "${row.role}"`,
+      });
+      continue;
+    }
+
+    try {
+      const existingUserId = existingUserByPhone.get(normalised);
+
+      let userId: string;
+
+      if (existingUserId) {
+        userId = existingUserId;
+      } else {
+        // Create the auth user (phone confirmed; email confirmed if provided).
+        const createPayload: Parameters<
+          typeof adminClient.auth.admin.createUser
+        >[0] = {
+          phone: normalised,
+          phone_confirm: true,
+          user_metadata: { name: row.name ?? '', full_name: row.name ?? '' },
+        };
+
+        if (row.email) {
+          createPayload.email = row.email.trim().toLowerCase();
+          createPayload.email_confirm = true;
+        }
+
+        const { data, error: createError } =
+          await adminClient.auth.admin.createUser(createPayload);
+
+        if (createError) {
+          skipped.push({
+            row: rowNum,
+            phone: normalised,
+            reason: friendlyAuthError(createError.message),
+          });
+          continue;
+        }
+
+        userId = data.user.id;
+
+        await adminClient.from('profiles').upsert(
+          {
+            id: userId,
+            full_name: row.name ?? '',
+            mobile_number: normalised,
+            ...(row.email ? { email: row.email.trim().toLowerCase() } : {}),
+          },
+          { onConflict: 'id' },
+        );
+      }
+
+      // Add to association (skip if already a member).
+      const { error: membershipError } = await adminClient
+        .from('accounts_memberships')
+        .insert({
+          user_id: userId,
+          account_id: associationId,
+          account_role: row.role,
+        });
+
+      if (membershipError) {
+        if (membershipError.code === '23505') {
+          skipped.push({
+            row: rowNum,
+            phone: normalised,
+            reason: 'Already a member of this association',
+          });
+        } else {
+          skipped.push({
+            row: rowNum,
+            phone: normalised,
+            reason: membershipError.message,
+          });
+        }
+        continue;
+      }
+
+      imported++;
+      logger.info(
+        { phone: normalised, associationId, role: row.role },
+        'Bulk invite: member added',
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      skipped.push({ row: rowNum, phone: normalised, reason: msg });
+    }
+  }
+
+  revalidatePath('/admin/accounts', 'page');
+
+  return { imported, skipped };
+}
 
 function revalidateAdmin() {
   revalidatePath(`/admin/accounts/[id]`, 'page');

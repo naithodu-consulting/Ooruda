@@ -332,30 +332,42 @@ Branch: `week-3-part-1`
 
 ---
 
-## Release v3.1 — Performance & Bug Fixes (Jul 12, 2026)
+## Release v3.1 — GST, Bulk Invite & Performance (Jul 2–12, 2026)
 
-### Billing & Payments: Client-Side Filtering (instant results)
+### Billing: GST Support
 
-Billing and payments filter dropdowns previously triggered a full server round-trip + 2–3 sequential Supabase queries on every change, causing 2–3 second delays. Filters are now instant:
+- **GST-inclusive bill generation**: When GST is enabled at the association level, generated bills now include the GST amount in the payable total. Electricity is excluded (pass-through billing); maintenance and other charges are taxable by default.
+- **Per-charge-type GST control**: The Charge Types card in Association Settings shows a GST toggle per charge type (visible only when association GST is enabled), allowing admins to mark individual charge types as taxable or exempt.
+- **Bill breakdown popup**: View Breakdown now shows subtotal, CGST, SGST, and GST-inclusive total as a compact summary below the line items.
+- **PDF bill updated**: Shows subtotal, CGST and SGST lines, and a GST-inclusive "Bill Amount (Payable)" when applicable.
 
-- **Server pages simplified**: load all bills in one query (with `Promise.all` for parallel independent fetches). No filter logic on the server.
-- **Client-side filtering**: `BillsSection` and `PaymentsSection` hold filter state in `useState`; filtered rows, metrics, and pagination are derived via `useMemo` — zero network requests on filter change.
-- **Pagination converted**: Previous/Next links (URL-based) replaced with button `onClick` state — no page reload.
-- **Live metrics strip**: Bill count, collected, outstanding, and overdue counts update instantly as filters change, replacing the separate metric card grid.
-- **`bill_type` column added** to `bills` table (values: `maintenance`, `electricity`, `other_charges`). Backfilled from `bill_no` patterns. Eliminates ILIKE queries entirely. Two composite indexes added: `bills(association_id, bill_type, period, status)` and `bills(unit_id, bill_type, period, status)`.
-- **`create_bill_with_items` RPC updated** to accept and store `p_bill_type` directly (new bills get correct type from day one).
-- **`bill-period-filter.ts`** shared utility: `getPeriodsForDuration()` extracted into `apps/web/lib/` so billing and payments use one canonical implementation.
+### Association: Registration Number
 
-### Invite Members: Bug Fixes
+- New **Registration Number** field on the association, editable in Billing Settings.
+- Printed in the PDF header on both bills and receipts, below the address and above the GSTIN.
 
-- **HTTP 300 (ambiguous function)** — Dropping `20260712000001`: old 4-arg overload of `invite_to_association_by_phone` coexisted with the 6-arg version; PostgREST returned 300. Dropped the stale overload.
-- **HTTP 400 (ON CONFLICT mismatch)** — `20260712000002`: `ON CONFLICT (account_id, phone)` didn't match the partial unique index (`WHERE phone IS NOT NULL`). Fixed by adding the predicate to the conflict target.
+### Admin: Bulk CSV Member Invite
 
-### PDF Download: Performance & UX
+- Super admins can now invite members in bulk via CSV upload from the Admin → Accounts page.
+- Three-step flow: upload CSV → preview parsed rows → view import results.
+- CSV format: `phone, name, email, role, association_name` — all columns mandatory. Invalid or incomplete rows are skipped with a reason shown in the results.
+- A downloadable CSV template is provided in the dialog.
 
-- **Cached PDFs now near-instant**: Previously, even cached PDFs required the Next.js server to download the file from Supabase Storage, buffer it in memory, then stream it to the browser (~1–2s). Now the route handler generates a short-lived signed Supabase Storage URL (valid 5 min) and returns a 302 redirect. The browser downloads directly from the CDN, bypassing the Next.js server entirely.
-- **Loading state on the download button**: The `DownloadPdfButton` component now uses `fetch()` + Blob URL + programmatic anchor click instead of a plain `<a href download>`. The button shows a spinner and "Generating…" label immediately on click, giving instant visual feedback for the entire generation duration. An error toast is shown if the request fails.
-- **Fixed button width during loading**: The labeled download button now has a fixed width (`w-[110px]`) so switching between "Download" and "Generating…" doesn't cause the button to resize and shift surrounding layout.
+### Billing & Payments: Instant Filters
+
+- Filter dropdowns (payment status, bill type, duration) now update results instantly with no server round-trip. Metrics (count, collected, outstanding, overdue) also update in real time as filters change.
+
+### PDF Downloads: Performance
+
+- Cached bill and receipt PDFs now download near-instantly. The download button shows a loading indicator while a PDF is being generated.
+
+### Electricity: Proportional Transmission Losses
+
+- Electricity block rates are now computed by dividing the MESCOM invoice amount by the total actual sub-meter consumption (rather than MESCOM's block units). This automatically distributes transmission losses proportionally across all sub-meters, ensuring the full invoice is always recovered in the same month.
+
+### Association Settings: Page Load
+
+- Billing Settings page now loads significantly faster — database queries are parallelised and a loading spinner is shown while the page fetches data.
 
 ---
 
@@ -430,9 +442,9 @@ Billing and payments filter dropdowns previously triggered a full server round-t
 | `20260712000002_fix_invite_on_conflict_partial_index.sql` | Jul 12 | Fix ON CONFLICT predicate to match partial unique index (fixes HTTP 400) |
 | `20260712000003_bills_bill_type.sql` | Jul 12 | Add `bill_type` column to bills, backfill, add composite indexes |
 | `20260712000004_create_bill_with_items_bill_type.sql` | Jul 12 | Update `create_bill_with_items` RPC to accept and store `bill_type` |
-| `20260702000001_bills_gst_amount.sql` | Jul 2 | Add `gst_amount` to bills table; update `create_bill_with_items` RPC with `p_gst_amount` |
-| `20260702000002_associations_registration_number.sql` | Jul 2 | Add `registration_number` column to associations |
-| `20260702000003_charge_types_gst_applicable_defaults.sql` | Jul 2 | Add `gst_applicable` flag to charge_types; seed defaults (true for maintenance/other_charges) |
+| `20260702000001_bills_gst_amount.sql` | Jul 2 | Add `gst_amount` column to `bills`; update `create_bill_with_items` to accept and store `p_gst_amount` |
+| `20260702000002_associations_registration_number.sql` | Jul 2 | Add `registration_number` column to `associations` |
+| `20260702000003_charge_types_gst_applicable_defaults.sql` | Jul 2 | Fix `gst_applicable` defaults: maintenance + other_charges → `true`, fix seed trigger |
 
 ---
 
@@ -452,9 +464,9 @@ Billing and payments filter dropdowns previously triggered a full server round-t
 | **Reports** | Partial | Arrears summary, payment summary, billing overview (more report types deferred) |
 | **Audit Logs** | Complete | Structured event log, all actions instrumented |
 | **Notifications** | Partial | Log view with read/unread state (push delivery not yet wired) |
-| **Admin Panel** | Complete | Create association, create/edit/remove users, manage roles, association permissions |
+| **Admin Panel** | Complete | Create association, create/edit/remove users, manage roles, association permissions, bulk CSV member invite |
 | **Dashboard** | Complete | Real-data metric cards, multi-unit billing summary, recent activity feed |
 
 ---
 
-*Last updated: 2026-07-01 (v3.1 additions: 2026-07-01)*
+*Last updated: 2026-07-02*

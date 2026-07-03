@@ -33,6 +33,7 @@ interface Props {
     id: string;
     status: string;
     address: string | null;
+    registration_number: string | null;
     brand_colour: string;
     gstin: string | null;
     gst_enabled: boolean;
@@ -112,8 +113,23 @@ export function AssociationForm({ association, billingSettings }: Props) {
               id="address"
               name="address"
               defaultValue={association.address ?? ''}
-              placeholder="123, Commercial Complex, MG Road, Mangaluru — 575008"
+              placeholder="123, Commercial Complex, MG Road, Mangaluru - 575008"
             />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="registration_number">Registration Number</Label>
+            <Input
+              id="registration_number"
+              name="registration_number"
+              defaultValue={association.registration_number ?? ''}
+              placeholder="e.g. KAR/HSG/2018/001234"
+              className="max-w-xs font-mono"
+            />
+            <p className="text-muted-foreground text-xs">
+              Society or association registration number issued by the
+              Registrar.
+            </p>
           </div>
         </CardContent>
       </Card>
