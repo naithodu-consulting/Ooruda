@@ -64,6 +64,12 @@ export async function recordPaymentAction(
   });
 
   if (error) {
+    await logAuditEvent({
+      associationId,
+      action: 'payment.record.failed',
+      entityType: 'payment',
+      summary: `Failed to record payment for bill ${billId}: ${error.message}`,
+    });
     return { success: false, error: error.message };
   }
 
@@ -109,6 +115,13 @@ export async function voidPaymentAction(
     .eq('id', paymentId);
 
   if (deleteError) {
+    await logAuditEvent({
+      associationId,
+      action: 'payment.void.failed',
+      entityType: 'payment',
+      entityId: paymentId,
+      summary: `Failed to void payment ${paymentId}: ${deleteError.message}`,
+    });
     return { success: false, error: deleteError.message };
   }
 
