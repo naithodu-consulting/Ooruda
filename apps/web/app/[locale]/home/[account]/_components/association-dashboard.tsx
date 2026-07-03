@@ -19,16 +19,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import { MetricCard } from '@kit/ui/metric-card';
 
 import { DownloadPdfButton } from '~/components/download-pdf-button';
+import { getDurationItems } from '~/lib/bill-filter-items';
+import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
-import {
-  daysBetweenYmd,
-  formatYmdLong,
-  todayInBillingZone,
-} from '~/lib/billing-dates';
+import { daysBetweenYmd, todayInBillingZone } from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 import { type PropOpsRole, hasMinimumRole } from '~/lib/rbac';
 import { getAccessibleUnits } from '~/lib/unit-access';
+
+import { DashboardDurationSelect } from './dashboard-duration-select';
 
 function currentPeriod(): string {
   const now = new Date();
@@ -36,6 +36,25 @@ function currentPeriod(): string {
 }
 
 const periodLabel = formatPeriod;
+
+function overviewPeriodDisplay(
+  duration: string,
+  periods: string[] | null,
+): string {
+  if (!periods || periods.length === 0) return 'All time';
+  const items = getDurationItems();
+  if (duration === 'this_fy') return items.this_fy;
+  if (duration === 'prev_fy') return items.prev_fy;
+  if (periods.length === 1) return periodLabel(periods[0]!);
+  const sorted = [...periods].sort();
+  const startDate = new Date(sorted[0]! + '-01');
+  const endDate = new Date(sorted[sorted.length - 1]! + '-01');
+  const startMonth = startDate.toLocaleString('en-IN', { month: 'short' });
+  if (startDate.getFullYear() === endDate.getFullYear()) {
+    return `${startMonth}–${endDate.toLocaleString('en-IN', { month: 'short', year: 'numeric' })}`;
+  }
+  return `${startDate.toLocaleString('en-IN', { month: 'short', year: 'numeric' })}–${endDate.toLocaleString('en-IN', { month: 'short', year: 'numeric' })}`;
+}
 
 function AgeingBar(props: {
   label: string;
@@ -67,9 +86,10 @@ function AgeingBar(props: {
   );
 }
 
-async function loadAssociationOverview(accountId: string) {
+async function loadAssociationOverview(accountId: string, duration: string) {
   const client = getSupabaseServerClient();
-  const period = currentPeriod();
+  const currentMonth = currentPeriod();
+  const periods = getPeriodsForDuration(duration);
 
   const { data: association } = await client
     .from('associations')
@@ -79,6 +99,14 @@ async function loadAssociationOverview(accountId: string) {
 
   if (!association) {
     return null;
+  }
+
+  let billsQuery = client
+    .from('bills')
+    .select('total_amount, paid_amount, status, due_date')
+    .eq('association_id', association.id);
+  if (periods) {
+    billsQuery = billsQuery.in('period', periods);
   }
 
   const [
@@ -96,16 +124,12 @@ async function loadAssociationOverview(accountId: string) {
       .select('id', { count: 'exact', head: true })
       .eq('association_id', association.id)
       .eq('status', 'Occupied'),
-    client
-      .from('bills')
-      .select('total_amount, paid_amount, status, due_date')
-      .eq('association_id', association.id)
-      .eq('period', period),
+    billsQuery,
     client
       .from('mescom_bills')
       .select('id')
       .eq('association_id', association.id)
-      .eq('period', period)
+      .eq('period', currentMonth)
       .maybeSingle(),
   ]);
 
@@ -153,7 +177,8 @@ async function loadAssociationOverview(accountId: string) {
 
   return {
     status: association.status,
-    period,
+    currentMonth,
+    periodDisplay: overviewPeriodDisplay(duration, periods),
     totalUnits: totalUnits ?? 0,
     occupiedUnits: occupiedUnits ?? 0,
     billsGenerated: bills?.length ?? 0,
@@ -235,14 +260,6 @@ async function loadMyBillSummary(accountId: string, userId: string) {
 
   const bills = (allBills as unknown as BillWithLineItems[]) ?? [];
 
-  // Most recent bill per unit for the per-unit breakdown.
-  const latestBillByUnit = new Map<string, BillWithLineItems>();
-  for (const bill of bills) {
-    if (!latestBillByUnit.has(bill.unit_id)) {
-      latestBillByUnit.set(bill.unit_id, bill);
-    }
-  }
-
   // Fetch payments for these bills
   const billIds = bills.map((b) => b.id);
   let payments: PaymentWithBillAndReceipt[] = [];
@@ -272,7 +289,6 @@ async function loadMyBillSummary(accountId: string, userId: string) {
   return {
     units,
     bills,
-    latestBillByUnit,
     payments,
     assocName,
   };
@@ -283,11 +299,13 @@ export async function AssociationDashboard({
   accountId,
   userId,
   role,
+  duration = 'current_month',
 }: {
   account: string;
   accountId: string;
   userId: string;
   role: PropOpsRole;
+  duration?: string;
 }) {
   const isPersonal = role === 'prop_owner' || role === 'tenant';
 
@@ -308,7 +326,7 @@ export async function AssociationDashboard({
       );
     }
 
-    const { units, bills, latestBillByUnit, payments, assocName } = summary;
+    const { units, bills, payments, assocName } = summary;
 
     return (
       <div className="flex flex-col gap-8">
@@ -322,49 +340,46 @@ export async function AssociationDashboard({
 
         {units.map((unit, index) => {
           const unitBills = bills.filter((b) => b.unit_id === unit.id);
-          const latestPeriod = unitBills.length > 0 ? unitBills[0]!.period : null;
-          const currentPeriodBills = unitBills.filter(
-            (b) => b.period === latestPeriod,
-          );
           const unitPayments = payments.filter((p) =>
             unitBills.some((b) => b.id === p.bill_id),
           );
 
-          // Sum outstanding across ALL bills in the latest period
-          const outstanding = currentPeriodBills.reduce(
+          // All unpaid/partial bills across ALL periods
+          const unpaidBills = unitBills.filter(
+            (b) => b.status === 'Unpaid' || b.status === 'Partial',
+          );
+
+          // Total outstanding across every period
+          const totalOutstanding = unpaidBills.reduce(
             (sum, b) => sum + Math.max(0, b.total_amount - b.paid_amount),
             0,
           );
 
-          // Status: Unpaid if any unpaid, Partial if any partial, else Paid
-          const anyUnpaid = currentPeriodBills.some((b) => b.status === 'Unpaid');
-          const anyPartial = currentPeriodBills.some((b) => b.status === 'Partial');
-          const status = anyUnpaid ? 'Unpaid' : anyPartial ? 'Partial' : 'Paid';
+          // Determine worst-case status across all unpaid bills
+          const hasOverdue = unpaidBills.some(
+            (b) => displayBillStatus(b) === 'Overdue',
+          );
+          const overallStatus = hasOverdue
+            ? 'Overdue'
+            : unpaidBills.length > 0
+              ? 'Unpaid'
+              : 'Paid';
 
-          // Due date: earliest across current-period bills
-          const dueDateBill = currentPeriodBills.reduce<BillWithLineItems | null>(
-            (earliest, b) =>
-              !earliest || b.due_date < earliest.due_date ? b : earliest,
-            null,
+          // Group unpaid bills by period for the card breakdown
+          const unpaidByPeriod = new Map<string, number>();
+          for (const b of unpaidBills) {
+            const amt = Math.max(0, b.total_amount - b.paid_amount);
+            unpaidByPeriod.set(
+              b.period,
+              (unpaidByPeriod.get(b.period) ?? 0) + amt,
+            );
+          }
+          // Sorted newest first
+          const periodBreakdown = Array.from(unpaidByPeriod.entries()).sort(
+            ([a], [b]) => b.localeCompare(a),
           );
 
-          // Maintenance and electricity amounts from their respective bills
-          let maintenanceAmount = 0;
-          let electricityAmount = 0;
-          for (const bill of currentPeriodBills) {
-            for (const item of bill.bill_line_items ?? []) {
-              const desc = item.description.toLowerCase();
-              if (desc.includes('maintenance')) maintenanceAmount += item.amount;
-              if (desc.includes('electricity')) electricityAmount += item.amount;
-            }
-          }
-
-          // Primary bill for download: electricity > maintenance > first available
-          const primaryBill =
-            currentPeriodBills.find((b) => b.bill_no.includes('-ELEC-')) ??
-            currentPeriodBills.find((b) => b.bill_no.includes('-MANT-')) ??
-            currentPeriodBills[0] ??
-            null;
+          const latestPeriod = periodBreakdown[0]?.[0] ?? null;
 
           return (
             <div
@@ -382,103 +397,108 @@ export async function AssociationDashboard({
                 </h2>
               </div>
 
-              {/* Amount Due Card - Premium Prototype Style */}
+              {/* Amount Due Card */}
               <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#11314f] via-[#0a1f33] to-[#05101a] p-6 text-white shadow-xl">
-                {/* Shiny Decorative Circle / Glow */}
+                {/* Decorative glow */}
                 <div className="pointer-events-none absolute top-[-15%] right-[-8%] h-56 w-56 rounded-full bg-gradient-to-br from-[#1b4b76] to-transparent opacity-40 blur-xl" />
                 <div className="pointer-events-none absolute top-[-8%] right-[-4%] h-40 w-40 rounded-full bg-gradient-to-br from-[#246197] to-transparent opacity-30 blur-lg" />
 
-                <div className="relative z-10 flex items-start justify-between">
-                  <div>
+                <div className="relative z-10 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <span className="text-[10px] font-bold tracking-wider text-white/40 uppercase">
-                      Amount Due
+                      Total amount due
                     </span>
                     <div className="mt-1 text-5xl font-black tracking-tight text-[#F59E0B]">
-                      {formatINR(outstanding)}
+                      {formatINR(totalOutstanding)}
                     </div>
-                    {latestPeriod && (
-                      <div className="mt-2 text-xs text-white/50">
-                        {currentPeriodBills.length} bill{currentPeriodBills.length !== 1 ? 's' : ''} &middot;{' '}
-                        {periodLabel(latestPeriod)}
-                      </div>
-                    )}
+                    <div className="mt-2 text-xs text-white/50">
+                      {unpaidBills.length === 0
+                        ? 'All paid'
+                        : `${unpaidBills.length} bill${unpaidBills.length !== 1 ? 's' : ''} across ${periodBreakdown.length} month${periodBreakdown.length !== 1 ? 's' : ''}`}
+                    </div>
                   </div>
 
-                  {currentPeriodBills.length > 0 && (
-                    <div className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold shadow-sm">
+                  {unpaidBills.length > 0 && (
+                    <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold shadow-sm">
                       <span
                         className={`h-2 w-2 rounded-full ${
-                          status === 'Paid'
+                          overallStatus === 'Paid'
                             ? 'bg-green-600'
-                            : status === 'Partial'
-                              ? 'bg-amber-500'
-                              : 'bg-red-600'
+                            : overallStatus === 'Overdue'
+                              ? 'bg-red-600'
+                              : 'bg-amber-500'
                         }`}
                       />
                       <span
                         className={
-                          status === 'Paid'
+                          overallStatus === 'Paid'
                             ? 'text-green-700'
-                            : status === 'Partial'
-                              ? 'text-amber-700'
-                              : 'text-red-700'
+                            : overallStatus === 'Overdue'
+                              ? 'text-red-700'
+                              : 'text-amber-700'
                         }
                       >
-                        {status}
+                        {overallStatus}
                       </span>
                     </div>
                   )}
                 </div>
 
-                {currentPeriodBills.length > 0 && (
-                  <div className="relative z-10 mt-6 grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
-                    <div>
-                      <span className="block text-[10px] font-bold tracking-wider text-white/40 uppercase">
-                        Due Date
-                      </span>
-                      <span className="mt-1 block text-sm font-semibold text-white">
-                        {dueDateBill ? formatYmdLong(dueDateBill.due_date) : '—'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-bold tracking-wider text-white/40 uppercase">
-                        Maintenance
-                      </span>
-                      <span className="mt-1 block text-sm font-semibold text-white">
-                        {formatINR(maintenanceAmount)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-bold tracking-wider text-white/40 uppercase">
-                        Electricity
-                      </span>
-                      <span className="mt-1 block text-sm font-semibold text-white">
-                        {formatINR(electricityAmount)}
-                      </span>
-                    </div>
+                {/* Per-period breakdown */}
+                {periodBreakdown.length > 0 && (
+                  <div className="relative z-10 mt-5 flex flex-col gap-2 border-t border-white/10 pt-5">
+                    {periodBreakdown.map(([period, amt]) => {
+                      const isLatest = period === latestPeriod;
+                      const periodBills = unpaidBills.filter(
+                        (b) => b.period === period,
+                      );
+                      const isOverdue = periodBills.some(
+                        (b) => displayBillStatus(b) === 'Overdue',
+                      );
+                      return (
+                        <div
+                          key={period}
+                          className="flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-white/70">
+                              {periodLabel(period)}
+                            </span>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                isLatest && !isOverdue
+                                  ? 'bg-amber-500/20 text-amber-300'
+                                  : 'bg-red-500/20 text-red-300'
+                              }`}
+                            >
+                              {isLatest && !isOverdue ? 'current' : 'overdue'}
+                            </span>
+                          </div>
+                          <span className="text-sm font-bold text-white">
+                            {formatINR(amt)}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
               {/* Quick Actions */}
-              {outstanding > 0 && (
+              {totalOutstanding > 0 && (
                 <div className="flex flex-wrap gap-3">
                   <Link
                     href={`/home/${account}/payments?unit=${unit.unit_no}`}
                     className="inline-flex items-center justify-center rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-orange-700 active:bg-orange-800"
                   >
-                    Pay now
+                    Pay all
                   </Link>
-                  {primaryBill && (
-                    <a
-                      href={`/api/billing/bills/${primaryBill.id}/pdf`}
-                      download
-                      data-test="download-latest-bill"
-                      className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                    >
-                      Download bill
-                    </a>
-                  )}
+                  <Link
+                    href={`/home/${account}/payments?unit=${unit.unit_no}`}
+                    className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    Pay by bill
+                  </Link>
                 </div>
               )}
 
@@ -599,7 +619,7 @@ export async function AssociationDashboard({
     );
   }
 
-  const overview = await loadAssociationOverview(accountId);
+  const overview = await loadAssociationOverview(accountId, duration);
   const canManage = hasMinimumRole(role, 'billing_operator');
 
   if (!overview) {
@@ -623,43 +643,70 @@ export async function AssociationDashboard({
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-muted-foreground -mt-2 text-sm">
-        {`${periodLabel(overview.period)} · ${overview.totalUnits} units · ${overview.occupiedUnits} occupied`}
-      </p>
+      <div className="-mt-2 flex items-center justify-between">
+        <p className="text-muted-foreground text-sm">
+          {`${overview.periodDisplay} · ${overview.totalUnits} units · ${overview.occupiedUnits} occupied`}
+        </p>
+        <DashboardDurationSelect value={duration} />
+      </div>
 
       <div className="grid grid-cols-1 gap-3.5 min-[480px]:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          icon={Receipt}
-          variant="blue"
-          label="Billed"
-          value={formatINR(overview.billed)}
-          sublabel={`${overview.billsGenerated} bills generated`}
-        />
-        <MetricCard
-          icon={Banknote}
-          variant="green"
-          label="Collected"
-          value={formatINR(overview.collected)}
-          sublabel={
-            overview.billed > 0
-              ? `${Math.round((overview.collected / overview.billed) * 100)}% collection rate`
-              : 'No bills yet'
-          }
-        />
-        <MetricCard
-          icon={Clock}
-          variant="amber"
-          label="Outstanding"
-          value={formatINR(overview.outstanding)}
-          sublabel="Pending collection"
-        />
-        <MetricCard
-          icon={AlertTriangle}
-          variant="red"
-          label="Overdue"
-          value={formatINR(overview.overdueAmount)}
-          sublabel={`${overview.overdueCount} units`}
-        />
+        <Link
+          href={`/home/${account}/billing?duration=${duration}`}
+          className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-blue-300 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none dark:hover:ring-blue-700"
+        >
+          <MetricCard
+            icon={Receipt}
+            variant="blue"
+            label="Billed"
+            value={formatINR(overview.billed)}
+            sublabel={`${overview.billsGenerated} bills generated`}
+            className="h-full"
+          />
+        </Link>
+        <Link
+          href={`/home/${account}/payments?duration=${duration}`}
+          className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-green-300 focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:outline-none dark:hover:ring-green-700"
+        >
+          <MetricCard
+            icon={Banknote}
+            variant="green"
+            label="Collected"
+            value={formatINR(overview.collected)}
+            sublabel={
+              overview.billed > 0
+                ? `${Math.round((overview.collected / overview.billed) * 100)}% collection rate`
+                : 'No bills yet'
+            }
+            className="h-full"
+          />
+        </Link>
+        <Link
+          href={`/home/${account}/billing?duration=${duration}&status=unpaid`}
+          className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-amber-300 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none dark:hover:ring-amber-700"
+        >
+          <MetricCard
+            icon={Clock}
+            variant="amber"
+            label="Outstanding"
+            value={formatINR(overview.outstanding)}
+            sublabel="Pending collection"
+            className="h-full"
+          />
+        </Link>
+        <Link
+          href={`/home/${account}/billing?duration=${duration}&status=overdue`}
+          className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-red-300 focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:outline-none dark:hover:ring-red-700"
+        >
+          <MetricCard
+            icon={AlertTriangle}
+            variant="red"
+            label="Overdue"
+            value={formatINR(overview.overdueAmount)}
+            sublabel={`${overview.overdueCount} units`}
+            className="h-full"
+          />
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -667,7 +714,7 @@ export async function AssociationDashboard({
           <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-sm">Collection progress</CardTitle>
             <Badge className={badgeExtras.success}>
-              {periodLabel(overview.period)}
+              {overview.periodDisplay}
             </Badge>
           </CardHeader>
           <CardContent>
@@ -766,7 +813,7 @@ export async function AssociationDashboard({
               <Alert className={alertExtras.info}>
                 <Zap />
                 <AlertDescription>
-                  Electricity bill for {periodLabel(overview.period)}{' '}
+                  Electricity bill for {periodLabel(overview.currentMonth)}{' '}
                   hasn&apos;t been added yet.{' '}
                   <Link
                     href={`/home/${account}/electricity`}

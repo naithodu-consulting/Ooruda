@@ -11,6 +11,7 @@ import { TeamAccountLayoutPageHeader } from './_components/team-account-layout-p
 
 interface TeamAccountHomePageProps {
   params: Promise<{ account: string }>;
+  searchParams: Promise<{ d?: string }>;
 }
 
 export const generateMetadata = async () => {
@@ -22,8 +23,12 @@ export const generateMetadata = async () => {
   };
 };
 
-async function TeamAccountHomePage({ params }: TeamAccountHomePageProps) {
-  const { account } = await params;
+async function TeamAccountHomePage({
+  params,
+  searchParams,
+}: TeamAccountHomePageProps) {
+  const [{ account }, { d }] = await Promise.all([params, searchParams]);
+  const duration = d ?? 'current_month';
   const { role, accountId, userId } = await requireRole(
     account,
     PROPOPS_ROLES.slice(),
@@ -42,6 +47,7 @@ async function TeamAccountHomePage({ params }: TeamAccountHomePageProps) {
         accountId={accountId}
         userId={userId}
         role={role}
+        duration={duration}
       />
     </PageBody>
   );

@@ -107,10 +107,14 @@ export function BillsSection(props: {
   periodOptions?: string[];
   isOtherChargesActive: boolean;
   accountSlug?: string;
+  initialDuration?: string;
+  initialStatus?: string;
 }) {
-  const [statusVal, setStatusVal] = useState('all');
+  const [statusVal, setStatusVal] = useState(props.initialStatus ?? 'all');
   const [typeVal, setTypeVal] = useState('all');
-  const [durationVal, setDurationVal] = useState('all');
+  const [durationVal, setDurationVal] = useState(
+    props.initialDuration ?? 'all',
+  );
   const [page, setPage] = useState(1);
 
   const durationItems = useMemo(() => getDurationItems(), []);

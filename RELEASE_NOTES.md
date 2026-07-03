@@ -388,6 +388,52 @@ Branch: `week-3-part-1`
 
 ---
 
+## Release v3.3 — Electricity Enhancements & Dashboard Improvements (Jul 3, 2026)
+
+### Electricity: Due Date Fixed to Next Month
+
+Electricity bills are now due in the calendar month AFTER the billing period (e.g. July electricity bill is due in August). Previously, the due date was calculated within the same billing month.
+
+### Electricity: Billing Period Date Range
+
+"Add Electricity Bill" dialog now includes Period Start and Period End date pickers (default: first and last day of the selected month). Stored in a new `period_start`/`period_end` column pair on `mescom_bills`. The electricity bill PDF uses these dates to display the exact billing period range.
+
+### Electricity: Redesigned Bill PDF
+
+Electricity bill PDFs now use a purpose-built format:
+- Header: association name + address
+- Title: "ELECTRICITY CHARGES"
+- Addressee block (unit + association) alongside bill metadata (Month, Period, Date, Due Date, Bill No)
+- Per-sub-meter table showing previous/current/consumed readings, block rate, and amount
+- Minimum charge row (when applicable)
+- Grand total
+- Configurable authorised signatory name at the bottom
+
+### Association Settings: Authorised Signatory
+
+Associations can now configure an "Authorised Signatory" name (e.g. "John Doe, Secretary") shown on electricity bill PDFs. Field added to the Electricity card in association settings.
+
+### Dashboard: Duration Filter
+
+Admin association dashboard now has a duration selector (Current Month / Last Month / Last 3 Months / Last 6 Months / FY labels / All Time) that filters all billing metrics for the selected window. Defaults to Current Month.
+
+### Dashboard: Clickable Metric Tiles
+
+All four admin metric tiles (Billed, Collected, Outstanding, Overdue) are now clickable and navigate to the billing or payments page with the matching duration and status filter pre-applied.
+
+### Dashboard: Improved Owner Amount Due
+
+Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partial bills across ALL periods, with per-period breakdown, worst-case status (Overdue vs Unpaid), and quick-action links to pay by bill or pay all outstanding.
+
+### Audit Log: Search & UX Improvements
+
+- **Search bar** added to the audit log page — filters by event name or details (URL-based, compatible with pagination).
+- **Column renames**: Action → Event, Actor → User, Entity → Details, Timestamp → Date.
+- **Truncated error details**: Long error messages are trimmed to 90 characters; raw JSON payloads are replaced with "An error occurred." rather than being shown verbatim.
+- **New action labels** for failed events (`mescom.bill_create_failed`, `bill.generate_failed`, `payment.failed`, `bill.pdf_generated`, `receipt.pdf_generated`).
+
+---
+
 ## Release v3.2 — GST, Bulk Invite & Electricity Reconciliation (Jul 3, 2026)
 
 ### GST Support
@@ -464,6 +510,8 @@ Branch: `week-3-part-1`
 | `20260702000004_razorpay_gateway.sql` | Jul 2 | `association_payment_gateways` table; add `razorpay_order_id`, `payment_batch_id` to `payments`; update `record_payment()` RPC to support owner/tenant Razorpay payments |
 | `20260702000003_charge_types_gst_applicable_defaults.sql` | Jul 2 | Fix `gst_applicable` defaults: maintenance + other_charges → `true`, fix seed trigger |
 | `20260703000001_drop_old_record_payment_overload.sql` | Jul 3 | Drop stale 5-arg overload of `record_payment` (fixes PGRST203 ambiguity with Razorpay 8-arg overload) |
+| `20260713000000_mescom_bills_period_dates.sql` | Jul 13 | Add `period_start` and `period_end` DATE columns to `mescom_bills` for exact billing period range on electricity PDFs |
+| `20260713000001_associations_authorised_signatory.sql` | Jul 13 | Add `authorised_signatory` TEXT column to `associations` for electricity bill PDF signature block |
 
 ---
 
@@ -476,7 +524,7 @@ Branch: `week-3-part-1`
 | **Associations** | Complete | Settings (general, electricity, tax, billing), logo upload, charge type configuration |
 | **Units** | Complete | CRUD, CSV import, common area type, owner/tenant assignment, unit detail + tenancy timeline |
 | **Members** | Complete | Phone invitations, email invitations, role-restricted invitations, phone number normalization |
-| **Electricity** | Complete | Sub-meter management, bill upload, meter readings (manual + CSV import), block rate calculation |
+| **Electricity** | Complete | Sub-meter management, bill upload (with period date range), meter readings (manual + CSV import), block rate calculation, redesigned PDF with per-meter breakdown and authorised signatory |
 | **Billing** | Complete | Bill generation (maintenance, electricity, other charges), line items, PDF, filters, common area |
 | **Other Charges** | Complete | Ad-hoc charges staging, flat/per-sqft split, CSV import |
 | **Payments** | Complete | Record payments (cash/UPI/bank/cheque), payment history, PDF receipts, bill status auto-sync |
@@ -485,8 +533,8 @@ Branch: `week-3-part-1`
 | **Notifications** | Partial | Log view with read/unread state (push delivery not yet wired) |
 | **Admin Panel** | Complete | Create association, create/edit/remove users, manage roles, association permissions, bulk CSV member invite, payment gateway config per association |
 | **Self-Service Payments** | Complete | Owner/tenant Razorpay checkout (Pay individual bill, Pay All Pending), per-association gateway credentials, batch grouping |
-| **Dashboard** | Complete | Real-data metric cards, multi-unit billing summary, recent activity feed |
+| **Dashboard** | Complete | Real-data metric cards with duration filter, clickable navigation to billing/payments, multi-unit billing summary with all-period outstanding aggregation, recent activity feed |
 
 ---
 
-*Last updated: 2026-07-03*
+*Last updated: 2026-07-03 (v3.3)*

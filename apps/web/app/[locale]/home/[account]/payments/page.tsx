@@ -12,6 +12,7 @@ import {
 
 interface Props {
   params: Promise<{ account: string }>;
+  searchParams: Promise<{ duration?: string }>;
 }
 
 export const metadata = { title: 'Payments' };
@@ -35,8 +36,8 @@ function receiptNoOf(payment: RawPayment): string | null {
 const BILL_WITH_PAYMENTS_SELECT =
   'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, units(unit_no), payments(id, amount, mode, paid_by_role, paid_at, receipts(receipt_no))';
 
-export default async function PaymentsPage({ params }: Props) {
-  const { account } = await params;
+export default async function PaymentsPage({ params, searchParams }: Props) {
+  const [{ account }, { duration }] = await Promise.all([params, searchParams]);
   const { accountId, role, userId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
@@ -93,6 +94,7 @@ export default async function PaymentsPage({ params }: Props) {
             canVoid={false}
             title="Your payments"
             description="Every payment recorded against your bill(s)."
+            initialDuration={duration}
           />
         </PageBody>
       );
@@ -155,6 +157,7 @@ export default async function PaymentsPage({ params }: Props) {
         }
         canVoid={!isUserRestricted && role === 'assoc_admin'}
         title={isUserRestricted ? 'Your payments' : 'Payments'}
+        initialDuration={duration}
         description={
           isUserRestricted
             ? 'Every payment recorded against your bill(s).'

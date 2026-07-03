@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useTransition } from 'react';
+import React, { useEffect, useMemo, useState, useTransition } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -81,6 +81,8 @@ export interface ElectricityBillRow {
   period: string;
   invoice_amount: number;
   block_consumption_units: number;
+  period_start: string | null;
+  period_end: string | null;
 }
 
 const unitsFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
@@ -274,14 +276,35 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
 
   const periodOptions = useMemo(() => getPeriodOptions(), []);
 
+  function defaultDatesForPeriod(p: string) {
+    const [y, m] = p.split('-').map(Number);
+    const lastDay = new Date(y!, m!, 0).getDate();
+    return {
+      periodStart: `${p}-01`,
+      periodEnd: `${p}-${String(lastDay).padStart(2, '0')}`,
+    };
+  }
+
   const form = useForm({
     resolver: zodResolver(CreateElectricityBillSchema),
     defaultValues: {
       period: defaultPeriod,
       invoiceAmount: '',
       blockConsumptionUnits: '',
+      ...defaultDatesForPeriod(defaultPeriod),
     },
   });
+
+  const watchedPeriod = form.watch('period');
+
+  useEffect(() => {
+    if (/^\d{4}-(0[1-9]|1[0-2])$/.test(watchedPeriod)) {
+      const { periodStart, periodEnd } = defaultDatesForPeriod(watchedPeriod);
+      form.setValue('periodStart', periodStart);
+      form.setValue('periodEnd', periodEnd);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedPeriod, form]);
 
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
@@ -362,6 +385,33 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
             </FormItem>
           )}
         />
+
+        <div className="grid grid-cols-2 gap-3">
+          <FormField
+            name="periodStart"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Period start</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            name="periodEnd"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Period end</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
         <Button
           type="submit"

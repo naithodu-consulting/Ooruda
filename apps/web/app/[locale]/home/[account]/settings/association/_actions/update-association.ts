@@ -30,6 +30,11 @@ const AssociationSchema = z.object({
   gst_enabled: z.boolean().default(false),
   gst_rate: z.coerce.number().min(0).max(100).nullable(),
   mescom_consumer_no: z.string().max(50).optional(),
+  authorised_signatory: z
+    .string()
+    .max(200)
+    .nullable()
+    .transform((v) => v || null),
 });
 
 const BillingSettingsSchema = z.object({
@@ -69,6 +74,8 @@ export async function updateAssociationAction(
     gst_enabled: formData.get('gst_enabled') === 'on',
     gst_rate: formData.get('gst_rate') || null,
     mescom_consumer_no: formData.get('mescom_consumer_no') || undefined,
+    authorised_signatory:
+      (formData.get('authorised_signatory') as string) || null,
   });
 
   if (!assocResult.success) {

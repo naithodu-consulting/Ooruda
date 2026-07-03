@@ -1,6 +1,6 @@
-import Link from 'next/link';
+'use client';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 
 import {
   Table,
@@ -32,20 +32,38 @@ const ACTION_LABELS: Record<string, string> = {
   'unit.bulk_imported': 'Bulk CSV import',
   'tenancy.started': 'Tenant assigned',
   'tenancy.ended': 'Tenancy ended',
-  'bill.generated': 'Bill generated',
+  'bill.generated': 'Bills generated',
   'bill.updated': 'Bill updated',
+  'bill.generate_failed': 'Bill generation failed',
   'payment.recorded': 'Payment recorded',
-  'mescom.reading_added': 'MESCOM reading added',
-  'mescom.bill_created': 'MESCOM bill uploaded',
+  'payment.failed': 'Payment failed',
+  'mescom.reading_added': 'Meter readings recorded',
+  'mescom.bill_created': 'Electricity bill added',
+  'mescom.bill_create_failed': 'Electricity bill failed',
+  'mescom.pdf_generated': 'Electricity bill PDF',
   'billing_settings.updated': 'Billing settings updated',
   'notifications.bulk_sent': 'Bulk reminders sent',
+  'bill.pdf_generated': 'Bill PDF generated',
+  'receipt.pdf_generated': 'Receipt PDF generated',
 };
 
 function actionLabel(action: string): string {
   return (
     ACTION_LABELS[action] ??
-    action.replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    action
+      .replace(/[._]/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
   );
+}
+
+function truncateSummary(summary: string | null): string {
+  if (!summary) return '—';
+  const braceIdx = summary.search(/[{[]/);
+  // If JSON starts at position 0, there's no human-readable prefix at all
+  const stripped =
+    braceIdx > 0 ? summary.slice(0, braceIdx).trim() : '';
+  const text = stripped || (braceIdx === 0 ? 'An error occurred.' : summary);
+  return text.length > 90 ? text.slice(0, 87) + '…' : text;
 }
 
 function RoleBadge({ roleLabel }: { roleLabel: string | null }) {
@@ -79,27 +97,46 @@ function RoleBadge({ roleLabel }: { roleLabel: string | null }) {
   );
 }
 
+function SearchBar({ defaultValue }: { defaultValue: string }) {
+  return (
+    <form method="GET" className="relative w-64">
+      <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
+      <input
+        name="search"
+        defaultValue={defaultValue}
+        placeholder="Search actions or details…"
+        className="border-input bg-background focus:ring-ring h-9 w-full rounded-md border py-1.5 pr-3 pl-8 text-sm focus:ring-2 focus:outline-none"
+      />
+    </form>
+  );
+}
+
 export function AuditLogCard(props: {
   rows: AuditLogRow[];
   page: number;
   totalPages: number;
   totalCount: number;
   account: string;
+  search: string;
 }) {
-  const { rows, page, totalPages, totalCount, account } = props;
+  const { rows, page, totalPages, totalCount, account, search } = props;
   const baseUrl = `/home/${account}/audit`;
+  const pageQuery = search ? `?search=${encodeURIComponent(search)}&page=` : `?page=`;
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-xl font-bold">Audit log</h2>
-        <p className="text-muted-foreground text-sm">All system actions</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Audit log</h2>
+          <p className="text-muted-foreground text-sm">All system actions</p>
+        </div>
+        <SearchBar defaultValue={search} />
       </div>
 
       <div className="dark:bg-card rounded-xl border bg-white">
         {rows.length === 0 ? (
           <p className="text-muted-foreground py-16 text-center text-sm">
-            Nothing has happened here yet.
+            {search ? `No results for "${search}".` : 'Nothing has happened here yet.'}
           </p>
         ) : (
           <>
@@ -107,19 +144,19 @@ export function AuditLogCard(props: {
               <TableHeader>
                 <TableRow className="border-b">
                   <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                    Action
+                    Event
                   </TableHead>
                   <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                    Actor
+                    User
                   </TableHead>
                   <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                     Role
                   </TableHead>
                   <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                    Entity
+                    Details
                   </TableHead>
                   <TableHead className="text-muted-foreground text-right text-xs font-semibold tracking-wider uppercase">
-                    Timestamp
+                    Date
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -136,7 +173,7 @@ export function AuditLogCard(props: {
                       <RoleBadge roleLabel={row.actorRoleLabel} />
                     </TableCell>
                     <TableCell className="text-muted-foreground py-3.5 text-sm">
-                      {row.summary ?? row.entity_type}
+                      {truncateSummary(row.summary)}
                     </TableCell>
                     <TableCell className="text-muted-foreground py-3.5 text-right text-sm">
                       {formatTimestampDMY(row.created_at)}
@@ -163,13 +200,13 @@ export function AuditLogCard(props: {
 
                 <div className="flex items-center gap-1">
                   {page > 1 ? (
-                    <Link
-                      href={`${baseUrl}?page=${page - 1}`}
+                    <a
+                      href={`${baseUrl}${pageQuery}${page - 1}`}
                       className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors"
                     >
                       <ChevronLeft className="h-4 w-4" />
                       Previous
-                    </Link>
+                    </a>
                   ) : (
                     <span className="border-input text-muted-foreground inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-md border px-3 text-sm font-medium opacity-50">
                       <ChevronLeft className="h-4 w-4" />
@@ -182,13 +219,13 @@ export function AuditLogCard(props: {
                   </span>
 
                   {page < totalPages ? (
-                    <Link
-                      href={`${baseUrl}?page=${page + 1}`}
+                    <a
+                      href={`${baseUrl}${pageQuery}${page + 1}`}
                       className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors"
                     >
                       Next
                       <ChevronRight className="h-4 w-4" />
-                    </Link>
+                    </a>
                   ) : (
                     <span className="border-input text-muted-foreground inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-md border px-3 text-sm font-medium opacity-50">
                       Next

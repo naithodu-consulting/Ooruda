@@ -39,6 +39,7 @@ interface Props {
     gst_enabled: boolean;
     gst_rate: number | null;
     mescom_consumer_no: string | null;
+    authorised_signatory: string | null;
   };
   billingSettings: {
     electricity_due_day: number;
@@ -144,15 +145,31 @@ export function AssociationForm({ association, billingSettings }: Props) {
         </CardHeader>
 
         <CardContent>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="mescom_consumer_no">Consumer Number</Label>
-            <Input
-              id="mescom_consumer_no"
-              name="mescom_consumer_no"
-              defaultValue={association.mescom_consumer_no ?? ''}
-              placeholder="e.g. 1234567890"
-              className="max-w-xs"
-            />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="mescom_consumer_no">Consumer Number</Label>
+              <Input
+                id="mescom_consumer_no"
+                name="mescom_consumer_no"
+                defaultValue={association.mescom_consumer_no ?? ''}
+                placeholder="e.g. 1234567890"
+                className="max-w-xs"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="authorised_signatory">Authorised Signatory</Label>
+              <Input
+                id="authorised_signatory"
+                name="authorised_signatory"
+                defaultValue={association.authorised_signatory ?? ''}
+                placeholder="e.g. John Doe, Secretary"
+                className="max-w-xs"
+              />
+              <p className="text-muted-foreground text-xs">
+                Name shown on electricity bill PDFs.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

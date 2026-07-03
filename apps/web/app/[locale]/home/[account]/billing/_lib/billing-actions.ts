@@ -118,15 +118,24 @@ export async function generateBillsAction(
   const slugPart = accountSlug.substring(0, 3).toUpperCase();
   const uuidPart = associationId.substring(0, 4).toUpperCase();
   const prefix = `${slugPart}${uuidPart}`;
-  const calculateDueDate = (day: number) =>
-    `${period}-${String(day).padStart(2, '0')}`;
+  const calculateDueDate = (billingPeriod: string, day: number) =>
+    `${billingPeriod}-${String(day).padStart(2, '0')}`;
+  // Electricity bills are due in the NEXT calendar month after the billing period.
+  const elecPeriod = (() => {
+    const [y, m] = period.split('-').map(Number);
+    const d = new Date(y!, m!, 1); // JS months are 0-indexed, so m (1-based) = next month
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
   const elecDueDate = calculateDueDate(
+    elecPeriod,
     billingSettings?.electricity_due_day ?? 10,
   );
   const maintDueDate = calculateDueDate(
+    period,
     billingSettings?.maintenance_due_day ?? 10,
   );
   const otherDueDate = calculateDueDate(
+    period,
     billingSettings?.other_charges_due_day ?? 10,
   );
 
@@ -189,7 +198,8 @@ export async function generateBillsAction(
         }
 
         if ((mescomBill.block_consumption_units ?? 0) > 0) {
-          blockRate = mescomBill.invoice_amount / mescomBill.block_consumption_units!;
+          blockRate =
+            mescomBill.invoice_amount / mescomBill.block_consumption_units!;
         }
       }
     }

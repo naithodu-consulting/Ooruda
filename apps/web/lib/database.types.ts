@@ -212,6 +212,7 @@ export type Database = {
           gst_enabled: boolean
           gst_rate: number | null
           gstin: string | null
+          authorised_signatory: string | null
           id: string
           logo_url: string | null
           mescom_consumer_no: string | null
@@ -228,6 +229,7 @@ export type Database = {
           gst_rate?: number | null
           gstin?: string | null
           id?: string
+          authorised_signatory?: string | null
           logo_url?: string | null
           mescom_consumer_no?: string | null
           registration_number?: string | null
@@ -237,6 +239,7 @@ export type Database = {
         Update: {
           account_id?: string
           address?: string | null
+          authorised_signatory?: string | null
           brand_colour?: string
           created_at?: string
           gst_enabled?: boolean
@@ -729,6 +732,8 @@ export type Database = {
           invoice_amount: number
           invoice_file_url: string | null
           period: string
+          period_end: string | null
+          period_start: string | null
           uploaded_at: string
           uploaded_by: string | null
         }
@@ -740,6 +745,8 @@ export type Database = {
           invoice_amount: number
           invoice_file_url?: string | null
           period: string
+          period_end?: string | null
+          period_start?: string | null
           uploaded_at?: string
           uploaded_by?: string | null
         }
@@ -751,6 +758,8 @@ export type Database = {
           invoice_amount?: number
           invoice_file_url?: string | null
           period?: string
+          period_end?: string | null
+          period_start?: string | null
           uploaded_at?: string
           uploaded_by?: string | null
         }

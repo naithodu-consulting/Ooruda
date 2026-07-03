@@ -80,7 +80,9 @@ export default async function MescomPage({ params }: Props) {
 
   const { data: bills } = await client
     .from('mescom_bills')
-    .select('id, period, invoice_amount, block_consumption_units')
+    .select(
+      'id, period, invoice_amount, block_consumption_units, period_start, period_end',
+    )
     .eq('association_id', association.id)
     .order('period', { ascending: false });
 

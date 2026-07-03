@@ -207,6 +207,7 @@ export type Database = {
         Row: {
           account_id: string
           address: string | null
+          authorised_signatory: string | null
           brand_colour: string
           created_at: string
           gst_enabled: boolean
@@ -222,6 +223,7 @@ export type Database = {
         Insert: {
           account_id: string
           address?: string | null
+          authorised_signatory?: string | null
           brand_colour?: string
           created_at?: string
           gst_enabled?: boolean
@@ -237,6 +239,7 @@ export type Database = {
         Update: {
           account_id?: string
           address?: string | null
+          authorised_signatory?: string | null
           brand_colour?: string
           created_at?: string
           gst_enabled?: boolean
@@ -729,6 +732,8 @@ export type Database = {
           invoice_amount: number
           invoice_file_url: string | null
           period: string
+          period_end: string | null
+          period_start: string | null
           uploaded_at: string
           uploaded_by: string | null
         }
@@ -740,6 +745,8 @@ export type Database = {
           invoice_amount: number
           invoice_file_url?: string | null
           period: string
+          period_end?: string | null
+          period_start?: string | null
           uploaded_at?: string
           uploaded_by?: string | null
         }
@@ -751,6 +758,8 @@ export type Database = {
           invoice_amount?: number
           invoice_file_url?: string | null
           period?: string
+          period_end?: string | null
+          period_start?: string | null
           uploaded_at?: string
           uploaded_by?: string | null
         }

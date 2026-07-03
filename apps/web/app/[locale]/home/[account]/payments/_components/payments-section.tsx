@@ -66,10 +66,13 @@ export function PaymentsSection(props: {
   title?: string;
   description?: string;
   accountSlug?: string;
+  initialDuration?: string;
 }) {
   const [statusVal, setStatusVal] = useState('all');
   const [typeVal, setTypeVal] = useState('all');
-  const [durationVal, setDurationVal] = useState('all');
+  const [durationVal, setDurationVal] = useState(
+    props.initialDuration ?? 'all',
+  );
   const [page, setPage] = useState(1);
 
   const durationItems = useMemo(() => getDurationItems(), []);

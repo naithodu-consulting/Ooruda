@@ -154,6 +154,8 @@ export async function createElectricityBillAction(
     period: parsed.data.period,
     invoice_amount: parsed.data.invoiceAmount,
     block_consumption_units: parsed.data.blockConsumptionUnits,
+    period_start: parsed.data.periodStart ?? null,
+    period_end: parsed.data.periodEnd ?? null,
   });
 
   if (error) {
