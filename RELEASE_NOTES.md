@@ -346,6 +346,18 @@ Branch: `week-3-part-1`
 - New **Registration Number** field on the association, editable in Billing Settings.
 - Printed in the PDF header on both bills and receipts, below the address and above the GSTIN.
 
+### Owner/Tenant: Self-Service Razorpay Payments
+
+- **Per-association Razorpay credentials**: Each association has its own Razorpay Key ID and Key Secret stored in a new `association_payment_gateways` table. Credentials are server-only (no authenticated RLS policy — service role only) and the secret never reaches the client.
+- **Super admin gateway config**: Admin → Accounts → [Association] now has a "Payment Gateway" card. Super admin enters/updates Key ID, Key Secret, optional Webhook Secret, and toggles active status. Editing with blank secret preserves the existing secret.
+- **"Pay ₹X" per bill**: When the association has an active gateway, `prop_owner` and `tenant` see a "Pay ₹X" button on each unpaid/partial bill row in the Payments page.
+- **"Pay All — ₹Y" button**: If multiple bills are pending, a single "Pay All" button appears at the top. It creates one Razorpay order for the total outstanding and settles each bill individually after payment verification.
+- **Secure checkout flow**: `POST /api/billing/razorpay/create-order` creates the order server-side using the association's key; `POST /api/billing/razorpay/verify` verifies the HMAC-SHA256 signature before calling `record_payment()` for each bill.
+- **Batch grouping**: Multi-bill payments share a `payment_batch_id` UUID for future grouped reporting.
+- **Duplicate payment protection**: Composite unique index `(razorpay_payment_id, bill_id)` prevents double-recording a payment for the same bill.
+- **Page auto-refresh**: After successful payment, `router.refresh()` is called so bill statuses update immediately without manual reload.
+- **Extensible design**: `provider` column in gateway table and `payment_batch_id` are forward-compatible with future gateways (PayU, CCAvenue) and batch reporting.
+
 ### Admin: Bulk CSV Member Invite
 
 - Super admins can now invite members in bulk via CSV upload from the Admin → Accounts page.
@@ -361,9 +373,14 @@ Branch: `week-3-part-1`
 
 - Cached bill and receipt PDFs now download near-instantly. The download button shows a loading indicator while a PDF is being generated.
 
-### Electricity: Proportional Transmission Losses
+### Electricity: Correct Block Rate Denominator
 
-- Electricity block rates are now computed by dividing the MESCOM invoice amount by the total actual sub-meter consumption (rather than MESCOM's block units). This automatically distributes transmission losses proportionally across all sub-meters, ensuring the full invoice is always recovered in the same month.
+- Electricity block rate is now computed as `invoice_amount ÷ mescom_bill.block_consumption_units` (the units on the MESCOM invoice itself), not the sum of individual sub-meter readings. This is the correct formula per MESCOM billing.
+- Minimum charge per sub-meter reading is now included in the electricity bill amount (`minimum_charge + block_rate × consumed_units`).
+
+### Dashboard: Accurate "Amount Due" for Multi-Bill Units
+
+- The owner dashboard now sums outstanding amounts across **all** bills for the current period (electricity + maintenance + other charges) rather than showing only the most recently generated bill's outstanding balance.
 
 ### Association Settings: Page Load
 
@@ -444,6 +461,7 @@ Branch: `week-3-part-1`
 | `20260712000004_create_bill_with_items_bill_type.sql` | Jul 12 | Update `create_bill_with_items` RPC to accept and store `bill_type` |
 | `20260702000001_bills_gst_amount.sql` | Jul 2 | Add `gst_amount` column to `bills`; update `create_bill_with_items` to accept and store `p_gst_amount` |
 | `20260702000002_associations_registration_number.sql` | Jul 2 | Add `registration_number` column to `associations` |
+| `20260702000004_razorpay_gateway.sql` | Jul 2 | `association_payment_gateways` table; add `razorpay_order_id`, `payment_batch_id` to `payments`; update `record_payment()` RPC to support owner/tenant Razorpay payments |
 | `20260702000003_charge_types_gst_applicable_defaults.sql` | Jul 2 | Fix `gst_applicable` defaults: maintenance + other_charges → `true`, fix seed trigger |
 | `20260703000001_drop_old_record_payment_overload.sql` | Jul 3 | Drop stale 5-arg overload of `record_payment` (fixes PGRST203 ambiguity with Razorpay 8-arg overload) |
 
@@ -465,9 +483,10 @@ Branch: `week-3-part-1`
 | **Reports** | Partial | Arrears summary, payment summary, billing overview (more report types deferred) |
 | **Audit Logs** | Complete | Structured event log, all actions instrumented |
 | **Notifications** | Partial | Log view with read/unread state (push delivery not yet wired) |
-| **Admin Panel** | Complete | Create association, create/edit/remove users, manage roles, association permissions, bulk CSV member invite |
+| **Admin Panel** | Complete | Create association, create/edit/remove users, manage roles, association permissions, bulk CSV member invite, payment gateway config per association |
+| **Self-Service Payments** | Complete | Owner/tenant Razorpay checkout (Pay individual bill, Pay All Pending), per-association gateway credentials, batch grouping |
 | **Dashboard** | Complete | Real-data metric cards, multi-unit billing summary, recent activity feed |
 
 ---
 
-*Last updated: 2026-07-02*
+*Last updated: 2026-07-03*
