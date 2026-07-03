@@ -391,6 +391,12 @@ export async function generateBillsAction(
           `Error generating ${type} bill for unit ${unit.id}:`,
           rpcError,
         );
+        await logAuditEvent({
+          associationId,
+          action: 'bills.generation.failed',
+          entityType: 'bill',
+          summary: `Failed to generate ${type} bill for period ${period} (unit ${unit.id}): ${rpcError.message}`,
+        });
         return false;
       }
 
@@ -461,11 +467,12 @@ export async function generateBillsAction(
       'en-IN',
       { month: 'long' },
     );
+    const [periodYear] = period.split('-');
     await logAuditEvent({
       associationId,
       action: 'bills.generated',
       entityType: 'bill',
-      summary: `${monthName} separate bills generated — ${created} invoices`,
+      summary: `Generated ${created} bill${created === 1 ? '' : 's'} for ${monthName} ${periodYear}`,
     });
   }
 
