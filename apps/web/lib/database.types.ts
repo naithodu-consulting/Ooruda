@@ -203,6 +203,50 @@ export type Database = {
           },
         ]
       }
+      association_payment_gateways: {
+        Row: {
+          association_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          key_id: string
+          key_secret: string
+          provider: string
+          updated_at: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          association_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key_id: string
+          key_secret: string
+          provider?: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          association_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key_id?: string
+          key_secret?: string
+          provider?: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "association_payment_gateways_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: true
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       associations: {
         Row: {
           account_id: string
@@ -1127,6 +1171,8 @@ export type Database = {
           mode: string
           paid_at: string
           paid_by_role: string
+          payment_batch_id: string | null
+          razorpay_order_id: string | null
           razorpay_payment_id: string | null
           recorded_by: string | null
         }
@@ -1138,6 +1184,8 @@ export type Database = {
           mode: string
           paid_at?: string
           paid_by_role: string
+          payment_batch_id?: string | null
+          razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
           recorded_by?: string | null
         }
@@ -1149,6 +1197,8 @@ export type Database = {
           mode?: string
           paid_at?: string
           paid_by_role?: string
+          payment_batch_id?: string | null
+          razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
           recorded_by?: string | null
         }
@@ -1846,16 +1896,30 @@ export type Database = {
         Args: { account_id: string; user_id: string }
         Returns: boolean
       }
-      record_payment: {
-        Args: {
-          p_amount: number
-          p_association_id: string
-          p_bill_id: string
-          p_mode: string
-          p_paid_by_role: string
-        }
-        Returns: string
-      }
+      record_payment:
+        | {
+            Args: {
+              p_amount: number
+              p_association_id: string
+              p_bill_id: string
+              p_mode: string
+              p_paid_by_role: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_amount: number
+              p_association_id: string
+              p_bill_id: string
+              p_mode: string
+              p_paid_by_role: string
+              p_payment_batch_id?: string
+              p_razorpay_order_id?: string
+              p_razorpay_payment_id?: string
+            }
+            Returns: string
+          }
       revoke_nonce: {
         Args: { p_id: string; p_reason?: string }
         Returns: boolean

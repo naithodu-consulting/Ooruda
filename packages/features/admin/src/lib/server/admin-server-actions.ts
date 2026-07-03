@@ -730,6 +730,82 @@ export async function bulkInviteMembersAction(
   return { imported, skipped };
 }
 
+// ─── Payment Gateway ──────────────────────────────────────────────────────────
+
+export interface UpsertPaymentGatewayInput {
+  associationId: string;
+  keyId: string;
+  keySecret: string;
+  webhookSecret?: string;
+  isActive: boolean;
+}
+
+/**
+ * Super-admin-only: configure or update Razorpay credentials for an association.
+ * The key_secret is stored as-is (Supabase storage is encrypted at rest).
+ * It is never returned to the client — reads show only key_id and is_active.
+ */
+export async function upsertPaymentGatewayAction(
+  input: UpsertPaymentGatewayInput,
+): Promise<{ success: boolean; error?: string }> {
+  const serverClient = getSupabaseServerClient();
+  if (!(await isSuperAdmin(serverClient))) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
+  const adminClient = getSupabaseServerAdminClient();
+  const logger = await getLogger();
+
+  const keepExistingSecret = input.keySecret === '___unchanged___';
+
+  // When editing with blank secret, fetch existing secret and carry it forward.
+  let resolvedSecret = input.keySecret.trim();
+  if (keepExistingSecret) {
+    const { data: existing } = await adminClient
+      .from('association_payment_gateways')
+      .select('key_secret')
+      .eq('association_id', input.associationId)
+      .maybeSingle();
+    resolvedSecret = existing?.key_secret ?? '';
+    if (!resolvedSecret) {
+      return {
+        success: false,
+        error: 'Existing secret not found. Please re-enter the key secret.',
+      };
+    }
+  }
+
+  const { error } = await adminClient
+    .from('association_payment_gateways')
+    .upsert(
+      {
+        association_id: input.associationId,
+        provider: 'razorpay',
+        key_id: input.keyId.trim(),
+        key_secret: resolvedSecret,
+        webhook_secret: input.webhookSecret?.trim() || null,
+        is_active: input.isActive,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'association_id' },
+    );
+
+  if (error) {
+    logger.error(
+      { error, associationId: input.associationId },
+      'Failed to upsert payment gateway',
+    );
+    return { success: false, error: error.message };
+  }
+
+  logger.info(
+    { associationId: input.associationId },
+    'Payment gateway configured by super admin',
+  );
+  revalidatePath(`/admin/accounts`, 'layout');
+  return { success: true };
+}
+
 function revalidateAdmin() {
   revalidatePath(`/admin/accounts/[id]`, 'page');
 }

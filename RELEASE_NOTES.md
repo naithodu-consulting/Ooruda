@@ -388,6 +388,29 @@ Branch: `week-3-part-1`
 
 ---
 
+## Release v4.0 — Razorpay Self-Service Payments & Unit-Scoped Pay All (Jul 3, 2026)
+
+Branch: `week-4`
+
+### Self-Service Online Payments (Razorpay)
+
+- **Per-association Razorpay gateway**: Super admins configure `key_id`, `key_secret`, `webhook_secret`, and toggle active/inactive per association in Admin → Accounts → [Association] → Payment Gateway card. Credentials are stored server-side only — `key_secret` is never sent to the client.
+- **Pay individual bill**: `prop_owner` and `tenant` see a "Pay ₹X" button on each unpaid/partial bill in the Payments page. Clicking opens the Razorpay checkout modal (UPI, card, netbanking, etc.).
+- **Pay All Pending**: When a specific unit tab is selected and there are 2+ pending bills, a "Pay All — ₹X" button appears in the card header. This creates one Razorpay order covering all pending bills for that unit; each bill gets a separate payment record linked by a shared `payment_batch_id`.
+- **Unit-scoped Pay All**: Multi-unit owners see unit tab pills (All Units / Unit 404 / Unit A2). "Pay All" is only available when a specific unit is selected, never cross-unit. Single-unit owners/tenants see no extra UI complexity.
+- **Dashboard "Pay now"**: Now links to `/payments?unit=<unit_no>`, auto-selecting the correct unit tab on arrival.
+- **Security**: Both `/api/billing/razorpay/create-order` and `/api/billing/razorpay/verify` resolve the caller's owned/rented unit IDs and scope all bill queries to those units. Admins and billing operators are blocked from these endpoints (they use the manual Record Payment flow instead).
+- **Duplicate protection**: Composite unique index on `(razorpay_payment_id, bill_id)` prevents duplicate payment records; the verify route skips `23505` conflicts gracefully.
+- **Modular gateway design**: `provider` column in `association_payment_gateways` allows future gateways (PayU, CCAvenue) without schema changes.
+
+### Payments Page UX
+
+- **Client-side filtering**: All bill data is loaded once; status, type, and duration filters apply instantly in-memory (no server round-trip per filter change).
+- **Unit tab pills**: Visible only for prop_owner/tenant with 2+ units. Scopes the bill table and Pay All to the selected unit.
+- **Live metrics strip**: Bill count, collected, outstanding, and payment count update instantly as filters change.
+
+---
+
 ## Release v3.2 — GST, Bulk Invite & Electricity Reconciliation (Jul 3, 2026)
 
 ### GST Support
@@ -490,3 +513,4 @@ Branch: `week-3-part-1`
 ---
 
 *Last updated: 2026-07-03*
+

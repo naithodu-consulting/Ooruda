@@ -1,6 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -41,6 +43,7 @@ import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
 import { BillPaymentsDialog, type PaymentRow } from './bill-payments-dialog';
+import { RazorpayCheckoutButton } from './razorpay-checkout';
 import { RecordPaymentDialog } from './record-payment-dialog';
 
 export interface BillPaymentRow {
@@ -57,20 +60,43 @@ export interface BillPaymentRow {
 }
 
 const PAGE_SIZE = 25;
+const ALL_UNITS = '__all__';
 
 export function PaymentsSection(props: {
   associationId: string;
   bills: BillPaymentRow[];
   canManage: boolean;
   canVoid: boolean;
+  canPay?: boolean;
+  paidByRole?: 'Owner' | 'Tenant';
   title?: string;
   description?: string;
   accountSlug?: string;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const onPaymentSuccess = useCallback(() => router.refresh(), [router]);
+
   const [statusVal, setStatusVal] = useState('all');
   const [typeVal, setTypeVal] = useState('all');
   const [durationVal, setDurationVal] = useState('all');
+  const [unitTab, setUnitTab] = useState(
+    () => searchParams.get('unit') ?? ALL_UNITS,
+  );
   const [page, setPage] = useState(1);
+
+  // Distinct units from all bills — used to render unit tabs for owner/tenant view
+  const unitList = useMemo(() => {
+    const seen = new Set<string>();
+    const units: string[] = [];
+    for (const b of props.bills) {
+      if (!seen.has(b.unit_no)) {
+        seen.add(b.unit_no);
+        units.push(b.unit_no);
+      }
+    }
+    return units.sort();
+  }, [props.bills]);
 
   const durationItems = useMemo(() => getDurationItems(), []);
   const today = useMemo(() => todayInBillingZone(), []);
@@ -78,6 +104,10 @@ export function PaymentsSection(props: {
   // Derived: filtered rows (instant — no network)
   const filtered = useMemo(() => {
     let rows = props.bills;
+
+    if (unitTab !== ALL_UNITS) {
+      rows = rows.filter((b) => b.unit_no === unitTab);
+    }
 
     if (statusVal !== 'all') {
       if (statusVal === 'paid') {
@@ -110,7 +140,7 @@ export function PaymentsSection(props: {
     }
 
     return rows;
-  }, [props.bills, statusVal, typeVal, durationVal, today]);
+  }, [props.bills, unitTab, statusVal, typeVal, durationVal, today]);
 
   // Derived: summary metrics
   const metrics = useMemo(() => {
@@ -138,20 +168,86 @@ export function PaymentsSection(props: {
     setPage(1);
   };
 
+  const handleUnitTab = (unit: string) => {
+    setUnitTab(unit);
+    setPage(1);
+  };
+
+  // Pending bills for "Pay All" — scoped to selected unit only (never cross-unit)
+  const allPendingBills = useMemo(() => {
+    if (unitTab === ALL_UNITS) return [];
+    return props.bills
+      .filter(
+        (b) =>
+          b.unit_no === unitTab &&
+          (b.status === 'Unpaid' || b.status === 'Partial'),
+      )
+      .map((b) => ({
+        id: b.id,
+        billNo: b.bill_no,
+        outstanding: b.total_amount - b.paid_amount,
+      }))
+      .filter((b) => b.outstanding > 0);
+  }, [props.bills, unitTab]);
+
   const isEmpty =
     props.bills.length === 0 &&
     statusVal === 'all' &&
     typeVal === 'all' &&
-    durationVal === 'all';
+    durationVal === 'all' &&
+    unitTab === ALL_UNITS;
 
   return (
     <Card className="border-0 shadow-none">
       <CardHeader>
-        <CardTitle>{props.title ?? 'Payments'}</CardTitle>
-        <CardDescription>
-          {props.description ??
-            'Record payments against bills and track receipts.'}
-        </CardDescription>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle>{props.title ?? 'Payments'}</CardTitle>
+            <CardDescription>
+              {props.description ??
+                'Record payments against bills and track receipts.'}
+            </CardDescription>
+          </div>
+          {props.canPay && props.paidByRole && allPendingBills.length > 1 && (
+            <RazorpayCheckoutButton
+              associationId={props.associationId}
+              bills={allPendingBills}
+              paidByRole={props.paidByRole}
+              onSuccess={onPaymentSuccess}
+            />
+          )}
+        </div>
+
+        {/* Unit tab pills — only for owner/tenant with multiple units */}
+        {props.canPay && unitList.length > 1 && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              onClick={() => handleUnitTab(ALL_UNITS)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
+                unitTab === ALL_UNITS
+                  ? 'bg-foreground text-background border-transparent'
+                  : 'border-border text-muted-foreground hover:border-foreground hover:text-foreground bg-transparent',
+              )}
+            >
+              All Units
+            </button>
+            {unitList.map((u) => (
+              <button
+                key={u}
+                onClick={() => handleUnitTab(u)}
+                className={cn(
+                  'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
+                  unitTab === u
+                    ? 'bg-foreground text-background border-transparent'
+                    : 'border-border text-muted-foreground hover:border-foreground hover:text-foreground bg-transparent',
+                )}
+              >
+                Unit {u}
+              </button>
+            ))}
+          </div>
+        )}
       </CardHeader>
 
       <CardContent className="flex flex-col gap-3.5">
@@ -274,6 +370,7 @@ export function PaymentsSection(props: {
                   <TableHead>Status</TableHead>
                   <TableHead className="w-[1%]" />
                   <TableHead className="w-[1%]" />
+                  <TableHead className="w-[1%]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -342,6 +439,23 @@ export function PaymentsSection(props: {
                             billNo={bill.bill_no}
                             associationId={props.associationId}
                             outstanding={outstanding}
+                          />
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="w-[1%] text-right whitespace-nowrap">
+                        {props.canPay && props.paidByRole && outstanding > 0 ? (
+                          <RazorpayCheckoutButton
+                            associationId={props.associationId}
+                            bills={[
+                              {
+                                id: bill.id,
+                                billNo: bill.bill_no,
+                                outstanding,
+                              },
+                            ]}
+                            paidByRole={props.paidByRole}
+                            variant="outline"
+                            onSuccess={onPaymentSuccess}
                           />
                         ) : null}
                       </TableCell>

@@ -41,6 +41,7 @@ import { AdminEditUserDialog } from './admin-edit-user-dialog';
 import { AdminImpersonateUserDialog } from './admin-impersonate-user-dialog';
 import { AdminMembersTable } from './admin-members-table';
 import { AdminMembershipsTable } from './admin-memberships-table';
+import { AdminPaymentGatewayCard } from './admin-payment-gateway-card';
 import { AdminReactivateUserDialog } from './admin-reactivate-user-dialog';
 
 type Account = Tables<'accounts'>;
@@ -206,13 +207,30 @@ async function TeamAccountPage(props: {
 }) {
   const adminClient = getSupabaseServerAdminClient();
 
-  const [members, { data: rawPermissions }] = await Promise.all([
-    getMembers(props.account.slug ?? ''),
-    adminClient
-      .from('assoc_admin_permissions')
-      .select('target_role, can_invite, can_edit, can_delete')
-      .eq('association_id', props.account.id),
-  ]);
+  // associations.id ≠ accounts.id — fetch the real association PK first.
+  const { data: assocRow } = await adminClient
+    .from('associations')
+    .select('id')
+    .eq('account_id', props.account.id)
+    .maybeSingle();
+
+  const associationId = assocRow?.id ?? '';
+
+  const [members, { data: rawPermissions }, { data: gatewayRow }] =
+    await Promise.all([
+      getMembers(props.account.slug ?? ''),
+      adminClient
+        .from('assoc_admin_permissions')
+        .select('target_role, can_invite, can_edit, can_delete')
+        .eq('association_id', props.account.id),
+      associationId
+        ? adminClient
+            .from('association_payment_gateways')
+            .select('key_id, is_active')
+            .eq('association_id', associationId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
 
   const initialPermissions: AssocPermissionRow[] = (rawPermissions ?? []).map(
     (r) => ({
@@ -282,6 +300,19 @@ async function TeamAccountPage(props: {
               />
             </CardContent>
           </Card>
+
+          <AdminPaymentGatewayCard
+            associationId={associationId}
+            existing={
+              gatewayRow
+                ? {
+                    keyId: gatewayRow.key_id,
+                    isActive: gatewayRow.is_active,
+                    hasSecret: true,
+                  }
+                : null
+            }
+          />
 
           <Card className={'border-destructive border'}>
             <CardHeader>
