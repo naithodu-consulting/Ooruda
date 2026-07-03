@@ -1,3 +1,4 @@
+import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
@@ -136,6 +137,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
             bills={[]}
             canManage={false}
             canVoid={false}
+            canPay={false}
             title="Your payments"
             description="Every payment recorded against your bill(s)."
             initialDuration={duration}
@@ -144,6 +146,18 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         </PageBody>
       );
     }
+  }
+
+  // For owners/tenants check if this association has an active payment gateway.
+  let gatewayActive = false;
+  if (isUserRestricted) {
+    const admin = getSupabaseServerAdminClient();
+    const { data: gateway } = await admin
+      .from('association_payment_gateways')
+      .select('is_active')
+      .eq('association_id', association.id)
+      .maybeSingle();
+    gatewayActive = gateway?.is_active ?? false;
   }
 
   // Load all bills in one query — client filters instantly in-memory.
@@ -302,6 +316,14 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         canVoid={!isUserRestricted && role === 'assoc_admin'}
         isSuperAdmin={!!isSuperAdmin}
         deletionCounts={deletionCounts}
+        canPay={isUserRestricted && gatewayActive}
+        paidByRole={
+          isUserRestricted
+            ? role === 'prop_owner'
+              ? 'Owner'
+              : 'Tenant'
+            : undefined
+        }
         title={isUserRestricted ? 'Your payments' : 'Payments'}
         hideUnitColumn={
           isUserRestricted && [...ownedUnitIds, ...rentedUnitIds].length <= 1
