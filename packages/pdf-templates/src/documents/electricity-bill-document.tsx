@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 
-import { formatDateLong, formatINR, formatPeriodLabel } from '../lib/format';
+import { DocumentHeader } from '../components/document-header';
+import { formatINR, formatPeriodLabel } from '../lib/format';
 
 export interface ElectricityBillMeterRow {
   meterLabel: string;
@@ -17,6 +18,7 @@ export interface ElectricityBillPdfData {
   association: {
     name: string;
     address: string | null;
+    logoUrl: string | null;
     authorisedSignatory: string | null;
   };
   unit: { unitNo: string };
@@ -41,129 +43,177 @@ const s = StyleSheet.create({
     padding: 36,
     color: '#1e293b',
   },
-  header: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#3B82F6',
-    paddingBottom: 10,
-    marginBottom: 10,
+
+  // ── Title strip ──────────────────────────────────────────────────────────
+  titleStrip: {
+    backgroundColor: '#1a3a5c',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 3,
+    marginBottom: 14,
+    alignItems: 'center',
   },
-  assocName: {
-    fontSize: 14,
+  titleText: {
+    fontSize: 11,
     fontWeight: 'bold',
-  },
-  assocAddress: {
-    fontSize: 8,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    color: '#ffffff',
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 12,
-    color: '#1e293b',
+    letterSpacing: 1.5,
   },
+
+  // ── Bill meta row (To + Bill details) ────────────────────────────────────
   metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 14,
-  },
-  toBlock: {
-    flexDirection: 'column',
-    gap: 2,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
   },
   toLabel: {
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: 'bold',
     color: '#64748b',
     textTransform: 'uppercase',
-    marginBottom: 2,
+    marginBottom: 3,
+    letterSpacing: 0.5,
   },
   toUnit: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 'bold',
   },
   toAssoc: {
-    fontSize: 9,
+    fontSize: 8,
     color: '#475569',
+    marginTop: 1,
   },
   detailsBlock: {
     alignItems: 'flex-end',
-    flexDirection: 'column',
     gap: 3,
   },
   detailRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   detailLabel: {
     fontSize: 8,
     color: '#64748b',
-    width: 52,
+    width: 54,
     textAlign: 'right',
   },
   detailValue: {
     fontSize: 8,
     fontWeight: 'bold',
-    minWidth: 90,
+    minWidth: 88,
   },
+  billNoValue: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    minWidth: 88,
+    color: '#1a3a5c',
+  },
+
+  // ── Meter readings table ──────────────────────────────────────────────────
   table: {
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 2,
+    borderColor: '#cbd5e1',
+    borderRadius: 3,
     marginBottom: 10,
+    overflow: 'hidden',
   },
   tableHeaderRow: {
     flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#1a3a5c',
     paddingVertical: 6,
     paddingHorizontal: 8,
+  },
+  tableHeaderText: {
+    fontSize: 8,
     fontWeight: 'bold',
+    color: '#ffffff',
   },
   tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  tableRowAlt: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  minChargeRow: {
     flexDirection: 'row',
     paddingVertical: 5,
     paddingHorizontal: 8,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
+    backgroundColor: '#fffbeb',
   },
   totalRow: {
     flexDirection: 'row',
-    paddingVertical: 6,
+    paddingVertical: 7,
     paddingHorizontal: 8,
     borderTopWidth: 2,
-    borderTopColor: '#1e293b',
+    borderTopColor: '#1a3a5c',
+    backgroundColor: '#eaf0f7',
     fontWeight: 'bold',
     fontSize: 10,
   },
+  colSl: { width: 22, fontSize: 8 },
   colMeter: { flexGrow: 1, flexBasis: 0 },
-  colReading: { width: 50, textAlign: 'right' },
+  colReading: { width: 52, textAlign: 'right' },
   colConsumed: { width: 54, textAlign: 'right' },
   colRate: { width: 52, textAlign: 'right' },
-  colAmount: { width: 60, textAlign: 'right' },
-  signatureBlock: {
-    marginTop: 32,
+  colAmount: { width: 62, textAlign: 'right' },
+
+  // ── Outstanding panel ─────────────────────────────────────────────────────
+  outstandingPanel: {
     alignSelf: 'flex-end',
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#fef2f2',
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+
+  // ── Signature row ─────────────────────────────────────────────────────────
+  signatureRow: {
+    marginTop: 28,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  signatureBlock: {
     alignItems: 'center',
-    width: 150,
+    width: 160,
   },
   signatureLine: {
     borderTopWidth: 1,
-    borderTopColor: '#1e293b',
+    borderTopColor: '#94a3b8',
     width: '100%',
     paddingTop: 4,
     textAlign: 'center',
     fontSize: 8,
-    color: '#475569',
+    color: '#64748b',
   },
   signatureName: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: 'bold',
     textAlign: 'center',
     marginTop: 2,
+    color: '#1e293b',
   },
+
+  // ── Footer ────────────────────────────────────────────────────────────────
   footer: {
     position: 'absolute',
     bottom: 24,
@@ -174,19 +224,21 @@ const s = StyleSheet.create({
     textAlign: 'center',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    paddingTop: 8,
+    paddingTop: 6,
   },
 });
 
-function formatDate(value: string): string {
-  return formatDateLong(value);
+function formatShortDate(iso: string): string {
+  const d = new Date(iso);
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  return `${dd}-${mm}-${yyyy}`;
 }
 
 function periodLabel(bill: ElectricityBillPdfData['bill']): string {
   if (bill.periodStart && bill.periodEnd) {
-    const start = formatDate(bill.periodStart);
-    const end = formatDate(bill.periodEnd);
-    return `${start} – ${end}`;
+    return `${formatShortDate(bill.periodStart)} to ${formatShortDate(bill.periodEnd)}`;
   }
   return formatPeriodLabel(bill.period);
 }
@@ -203,20 +255,28 @@ export function ElectricityBillDocument({
   return (
     <Document>
       <Page size="A4" style={s.page}>
-        {/* Header */}
-        <View style={s.header}>
-          <Text style={s.assocName}>{association.name}</Text>
-          {association.address ? (
-            <Text style={s.assocAddress}>{association.address}</Text>
-          ) : null}
+        {/* Shared header: logo + name + address + bill no + date */}
+        <DocumentHeader
+          association={{
+            name: association.name,
+            address: association.address,
+            gstin: null,
+            registrationNumber: null,
+            logoUrl: association.logoUrl,
+          }}
+          docTitle="Electricity Bill"
+          docNo={bill.billNo}
+          docDate={formatShortDate(bill.generatedAt)}
+        />
+
+        {/* Title strip */}
+        <View style={s.titleStrip}>
+          <Text style={s.titleText}>Electricity Charges</Text>
         </View>
 
-        {/* Title */}
-        <Text style={s.title}>Electricity Charges</Text>
-
-        {/* To + Bill details side by side */}
+        {/* To + Bill details */}
         <View style={s.metaRow}>
-          <View style={s.toBlock}>
+          <View>
             <Text style={s.toLabel}>Bill To</Text>
             <Text style={s.toUnit}>Unit {unit.unitNo}</Text>
             <Text style={s.toAssoc}>{association.name}</Text>
@@ -225,25 +285,15 @@ export function ElectricityBillDocument({
           <View style={s.detailsBlock}>
             <View style={s.detailRow}>
               <Text style={s.detailLabel}>Month</Text>
-              <Text style={s.detailValue}>
-                {formatPeriodLabel(bill.period)}
-              </Text>
+              <Text style={s.detailValue}>{formatPeriodLabel(bill.period)}</Text>
             </View>
             <View style={s.detailRow}>
               <Text style={s.detailLabel}>Period</Text>
               <Text style={s.detailValue}>{periodLabel(bill)}</Text>
             </View>
             <View style={s.detailRow}>
-              <Text style={s.detailLabel}>Date</Text>
-              <Text style={s.detailValue}>{formatDate(bill.generatedAt)}</Text>
-            </View>
-            <View style={s.detailRow}>
               <Text style={s.detailLabel}>Due Date</Text>
-              <Text style={s.detailValue}>{formatDate(bill.dueDate)}</Text>
-            </View>
-            <View style={s.detailRow}>
-              <Text style={s.detailLabel}>Bill No</Text>
-              <Text style={s.detailValue}>{bill.billNo}</Text>
+              <Text style={s.detailValue}>{formatShortDate(bill.dueDate)}</Text>
             </View>
           </View>
         </View>
@@ -251,16 +301,18 @@ export function ElectricityBillDocument({
         {/* Meter readings table */}
         <View style={s.table}>
           <View style={s.tableHeaderRow}>
-            <Text style={s.colMeter}>Meter</Text>
-            <Text style={s.colReading}>Previous</Text>
-            <Text style={s.colReading}>Current</Text>
-            <Text style={s.colConsumed}>Consumed</Text>
-            <Text style={s.colRate}>Rate/Unit</Text>
-            <Text style={s.colAmount}>Amount</Text>
+            <Text style={[s.colSl, s.tableHeaderText]}>SL</Text>
+            <Text style={[s.colMeter, s.tableHeaderText]}>Description</Text>
+            <Text style={[s.colReading, s.tableHeaderText]}>Previous</Text>
+            <Text style={[s.colReading, s.tableHeaderText]}>Current</Text>
+            <Text style={[s.colConsumed, s.tableHeaderText]}>Units</Text>
+            <Text style={[s.colRate, s.tableHeaderText]}>Rate/Unit</Text>
+            <Text style={[s.colAmount, s.tableHeaderText]}>Amount</Text>
           </View>
 
           {meters.map((m, i) => (
-            <View style={s.tableRow} key={i}>
+            <View style={i % 2 === 0 ? s.tableRow : s.tableRowAlt} key={i}>
+              <Text style={s.colSl}>{i + 1}</Text>
               <Text style={s.colMeter}>{m.meterLabel}</Text>
               <Text style={s.colReading}>{m.previousReading}</Text>
               <Text style={s.colReading}>{m.currentReading}</Text>
@@ -271,62 +323,75 @@ export function ElectricityBillDocument({
           ))}
 
           {minimumCharge > 0 ? (
-            <View style={s.tableRow}>
-              <Text style={{ ...s.colMeter, color: '#64748b' }}>
+            <View style={s.minChargeRow}>
+              <Text style={s.colSl}>{meters.length + 1}</Text>
+              <Text style={[s.colMeter, { color: '#92400e' }]}>
                 Minimum Charge
               </Text>
               <Text style={s.colReading} />
               <Text style={s.colReading} />
               <Text style={s.colConsumed} />
               <Text style={s.colRate} />
-              <Text style={s.colAmount}>{formatINR(minimumCharge)}</Text>
+              <Text style={[s.colAmount, { color: '#92400e' }]}>
+                {formatINR(minimumCharge)}
+              </Text>
             </View>
           ) : null}
 
           <View style={s.totalRow}>
+            <Text style={s.colSl} />
             <Text style={s.colMeter}>Total</Text>
             <Text style={s.colReading} />
             <Text style={s.colReading} />
             <Text style={s.colConsumed} />
             <Text style={s.colRate} />
-            <Text style={s.colAmount}>{formatINR(bill.totalAmount)}</Text>
+            <Text style={[s.colAmount, { color: '#1a3a5c' }]}>
+              {formatINR(bill.totalAmount)}
+            </Text>
           </View>
         </View>
 
-        {/* Outstanding (if partial/unpaid) */}
+        {/* Outstanding amount (if partial/unpaid) */}
         {outstanding > 0 ? (
-          <View
-            style={{
-              alignSelf: 'flex-end',
-              flexDirection: 'row',
-              gap: 6,
-              marginBottom: 4,
-            }}
-          >
-            <Text style={{ color: '#64748b', fontSize: 8 }}>Paid</Text>
+          <View style={s.outstandingPanel}>
+            <Text style={{ fontSize: 8, color: '#64748b' }}>Paid</Text>
             <Text style={{ fontSize: 8 }}>{formatINR(bill.paidAmount)}</Text>
-            <Text style={{ color: '#64748b', fontSize: 8, marginLeft: 8 }}>
+            <Text style={{ fontSize: 8, color: '#64748b', marginLeft: 10 }}>
               Outstanding
             </Text>
-            <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#dc2626' }}>
+            <Text
+              style={{ fontSize: 8, fontWeight: 'bold', color: '#dc2626' }}
+            >
               {formatINR(outstanding)}
             </Text>
           </View>
         ) : null}
 
-        {/* Authorised signatory */}
-        {association.authorisedSignatory ? (
+        {/* Receiver + Authorised Signatory */}
+        <View style={s.signatureRow}>
           <View style={s.signatureBlock}>
-            <Text style={s.signatureLine}>Authorised Signatory</Text>
-            <Text style={s.signatureName}>
-              {association.authorisedSignatory}
+            <Text style={{ fontSize: 20, color: '#e2e8f0', marginBottom: 4 }}>
+              {''}
             </Text>
+            <Text style={s.signatureLine}>Receiver's Signature</Text>
           </View>
-        ) : null}
+
+          <View style={s.signatureBlock}>
+            <Text style={{ fontSize: 20, color: '#e2e8f0', marginBottom: 4 }}>
+              {''}
+            </Text>
+            <Text style={s.signatureLine}>Authorised Signatory</Text>
+            {association.authorisedSignatory ? (
+              <Text style={s.signatureName}>
+                {association.authorisedSignatory}
+              </Text>
+            ) : null}
+          </View>
+        </View>
 
         <View style={s.footer} fixed>
           <Text>
-            This is a system-generated bill and does not require a physical
+            This is a computer-generated bill and does not require a physical
             signature.
           </Text>
         </View>

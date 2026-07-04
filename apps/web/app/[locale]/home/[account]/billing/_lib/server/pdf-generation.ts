@@ -198,6 +198,7 @@ export async function getOrGenerateBillPdf(
           association: {
             name: association.accounts?.name ?? 'Association',
             address: association.address,
+            logoUrl: association.accounts?.picture_url ?? null,
             authorisedSignatory: association.authorised_signatory,
           },
           unit: { unitNo: bill.units.unit_no },

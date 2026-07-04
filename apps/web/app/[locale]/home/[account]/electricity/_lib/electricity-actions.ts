@@ -178,7 +178,7 @@ export async function createElectricityBillAction(
     associationId,
     action: 'mescom_bill.created',
     entityType: 'mescom_bill',
-    summary: `Uploaded Electricity bill for ${parsed.data.period}`,
+    summary: `Added electricity bill for ${parsed.data.period}`,
   });
 
   return { success: true };
@@ -223,7 +223,7 @@ export async function deleteElectricityBillAction(
     associationId,
     action: 'mescom_bill.deleted',
     entityType: 'mescom_bill',
-    summary: `Deleted Electricity bill`,
+    summary: `Deleted electricity bill`,
   });
 
   return { success: true };

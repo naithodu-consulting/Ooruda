@@ -1,3 +1,4 @@
+import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { PageBody } from '@kit/ui/page';
 
@@ -25,6 +26,7 @@ export default async function AuditPage({ params, searchParams }: Props) {
   const to = from + PAGE_SIZE - 1;
 
   const client = getSupabaseServerClient();
+  const adminClient = getSupabaseServerAdminClient();
 
   const { data: association } = await client
     .from('associations')
@@ -36,6 +38,16 @@ export default async function AuditPage({ params, searchParams }: Props) {
     throw new Error('Unable to load the association for this account.');
   }
 
+  // If searching by name, resolve matching user IDs first
+  let actorIdFilter: string[] | null = null;
+  if (search) {
+    const { data: matchingProfiles } = await adminClient
+      .from('profiles')
+      .select('id')
+      .ilike('full_name', `%${search}%`);
+    actorIdFilter = (matchingProfiles ?? []).map((p) => p.id);
+  }
+
   let query = client
     .from('audit_logs')
     .select('id, action, entity_type, summary, actor_user_id, created_at', {
@@ -45,9 +57,16 @@ export default async function AuditPage({ params, searchParams }: Props) {
     .order('created_at', { ascending: false });
 
   if (search) {
-    query = query.or(
-      `action.ilike.%${search}%,summary.ilike.%${search}%`,
-    );
+    if (actorIdFilter && actorIdFilter.length > 0) {
+      // Search matches action/summary OR any of the resolved actor IDs
+      query = query.or(
+        `action.ilike.%${search}%,summary.ilike.%${search}%,actor_user_id.in.(${actorIdFilter.map((id) => `"${id}"`).join(',')})`,
+      );
+    } else {
+      query = query.or(
+        `action.ilike.%${search}%,summary.ilike.%${search}%`,
+      );
+    }
   }
 
   const { data: logs, count } = await query.range(from, to);
@@ -56,9 +75,13 @@ export default async function AuditPage({ params, searchParams }: Props) {
     ...new Set((logs ?? []).map((l) => l.actor_user_id).filter(Boolean)),
   ] as string[];
 
+  // Use admin client so super-admin actors (not members of this account) resolve correctly
   const { data: profiles } =
     actorIds.length > 0
-      ? await client.from('profiles').select('id, full_name').in('id', actorIds)
+      ? await adminClient
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', actorIds)
       : { data: [] };
 
   const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
@@ -88,7 +111,7 @@ export default async function AuditPage({ params, searchParams }: Props) {
       ? (nameById.get(l.actor_user_id) ?? 'Unknown')
       : 'System',
     actorRoleLabel: l.actor_user_id
-      ? (roleLabelById.get(l.actor_user_id) ?? null)
+      ? (roleLabelById.get(l.actor_user_id) ?? 'Super Admin')
       : null,
     created_at: l.created_at,
   }));

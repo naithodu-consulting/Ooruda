@@ -427,10 +427,22 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 
 ### Audit Log: Search & UX Improvements
 
-- **Search bar** added to the audit log page — filters by event name or details (URL-based, compatible with pagination).
+- **Instant search** — debounced as-you-type (300ms) across event name, details, and actor name; results update without pressing Enter.
+- **Actor name search** — searches profiles via admin client so super-admin actors resolve correctly; name-matched user IDs are passed as a typed `.in()` filter.
+- **Super Admin badge** — actors not in the account's membership (super admins) now show a red "Super Admin" role badge instead of a dash.
 - **Column renames**: Action → Event, Actor → User, Entity → Details, Timestamp → Date.
-- **Truncated error details**: Long error messages are trimmed to 90 characters; raw JSON payloads are replaced with "An error occurred." rather than being shown verbatim.
-- **New action labels** for failed events (`mescom.bill_create_failed`, `bill.generate_failed`, `payment.failed`, `bill.pdf_generated`, `receipt.pdf_generated`).
+- **Truncated error details**: Long error messages trimmed to 90 characters; raw JSON payloads replaced with "An error occurred."
+- **Corrected action labels** — all label keys now match exact DB action values (`mescom_bill.created`, `bills.generated`, `meter_readings.recorded`, etc.) covering all success and failure variants.
+- **Wording fix** — audit summary for electricity bill creation changed from "Uploaded Electricity bill" to "Added electricity bill".
+
+### Electricity Bill PDF: Redesign
+
+- **Association logo** — shown in the header via the shared `DocumentHeader` component (falls back to Ooruda mark if no logo set).
+- **Association address** — included in the header.
+- **Navy colour scheme** — professional deep navy (`#1a3a5c`) for title strip, table header, and total row; replaces the previous bright blue.
+- **SL column** and alternating row shading added to the meter readings table.
+- **Minimum charge row** — amber-tinted to visually distinguish it.
+- **Receiver's Signature + Authorised Signatory** — both signature blocks shown side by side at the bottom, matching the standard bill format.
 
 ---
 
@@ -537,4 +549,4 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 
 ---
 
-*Last updated: 2026-07-03 (v3.3)*
+*Last updated: 2026-07-04 (v3.3)*
