@@ -211,9 +211,8 @@ export function BillsSection(props: {
         )}
 
         <p className="text-muted-foreground mt-3 text-xs">
-          Block rate = MESCOM invoice ÷ total sub-meter consumption.
-          Transmission losses are shared proportionally so the full invoice is
-          always recovered each month.
+          Rate per unit = MESCOM invoice ÷ block consumption units. Each
+          sub-meter is charged at this rate for its actual consumption.
         </p>
       </CardContent>
     </Card>

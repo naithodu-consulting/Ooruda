@@ -226,6 +226,7 @@ export default async function MescomPage({ params }: Props) {
             subMeters={subMeterRows}
             units={unitRows}
             canManage={canManage}
+            isSuperAdmin={!!isSuperAdmin}
           />
 
           <BillsSection

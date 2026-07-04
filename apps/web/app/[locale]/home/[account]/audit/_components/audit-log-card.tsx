@@ -53,6 +53,8 @@ const ACTION_LABELS: Record<string, string> = {
   'meter_readings.record.failed': 'Meter readings failed',
   'meter_readings.bulk_imported': 'Meter readings imported',
   'meter_readings.bulk_import.failed': 'Meter readings import failed',
+  'sub_meter.bulk_imported': 'Sub-meters imported',
+  'sub_meter.bulk_import.failed': 'Sub-meter import failed',
   'billing_settings.updated': 'Billing settings updated',
   'notifications.bulk_sent': 'Bulk reminders sent',
 };

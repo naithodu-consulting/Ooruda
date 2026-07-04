@@ -425,6 +425,22 @@ All four admin metric tiles (Billed, Collected, Outstanding, Overdue) are now cl
 
 Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partial bills across ALL periods, with per-period breakdown, worst-case status (Overdue vs Unpaid), and quick-action links to pay by bill or pay all outstanding.
 
+### Electricity: Sub-meter CSV Import (Super Admin only)
+
+- **Bulk import sub-meters via CSV** — new "Import Sub-meters" button visible only to super admins in the Sub-meters section.
+- CSV columns: `unit_no`, `sub_meter_no`, `meter_type` (`Unit` or `CommonArea`).
+- Existing sub-meters are skipped (no overwrite); duplicates within the same batch are deduplicated.
+- CommonArea meters use the alphabetically-first unit as FK anchor (deterministic across imports).
+- Insert uses admin client to bypass RLS, consistent with other super-admin operations.
+- Preview table + skipped-rows result view, same UX as meter readings import.
+
+### Electricity: Meter Readings CSV — Optional Previous Reading & Minimum Charge
+
+- `previous_reading` and `minimum_charge` columns added to the meter readings CSV as **optional overrides**.
+- If blank, zero, or non-numeric — existing/derived values are used (no behaviour change for current CSVs).
+- If a valid number > 0 is supplied — that value is used, enabling bulk test data uploads with explicit values.
+- Template and preview table updated to show the new columns.
+
 ### Audit Log: Search & UX Improvements
 
 - **Instant search** — debounced as-you-type (300ms) across event name, details, and actor name; results update without pressing Enter.
@@ -549,4 +565,4 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 
 ---
 
-*Last updated: 2026-07-04 (v3.3)*
+*Last updated: 2026-07-04 (v3.4)*

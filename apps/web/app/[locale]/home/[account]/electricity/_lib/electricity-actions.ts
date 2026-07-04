@@ -1,5 +1,6 @@
 'use server';
 
+import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
@@ -234,6 +235,9 @@ export type MeterReadingImportRow = {
   sub_meter_no: string;
   current_reading: number;
   period: string; // YYYY-MM, validated client-side
+  // Optional overrides — only applied when > 0; otherwise existing/derived values are used
+  previous_reading_override?: number;
+  minimum_charge_override?: number;
 };
 
 export type MeterReadingImportSkipped = {
@@ -404,9 +408,17 @@ export async function bulkImportMeterReadingsAction(
       sub_meter_id: subMeter.id,
       mescom_bill_id: billId,
       period: row.period,
-      previous_reading: previousReading,
+      previous_reading:
+        row.previous_reading_override != null &&
+        row.previous_reading_override > 0 &&
+        row.previous_reading_override <= row.current_reading
+          ? row.previous_reading_override
+          : previousReading,
       current_reading: row.current_reading,
-      minimum_charge: previousMinimumCharge,
+      minimum_charge:
+        row.minimum_charge_override && row.minimum_charge_override > 0
+          ? row.minimum_charge_override
+          : previousMinimumCharge,
     });
   }
 
@@ -546,4 +558,140 @@ export async function recordMeterReadingsAction(
   });
 
   return { success: true };
+}
+
+// ── Bulk sub-meter import ─────────────────────────────────────────────────────
+
+export type SubMeterImportRow = {
+  unit_no: string;
+  sub_meter_no: string;
+  meter_type: 'Unit' | 'CommonArea';
+};
+
+export type SubMeterImportSkipped = {
+  row: number;
+  sub_meter_no: string;
+  reason: string;
+};
+
+export type SubMeterImportResult = {
+  success: boolean;
+  imported: number;
+  skipped: SubMeterImportSkipped[];
+  error?: string;
+};
+
+/**
+ * Bulk-import sub-meters from CSV. Super-admin only.
+ * Existing (unit_id + meter_label) pairs are skipped — no overwrite.
+ */
+export async function bulkImportSubMetersAction(
+  associationId: string,
+  rows: SubMeterImportRow[],
+): Promise<SubMeterImportResult> {
+  const client = getSupabaseServerClient();
+
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+  if (!isSuperAdmin) {
+    return {
+      success: false,
+      imported: 0,
+      skipped: [],
+      error: 'Only a super admin can bulk-import sub-meters.',
+    };
+  }
+
+  const adminClient = getSupabaseServerAdminClient();
+
+  // Use adminClient for both units and existing sub-meters so dedup keys are consistent
+  const { data: units } = await adminClient
+    .from('units')
+    .select('id, unit_no')
+    .eq('association_id', associationId)
+    .order('unit_no');
+
+  const unitByNo = new Map<string, string>(
+    (units ?? []).map((u) => [u.unit_no.toLowerCase(), u.id]),
+  );
+
+  // Fetch existing sub-meters to detect duplicates
+  const unitIds = (units ?? []).map((u) => u.id);
+  const { data: existing } = unitIds.length
+    ? await adminClient
+        .from('sub_meters')
+        .select('unit_id, meter_label')
+        .in('unit_id', unitIds)
+    : { data: [] };
+
+  const existingSet = new Set(
+    (existing ?? []).map((s) => `${s.unit_id}::${s.meter_label.toLowerCase()}`),
+  );
+
+  const skipped: SubMeterImportSkipped[] = [];
+
+  type InsertRow = { unit_id: string; meter_label: string; meter_type: string };
+  const toInsert: InsertRow[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    const rowNum = i + 1;
+
+    if (!['Unit', 'CommonArea'].includes(row.meter_type)) {
+      skipped.push({ row: rowNum, sub_meter_no: row.sub_meter_no, reason: `Invalid meter_type "${row.meter_type}". Must be "Unit" or "CommonArea".` });
+      continue;
+    }
+
+    const isCommon = row.meter_type === 'CommonArea';
+    let unitId: string | undefined;
+
+    if (isCommon) {
+      // For CommonArea meters, unit_no is ignored — attach to the first unit as
+      // a placeholder so the FK is satisfied; matching during readings uses label only.
+      unitId = units?.[0]?.id;
+      if (!unitId) {
+        skipped.push({ row: rowNum, sub_meter_no: row.sub_meter_no, reason: 'No units found in this association.' });
+        continue;
+      }
+    } else {
+      unitId = unitByNo.get(row.unit_no.toLowerCase());
+      if (!unitId) {
+        skipped.push({ row: rowNum, sub_meter_no: row.sub_meter_no, reason: `Unit "${row.unit_no}" not found.` });
+        continue;
+      }
+    }
+
+    const key = `${unitId}::${row.sub_meter_no.toLowerCase()}`;
+    if (existingSet.has(key)) {
+      skipped.push({ row: rowNum, sub_meter_no: row.sub_meter_no, reason: `Sub-meter "${row.sub_meter_no}" already exists for unit "${row.unit_no}".` });
+      continue;
+    }
+
+    existingSet.add(key); // prevent duplicates within the same batch
+    toInsert.push({ unit_id: unitId, meter_label: row.sub_meter_no, meter_type: row.meter_type });
+  }
+
+  if (toInsert.length === 0) {
+    return { success: true, imported: 0, skipped };
+  }
+
+  const { error } = await adminClient.from('sub_meters').insert(toInsert);
+
+  if (error) {
+    await logAuditEvent({
+      associationId,
+      action: 'sub_meter.bulk_import.failed',
+      entityType: 'sub_meter',
+      summary: `Failed to bulk import sub-meters: ${error.message}`,
+    });
+    return { success: false, imported: 0, skipped, error: error.message };
+  }
+
+  await logAuditEvent({
+    associationId,
+    action: 'sub_meter.bulk_imported',
+    entityType: 'sub_meter',
+    summary: `Bulk imported ${toInsert.length} sub-meter(s) via CSV`,
+  });
+
+  return { success: true, imported: toInsert.length, skipped };
 }

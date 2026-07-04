@@ -44,12 +44,12 @@ import {
 
 import { bulkImportMeterReadingsAction } from '../_lib/electricity-actions';
 
-// CSV has exactly 3 columns — billing month is chosen in the dialog, not the file
+// 3 required columns + 2 optional overrides for testing large datasets
 const TEMPLATE_CSV = [
-  'unit_no,sub_meter_no,current_reading',
-  'G-01,SM-1,1250',
-  '1-02,SM-5,980',
-  'COMMON,Common-Lift,320',
+  'unit_no,sub_meter_no,current_reading,previous_reading,minimum_charge',
+  'G-01,SM-1,1250,,',
+  '1-02,SM-5,980,900,150',
+  'COMMON,Common-Lift,320,,',
 ].join('\n');
 
 const REQUIRED_COLUMNS = [
@@ -86,6 +86,8 @@ type ParsedRow = {
   unit_no: string;
   sub_meter_no: string;
   current_reading: number;
+  previous_reading?: number; // optional override — only used when > 0
+  minimum_charge?: number;   // optional override — only used when > 0
   _error?: string;
 };
 
@@ -123,6 +125,7 @@ function parseCSV(text: string): ParsedRow[] {
   }
 
   const col = (name: string) => headers.indexOf(name);
+  const hasCol = (name: string) => headers.includes(name);
 
   return lines.slice(1).map((line, i) => {
     const cells = line.split(',').map((c) => c.trim());
@@ -132,6 +135,17 @@ function parseCSV(text: string): ParsedRow[] {
     const sub_meter_no = get('sub_meter_no');
     const currentReadingRaw = get('current_reading');
     const currentReading = Number(currentReadingRaw);
+
+    // Optional overrides — treated as absent when blank or non-positive
+    const prevRaw = hasCol('previous_reading') ? get('previous_reading') : '';
+    const prevNum = prevRaw !== '' ? Number(prevRaw) : NaN;
+    const previous_reading =
+      !Number.isNaN(prevNum) && prevNum > 0 ? prevNum : undefined;
+
+    const minRaw = hasCol('minimum_charge') ? get('minimum_charge') : '';
+    const minNum = minRaw !== '' ? Number(minRaw) : NaN;
+    const minimum_charge =
+      !Number.isNaN(minNum) && minNum > 0 ? minNum : undefined;
 
     let error: string | undefined;
     if (!unit_no) error = 'unit_no is required';
@@ -148,6 +162,8 @@ function parseCSV(text: string): ParsedRow[] {
       unit_no,
       sub_meter_no,
       current_reading: currentReading,
+      previous_reading,
+      minimum_charge,
       _error: error,
     };
   });
@@ -212,12 +228,16 @@ export function ImportMeterReadingsDialog({
     startTransition(async () => {
       const res = await bulkImportMeterReadingsAction(
         associationId,
-        validRows.map(({ unit_no, sub_meter_no, current_reading }) => ({
-          unit_no,
-          sub_meter_no,
-          current_reading,
-          period: dbPeriod,
-        })),
+        validRows.map(
+          ({ unit_no, sub_meter_no, current_reading, previous_reading, minimum_charge }) => ({
+            unit_no,
+            sub_meter_no,
+            current_reading,
+            period: dbPeriod,
+            previous_reading_override: previous_reading,
+            minimum_charge_override: minimum_charge,
+          }),
+        ),
       );
 
       if (!res.success) {
@@ -316,11 +336,16 @@ export function ImportMeterReadingsDialog({
             {/* Instructions + template */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <p className="text-muted-foreground text-sm">
-                Columns:{' '}
+                Required:{' '}
                 <span className="font-medium">
                   unit_no, sub_meter_no, current_reading
+                </span>
+                <br />
+                Optional:{' '}
+                <span className="font-medium">
+                  previous_reading, minimum_charge
                 </span>{' '}
-                (all required)
+                — leave blank to use existing values.
                 <br />
                 For common-area meters use{' '}
                 <span className="font-medium">COMMON</span> as unit_no.
@@ -367,7 +392,9 @@ export function ImportMeterReadingsDialog({
                         <TableHead className="w-10">#</TableHead>
                         <TableHead>Unit</TableHead>
                         <TableHead>Sub-meter</TableHead>
-                        <TableHead>Current reading</TableHead>
+                        <TableHead>Prev</TableHead>
+                        <TableHead>Current</TableHead>
+                        <TableHead>Min charge</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -382,8 +409,14 @@ export function ImportMeterReadingsDialog({
                           </TableCell>
                           <TableCell>{row.unit_no || '—'}</TableCell>
                           <TableCell>{row.sub_meter_no || '—'}</TableCell>
+                          <TableCell className="text-muted-foreground tabular-nums text-xs">
+                            {row.previous_reading ?? '—'}
+                          </TableCell>
                           <TableCell className="tabular-nums">
                             {row._error ? '—' : row.current_reading}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground tabular-nums text-xs">
+                            {row.minimum_charge ?? '—'}
                           </TableCell>
                           <TableCell>
                             {row._error ? (

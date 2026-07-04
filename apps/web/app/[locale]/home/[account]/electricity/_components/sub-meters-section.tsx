@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus } from 'lucide-react';
+
+import { ImportSubMetersDialog } from './import-sub-meters-dialog';
 import { useForm } from 'react-hook-form';
 
 import { Badge } from '@kit/ui/badge';
@@ -76,6 +78,7 @@ export function SubMetersSection(props: {
   subMeters: SubMeterRow[];
   units: { id: string; unit_no: string }[];
   canManage: boolean;
+  isSuperAdmin?: boolean;
 }) {
   return (
     <Card className="border-0 shadow-none">
@@ -89,7 +92,10 @@ export function SubMetersSection(props: {
         </div>
 
         {props.canManage ? (
-          <div className="sm:shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
+            {props.isSuperAdmin && (
+              <ImportSubMetersDialog associationId={props.associationId} />
+            )}
             <AddSubMeterDialog
               associationId={props.associationId}
               units={props.units}
