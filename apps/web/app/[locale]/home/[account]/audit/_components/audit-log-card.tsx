@@ -165,7 +165,7 @@ export function AuditLogCard(props: {
   account: string;
   search: string;
 }) {
-  const { rows, page, totalPages, totalCount, account, search } = props;
+  const { rows, page, totalPages, totalCount, search } = props;
   const pathname = usePathname();
   const basePath = pathname.split('?')[0]!;
   const pageQuery = search
