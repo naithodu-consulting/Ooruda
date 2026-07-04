@@ -67,8 +67,9 @@ export function PaymentsSection(props: {
   description?: string;
   accountSlug?: string;
   initialDuration?: string;
+  initialStatus?: string;
 }) {
-  const [statusVal, setStatusVal] = useState('all');
+  const [statusVal, setStatusVal] = useState(props.initialStatus ?? 'all');
   const [typeVal, setTypeVal] = useState('all');
   const [durationVal, setDurationVal] = useState(
     props.initialDuration ?? 'all',
@@ -83,7 +84,12 @@ export function PaymentsSection(props: {
     let rows = props.bills;
 
     if (statusVal !== 'all') {
-      if (statusVal === 'paid') {
+      if (statusVal === 'collected') {
+        // Collected = any bill with money received (Paid or Partial)
+        rows = rows.filter(
+          (b) => b.status === 'Paid' || b.status === 'Partial',
+        );
+      } else if (statusVal === 'paid') {
         rows = rows.filter((b) => b.status === 'Paid');
       } else if (statusVal === 'unpaid') {
         rows = rows.filter((b) => b.status === 'Unpaid' && b.due_date >= today);

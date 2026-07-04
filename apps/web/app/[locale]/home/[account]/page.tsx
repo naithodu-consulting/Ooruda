@@ -9,6 +9,8 @@ import { PROPOPS_ROLES, requireRole } from '~/lib/rbac';
 import { AssociationDashboard } from './_components/association-dashboard';
 import { TeamAccountLayoutPageHeader } from './_components/team-account-layout-page-header';
 
+export const dynamic = 'force-dynamic';
+
 interface TeamAccountHomePageProps {
   params: Promise<{ account: string }>;
   searchParams: Promise<{ d?: string }>;

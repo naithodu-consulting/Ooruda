@@ -665,7 +665,7 @@ export async function AssociationDashboard({
           />
         </Link>
         <Link
-          href={`/home/${account}/payments?duration=${duration}`}
+          href={`/home/${account}/payments?duration=${duration}&status=collected`}
           className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-green-300 focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:outline-none dark:hover:ring-green-700"
         >
           <MetricCard
