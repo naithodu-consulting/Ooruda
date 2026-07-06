@@ -30,7 +30,7 @@ import {
   type BulkInviteRow,
 } from '../lib/server/admin-server-actions';
 
-const TEMPLATE_CSV = `phone,name,email,role,association_name\n9911000001,Rajesh Kumar,rajesh@example.com,prop_owner,Sunrise Apartments\n9922000002,Priya Shah,priya@example.com,tenant,Sunrise Apartments\n`;
+const TEMPLATE_CSV = `phone,name,email,role,association_name\n9911000001,Rajesh Kumar,rajesh@example.com,prop_owner,Sunrise Apartments\n9922000002,Priya Shah,,tenant,Sunrise Apartments\n`;
 
 function downloadTemplate() {
   const blob = new Blob([TEMPLATE_CSV], { type: 'text/csv' });
@@ -120,7 +120,7 @@ export function AdminBulkInviteDialog(
                 Upload a CSV file with these columns. Bad rows are skipped.
               </span>
               <code className="bg-muted text-foreground block w-fit rounded px-2 py-0.5 text-xs">
-                phone, name, email, role, association_name
+                phone, name, email (optional), role, association_name
               </code>
             </span>
           </DialogDescription>
@@ -169,7 +169,7 @@ export function AdminBulkInviteDialog(
                 </Button>
               </div>
               <pre className="font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap">
-                {`phone,name,email,role,association_name\n9911000001,Rajesh Kumar,rajesh@example.com,prop_owner,Sunrise Apartments\n9922000002,Priya Shah,priya@example.com,tenant,Sunrise Apartments`}
+                {`phone,name,email,role,association_name\n9911000001,Rajesh Kumar,rajesh@example.com,prop_owner,Sunrise Apartments\n9922000002,Priya Shah,,tenant,Sunrise Apartments`}
               </pre>
               <p className="mt-2.5 flex flex-wrap gap-1">
                 <span className="font-medium">Valid roles:</span>
@@ -333,11 +333,10 @@ function parseCsv(text: string): BulkInviteRow[] | string {
   if (
     phoneIdx === -1 ||
     nameIdx === -1 ||
-    emailIdx === -1 ||
     roleIdx === -1 ||
     assocIdx === -1
   ) {
-    return 'CSV must have columns: phone, name, email, role, association_name — all are required.';
+    return 'CSV must have columns: phone, name, role, association_name (email is optional).';
   }
 
   const rows: BulkInviteRow[] = [];
@@ -346,11 +345,11 @@ function parseCsv(text: string): BulkInviteRow[] | string {
     const cols = lines[i]!.split(',').map((c) => c.trim());
     const phone = cols[phoneIdx] ?? '';
     const name = cols[nameIdx] ?? '';
-    const email = cols[emailIdx] ?? '';
+    const email = emailIdx !== -1 ? (cols[emailIdx] ?? '') : '';
     const role = cols[roleIdx] ?? '';
     const association_name = cols[assocIdx] ?? '';
 
-    if (!phone || !name || !email || !role || !association_name) continue;
+    if (!phone || !name || !role || !association_name) continue;
 
     rows.push({
       phone,
