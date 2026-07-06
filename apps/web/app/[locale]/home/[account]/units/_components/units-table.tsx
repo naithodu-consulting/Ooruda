@@ -7,22 +7,10 @@ import { useRouter } from 'next/navigation';
 
 import { Trash2 } from 'lucide-react';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@kit/ui/alert-dialog';
 import { Badge } from '@kit/ui/badge';
 import { badgeExtras } from '@kit/ui/badge-extras';
 import { Button } from '@kit/ui/button';
 import { toast } from '@kit/ui/sonner';
-import { Spinner } from '@kit/ui/spinner';
 import {
   Table,
   TableBody,
@@ -35,6 +23,7 @@ import { cn } from '@kit/ui/utils';
 
 import { personLabel } from '~/lib/person-label';
 
+import { TypeToConfirmDialog } from '../../_components/type-to-confirm-dialog';
 import { deleteUnitAction } from '../_lib/units-actions';
 import { EditUnitDialog } from './edit-unit-dialog';
 
@@ -54,7 +43,13 @@ export interface UnitRow {
   type: string;
   floor: number | null;
   area_sqft: number;
+  door_no: string | null;
   owner_id: string | null;
+  owner_is_company: boolean;
+  owner_company_name: string | null;
+  owner_company_address: string | null;
+  owner_company_gstin: string | null;
+  bill_to: string;
   status: string;
 }
 
@@ -251,10 +246,9 @@ function DeleteUnitButton({
   associationId: string;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const onDelete = () => {
+  const onConfirm = () => {
     startTransition(async () => {
       const result = await deleteUnitAction(unit.id, associationId);
 
@@ -264,49 +258,27 @@ function DeleteUnitButton({
       }
 
       toast.success(`Unit ${unit.unit_no} deleted.`);
-      setOpen(false);
       router.refresh();
     });
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger
-        render={
-          <Button
-            size="icon"
-            variant="ghost"
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8"
-            data-test="delete-unit-trigger"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        }
-      />
-
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete unit {unit.unit_no}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This removes the unit along with its tenancy history and any billing
-            overrides. This can't be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={isPending}
-            onClick={(event) => {
-              event.preventDefault();
-              onDelete();
-            }}
-          >
-            {isPending && <Spinner className="mr-2 h-4 w-4" />}
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <TypeToConfirmDialog
+      trigger={
+        <Button
+          size="icon"
+          variant="ghost"
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8"
+          data-test="delete-unit-trigger"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      }
+      title={`Delete unit ${unit.unit_no}?`}
+      description="This permanently removes the unit along with its tenancy history and billing overrides. This cannot be undone."
+      confirmValue={unit.unit_no}
+      isPending={isPending}
+      onConfirm={onConfirm}
+    />
   );
 }

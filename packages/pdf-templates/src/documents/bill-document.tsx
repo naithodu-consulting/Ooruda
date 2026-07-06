@@ -10,9 +10,15 @@ import {
 import { styles } from '../components/styles';
 import { formatDateLong, formatINR, formatPeriodLabel } from '../lib/format';
 
+export interface BillingEntityData {
+  isCompany: boolean;
+  name: string | null;
+  companyAddress: string | null;
+  companyGstin: string | null;
+}
+
 export interface BillPdfLineItem {
   description: string;
-  payer: 'Owner' | 'Tenant';
   gstApplicable: boolean;
   amount: number;
 }
@@ -22,7 +28,7 @@ export interface BillPdfData {
     gstEnabled: boolean;
     gstRate: number | null;
   };
-  unit: { unitNo: string };
+  unit: { unitNo: string; doorNo?: string | null; floor?: number | null };
   bill: {
     billNo: string;
     period: string;
@@ -35,6 +41,7 @@ export interface BillPdfData {
     status: string;
   };
   lineItems: BillPdfLineItem[];
+  billTo?: BillingEntityData | null;
 }
 
 export function BillDocument({
@@ -42,6 +49,7 @@ export function BillDocument({
   unit,
   bill,
   lineItems,
+  billTo,
 }: BillPdfData) {
   // Line item amounts are always pre-GST base amounts.
   const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
@@ -77,8 +85,38 @@ export function BillDocument({
 
         <View style={[styles.section, styles.infoGrid]}>
           <View style={styles.infoCol}>
-            <Text style={styles.sectionTitle}>Unit</Text>
-            <Text>{unit.unitNo}</Text>
+            <Text style={styles.sectionTitle}>Bill To</Text>
+            {billTo?.name ? (
+              <Text style={{ fontWeight: 'bold' }}>{billTo.name}</Text>
+            ) : null}
+            {billTo?.isCompany && billTo.companyAddress ? (
+              <Text style={{ fontSize: 8, color: '#475569', marginTop: 1 }}>
+                {billTo.companyAddress}
+              </Text>
+            ) : (
+              <>
+                <Text style={{ fontSize: 8, color: '#475569', marginTop: 1 }}>
+                  {unit.doorNo
+                    ? `${unit.unitNo} / ${unit.doorNo}`
+                    : `Unit ${unit.unitNo}`}
+                </Text>
+                {unit.floor != null ? (
+                  <Text style={{ fontSize: 8, color: '#475569' }}>
+                    {`Floor ${unit.floor}`}
+                  </Text>
+                ) : null}
+                {association.address ? (
+                  <Text style={{ fontSize: 8, color: '#475569' }}>
+                    {association.address}
+                  </Text>
+                ) : null}
+              </>
+            )}
+            {billTo?.isCompany && billTo.companyGstin ? (
+              <Text style={{ fontSize: 8, color: '#475569' }}>
+                GSTIN: {billTo.companyGstin}
+              </Text>
+            ) : null}
           </View>
           <View style={styles.infoCol}>
             <Text style={styles.sectionTitle}>Billing Period</Text>
@@ -99,14 +137,12 @@ export function BillDocument({
           <View style={styles.table}>
             <View style={styles.tableHeaderRow}>
               <Text style={styles.colDescription}>Description</Text>
-              <Text style={styles.colPayer}>Payer</Text>
               <Text style={styles.colGst}>GST</Text>
               <Text style={styles.colAmount}>Amount</Text>
             </View>
             {lineItems.map((item, i) => (
               <View style={styles.tableRow} key={i}>
                 <Text style={styles.colDescription}>{item.description}</Text>
-                <Text style={styles.colPayer}>{item.payer}</Text>
                 <Text style={styles.colGst}>
                   {item.gstApplicable ? 'Yes' : '—'}
                 </Text>

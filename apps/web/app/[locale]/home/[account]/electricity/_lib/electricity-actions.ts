@@ -72,6 +72,7 @@ export async function createSubMeterAction(
     unit_id: parsed.data.unitId,
     meter_label: parsed.data.meterLabel,
     meter_type: parsed.data.meterType,
+    load_kva: parsed.data.loadKva ?? null,
   });
 
   if (error) {
@@ -566,6 +567,7 @@ export type SubMeterImportRow = {
   unit_no: string;
   sub_meter_no: string;
   meter_type: 'Unit' | 'CommonArea';
+  load_kva?: number | null;
 };
 
 export type SubMeterImportSkipped = {
@@ -629,7 +631,12 @@ export async function bulkImportSubMetersAction(
 
   const skipped: SubMeterImportSkipped[] = [];
 
-  type InsertRow = { unit_id: string; meter_label: string; meter_type: string };
+  type InsertRow = {
+    unit_id: string;
+    meter_label: string;
+    meter_type: string;
+    load_kva: number | null;
+  };
   const toInsert: InsertRow[] = [];
 
   for (let i = 0; i < rows.length; i++) {
@@ -637,7 +644,11 @@ export async function bulkImportSubMetersAction(
     const rowNum = i + 1;
 
     if (!['Unit', 'CommonArea'].includes(row.meter_type)) {
-      skipped.push({ row: rowNum, sub_meter_no: row.sub_meter_no, reason: `Invalid meter_type "${row.meter_type}". Must be "Unit" or "CommonArea".` });
+      skipped.push({
+        row: rowNum,
+        sub_meter_no: row.sub_meter_no,
+        reason: `Invalid meter_type "${row.meter_type}". Must be "Unit" or "CommonArea".`,
+      });
       continue;
     }
 
@@ -649,25 +660,42 @@ export async function bulkImportSubMetersAction(
       // a placeholder so the FK is satisfied; matching during readings uses label only.
       unitId = units?.[0]?.id;
       if (!unitId) {
-        skipped.push({ row: rowNum, sub_meter_no: row.sub_meter_no, reason: 'No units found in this association.' });
+        skipped.push({
+          row: rowNum,
+          sub_meter_no: row.sub_meter_no,
+          reason: 'No units found in this association.',
+        });
         continue;
       }
     } else {
       unitId = unitByNo.get(row.unit_no.toLowerCase());
       if (!unitId) {
-        skipped.push({ row: rowNum, sub_meter_no: row.sub_meter_no, reason: `Unit "${row.unit_no}" not found.` });
+        skipped.push({
+          row: rowNum,
+          sub_meter_no: row.sub_meter_no,
+          reason: `Unit "${row.unit_no}" not found.`,
+        });
         continue;
       }
     }
 
     const key = `${unitId}::${row.sub_meter_no.toLowerCase()}`;
     if (existingSet.has(key)) {
-      skipped.push({ row: rowNum, sub_meter_no: row.sub_meter_no, reason: `Sub-meter "${row.sub_meter_no}" already exists for unit "${row.unit_no}".` });
+      skipped.push({
+        row: rowNum,
+        sub_meter_no: row.sub_meter_no,
+        reason: `Sub-meter "${row.sub_meter_no}" already exists for unit "${row.unit_no}".`,
+      });
       continue;
     }
 
     existingSet.add(key); // prevent duplicates within the same batch
-    toInsert.push({ unit_id: unitId, meter_label: row.sub_meter_no, meter_type: row.meter_type });
+    toInsert.push({
+      unit_id: unitId,
+      meter_label: row.sub_meter_no,
+      meter_type: row.meter_type,
+      load_kva: row.load_kva ?? null,
+    });
   }
 
   if (toInsert.length === 0) {

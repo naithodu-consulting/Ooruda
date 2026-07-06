@@ -1,9 +1,17 @@
 import * as React from 'react';
 
-import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
+import {
+  Document,
+  Page,
+  StyleSheet,
+  Text,
+  View,
+} from '@react-pdf/renderer';
 
+import { DocumentFooter } from '../components/document-footer';
 import { DocumentHeader } from '../components/document-header';
 import { formatINR, formatPeriodLabel } from '../lib/format';
+import type { BillingEntityData } from './bill-document';
 
 export interface ElectricityBillMeterRow {
   meterLabel: string;
@@ -12,6 +20,7 @@ export interface ElectricityBillMeterRow {
   consumedUnits: number;
   blockRate: number;
   amount: number;
+  loadKva?: number | null;
 }
 
 export interface ElectricityBillPdfData {
@@ -21,7 +30,8 @@ export interface ElectricityBillPdfData {
     logoUrl: string | null;
     authorisedSignatory: string | null;
   };
-  unit: { unitNo: string };
+  unit: { unitNo: string; doorNo?: string | null; floor?: number | null };
+  billTo?: BillingEntityData | null;
   bill: {
     billNo: string;
     period: string;
@@ -213,18 +223,19 @@ const s = StyleSheet.create({
     color: '#1e293b',
   },
 
-  // ── Footer ────────────────────────────────────────────────────────────────
-  footer: {
-    position: 'absolute',
-    bottom: 24,
-    left: 36,
-    right: 36,
-    fontSize: 7,
-    color: '#94a3b8',
-    textAlign: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    paddingTop: 6,
+  // ── Load note ─────────────────────────────────────────────────────────────
+  loadNote: {
+    marginBottom: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 3,
+  },
+  loadNoteText: {
+    fontSize: 7.5,
+    color: '#475569',
   },
 });
 
@@ -246,6 +257,7 @@ function periodLabel(bill: ElectricityBillPdfData['bill']): string {
 export function ElectricityBillDocument({
   association,
   unit,
+  billTo,
   bill,
   meters,
   minimumCharge,
@@ -278,14 +290,33 @@ export function ElectricityBillDocument({
         <View style={s.metaRow}>
           <View>
             <Text style={s.toLabel}>Bill To</Text>
-            <Text style={s.toUnit}>Unit {unit.unitNo}</Text>
+            {billTo?.name ? <Text style={s.toUnit}>{billTo.name}</Text> : null}
+            {billTo?.isCompany && billTo.companyAddress ? (
+              <Text style={s.toAssoc}>{billTo.companyAddress}</Text>
+            ) : (
+              <>
+                <Text style={billTo?.name ? s.toAssoc : s.toUnit}>
+                  {unit.doorNo
+                    ? `${unit.unitNo} / ${unit.doorNo}`
+                    : `Unit ${unit.unitNo}`}
+                </Text>
+                {unit.floor != null ? (
+                  <Text style={s.toAssoc}>{`Floor ${unit.floor}`}</Text>
+                ) : null}
+              </>
+            )}
+            {billTo?.isCompany && billTo.companyGstin ? (
+              <Text style={s.toAssoc}>GSTIN: {billTo.companyGstin}</Text>
+            ) : null}
             <Text style={s.toAssoc}>{association.name}</Text>
           </View>
 
           <View style={s.detailsBlock}>
             <View style={s.detailRow}>
               <Text style={s.detailLabel}>Month</Text>
-              <Text style={s.detailValue}>{formatPeriodLabel(bill.period)}</Text>
+              <Text style={s.detailValue}>
+                {formatPeriodLabel(bill.period)}
+              </Text>
             </View>
             <View style={s.detailRow}>
               <Text style={s.detailLabel}>Period</Text>
@@ -351,6 +382,19 @@ export function ElectricityBillDocument({
           </View>
         </View>
 
+        {/* Sanctioned load note (if any meter has a load) */}
+        {meters.some((m) => m.loadKva != null) ? (
+          <View style={s.loadNote}>
+            <Text style={s.loadNoteText}>
+              Sanctioned Load —{' '}
+              {meters
+                .filter((m) => m.loadKva != null)
+                .map((m) => `${m.meterLabel}: ${m.loadKva} kVA`)
+                .join('  |  ')}
+            </Text>
+          </View>
+        ) : null}
+
         {/* Outstanding amount (if partial/unpaid) */}
         {outstanding > 0 ? (
           <View style={s.outstandingPanel}>
@@ -359,9 +403,7 @@ export function ElectricityBillDocument({
             <Text style={{ fontSize: 8, color: '#64748b', marginLeft: 10 }}>
               Outstanding
             </Text>
-            <Text
-              style={{ fontSize: 8, fontWeight: 'bold', color: '#dc2626' }}
-            >
+            <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#dc2626' }}>
               {formatINR(outstanding)}
             </Text>
           </View>
@@ -389,12 +431,7 @@ export function ElectricityBillDocument({
           </View>
         </View>
 
-        <View style={s.footer} fixed>
-          <Text>
-            This is a computer-generated bill and does not require a physical
-            signature.
-          </Text>
-        </View>
+        <DocumentFooter note="This is a computer-generated bill and does not require a physical signature." />
       </Page>
     </Document>
   );

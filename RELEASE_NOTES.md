@@ -388,6 +388,36 @@ Branch: `week-3-part-1`
 
 ---
 
+## Release v3.5 — Door Number, Electricity Load & Ooruda Branding (Jul 14, 2026)
+
+### Units: Door Number Field
+
+- Optional `door_no` column added to `units` table.
+- Editable in Add Unit and Edit Unit dialogs.
+- Included as an optional `door_no` column in the units CSV import template; shown in the preview table.
+- Door number appears on electricity bills, maintenance bills, and payment receipts (if set) — shown beneath the unit number.
+
+### Electricity: Sub-meter Sanctioned Load (kVA)
+
+- Optional `load_kva` column added to `sub_meters` table.
+- Editable in Add Sub-meter dialog (new "Sanctioned Load (kVA)" field).
+- Shown in the sub-meters table as a "Load (kVA)" column.
+- Included as optional `load_kva` column in the sub-meters CSV import template; shown in the preview table.
+- If any sub-meter has a load value, a note is shown below the electricity bill PDF's meter readings table: "Sanctioned Load — SM-1: 2.5 kVA | SM-2: 3.0 kVA", helping customers understand the basis for minimum charges.
+
+### Association Settings: Sanctioned Association Load (kVA)
+
+- Optional `sanctioned_load_kva` column added to `associations` table.
+- New "Sanctioned Load (kVA)" field in the Electricity card of association settings.
+- Stored for future calculations (not shown on individual bills).
+
+### Bills & Receipts: "Generated from Ooruda" Footer
+
+- All bill PDFs (maintenance, other charges) and payment receipts now show "Generated from [Ooruda](https://ooruda.com/)" as a clickable hyperlink in the footer.
+- Electricity bill PDF updated to match (was previously using its own inline footer).
+
+---
+
 ## Release v3.3 — Electricity Enhancements & Dashboard Improvements (Jul 3, 2026)
 
 ### Electricity: Due Date Fixed to Next Month
@@ -540,17 +570,114 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 | `20260703000001_drop_old_record_payment_overload.sql` | Jul 3 | Drop stale 5-arg overload of `record_payment` (fixes PGRST203 ambiguity with Razorpay 8-arg overload) |
 | `20260713000000_mescom_bills_period_dates.sql` | Jul 13 | Add `period_start` and `period_end` DATE columns to `mescom_bills` for exact billing period range on electricity PDFs |
 | `20260713000001_associations_authorised_signatory.sql` | Jul 13 | Add `authorised_signatory` TEXT column to `associations` for electricity bill PDF signature block |
+| `20260714000000_door_no_load_kva.sql` | Jul 14 | Add optional `door_no` TEXT to `units`, `load_kva` NUMERIC to `sub_meters`, `sanctioned_load_kva` NUMERIC to `associations` |
+| `20260715000000_bill_sequences.sql` | Jul 15 | `bill_sequences` table + `allocate_bill_no()` RPC for FY-scoped, per-type atomic bill number allocation |
+| `20260715000001_billing_entity_fields.sql` | Jul 15 | Add `bill_to`, `owner_is_company`, `owner_company_*` to `units`; `is_company`, `company_*` to `tenancies`; `pan_number` to `associations` |
 
 ---
 
-## Feature Summary by Module
+## Release v3.6 — Continuous Bill Numbering (Jul 15, 2026)
+
+### Bill Numbering Overhaul
+
+Previous bill numbers reset their sequence counter every billing period (`YYMM` segment), producing `…-2606-001`, `…-2607-001` — a new series each month. This was incompatible with Indian GST filing requirements, which expect a single unbroken series within a financial year.
+
+**New format:** `{Prefix}-{Type}-{FYSTR}-{NNNN}`
+- `FYSTR` is the financial year string (e.g. `2627` for April 2026 – March 2027)
+- `NNNN` is a 4-digit zero-padded sequence that increments continuously across months, resetting only on April 1 each year
+- Three independent series per association per FY: `MANT`, `ELEC`, `OTHR`
+
+**Examples (same association, same FY):**
+- June maintenance bill: `OOR1A2B-MANT-2627-0001`
+- July maintenance bill: `OOR1A2B-MANT-2627-0002`
+- August electricity bill: `OOR1A2B-ELEC-2627-0001`
+
+Old bills retain their original numbers (issued documents cannot be renumbered). The two formats are visually distinct — old numbers have a `YYMM` segment, new ones have a `FYSTR`.
+
+**Atomicity fix:** The old sequence was computed in application code by scanning existing bills, creating a race-condition window for concurrent billing runs. The new `allocate_bill_no()` Postgres function uses `INSERT … ON CONFLICT DO UPDATE … RETURNING` to allocate the next sequence number atomically, eliminating that risk.
+
+### PDF Cleanup — Payer/Paid By Removed
+
+The "Payer" column (Owner / Tenant) has been removed from bill PDF line items, and the "Paid By" field has been removed from receipt PDFs. These internal routing labels are not required on externally facing documents.
+
+---
+
+## Release v3.7 — Billing Entity, Bill-To Override, PAN, Type-to-Confirm & Ooruda Branding (Jul 6, 2026)
+
+### Billing Entity: Individual vs Company
+
+Both owners and tenants can now be flagged as individuals or companies. This controls what appears on bills and receipts.
+
+**Owner (per unit):**
+- New "Owner is a company" checkbox in the Edit Unit dialog.
+- When checked: company name (required), registered address (optional, falls back to unit address), and GSTIN (optional) can be set.
+- Stored on the `units` table (`owner_is_company`, `owner_company_name`, `owner_company_address`, `owner_company_gstin`).
+
+**Tenant (per tenancy):**
+- New "Tenant is a company" checkbox in the Assign Tenant flow within the Edit Unit dialog.
+- Same fields: company name, registered address, GSTIN.
+- Stored on the `tenancies` table (`is_company`, `company_name`, `company_address`, `company_gstin`).
+
+**On bills and receipts:**
+- The "Bill To" block replaces the old "Unit" block and shows: name (person or company), address (company registered address if set, else derived unit address), and company GSTIN if applicable.
+- Address derivation: `door_no` + unit number + floor + association address (no separate field needed for individuals or companies without a distinct registered address).
+
+### Bill-To Override (per unit)
+
+A new **Bill to** dropdown in the Edit Unit dialog controls who receives the bill for each unit:
+
+| Setting | Behaviour |
+|---|---|
+| Auto (default) | Tenant if unit is occupied; owner otherwise |
+| Always owner | Bills always go to the owner, even when a tenant is active |
+| Always tenant | Bills always go to the tenant; falls back to owner if unoccupied |
+
+Stored as `bill_to` on the `units` table.
+
+### Association PAN Number
+
+Associations can now store a **PAN number** in Settings → Association → Tax Settings (below GSTIN).
+
+- PDF headers: GSTIN is shown if set; otherwise PAN is shown. If neither is set, neither appears.
+- Stored as `pan_number` on the `associations` table.
+
+### Type-to-Confirm Deletion
+
+All hard-delete operations now require the user to type a confirmation string before proceeding:
+
+- **Delete Unit** (super admin only): type the unit number (e.g. `A-101`) to confirm.
+- **Delete Electricity Bill** (super admin only): type `DELETE` to confirm.
+- Implemented via a reusable `TypeToConfirmDialog` component in `apps/web/app/[locale]/home/[account]/_components/`.
+- Old `AlertDialog`-based confirmations replaced.
+
+### Ooruda Footer Branding
+
+The "Generated from Ooruda" link in all PDF footers (bills, receipts, electricity bills) is now **bold** with the brand gold colour (`#fcd469`), making the Ooruda name visually distinct on printed documents.
+
+The electricity bill PDF footer was refactored to use the shared `DocumentFooter` component (previously duplicated inline) so both PDF types stay in sync.
+
+### Code Quality Fixes (Jul 6 session)
+
+- **Bill number RPC**: Removed unnecessary `as any` cast from the `allocate_bill_no` RPC call — the function is already typed in `database.types.ts`.
+- **Audit logging**: Sequence-allocation failures now emit a structured `logAuditEvent` entry instead of a bare `console.error`.
+- **Sub-meter CSV validation**: CommonArea rows now require `unit_no = COMMON`; using a real unit number raises a parse-time error explaining that `unit_no` is ignored for CommonArea meters.
+- **Meter readings CSV**: `current_reading` validation error message corrected from "positive number" to "non-negative number" (a reading of 0 is valid for a new meter).
+- **Electricity bill PDF**: Footer extracted to shared `DocumentFooter` component (no duplicate Ooruda link).
+
+### Dependencies
+
+- `@supabase/postgrest-js` bumped from `2.106.2` → `2.109.0` (minor patch).
+- `@supabase/phoenix` bumped from `0.4.2` → `0.4.4`.
+
+---
+
 
 | Module | Status | Key Capabilities |
 |---|---|---|
 | **Authentication** | Complete | Phone OTP sign-in, email OTP fallback, invite-only model, complete profile flow |
 | **RBAC** | Complete | 4 roles (assoc_admin, billing_operator, prop_owner, tenant), JWT hook, `requireRole()` guard, super admin |
 | **Associations** | Complete | Settings (general, electricity, tax, billing), logo upload, charge type configuration |
-| **Units** | Complete | CRUD, CSV import, common area type, owner/tenant assignment, unit detail + tenancy timeline |
+| **Units** | Complete | CRUD, CSV import, common area type, owner/tenant assignment, unit detail + tenancy timeline, bill-to override, owner company billing entity, type-to-confirm deletion |
 | **Members** | Complete | Phone invitations, email invitations, role-restricted invitations, phone number normalization |
 | **Electricity** | Complete | Sub-meter management, bill upload (with period date range), meter readings (manual + CSV import), block rate calculation, redesigned PDF with per-meter breakdown and authorised signatory |
 | **Billing** | Complete | Bill generation (maintenance, electricity, other charges), line items, PDF, filters, common area |
@@ -565,4 +692,4 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 
 ---
 
-*Last updated: 2026-07-04 (v3.4)*
+*Last updated: 2026-07-06 (v3.7)*

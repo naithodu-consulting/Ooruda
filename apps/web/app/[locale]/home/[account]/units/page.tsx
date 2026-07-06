@@ -50,7 +50,9 @@ export default async function UnitsPage({ params }: Props) {
 
   const { data: units } = await client
     .from('units')
-    .select('id, unit_no, type, floor, area_sqft, owner_id, status')
+    .select(
+      'id, unit_no, type, floor, area_sqft, door_no, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin, bill_to, status',
+    )
     .eq('association_id', association.id)
     .order('unit_no');
 

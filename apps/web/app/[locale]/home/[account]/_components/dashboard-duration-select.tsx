@@ -31,7 +31,7 @@ export function DashboardDurationSelect({ value }: { value: string }) {
           key={opt.value}
           onClick={() => router.push(`${pathname}?d=${opt.value}`)}
           className={cn(
-            'rounded-full px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap',
+            'rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors',
             value === opt.value
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground',

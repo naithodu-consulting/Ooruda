@@ -80,7 +80,6 @@ export const styles = StyleSheet.create({
     borderTopColor: '#e2e8f0',
   },
   colDescription: { flexGrow: 1, flexBasis: 0 },
-  colPayer: { width: 60 },
   colGst: { width: 40, textAlign: 'center' },
   colAmount: { width: 70, textAlign: 'right' },
   summaryBlock: {

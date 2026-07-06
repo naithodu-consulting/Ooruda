@@ -40,6 +40,8 @@ interface Props {
     gst_rate: number | null;
     mescom_consumer_no: string | null;
     authorised_signatory: string | null;
+    sanctioned_load_kva: number | null;
+    pan_number: string | null;
   };
   billingSettings: {
     electricity_due_day: number;
@@ -170,6 +172,24 @@ export function AssociationForm({ association, billingSettings }: Props) {
                 Name shown on electricity bill PDFs.
               </p>
             </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="sanctioned_load_kva">Sanctioned Load (kVA)</Label>
+              <Input
+                id="sanctioned_load_kva"
+                name="sanctioned_load_kva"
+                type="number"
+                step="0.01"
+                min="0"
+                defaultValue={association.sanctioned_load_kva ?? ''}
+                placeholder="e.g. 100"
+                className="max-w-xs"
+              />
+              <p className="text-muted-foreground text-xs">
+                Total sanctioned load for the association from the electricity
+                board.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -203,6 +223,23 @@ export function AssociationForm({ association, billingSettings }: Props) {
               placeholder="29AABCS1429B1ZB"
               className="max-w-xs font-mono uppercase"
             />
+            <p className="text-muted-foreground text-xs">
+              Shown on bills when available.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="pan_number">PAN Number</Label>
+            <Input
+              id="pan_number"
+              name="pan_number"
+              defaultValue={association.pan_number ?? ''}
+              placeholder="AABCS1429B"
+              className="max-w-xs font-mono uppercase"
+            />
+            <p className="text-muted-foreground text-xs">
+              Shown on bills when GSTIN is not available.
+            </p>
           </div>
 
           <div className="flex flex-col gap-1.5">

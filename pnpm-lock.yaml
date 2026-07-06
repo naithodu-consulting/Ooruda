@@ -467,10 +467,10 @@ importers:
         version: link:../../packages/ui
       '@makerkit/data-loader-supabase-core':
         specifier: 'catalog:'
-        version: 0.0.10(@supabase/postgrest-js@2.106.2)(@supabase/supabase-js@2.106.2)
+        version: 0.0.10(@supabase/postgrest-js@2.109.0)(@supabase/supabase-js@2.106.2)
       '@makerkit/data-loader-supabase-nextjs':
         specifier: 'catalog:'
-        version: 1.2.5(@supabase/postgrest-js@2.106.2)(@supabase/supabase-js@2.106.2)(@tanstack/react-query@5.100.14(react@19.2.7))(next@16.2.7(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
+        version: 1.2.5(@supabase/postgrest-js@2.109.0)(@supabase/supabase-js@2.106.2)(@tanstack/react-query@5.100.14(react@19.2.7))(next@16.2.7(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
       '@marsidev/react-turnstile':
         specifier: 'catalog:'
         version: 1.5.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -959,10 +959,10 @@ importers:
         version: link:../../ui
       '@makerkit/data-loader-supabase-core':
         specifier: 'catalog:'
-        version: 0.0.10(@supabase/postgrest-js@2.106.2)(@supabase/supabase-js@2.106.2)
+        version: 0.0.10(@supabase/postgrest-js@2.109.0)(@supabase/supabase-js@2.106.2)
       '@makerkit/data-loader-supabase-nextjs':
         specifier: 'catalog:'
-        version: 1.2.5(@supabase/postgrest-js@2.106.2)(@supabase/supabase-js@2.106.2)(@tanstack/react-query@5.100.14(react@19.2.7))(next@16.2.7(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
+        version: 1.2.5(@supabase/postgrest-js@2.109.0)(@supabase/supabase-js@2.106.2)(@tanstack/react-query@5.100.14(react@19.2.7))(next@16.2.7(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
       '@supabase/supabase-js':
         specifier: 'catalog:'
         version: 2.106.2
@@ -4831,11 +4831,15 @@ packages:
     resolution: {integrity: sha512-oRnr0QrL8H+zTO1YyQ1QjiHZU/957jvubbxSJTUm2XLAgzoGGV9Tahfyd+uvLsBLRVmXLtpU3oyCjdQIvkGMOA==}
     engines: {node: '>=20.0.0'}
 
-  '@supabase/phoenix@0.4.2':
-    resolution: {integrity: sha512-YSAGnmDAfuleFCVt3CeurQZAhxRfXWeZIIkwp7NhYzQ1UwW6ePSnzsFAiUm/mbCkfoCf70QQHKW/K6RKh52a4A==}
+  '@supabase/phoenix@0.4.4':
+    resolution: {integrity: sha512-Gt0pqoXuIqX/8dvG0OKp/wMCobXNH3klNbUPBNyOfN0YA1IswrM3HyWFMOPk1Jy+BRaIyDPcFx4jLBwHNmlyfQ==}
 
   '@supabase/postgrest-js@2.106.2':
     resolution: {integrity: sha512-tDOzyPgp9pIRMR2x6C9+uDSJrnXSzxLtt3d7nC+Lrsy3jnJDHYfdQC/xcRyhJE/TOBJ0heSqRKR3UmejDjZxsw==}
+    engines: {node: '>=20.0.0'}
+
+  '@supabase/postgrest-js@2.109.0':
+    resolution: {integrity: sha512-Xk4gzuzyrGIPWCUuJolDQS/9zdFZDEXRhNsVeOHEKwFr+vpNU0himsHtLOhSEYlyPqwmeY8LUCKL6bLsDp0ScA==}
     engines: {node: '>=20.0.0'}
 
   '@supabase/realtime-js@2.106.2':
@@ -10043,15 +10047,15 @@ snapshots:
 
   '@lemonsqueezy/lemonsqueezy.js@4.0.0': {}
 
-  '@makerkit/data-loader-supabase-core@0.0.10(@supabase/postgrest-js@2.106.2)(@supabase/supabase-js@2.106.2)':
+  '@makerkit/data-loader-supabase-core@0.0.10(@supabase/postgrest-js@2.109.0)(@supabase/supabase-js@2.106.2)':
     dependencies:
-      '@supabase/postgrest-js': 2.106.2
+      '@supabase/postgrest-js': 2.109.0
       '@supabase/supabase-js': 2.106.2
       ts-case-convert: 2.1.0
 
-  '@makerkit/data-loader-supabase-nextjs@1.2.5(@supabase/postgrest-js@2.106.2)(@supabase/supabase-js@2.106.2)(@tanstack/react-query@5.100.14(react@19.2.7))(next@16.2.7(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)':
+  '@makerkit/data-loader-supabase-nextjs@1.2.5(@supabase/postgrest-js@2.109.0)(@supabase/supabase-js@2.106.2)(@tanstack/react-query@5.100.14(react@19.2.7))(next@16.2.7(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)':
     dependencies:
-      '@makerkit/data-loader-supabase-core': 0.0.10(@supabase/postgrest-js@2.106.2)(@supabase/supabase-js@2.106.2)
+      '@makerkit/data-loader-supabase-core': 0.0.10(@supabase/postgrest-js@2.109.0)(@supabase/supabase-js@2.106.2)
       '@supabase/supabase-js': 2.106.2
       '@tanstack/react-query': 5.100.14(react@19.2.7)
       next: 16.2.7(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(babel-plugin-macros@3.1.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -12146,15 +12150,19 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@supabase/phoenix@0.4.2': {}
+  '@supabase/phoenix@0.4.4': {}
 
   '@supabase/postgrest-js@2.106.2':
     dependencies:
       tslib: 2.8.1
 
+  '@supabase/postgrest-js@2.109.0':
+    dependencies:
+      tslib: 2.8.1
+
   '@supabase/realtime-js@2.106.2':
     dependencies:
-      '@supabase/phoenix': 0.4.2
+      '@supabase/phoenix': 0.4.4
       tslib: 2.8.1
 
   '@supabase/ssr@0.10.3(@supabase/supabase-js@2.106.2)':

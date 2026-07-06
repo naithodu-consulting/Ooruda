@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@kit/ui/dialog';
+import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import {
   Table,
@@ -32,16 +33,18 @@ import {
   TableHeader,
   TableRow,
 } from '@kit/ui/table';
-import { toast } from '@kit/ui/sonner';
 
 import { bulkImportSubMetersAction } from '../_lib/electricity-actions';
 
 const TEMPLATE_CSV = [
-  'unit_no,sub_meter_no,meter_type',
-  'G-01,SM-1,Unit',
-  '1-02,SM-5,Unit',
-  'COMMON,Common-Lift,CommonArea',
+  'unit_no,sub_meter_no,meter_type,load_kva',
+  'G-01,SM-1,Unit,5',
+  '1-02,SM-5,Unit,',
+  'COMMON,Common-Lift,CommonArea,10',
 ].join('\n');
+// For CommonArea rows, unit_no MUST be "COMMON" — the backend attaches them to
+// the first unit as an FK placeholder. The label (sub_meter_no) is what
+// identifies them during meter-readings import.
 
 const REQUIRED_COLUMNS = ['unit_no', 'sub_meter_no', 'meter_type'] as const;
 const VALID_METER_TYPES = ['Unit', 'CommonArea'] as const;
@@ -51,6 +54,7 @@ type ParsedRow = {
   unit_no: string;
   sub_meter_no: string;
   meter_type: 'Unit' | 'CommonArea' | '';
+  load_kva: number | null;
   _error?: string;
 };
 
@@ -82,6 +86,7 @@ function parseCSV(text: string): ParsedRow[] {
         unit_no: '',
         sub_meter_no: '',
         meter_type: '',
+        load_kva: null,
         _error: `Missing required columns: ${missing.join(', ')}`,
       },
     ];
@@ -99,18 +104,34 @@ function parseCSV(text: string): ParsedRow[] {
     const meter_type = VALID_METER_TYPES.find(
       (t) => t.toLowerCase() === meter_type_raw.toLowerCase(),
     );
+    const load_kva_raw = get('load_kva');
+    const load_kva =
+      load_kva_raw === ''
+        ? null
+        : Number.isNaN(Number(load_kva_raw))
+          ? null
+          : Number(load_kva_raw);
 
     let error: string | undefined;
     if (!unit_no) error = 'unit_no is required';
     else if (!sub_meter_no) error = 'sub_meter_no is required';
     else if (!meter_type)
       error = `meter_type must be "Unit" or "CommonArea" (got "${meter_type_raw}")`;
+    else if (
+      meter_type === 'CommonArea' &&
+      unit_no.toUpperCase() !== 'COMMON'
+    )
+      error =
+        'For CommonArea meters, unit_no must be "COMMON" (it is ignored by the system)';
+    else if (load_kva_raw !== '' && load_kva !== null && load_kva <= 0)
+      error = 'load_kva must be a positive number';
 
     return {
       _row: i + 1,
       unit_no,
       sub_meter_no,
       meter_type: (meter_type ?? '') as 'Unit' | 'CommonArea' | '',
+      load_kva,
       _error: error,
     };
   });
@@ -163,10 +184,11 @@ export function ImportSubMetersDialog({
     startTransition(async () => {
       const res = await bulkImportSubMetersAction(
         associationId,
-        validRows.map(({ unit_no, sub_meter_no, meter_type }) => ({
+        validRows.map(({ unit_no, sub_meter_no, meter_type, load_kva }) => ({
           unit_no,
           sub_meter_no,
           meter_type: meter_type as 'Unit' | 'CommonArea',
+          load_kva,
         })),
       );
 
@@ -240,9 +262,16 @@ export function ImportSubMetersDialog({
                   unit_no, sub_meter_no, meter_type
                 </span>
                 <br />
+                Optional: <span className="font-medium">load_kva</span>{' '}
+                (sanctioned load in kVA)
+                <br />
                 <span className="font-medium">meter_type</span> must be{' '}
                 <span className="font-medium">Unit</span> or{' '}
                 <span className="font-medium">CommonArea</span>.
+                <br />
+                For common-area meters use{' '}
+                <span className="font-medium">COMMON</span> as unit_no — the
+                backend ignores it and uses the first unit as an FK anchor.
                 <br />
                 Existing sub-meters are skipped — no overwrite.
               </p>
@@ -289,6 +318,7 @@ export function ImportSubMetersDialog({
                         <TableHead>Unit</TableHead>
                         <TableHead>Sub-meter</TableHead>
                         <TableHead>Type</TableHead>
+                        <TableHead>Load (kVA)</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -304,6 +334,9 @@ export function ImportSubMetersDialog({
                           <TableCell>{row.unit_no || '—'}</TableCell>
                           <TableCell>{row.sub_meter_no || '—'}</TableCell>
                           <TableCell>{row.meter_type || '—'}</TableCell>
+                          <TableCell>
+                            {row.load_kva != null ? row.load_kva : '—'}
+                          </TableCell>
                           <TableCell>
                             {row._error ? (
                               <span className="text-destructive flex items-center gap-1 text-xs">

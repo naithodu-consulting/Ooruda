@@ -63,9 +63,7 @@ export default async function AuditPage({ params, searchParams }: Props) {
         `action.ilike.%${search}%,summary.ilike.%${search}%,actor_user_id.in.(${actorIdFilter.map((id) => `"${id}"`).join(',')})`,
       );
     } else {
-      query = query.or(
-        `action.ilike.%${search}%,summary.ilike.%${search}%`,
-      );
+      query = query.or(`action.ilike.%${search}%,summary.ilike.%${search}%`);
     }
   }
 

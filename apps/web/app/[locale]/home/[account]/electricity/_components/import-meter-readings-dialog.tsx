@@ -87,7 +87,7 @@ type ParsedRow = {
   sub_meter_no: string;
   current_reading: number;
   previous_reading?: number; // optional override — only used when > 0
-  minimum_charge?: number;   // optional override — only used when > 0
+  minimum_charge?: number; // optional override — only used when > 0
   _error?: string;
 };
 
@@ -150,12 +150,10 @@ function parseCSV(text: string): ParsedRow[] {
     let error: string | undefined;
     if (!unit_no) error = 'unit_no is required';
     else if (!sub_meter_no) error = 'sub_meter_no is required';
-    else if (
-      !currentReadingRaw ||
-      Number.isNaN(currentReading) ||
-      currentReading < 0
-    )
+    else if (Number.isNaN(currentReading) || currentReading < 0)
       error = 'current_reading must be a non-negative number';
+    else if (previous_reading !== undefined && previous_reading > currentReading)
+      error = 'previous_reading cannot be greater than current_reading';
 
     return {
       _row: i + 1,
@@ -229,7 +227,13 @@ export function ImportMeterReadingsDialog({
       const res = await bulkImportMeterReadingsAction(
         associationId,
         validRows.map(
-          ({ unit_no, sub_meter_no, current_reading, previous_reading, minimum_charge }) => ({
+          ({
+            unit_no,
+            sub_meter_no,
+            current_reading,
+            previous_reading,
+            minimum_charge,
+          }) => ({
             unit_no,
             sub_meter_no,
             current_reading,
@@ -409,13 +413,13 @@ export function ImportMeterReadingsDialog({
                           </TableCell>
                           <TableCell>{row.unit_no || '—'}</TableCell>
                           <TableCell>{row.sub_meter_no || '—'}</TableCell>
-                          <TableCell className="text-muted-foreground tabular-nums text-xs">
+                          <TableCell className="text-muted-foreground text-xs tabular-nums">
                             {row.previous_reading ?? '—'}
                           </TableCell>
                           <TableCell className="tabular-nums">
                             {row._error ? '—' : row.current_reading}
                           </TableCell>
-                          <TableCell className="text-muted-foreground tabular-nums text-xs">
+                          <TableCell className="text-muted-foreground text-xs tabular-nums">
                             {row.minimum_charge ?? '—'}
                           </TableCell>
                           <TableCell>

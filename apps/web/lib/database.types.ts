@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -203,36 +208,84 @@ export type Database = {
           },
         ]
       }
+      association_payment_gateways: {
+        Row: {
+          association_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          key_id: string
+          key_secret: string
+          provider: string
+          updated_at: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          association_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key_id: string
+          key_secret: string
+          provider?: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          association_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key_id?: string
+          key_secret?: string
+          provider?: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "association_payment_gateways_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: true
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       associations: {
         Row: {
           account_id: string
           address: string | null
+          authorised_signatory: string | null
           brand_colour: string
           created_at: string
           gst_enabled: boolean
           gst_rate: number | null
           gstin: string | null
-          authorised_signatory: string | null
           id: string
           logo_url: string | null
           mescom_consumer_no: string | null
           registration_number: string | null
+          pan_number: string | null
+          sanctioned_load_kva: number | null
           status: string
           updated_at: string
         }
         Insert: {
           account_id: string
           address?: string | null
+          authorised_signatory?: string | null
           brand_colour?: string
           created_at?: string
           gst_enabled?: boolean
           gst_rate?: number | null
           gstin?: string | null
           id?: string
-          authorised_signatory?: string | null
           logo_url?: string | null
           mescom_consumer_no?: string | null
+          pan_number?: string | null
           registration_number?: string | null
+          sanctioned_load_kva?: number | null
           status?: string
           updated_at?: string
         }
@@ -248,7 +301,9 @@ export type Database = {
           id?: string
           logo_url?: string | null
           mescom_consumer_no?: string | null
+          pan_number?: string | null
           registration_number?: string | null
+          sanctioned_load_kva?: number | null
           status?: string
           updated_at?: string
         }
@@ -361,6 +416,35 @@ export type Database = {
             columns: ["charge_type_id"]
             isOneToOne: false
             referencedRelation: "charge_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bill_sequences: {
+        Row: {
+          association_id: string
+          bill_type: string
+          financial_year: number
+          next_val: number
+        }
+        Insert: {
+          association_id: string
+          bill_type: string
+          financial_year: number
+          next_val?: number
+        }
+        Update: {
+          association_id?: string
+          bill_type?: string
+          financial_year?: number
+          next_val?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_sequences_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
             referencedColumns: ["id"]
           },
         ]
@@ -1136,6 +1220,8 @@ export type Database = {
           mode: string
           paid_at: string
           paid_by_role: string
+          payment_batch_id: string | null
+          razorpay_order_id: string | null
           razorpay_payment_id: string | null
           recorded_by: string | null
         }
@@ -1147,6 +1233,8 @@ export type Database = {
           mode: string
           paid_at?: string
           paid_by_role: string
+          payment_batch_id?: string | null
+          razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
           recorded_by?: string | null
         }
@@ -1158,6 +1246,8 @@ export type Database = {
           mode?: string
           paid_at?: string
           paid_by_role?: string
+          payment_batch_id?: string | null
+          razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
           recorded_by?: string | null
         }
@@ -1328,6 +1418,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          load_kva: number | null
           meter_label: string
           meter_type: string
           unit_id: string
@@ -1336,6 +1427,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          load_kva?: number | null
           meter_label: string
           meter_type?: string
           unit_id: string
@@ -1344,6 +1436,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          load_kva?: number | null
           meter_label?: string
           meter_type?: string
           unit_id?: string
@@ -1490,27 +1583,39 @@ export type Database = {
       }
       tenancies: {
         Row: {
+          company_address: string | null
+          company_gstin: string | null
+          company_name: string | null
           created_at: string
           end_date: string | null
           id: string
+          is_company: boolean
           start_date: string
           status: string
           tenant_id: string
           unit_id: string
         }
         Insert: {
+          company_address?: string | null
+          company_gstin?: string | null
+          company_name?: string | null
           created_at?: string
           end_date?: string | null
           id?: string
+          is_company?: boolean
           start_date: string
           status?: string
           tenant_id: string
           unit_id: string
         }
         Update: {
+          company_address?: string | null
+          company_gstin?: string | null
+          company_name?: string | null
           created_at?: string
           end_date?: string | null
           id?: string
+          is_company?: boolean
           start_date?: string
           status?: string
           tenant_id?: string
@@ -1575,10 +1680,16 @@ export type Database = {
         Row: {
           area_sqft: number
           association_id: string
+          bill_to: string
           created_at: string
+          door_no: string | null
           floor: number | null
           id: string
+          owner_company_address: string | null
+          owner_company_gstin: string | null
+          owner_company_name: string | null
           owner_id: string | null
+          owner_is_company: boolean
           status: string
           type: string
           unit_no: string
@@ -1586,10 +1697,16 @@ export type Database = {
         Insert: {
           area_sqft: number
           association_id: string
+          bill_to?: string
           created_at?: string
+          door_no?: string | null
           floor?: number | null
           id?: string
+          owner_company_address?: string | null
+          owner_company_gstin?: string | null
+          owner_company_name?: string | null
           owner_id?: string | null
+          owner_is_company?: boolean
           status?: string
           type?: string
           unit_no: string
@@ -1597,10 +1714,16 @@ export type Database = {
         Update: {
           area_sqft?: number
           association_id?: string
+          bill_to?: string
           created_at?: string
+          door_no?: string | null
           floor?: number | null
           id?: string
+          owner_company_address?: string | null
+          owner_company_gstin?: string | null
+          owner_company_name?: string | null
           owner_id?: string | null
+          owner_is_company?: boolean
           status?: string
           type?: string
           unit_no?: string
@@ -1659,6 +1782,14 @@ export type Database = {
           invited_by: string
         }
         Returns: Database["public"]["Tables"]["invitations"]["Row"][]
+      }
+      allocate_bill_no: {
+        Args: {
+          p_association_id: string
+          p_bill_type: string
+          p_period: string
+        }
+        Returns: string
       }
       association_role: { Args: { p_association_id: string }; Returns: string }
       can_action_account_member: {
@@ -1862,6 +1993,9 @@ export type Database = {
           p_bill_id: string
           p_mode: string
           p_paid_by_role: string
+          p_payment_batch_id?: string
+          p_razorpay_order_id?: string
+          p_razorpay_payment_id?: string
         }
         Returns: string
       }
@@ -2094,101 +2228,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      iceberg_namespaces: {
-        Row: {
-          bucket_name: string
-          catalog_id: string
-          created_at: string
-          id: string
-          metadata: Json
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          bucket_name: string
-          catalog_id: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          bucket_name?: string
-          catalog_id?: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          name?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "iceberg_namespaces_catalog_id_fkey"
-            columns: ["catalog_id"]
-            isOneToOne: false
-            referencedRelation: "buckets_analytics"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      iceberg_tables: {
-        Row: {
-          bucket_name: string
-          catalog_id: string
-          created_at: string
-          id: string
-          location: string
-          name: string
-          namespace_id: string
-          remote_table_id: string | null
-          shard_id: string | null
-          shard_key: string | null
-          updated_at: string
-        }
-        Insert: {
-          bucket_name: string
-          catalog_id: string
-          created_at?: string
-          id?: string
-          location: string
-          name: string
-          namespace_id: string
-          remote_table_id?: string | null
-          shard_id?: string | null
-          shard_key?: string | null
-          updated_at?: string
-        }
-        Update: {
-          bucket_name?: string
-          catalog_id?: string
-          created_at?: string
-          id?: string
-          location?: string
-          name?: string
-          namespace_id?: string
-          remote_table_id?: string | null
-          shard_id?: string | null
-          shard_key?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "iceberg_tables_catalog_id_fkey"
-            columns: ["catalog_id"]
-            isOneToOne: false
-            referencedRelation: "buckets_analytics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "iceberg_tables_namespace_id_fkey"
-            columns: ["namespace_id"]
-            isOneToOne: false
-            referencedRelation: "iceberg_namespaces"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       migrations: {
         Row: {
@@ -2703,4 +2742,3 @@ export const Constants = {
     },
   },
 } as const
-

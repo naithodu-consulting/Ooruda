@@ -68,6 +68,7 @@ export async function createUnitAction(
       type: parsed.data.type,
       floor: parsed.data.floor ?? null,
       area_sqft: parsed.data.area_sqft,
+      door_no: parsed.data.door_no ?? null,
     })
     .select('id')
     .single();
@@ -146,7 +147,13 @@ export async function updateUnitAction(
       type: parsed.data.type,
       floor: parsed.data.floor ?? null,
       area_sqft: parsed.data.area_sqft,
+      door_no: parsed.data.door_no ?? null,
       owner_id: ownerId,
+      bill_to: parsed.data.bill_to ?? 'auto',
+      owner_is_company: parsed.data.owner_is_company ?? false,
+      owner_company_name: parsed.data.owner_company_name ?? null,
+      owner_company_address: parsed.data.owner_company_address ?? null,
+      owner_company_gstin: parsed.data.owner_company_gstin ?? null,
     })
     .eq('id', unitId)
     .eq('association_id', associationId);
@@ -329,6 +336,10 @@ export async function assignTenantAction(
     unit_id: unitId,
     tenant_id: parsed.data.tenantId,
     start_date: parsed.data.startDate,
+    is_company: parsed.data.isCompany ?? false,
+    company_name: parsed.data.companyName ?? null,
+    company_address: parsed.data.companyAddress ?? null,
+    company_gstin: parsed.data.companyGstin ?? null,
   });
 
   if (tenancyError) {
@@ -437,6 +448,7 @@ export type BulkImportRow = {
   type: string;
   floor: string | number | null | undefined;
   area_sqft: string | number;
+  door_no?: string | null;
 };
 
 export type BulkImportSkipped = {
@@ -475,6 +487,7 @@ export async function bulkImportUnitsAction(
     type: string;
     floor: number | null;
     area_sqft: number;
+    door_no: string | null;
   }[] = [];
 
   for (let i = 0; i < rows.length; i++) {
@@ -496,6 +509,7 @@ export async function bulkImportUnitsAction(
       type: parsed.data.type,
       floor: parsed.data.floor ?? null,
       area_sqft: parsed.data.area_sqft,
+      door_no: parsed.data.door_no ?? null,
     });
   }
 
