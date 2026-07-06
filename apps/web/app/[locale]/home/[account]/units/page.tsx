@@ -8,6 +8,8 @@ import { Trans } from '@kit/ui/trans';
 import { displayBillStatus } from '~/lib/bill-status';
 import { requireRole } from '~/lib/rbac';
 
+import { AdminBulkInviteDialog } from '@kit/admin/components/admin-bulk-invite-dialog';
+import { Button } from '@kit/ui/button';
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import { AddUnitDialog } from './_components/add-unit-dialog';
 import { ImportUnitsDialog } from './_components/import-units-dialog';
@@ -214,6 +216,13 @@ export default async function UnitsPage({ params }: Props) {
         ) : null}
 
         <div className="flex items-center justify-end gap-4">
+          {isSuperAdmin ? (
+            <AdminBulkInviteDialog>
+              <Button variant="outline" data-test="admin-bulk-invite-button">
+                Bulk Invite Users
+              </Button>
+            </AdminBulkInviteDialog>
+          ) : null}
           {canManage ? (
             <>
               <ImportUnitsDialog associationId={association.id} />

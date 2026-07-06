@@ -1,7 +1,7 @@
 import { ServerDataLoader } from '@makerkit/data-loader-supabase-nextjs';
 
 import { AdminAccountsTable } from '@kit/admin/components/admin-accounts-table';
-import { AdminBulkInviteDialog } from '@kit/admin/components/admin-bulk-invite-dialog';
+
 import { AdminCreateAssociationDialog } from '@kit/admin/components/admin-create-association-dialog';
 import { AdminCreateUserDialog } from '@kit/admin/components/admin-create-user-dialog';
 import { AdminGuard } from '@kit/admin/components/admin-guard';
@@ -82,11 +82,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
             </Button>
           </AdminCreateAssociationDialog>
 
-          <AdminBulkInviteDialog>
-            <Button variant="outline" data-test="admin-bulk-invite-button">
-              Bulk Invite
-            </Button>
-          </AdminBulkInviteDialog>
+
 
           <AdminCreateUserDialog associations={associations}>
             <Button data-test="admin-create-user-button">Create User</Button>
