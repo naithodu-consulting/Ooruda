@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
@@ -156,7 +157,7 @@ export async function generateBillsAction(
   if (hasElectricityChargeType) {
     const { data: mescomBill } = await client
       .from('mescom_bills')
-      .select('invoice_amount, block_consumption_units')
+      .select('invoice_amount')
       .eq('association_id', associationId)
       .eq('period', period)
       .maybeSingle();
@@ -179,6 +180,7 @@ export async function generateBillsAction(
           .eq('period', period)
           .in('sub_meter_id', subMeterIds);
 
+        let totalSubMeterUnits = 0;
         for (const r of readings ?? []) {
           const unitId = unitIdBySubMeter.get(r.sub_meter_id);
           if (unitId) {
@@ -187,11 +189,22 @@ export async function generateBillsAction(
             minimumChargeByUnit[unitId] =
               (minimumChargeByUnit[unitId] ?? 0) + (r.minimum_charge ?? 0);
           }
+          totalSubMeterUnits += r.consumed_units ?? 0;
         }
 
-        if ((mescomBill.block_consumption_units ?? 0) > 0) {
-          blockRate =
-            mescomBill.invoice_amount / mescomBill.block_consumption_units!;
+        // Rate = invoice ÷ sum of all sub-meter consumed units for this association.
+        // Includes CommonArea meters (their unit_id rows are in unitIds since the
+        // units query at the top fetches all units without a type filter).
+        // This is higher than the MESCOM block rate — transmission losses are
+        // distributed proportionally so the full invoice is always recovered.
+        if (totalSubMeterUnits > 0) {
+          blockRate = mescomBill.invoice_amount / totalSubMeterUnits;
+        } else {
+          const logger = await getLogger();
+          logger.warn(
+            { associationId, period },
+            'generateBills: no sub-meter readings found; electricity blockRate stays null',
+          );
         }
       }
     }

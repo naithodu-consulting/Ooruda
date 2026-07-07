@@ -767,6 +767,19 @@ The meter readings import was completely rewritten to match the format associati
 |---|---|
 | `20260716000000_sub_meters_initial_reading_min_charge.sql` | Add `initial_reading` and `minimum_charge` columns to `sub_meters` |
 
+### Electricity: Transmission-Loss Recovery in Billing Rate
+
+The electricity per-unit charge formula has been updated:
+
+| | Formula |
+|---|---|
+| **Old** | `rate = invoice_amount ÷ block_consumption_units` (MESCOM main meter) |
+| **New** | `rate = invoice_amount ÷ sum of all sub-meter consumed units` (including CommonArea) |
+
+Since the sum of individual sub-meter readings is always less than the MESCOM main meter reading (due to building transmission losses), the new rate is proportionally higher — ensuring the full MESCOM invoice is always recovered from occupants. Losses are distributed proportionally based on each unit's consumption. CommonArea sub-meters are included in the denominator.
+
+This change affects both bill generation and electricity bill PDFs (which show the per-unit rate in the meter breakdown table). The PDF generation was also optimised to fetch all meter readings in a single query (instead of two), using the database-generated `consumed_units` value directly.
+
 ### Dependencies
 
 - `xlsx` (SheetJS) added to `apps/web` and `packages/features/admin` for XLSX parsing and template generation.

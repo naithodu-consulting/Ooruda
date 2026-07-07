@@ -269,12 +269,18 @@ export async function getOrGenerateBillPdf(
       // per-meter breakdown for the electricity bill PDF.
       const { data: mescomBill } = await admin
         .from('mescom_bills')
-        .select(
-          'id, invoice_amount, block_consumption_units, period_start, period_end',
-        )
+        .select('id, invoice_amount, period_start, period_end')
         .eq('association_id', bill.association_id)
         .eq('period', bill.period)
         .maybeSingle();
+
+      if (!mescomBill) {
+        const logger = await getLogger();
+        logger.warn(
+          { billId: bill.id, period: bill.period },
+          'generateElectricityBillPdf: no mescom bill found; rates will be zero',
+        );
+      }
 
       const { data: subMeters } = await admin
         .from('sub_meters')
@@ -285,20 +291,32 @@ export async function getOrGenerateBillPdf(
 
       const subMeterIds = (subMeters ?? []).map((m) => m.id);
 
-      const { data: meterReadings } =
-        mescomBill && subMeterIds.length
-          ? await admin
-              .from('meter_readings')
-              .select(
-                'sub_meter_id, previous_reading, current_reading, minimum_charge',
-              )
-              .eq('mescom_bill_id', mescomBill.id)
-              .in('sub_meter_id', subMeterIds)
-          : { data: [] };
+      // Fetch all readings for this mescom bill in one query.
+      // Then partition: readings matching this unit's sub-meters → per-meter
+      // breakdown table; all readings → denominator for the billing rate.
+      // Rate = invoice ÷ sum of all sub-meter consumed units (distributes
+      // transmission losses proportionally; includes CommonArea meters).
+      const { data: allReadingsForBill } = mescomBill
+        ? await admin
+            .from('meter_readings')
+            .select(
+              'sub_meter_id, previous_reading, current_reading, consumed_units, minimum_charge',
+            )
+            .eq('mescom_bill_id', mescomBill.id)
+        : { data: [] };
+
+      const unitSubMeterIdSet = new Set(subMeterIds);
+      const meterReadings = (allReadingsForBill ?? []).filter((r) =>
+        unitSubMeterIdSet.has(r.sub_meter_id),
+      );
+      const totalSubMeterUnits = (allReadingsForBill ?? []).reduce(
+        (sum, r) => sum + (r.consumed_units ?? 0),
+        0,
+      );
 
       const blockRate =
-        mescomBill && mescomBill.block_consumption_units > 0
-          ? mescomBill.invoice_amount / mescomBill.block_consumption_units
+        mescomBill && totalSubMeterUnits > 0
+          ? mescomBill.invoice_amount / totalSubMeterUnits
           : 0;
 
       const meterInfoById = new Map(
@@ -309,8 +327,8 @@ export async function getOrGenerateBillPdf(
       );
 
       let minimumCharge = 0;
-      const meters = (meterReadings ?? []).map((r) => {
-        const consumed = r.current_reading - r.previous_reading;
+      const meters = meterReadings.map((r) => {
+        const consumed = r.consumed_units ?? (r.current_reading - r.previous_reading);
         const amount = Math.round(consumed * blockRate * 100) / 100;
         minimumCharge += r.minimum_charge ?? 0;
         const info = meterInfoById.get(r.sub_meter_id);
