@@ -1,7 +1,8 @@
 'use client';
 
-import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+
+import { useRouter, usePathname } from 'next/navigation';
 
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 
@@ -62,9 +63,7 @@ const ACTION_LABELS: Record<string, string> = {
 function actionLabel(action: string): string {
   return (
     ACTION_LABELS[action] ??
-    action
-      .replace(/[._]/g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase())
+    action.replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
   );
 }
 

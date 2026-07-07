@@ -10,6 +10,15 @@ export const CreateSubMeterSchema = z.object({
     .min(1, 'Meter Number is required')
     .max(50, 'Meter Number is too long'),
   meterType: z.enum(SUB_METER_TYPES),
+  loadKva: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? null : Number(v)),
+    z
+      .number()
+      .positive('Load must be greater than 0')
+      .max(10000, 'Load looks too high')
+      .nullable()
+      .optional(),
+  ),
 });
 
 export type CreateSubMeterInput = z.input<typeof CreateSubMeterSchema>;

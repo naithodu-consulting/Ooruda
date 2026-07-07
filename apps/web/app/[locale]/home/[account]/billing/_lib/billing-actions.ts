@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
@@ -95,29 +96,21 @@ export async function generateBillsAction(
     .eq('association_id', associationId)
     .single();
 
-  // `associationId` is `associations.id`, not `accounts.id` — the slug lives
-  // on the linked account, so resolve it through `associations.account_id`.
   const { data: association, error: associationError } = await client
     .from('associations')
-    .select('gst_enabled, gst_rate, accounts(slug)')
+    .select('gst_enabled, gst_rate')
     .eq('id', associationId)
     .single();
 
-  const accountSlug = association?.accounts?.slug;
-
-  if (associationError || !accountSlug) {
+  if (associationError || !association) {
     return {
       success: false,
-      error: 'Association slug is required to generate bills.',
+      error: 'Could not load association settings.',
     };
   }
 
-  const gstEnabled = association?.gst_enabled ?? false;
-  const gstRate = association?.gst_rate ?? 0;
-
-  const slugPart = accountSlug.substring(0, 3).toUpperCase();
-  const uuidPart = associationId.substring(0, 4).toUpperCase();
-  const prefix = `${slugPart}${uuidPart}`;
+  const gstEnabled = association.gst_enabled ?? false;
+  const gstRate = association.gst_rate ?? 0;
   const calculateDueDate = (billingPeriod: string, day: number) =>
     `${billingPeriod}-${String(day).padStart(2, '0')}`;
   // Electricity bills are due in the NEXT calendar month after the billing period.
@@ -164,7 +157,7 @@ export async function generateBillsAction(
   if (hasElectricityChargeType) {
     const { data: mescomBill } = await client
       .from('mescom_bills')
-      .select('invoice_amount, block_consumption_units')
+      .select('invoice_amount')
       .eq('association_id', associationId)
       .eq('period', period)
       .maybeSingle();
@@ -187,6 +180,7 @@ export async function generateBillsAction(
           .eq('period', period)
           .in('sub_meter_id', subMeterIds);
 
+        let totalSubMeterUnits = 0;
         for (const r of readings ?? []) {
           const unitId = unitIdBySubMeter.get(r.sub_meter_id);
           if (unitId) {
@@ -195,11 +189,22 @@ export async function generateBillsAction(
             minimumChargeByUnit[unitId] =
               (minimumChargeByUnit[unitId] ?? 0) + (r.minimum_charge ?? 0);
           }
+          totalSubMeterUnits += r.consumed_units ?? 0;
         }
 
-        if ((mescomBill.block_consumption_units ?? 0) > 0) {
-          blockRate =
-            mescomBill.invoice_amount / mescomBill.block_consumption_units!;
+        // Rate = invoice ÷ sum of all sub-meter consumed units for this association.
+        // Includes CommonArea meters (their unit_id rows are in unitIds since the
+        // units query at the top fetches all units without a type filter).
+        // This is higher than the MESCOM block rate — transmission losses are
+        // distributed proportionally so the full invoice is always recovered.
+        if (totalSubMeterUnits > 0) {
+          blockRate = mescomBill.invoice_amount / totalSubMeterUnits;
+        } else {
+          const logger = await getLogger();
+          logger.warn(
+            { associationId, period },
+            'generateBills: no sub-meter readings found; electricity blockRate stays null',
+          );
         }
       }
     }
@@ -212,22 +217,16 @@ export async function generateBillsAction(
     .eq('period', period);
 
   const existingByUnit = new Map<string, string[]>();
-  let nextSeq = 0;
   for (const b of existingBills ?? []) {
-    const list = existingByUnit.get(b.unit_id) || [];
+    const list = existingByUnit.get(b.unit_id) ?? [];
     list.push(b.bill_no);
     existingByUnit.set(b.unit_id, list);
-
-    const match = b.bill_no.match(/-(\d+)$/);
-    if (match) nextSeq = Math.max(nextSeq, parseInt(match[1]!, 10));
   }
 
   let created = 0;
   let skipped = 0;
 
   const roundToTwoDecimals = (val: number) => Math.round(val * 100) / 100;
-
-  const yyMM = period.replace('-', '').substring(2); // "2026-06" -> "2606"
 
   const shouldGenElec = billType === 'All' || billType === 'Electricity';
   const shouldGenMaint = billType === 'All' || billType === 'Maintenance';
@@ -351,8 +350,23 @@ export async function generateBillsAction(
     ) => {
       if (items.length === 0) return true; // nothing to bill
 
-      nextSeq += 1;
-      const billNo = `${prefix}-${typePrefix}-${yyMM}-${String(nextSeq).padStart(3, '0')}`;
+      const { data: billNo, error: seqError } = await client.rpc(
+        'allocate_bill_no',
+        {
+          p_association_id: associationId,
+          p_bill_type: typePrefix,
+          p_period: period,
+        },
+      );
+      if (seqError || !billNo) {
+        await logAuditEvent({
+          associationId,
+          action: 'bills.generation.failed',
+          entityType: 'bill',
+          summary: `Failed to allocate bill number for ${typePrefix} in period ${period}: ${seqError?.message ?? 'no bill number returned'}`,
+        });
+        return false;
+      }
 
       const baseTotal = roundToTwoDecimals(
         items.reduce((sum, li) => sum + li.amount, 0),
@@ -379,7 +393,7 @@ export async function generateBillsAction(
             : 'maintenance';
 
       const { error: rpcError } = await client.rpc(
-        'create_bill_with_items' as any,
+        'create_bill_with_items',
         {
           p_association_id: associationId,
           p_unit_id: unit.id,

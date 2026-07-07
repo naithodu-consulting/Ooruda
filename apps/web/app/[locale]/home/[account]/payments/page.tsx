@@ -37,7 +37,10 @@ const BILL_WITH_PAYMENTS_SELECT =
   'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, units(unit_no), payments(id, amount, mode, paid_by_role, paid_at, receipts(receipt_no))';
 
 export default async function PaymentsPage({ params, searchParams }: Props) {
-  const [{ account }, { duration, status }] = await Promise.all([params, searchParams]);
+  const [{ account }, { duration, status }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const { accountId, role, userId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',

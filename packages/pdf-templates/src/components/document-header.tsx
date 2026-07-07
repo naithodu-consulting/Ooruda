@@ -9,6 +9,7 @@ export interface AssociationBranding {
   name: string;
   address: string | null;
   gstin: string | null;
+  panNumber?: string | null;
   registrationNumber: string | null;
   logoUrl: string | null;
 }
@@ -48,6 +49,8 @@ export function DocumentHeader({
           ) : null}
           {association.gstin ? (
             <Text style={styles.metaText}>GSTIN: {association.gstin}</Text>
+          ) : association.panNumber ? (
+            <Text style={styles.metaText}>PAN: {association.panNumber}</Text>
           ) : null}
         </View>
       </View>

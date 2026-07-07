@@ -188,7 +188,7 @@ export function ChargeTypesCard({
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{ct.name}</span>
                     {ct.is_builtin && (
-                      <span className="bg-muted text-muted-foreground whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase">
+                      <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide whitespace-nowrap uppercase">
                         Built-in
                       </span>
                     )}

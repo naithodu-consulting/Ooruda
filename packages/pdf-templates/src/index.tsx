@@ -13,7 +13,11 @@ import {
   type ReceiptPdfData,
 } from './documents/receipt-document';
 
-export type { BillPdfData, BillPdfLineItem } from './documents/bill-document';
+export type {
+  BillPdfData,
+  BillPdfLineItem,
+  BillingEntityData,
+} from './documents/bill-document';
 export type {
   ElectricityBillPdfData,
   ElectricityBillMeterRow,

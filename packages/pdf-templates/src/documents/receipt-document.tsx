@@ -9,16 +9,17 @@ import {
 } from '../components/document-header';
 import { styles } from '../components/styles';
 import { formatDateLong, formatINR, formatPeriodLabel } from '../lib/format';
+import type { BillingEntityData } from './bill-document';
 
 export interface ReceiptPdfData {
   association: AssociationBranding;
-  unit: { unitNo: string };
+  unit: { unitNo: string; doorNo?: string | null; floor?: number | null };
+  billTo?: BillingEntityData | null;
   bill: { billNo: string; period: string };
   receipt: { receiptNo: string; generatedAt: string };
   payment: {
     amount: number;
     mode: string;
-    paidByRole: 'Owner' | 'Tenant';
     paidAt: string;
   };
 }
@@ -26,6 +27,7 @@ export interface ReceiptPdfData {
 export function ReceiptDocument({
   association,
   unit,
+  billTo,
   bill,
   receipt,
   payment,
@@ -42,8 +44,38 @@ export function ReceiptDocument({
 
         <View style={[styles.section, styles.infoGrid]}>
           <View style={styles.infoCol}>
-            <Text style={styles.sectionTitle}>Unit</Text>
-            <Text>{unit.unitNo}</Text>
+            <Text style={styles.sectionTitle}>Bill To</Text>
+            {billTo?.name ? (
+              <Text style={{ fontWeight: 'bold' }}>{billTo.name}</Text>
+            ) : null}
+            {billTo?.isCompany && billTo.companyAddress ? (
+              <Text style={{ fontSize: 8, color: '#475569', marginTop: 1 }}>
+                {billTo.companyAddress}
+              </Text>
+            ) : (
+              <>
+                <Text style={{ fontSize: 8, color: '#475569', marginTop: 1 }}>
+                  {unit.doorNo
+                    ? `${unit.unitNo} / ${unit.doorNo}`
+                    : `Unit ${unit.unitNo}`}
+                </Text>
+                {unit.floor != null ? (
+                  <Text style={{ fontSize: 8, color: '#475569' }}>
+                    {`Floor ${unit.floor}`}
+                  </Text>
+                ) : null}
+                {association.address ? (
+                  <Text style={{ fontSize: 8, color: '#475569' }}>
+                    {association.address}
+                  </Text>
+                ) : null}
+              </>
+            )}
+            {billTo?.isCompany && billTo.companyGstin ? (
+              <Text style={{ fontSize: 8, color: '#475569' }}>
+                GSTIN: {billTo.companyGstin}
+              </Text>
+            ) : null}
           </View>
           <View style={styles.infoCol}>
             <Text style={styles.sectionTitle}>Bill No.</Text>
@@ -52,10 +84,6 @@ export function ReceiptDocument({
           <View style={styles.infoCol}>
             <Text style={styles.sectionTitle}>Billing Period</Text>
             <Text>{formatPeriodLabel(bill.period)}</Text>
-          </View>
-          <View style={styles.infoCol}>
-            <Text style={styles.sectionTitle}>Paid By</Text>
-            <Text>{payment.paidByRole}</Text>
           </View>
         </View>
 

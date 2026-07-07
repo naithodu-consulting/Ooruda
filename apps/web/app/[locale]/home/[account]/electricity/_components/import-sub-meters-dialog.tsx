@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@kit/ui/dialog';
+import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import {
   Table,
@@ -32,47 +33,67 @@ import {
   TableHeader,
   TableRow,
 } from '@kit/ui/table';
-import { toast } from '@kit/ui/sonner';
+
+import {
+  downloadXlsxTemplate,
+  parseSpreadsheetFile,
+} from '~/lib/parse-spreadsheet';
 
 import { bulkImportSubMetersAction } from '../_lib/electricity-actions';
 
-const TEMPLATE_CSV = [
-  'unit_no,sub_meter_no,meter_type',
-  'G-01,SM-1,Unit',
-  '1-02,SM-5,Unit',
-  'COMMON,Common-Lift,CommonArea',
-].join('\n');
+// For CommonArea rows, unit_no MUST be "COMMON" — the backend attaches them to
+// the first unit as an FK placeholder. The label (sub_meter_no) is what
+// identifies them during meter-readings import.
 
 const REQUIRED_COLUMNS = ['unit_no', 'sub_meter_no', 'meter_type'] as const;
 const VALID_METER_TYPES = ['Unit', 'CommonArea'] as const;
+
+// Association may send these column names; normalise to our internal names.
+const COLUMN_ALIASES: Record<string, string> = {
+  initial_meter_reading: 'initial_reading',
+  min_charges: 'minimum_charge',
+};
 
 type ParsedRow = {
   _row: number;
   unit_no: string;
   sub_meter_no: string;
   meter_type: 'Unit' | 'CommonArea' | '';
+  load_kva: number | null;
+  initial_reading: number;
+  minimum_charge: number;
   _error?: string;
 };
 
 function downloadTemplate() {
-  const blob = new Blob([TEMPLATE_CSV], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'sub-meters-import-template.csv';
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadXlsxTemplate('sub-meters-import-template.xlsx', [
+    'unit_no', 'sub_meter_no', 'meter_type', 'initial_meter_reading', 'load_kva', 'min_charges',
+  ], [
+    ['G-01', 'SM-1', 'Unit', 1250, 5, 50],
+    ['1-02', 'SM-5', 'Unit', 980, '', ''],
+    ['COMMON', 'Common-Lift', 'CommonArea', 320, 10, 100],
+  ]);
 }
 
-function parseCSV(text: string): ParsedRow[] {
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
+function normaliseRow(r: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(r)) {
+    out[COLUMN_ALIASES[k] ?? k] = v;
+  }
+  return out;
+}
 
-  if (lines.length < 2) return [];
+function parseNum(raw: string): number | null {
+  if (raw === '') return null;
+  const n = Number(raw);
+  return Number.isNaN(n) ? null : n;
+}
 
-  const headers = lines[0]!.split(',').map((h) => h.trim().toLowerCase());
+function parseRows(raw: Record<string, string>[]): ParsedRow[] {
+  if (raw.length === 0) return [];
+
+  const normalised = raw.map(normaliseRow);
+  const headers = Object.keys(normalised[0]!);
   const missing = REQUIRED_COLUMNS.filter((c) => !headers.includes(c));
 
   if (missing.length > 0) {
@@ -82,35 +103,60 @@ function parseCSV(text: string): ParsedRow[] {
         unit_no: '',
         sub_meter_no: '',
         meter_type: '',
+        load_kva: null,
+        initial_reading: 0,
+        minimum_charge: 0,
         _error: `Missing required columns: ${missing.join(', ')}`,
       },
     ];
   }
 
-  const col = (name: string) => headers.indexOf(name);
-
-  return lines.slice(1).map((line, i) => {
-    const cells = line.split(',').map((c) => c.trim());
-    const get = (name: string) => cells[col(name)] ?? '';
-
-    const unit_no = get('unit_no');
-    const sub_meter_no = get('sub_meter_no');
-    const meter_type_raw = get('meter_type');
+  return normalised.map((r, i) => {
+    const unit_no = r['unit_no'] ?? '';
+    const sub_meter_no = r['sub_meter_no'] ?? '';
+    const meter_type_raw = r['meter_type'] ?? '';
     const meter_type = VALID_METER_TYPES.find(
       (t) => t.toLowerCase() === meter_type_raw.toLowerCase(),
     );
+
+    const load_kva_raw = r['load_kva'] ?? '';
+    const load_kva = parseNum(load_kva_raw);
+
+    const initial_reading_raw = r['initial_reading'] ?? '';
+    const initial_reading_parsed = parseNum(initial_reading_raw);
+    const initial_reading = initial_reading_parsed ?? 0;
+
+    const min_charge_raw = r['minimum_charge'] ?? '';
+    const min_charge_parsed = parseNum(min_charge_raw);
+    const minimum_charge = min_charge_parsed ?? 0;
 
     let error: string | undefined;
     if (!unit_no) error = 'unit_no is required';
     else if (!sub_meter_no) error = 'sub_meter_no is required';
     else if (!meter_type)
       error = `meter_type must be "Unit" or "CommonArea" (got "${meter_type_raw}")`;
+    else if (meter_type === 'CommonArea' && unit_no.toUpperCase() !== 'COMMON')
+      error =
+        'For CommonArea meters, unit_no must be "COMMON" (it is ignored by the system)';
+    else if (load_kva_raw !== '' && load_kva !== null && load_kva <= 0)
+      error = 'load_kva must be a positive number';
+    else if (initial_reading_raw !== '' && initial_reading_parsed === null)
+      error = 'initial_meter_reading must be a number';
+    else if (initial_reading < 0)
+      error = 'initial_meter_reading must be ≥ 0';
+    else if (min_charge_raw !== '' && min_charge_parsed === null)
+      error = 'min_charges must be a number';
+    else if (minimum_charge < 0)
+      error = 'min_charges must be ≥ 0';
 
     return {
       _row: i + 1,
       unit_no,
       sub_meter_no,
       meter_type: (meter_type ?? '') as 'Unit' | 'CommonArea' | '',
+      load_kva,
+      initial_reading,
+      minimum_charge,
       _error: error,
     };
   });
@@ -141,11 +187,9 @@ export function ImportSubMetersDialog({
     if (!file) return;
     setFileName(file.name);
     setResult(null);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setRows(parseCSV(ev.target?.result as string));
-    };
-    reader.readAsText(file);
+    parseSpreadsheetFile(file)
+      .then((raw) => setRows(parseRows(raw)))
+      .catch(() => toast.error('Failed to read the file. Please check it is a valid CSV or Excel file.'));
   }
 
   function handleOpenChange(next: boolean) {
@@ -163,10 +207,13 @@ export function ImportSubMetersDialog({
     startTransition(async () => {
       const res = await bulkImportSubMetersAction(
         associationId,
-        validRows.map(({ unit_no, sub_meter_no, meter_type }) => ({
+        validRows.map(({ unit_no, sub_meter_no, meter_type, load_kva, initial_reading, minimum_charge }) => ({
           unit_no,
           sub_meter_no,
           meter_type: meter_type as 'Unit' | 'CommonArea',
+          load_kva,
+          initial_reading,
+          minimum_charge,
         })),
       );
 
@@ -211,7 +258,7 @@ export function ImportSubMetersDialog({
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".csv,.xlsx,text/csv"
                   className="hidden"
                   id="sub-meters-csv-upload"
                   onChange={handleFileChange}
@@ -226,7 +273,9 @@ export function ImportSubMetersDialog({
                     strokeWidth={1.5}
                   />
                   <p className="font-medium text-orange-600">
-                    {fileName ? fileName : 'Drop CSV here, or click to browse'}
+                    {fileName
+                      ? fileName
+                      : 'Drop CSV or Excel here, or click to browse'}
                   </p>
                 </label>
               </div>
@@ -240,9 +289,20 @@ export function ImportSubMetersDialog({
                   unit_no, sub_meter_no, meter_type
                 </span>
                 <br />
-                <span className="font-medium">meter_type</span> must be{' '}
+                Optional:{' '}
+                <span className="font-medium">
+                  initial_meter_reading, load_kva, min_charges
+                </span>
+                <br />
+                <span className="font-medium">meter_type</span>:{' '}
                 <span className="font-medium">Unit</span> or{' '}
-                <span className="font-medium">CommonArea</span>.
+                <span className="font-medium">CommonArea</span>. For
+                common-area meters use{' '}
+                <span className="font-medium">COMMON</span> as unit_no.
+                <br />
+                <span className="font-medium">initial_meter_reading</span> is
+                last month&apos;s reading at onboarding — used as the baseline
+                for the first bill.
                 <br />
                 Existing sub-meters are skipped — no overwrite.
               </p>
@@ -289,6 +349,9 @@ export function ImportSubMetersDialog({
                         <TableHead>Unit</TableHead>
                         <TableHead>Sub-meter</TableHead>
                         <TableHead>Type</TableHead>
+                        <TableHead>Init. Reading</TableHead>
+                        <TableHead>Load (kVA)</TableHead>
+                        <TableHead>Min. Charge</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -304,6 +367,15 @@ export function ImportSubMetersDialog({
                           <TableCell>{row.unit_no || '—'}</TableCell>
                           <TableCell>{row.sub_meter_no || '—'}</TableCell>
                           <TableCell>{row.meter_type || '—'}</TableCell>
+                          <TableCell className="tabular-nums">
+                            {row.initial_reading}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {row.load_kva != null ? row.load_kva : '—'}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {row.minimum_charge > 0 ? row.minimum_charge : '—'}
+                          </TableCell>
                           <TableCell>
                             {row._error ? (
                               <span className="text-destructive flex items-center gap-1 text-xs">

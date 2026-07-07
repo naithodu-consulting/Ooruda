@@ -5,21 +5,9 @@ import React, { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogMedia,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@kit/ui/alert-dialog';
 import { Button } from '@kit/ui/button';
 import {
   Card,
@@ -67,6 +55,7 @@ import {
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
+import { TypeToConfirmDialog } from '../../_components/type-to-confirm-dialog';
 import {
   createElectricityBillAction,
   deleteElectricityBillAction,
@@ -433,9 +422,8 @@ function DeleteElectricityBillButton(props: {
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [open, setOpen] = React.useState(false);
 
-  const onDelete = () => {
+  const onConfirm = () => {
     startTransition(async () => {
       const result = await deleteElectricityBillAction(
         props.associationId,
@@ -447,51 +435,23 @@ function DeleteElectricityBillButton(props: {
         return;
       }
 
-      setOpen(false);
       toast.success(`Electricity bill for ${props.period} deleted.`);
       router.refresh();
     });
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger
-        render={
-          <Button size="sm" variant="destructive">
-            Delete
-          </Button>
-        }
-      />
-
-      <AlertDialogContent size="sm">
-        <AlertDialogHeader>
-          <AlertDialogMedia className="bg-destructive/10 text-destructive">
-            <Trash2 />
-          </AlertDialogMedia>
-          <AlertDialogTitle>
-            Delete {formatPeriod(props.period)} bill?
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            This permanently removes the Electricity bill and all its recorded
-            meter readings. This action cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            variant="destructive"
-            onClick={(e) => {
-              e.preventDefault();
-              onDelete();
-            }}
-            disabled={isPending}
-          >
-            {isPending && <Spinner className="mr-2 h-4 w-4" />}
-            Delete bill
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <TypeToConfirmDialog
+      trigger={
+        <Button size="sm" variant="destructive">
+          Delete
+        </Button>
+      }
+      title={`Delete ${formatPeriod(props.period)} bill?`}
+      description="This permanently removes the Electricity bill and all its recorded meter readings. This action cannot be undone."
+      confirmValue="DELETE"
+      isPending={isPending}
+      onConfirm={onConfirm}
+    />
   );
 }

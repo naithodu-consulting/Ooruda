@@ -388,6 +388,36 @@ Branch: `week-3-part-1`
 
 ---
 
+## Release v3.5 — Door Number, Electricity Load & Ooruda Branding (Jul 14, 2026)
+
+### Units: Door Number Field
+
+- Optional `door_no` column added to `units` table.
+- Editable in Add Unit and Edit Unit dialogs.
+- Included as an optional `door_no` column in the units CSV import template; shown in the preview table.
+- Door number appears on electricity bills, maintenance bills, and payment receipts (if set) — shown beneath the unit number.
+
+### Electricity: Sub-meter Sanctioned Load (kVA)
+
+- Optional `load_kva` column added to `sub_meters` table.
+- Editable in Add Sub-meter dialog (new "Sanctioned Load (kVA)" field).
+- Shown in the sub-meters table as a "Load (kVA)" column.
+- Included as optional `load_kva` column in the sub-meters CSV import template; shown in the preview table.
+- If any sub-meter has a load value, a note is shown below the electricity bill PDF's meter readings table: "Sanctioned Load — SM-1: 2.5 kVA | SM-2: 3.0 kVA", helping customers understand the basis for minimum charges.
+
+### Association Settings: Sanctioned Association Load (kVA)
+
+- Optional `sanctioned_load_kva` column added to `associations` table.
+- New "Sanctioned Load (kVA)" field in the Electricity card of association settings.
+- Stored for future calculations (not shown on individual bills).
+
+### Bills & Receipts: "Generated from Ooruda" Footer
+
+- All bill PDFs (maintenance, other charges) and payment receipts now show "Generated from [Ooruda](https://ooruda.com/)" as a clickable hyperlink in the footer.
+- Electricity bill PDF updated to match (was previously using its own inline footer).
+
+---
+
 ## Release v3.3 — Electricity Enhancements & Dashboard Improvements (Jul 3, 2026)
 
 ### Electricity: Due Date Fixed to Next Month
@@ -540,17 +570,268 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 | `20260703000001_drop_old_record_payment_overload.sql` | Jul 3 | Drop stale 5-arg overload of `record_payment` (fixes PGRST203 ambiguity with Razorpay 8-arg overload) |
 | `20260713000000_mescom_bills_period_dates.sql` | Jul 13 | Add `period_start` and `period_end` DATE columns to `mescom_bills` for exact billing period range on electricity PDFs |
 | `20260713000001_associations_authorised_signatory.sql` | Jul 13 | Add `authorised_signatory` TEXT column to `associations` for electricity bill PDF signature block |
+| `20260714000000_door_no_load_kva.sql` | Jul 14 | Add optional `door_no` TEXT to `units`, `load_kva` NUMERIC to `sub_meters`, `sanctioned_load_kva` NUMERIC to `associations` |
+| `20260715000000_bill_sequences.sql` | Jul 15 | `bill_sequences` table + `allocate_bill_no()` RPC for FY-scoped, per-type atomic bill number allocation |
+| `20260715000001_billing_entity_fields.sql` | Jul 15 | Add `bill_to`, `owner_is_company`, `owner_company_*` to `units`; `is_company`, `company_*` to `tenancies`; `pan_number` to `associations` |
+| `20260716000000_sub_meters_initial_reading_min_charge.sql` | Jul 16 | Add `initial_reading` and `minimum_charge` columns to `sub_meters` for onboarding baseline and default monthly charge |
+| `20260707122210_test_flags_and_rename_test_data.sql` | Jul 7 | Add `is_test` to `associations` and `profiles`; rename Abish → Sandbox Residency, Prestige Meadows → Demo Towers; tag 11 test users |
+| `20260707132123_sync_test_user_account_names.sql` | Jul 7 | Sync `accounts.name` from `profiles.full_name` for all test users (display name fix) |
 
 ---
 
-## Feature Summary by Module
+## Release v3.6 — Continuous Bill Numbering (Jul 15, 2026)
+
+### Bill Numbering Overhaul
+
+Previous bill numbers reset their sequence counter every billing period (`YYMM` segment), producing `…-2606-001`, `…-2607-001` — a new series each month. This was incompatible with Indian GST filing requirements, which expect a single unbroken series within a financial year.
+
+**New format:** `{Prefix}-{Type}-{FYSTR}-{NNNN}`
+- `FYSTR` is the financial year string (e.g. `2627` for April 2026 – March 2027)
+- `NNNN` is a 4-digit zero-padded sequence that increments continuously across months, resetting only on April 1 each year
+- Three independent series per association per FY: `MANT`, `ELEC`, `OTHR`
+
+**Examples (same association, same FY):**
+- June maintenance bill: `OOR1A2B-MANT-2627-0001`
+- July maintenance bill: `OOR1A2B-MANT-2627-0002`
+- August electricity bill: `OOR1A2B-ELEC-2627-0001`
+
+Old bills retain their original numbers (issued documents cannot be renumbered). The two formats are visually distinct — old numbers have a `YYMM` segment, new ones have a `FYSTR`.
+
+**Atomicity fix:** The old sequence was computed in application code by scanning existing bills, creating a race-condition window for concurrent billing runs. The new `allocate_bill_no()` Postgres function uses `INSERT … ON CONFLICT DO UPDATE … RETURNING` to allocate the next sequence number atomically, eliminating that risk.
+
+### PDF Cleanup — Payer/Paid By Removed
+
+The "Payer" column (Owner / Tenant) has been removed from bill PDF line items, and the "Paid By" field has been removed from receipt PDFs. These internal routing labels are not required on externally facing documents.
+
+---
+
+## Release v3.7 — Billing Entity, Bill-To Override, PAN, Type-to-Confirm & Ooruda Branding (Jul 6, 2026)
+
+### Billing Entity: Individual vs Company
+
+Both owners and tenants can now be flagged as individuals or companies. This controls what appears on bills and receipts.
+
+**Owner (per unit):**
+- New "Owner is a company" checkbox in the Edit Unit dialog.
+- When checked: company name (required), registered address (optional, falls back to unit address), and GSTIN (optional) can be set.
+- Stored on the `units` table (`owner_is_company`, `owner_company_name`, `owner_company_address`, `owner_company_gstin`).
+
+**Tenant (per tenancy):**
+- New "Tenant is a company" checkbox in the Assign Tenant flow within the Edit Unit dialog.
+- Same fields: company name, registered address, GSTIN.
+- Stored on the `tenancies` table (`is_company`, `company_name`, `company_address`, `company_gstin`).
+
+**On bills and receipts:**
+- The "Bill To" block replaces the old "Unit" block and shows: name (person or company), address (company registered address if set, else derived unit address), and company GSTIN if applicable.
+- Address derivation: `door_no` + unit number + floor + association address (no separate field needed for individuals or companies without a distinct registered address).
+
+### Bill-To Override (per unit)
+
+A new **Bill to** dropdown in the Edit Unit dialog controls who receives the bill for each unit:
+
+| Setting | Behaviour |
+|---|---|
+| Auto (default) | Tenant if unit is occupied; owner otherwise |
+| Always owner | Bills always go to the owner, even when a tenant is active |
+| Always tenant | Bills always go to the tenant; falls back to owner if unoccupied |
+
+Stored as `bill_to` on the `units` table.
+
+### Association PAN Number
+
+Associations can now store a **PAN number** in Settings → Association → Tax Settings (below GSTIN).
+
+- PDF headers: GSTIN is shown if set; otherwise PAN is shown. If neither is set, neither appears.
+- Stored as `pan_number` on the `associations` table.
+
+### Type-to-Confirm Deletion
+
+All hard-delete operations now require the user to type a confirmation string before proceeding:
+
+- **Delete Unit** (super admin only): type the unit number (e.g. `A-101`) to confirm.
+- **Delete Electricity Bill** (super admin only): type `DELETE` to confirm.
+- Implemented via a reusable `TypeToConfirmDialog` component in `apps/web/app/[locale]/home/[account]/_components/`.
+- Old `AlertDialog`-based confirmations replaced.
+
+### Ooruda Footer Branding
+
+The "Generated from Ooruda" link in all PDF footers (bills, receipts, electricity bills) is now **bold** with the brand gold colour (`#fcd469`), making the Ooruda name visually distinct on printed documents.
+
+The electricity bill PDF footer was refactored to use the shared `DocumentFooter` component (previously duplicated inline) so both PDF types stay in sync.
+
+### Code Quality Fixes (Jul 6 session)
+
+- **Bill number RPC**: Removed unnecessary `as any` cast from the `allocate_bill_no` RPC call — the function is already typed in `database.types.ts`.
+- **Audit logging**: Sequence-allocation failures now emit a structured `logAuditEvent` entry instead of a bare `console.error`.
+- **Sub-meter CSV validation**: CommonArea rows now require `unit_no = COMMON`; using a real unit number raises a parse-time error explaining that `unit_no` is ignored for CommonArea meters.
+- **Meter readings CSV**: `current_reading` validation error message corrected from "positive number" to "non-negative number" (a reading of 0 is valid for a new meter).
+- **Electricity bill PDF**: Footer extracted to shared `DocumentFooter` component (no duplicate Ooruda link).
+
+### Dependencies
+
+- `@supabase/postgrest-js` bumped from `2.106.2` → `2.109.0` (minor patch).
+- `@supabase/phoenix` bumped from `0.4.2` → `0.4.4`.
+
+---
+
+## Release v4.0 — Association Onboarding & XLSX Import (Jul 7, 2026)
+
+Branch: `week-4-enhancements`
+
+This release focuses on onboarding associations with their existing data. All import dialogs now accept Excel (XLSX) files alongside CSV, and the system understands the specific column formats used by associations in their own records.
+
+### Shared Spreadsheet Parsing Utility
+
+- New `apps/web/lib/parse-spreadsheet.ts` shared utility using SheetJS (`xlsx`).
+- `parseSpreadsheetFile(file)` — detects `.xlsx` vs `.csv` by extension; normalises all headers to `lowercase_with_underscores`; returns `Record<string, string>[]`.
+- `downloadXlsxTemplate(filename, headers, sampleRows)` — generates and downloads XLSX import templates.
+- Used by all four import dialogs, replacing the previous per-dialog CSV parsing.
+
+### XLSX Support Across All Import Dialogs
+
+All four bulk import dialogs now accept both `.csv` and `.xlsx` files:
+
+- **Import Units** (units page)
+- **Import Sub-meters** (electricity page, super admin)
+- **Import Meter Readings** (electricity page)
+- **Import Other Charges** (billing page)
+
+File upload labels and instructions updated to remove "CSV" references. Template downloads now produce `.xlsx` files.
+
+### Units Import: Association Column Format
+
+The units import dialog now understands the association's native column format:
+
+| Association column | System column |
+|---|---|
+| `AREA` | `area_sqft` |
+| `DOOR_NUMBER` | `door_no` |
+
+Files with columns `UNIT_NO, TYPE, FLOOR, AREA, DOOR_NUMBER` are accepted without any manual column remapping.
+
+### Admin Bulk Invite: Association User XLSX Format
+
+The admin bulk-invite dialog now auto-detects and handles the association's user data XLSX format:
+
+- **Detection**: presence of `OWNER_MOBILE_NO` column (after normalisation) identifies the association format.
+- **Format**: `UNIT_NO, OWNER_NAME, OWNER_MOBILE_NO, OWNER_EMAIL_ADDRESS, UNIT_STATUS, TENANT_OR_ORGANIZATION_NAME, TENANT_MOBILE_NO, TENANT_EMAIL_ADDRESS`
+- **Row expansion**: each association row expands to 1–2 invite rows:
+  - `SELF OCCUPIED` → owner invite only
+  - `RENTED` → owner invite + tenant invite (if tenant name + phone present)
+  - `VACANT` → owner invite only (builder as `prop_owner`)
+- **Unit status**: `SELF OCCUPIED` / `RENTED` → `Occupied`; `VACANT` → `Vacant`. Status is written to `units.status` after memberships are created.
+- **Validation**: `UNIT_STATUS` is mandatory; unrecognised values produce a clear parse-time error.
+- Preview table shows: phone, name, role, unit number, and status per expanded row.
+
+### Electricity: Sub-meter Onboarding Columns
+
+Two new columns added to `sub_meters`:
+
+| Column | Type | Purpose |
+|---|---|---|
+| `initial_reading` | `numeric(12,2)` | Last recorded reading before onboarding — used as the `previous_reading` fallback when calculating the first electricity bill |
+| `minimum_charge` | `numeric(10,2)` | Default monthly minimum charge for this meter — auto-filled on every meter reading without a per-reading override |
+
+**Sub-meter import** (CSV/XLSX) accepts association column aliases:
+
+| Association column | System column |
+|---|---|
+| `INITIAL_METER_READING` | `initial_reading` |
+| `MIN_CHARGES` | `minimum_charge` |
+
+Both fields are optional (default 0). Preview table shows Init. Reading and Min. Charge columns.
+
+### Electricity: Simplified Meter Readings Import
+
+The meter readings import was completely rewritten to match the format associations will supply:
+
+- **New format**: `SUB_METER_NO, CURRENT_METER_READING` only (2 columns).
+- Sub-meters are looked up by their label (`meter_label`) within the association — no unit number needed.
+- **Previous reading** auto-filled: last recorded reading before the selected period, falling back to `sub_meter.initial_reading` for newly onboarded meters.
+- **Minimum charge** auto-filled from `sub_meter.minimum_charge` — no per-row override needed.
+- **Duplicate detection**: duplicate sub-meter labels within the file are rejected at parse time with a clear error.
+- CommonArea meters are included naturally — their `meter_label` (e.g. `Common-Lift`) identifies them directly.
+- Template updated to 2-column format; instructions updated to explain auto-fill behaviour.
+
+### Code Quality & Security Improvements
+
+- **`server-only` guard**: `electricity-actions.ts` now imports `server-only` to prevent accidental client-side bundling.
+- **Server-side input validation**: `bulkImportMeterReadingsAction` validates period format (`YYYY-MM` regex) and enforces a 500-row cap on both bulk import actions.
+- **Unit status error logging**: unit status update failures in `bulkInviteMembersAction` are now logged via the structured logger (previously silently swallowed).
+- **Unit number case consistency**: deduplication key and DB query in the unit status update loop both normalise to uppercase, eliminating silent no-op updates.
+- **File parse errors surfaced**: both electricity import dialogs show a toast if the XLSX/CSV parse throws (previously: silent unhandled rejection).
+- **`useTransition` in admin bulk invite**: replaced manual `useState`/`setPending` with `useTransition` and added an error toast on action failure.
+- **Dead code removed**: redundant `seen` Map loop in meter readings dialog removed.
+
+### Migration
+
+| Migration | Description |
+|---|---|
+| `20260716000000_sub_meters_initial_reading_min_charge.sql` | Add `initial_reading` and `minimum_charge` columns to `sub_meters` |
+
+### Electricity: Transmission-Loss Recovery in Billing Rate
+
+The electricity per-unit charge formula has been updated:
+
+| | Formula |
+|---|---|
+| **Old** | `rate = invoice_amount ÷ block_consumption_units` (MESCOM main meter) |
+| **New** | `rate = invoice_amount ÷ sum of all sub-meter consumed units` (including CommonArea) |
+
+Since the sum of individual sub-meter readings is always less than the MESCOM main meter reading (due to building transmission losses), the new rate is proportionally higher — ensuring the full MESCOM invoice is always recovered from occupants. Losses are distributed proportionally based on each unit's consumption. CommonArea sub-meters are included in the denominator.
+
+This change affects both bill generation and electricity bill PDFs (which show the per-unit rate in the meter breakdown table). The PDF generation was also optimised to fetch all meter readings in a single query (instead of two), using the database-generated `consumed_units` value directly.
+
+### Dependencies
+
+- `xlsx` (SheetJS) added to `apps/web` and `packages/features/admin` for XLSX parsing and template generation.
+
+### Admin Panel: Test vs Real Tagging
+
+- `is_test` boolean column added to both `associations` and `profiles`.
+- Two test associations renamed: Abish Association → **Sandbox Residency**, Prestige Meadows → **Demo Towers**. Both marked `is_test = true`.
+- Eleven test users (phone numbers `+919911000001–020`) renamed to a `[Role] T. [Descriptor]` pattern (e.g. Arjun T. Admin) and marked `is_test = true`.
+- **Test badge**: amber "Test" tag shown next to the account name in the admin accounts list and on the team account detail page for test associations/users.
+- **Kind filter**: new "Kind" dropdown in the admin accounts table — filter to "All", "Real", or "Test". Filtering is server-side (accounts table queried with `.in()` / `.not().in()` against the precomputed test account ID set).
+
+### Admin Bulk Invite: XLSX Data Cleaning & Owner Enrichment
+
+Improvements to handle real-world data quality issues found in association-supplied XLSX files:
+
+- **Phone normalisation**: `cleanPhoneCell()` strips Excel float suffixes (`9876543210.0` → `9876543210`), collapses internal spaces (`94482 53545` → `9448253545`), and trims trailing whitespace before the `+91` prefix is added.
+- **Unit number float cleanup**: `cleanUnitNo()` converts Excel-numeric cells that arrive as `"101.0"` → `"101"`. Alphanumeric unit numbers (e.g. `G1A`) are passed through unchanged.
+- **Company owner detection**: `isCompanyName()` matches common Indian business entity suffixes (LLP, Pvt Ltd, Limited, Buildcon, Infotech, Management, Realty, etc.). When the owner name matches, `owner_is_company = true` and `owner_company_name` are written to the unit — no invite is suppressed, a contact is still created under that phone.
+- **SELF OCCUPIED firm name capture**: when a SELF OCCUPIED row has a grey-cell tenant/organisation name (the occupying firm), it is stored as `owner_company_name` on the unit for billing purposes. No tenancy row is created. If both the owner and tenant organisation are companies, the tenant company name takes priority as the billing entity.
+- **Joint ownership name handling**: when `OWNER_NAME` contains ` & ` (e.g. `UJWAL N SALIAN & HARSHALATHA U SALIAN`), only the first name is used for the account — one account per phone number.
+- **Server-side owner enrichment**: after all invites are processed, `bulkInviteMembersAction` fetches the resolved user IDs by phone and writes `owner_id`, `owner_is_company`, and `owner_company_name` to the relevant unit rows in a single pass.
+
+### Admin Panel: Delete User Cache Bust
+
+- `deleteUserAction` now calls `revalidateAdmin()` before `redirect()`, so the accounts list refreshes immediately after a user is deleted.
+
+### Admin Panel: Tabs & Label Renames
+
+- Account type filter replaced with **tabs**: All | Associations | Users (was a dropdown with All / Team / Personal).
+- "Type" column values renamed: "Team" → "Association", "Personal" → "User".
+- Account detail page badges renamed: "Personal Account" → "User Account", "Team Account" → "Association".
+- Units page button renames: "Bulk Invite Users" → **"Invite Members"**, "Import CSV" → **"Import Units"**.
+
+### Migration
+
+| Migration | Description |
+|---|---|
+| `20260707122210_test_flags_and_rename_test_data.sql` | Add `is_test` to `associations` and `profiles`; rename and mark test associations and users |
+| `20260707132123_sync_test_user_account_names.sql` | Sync `accounts.name` from `profiles.full_name` for all test users |
+
+---
+
 
 | Module | Status | Key Capabilities |
 |---|---|---|
 | **Authentication** | Complete | Phone OTP sign-in, email OTP fallback, invite-only model, complete profile flow |
 | **RBAC** | Complete | 4 roles (assoc_admin, billing_operator, prop_owner, tenant), JWT hook, `requireRole()` guard, super admin |
 | **Associations** | Complete | Settings (general, electricity, tax, billing), logo upload, charge type configuration |
-| **Units** | Complete | CRUD, CSV import, common area type, owner/tenant assignment, unit detail + tenancy timeline |
+| **Units** | Complete | CRUD, CSV import, common area type, owner/tenant assignment, unit detail + tenancy timeline, bill-to override, owner company billing entity, type-to-confirm deletion |
 | **Members** | Complete | Phone invitations, email invitations, role-restricted invitations, phone number normalization |
 | **Electricity** | Complete | Sub-meter management, bill upload (with period date range), meter readings (manual + CSV import), block rate calculation, redesigned PDF with per-meter breakdown and authorised signatory |
 | **Billing** | Complete | Bill generation (maintenance, electricity, other charges), line items, PDF, filters, common area |
@@ -565,4 +846,4 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 
 ---
 
-*Last updated: 2026-07-04 (v3.4)*
+*Last updated: 2026-07-07 (v4.0 — test flags, admin panel tabs, bulk invite XLSX data cleaning)*

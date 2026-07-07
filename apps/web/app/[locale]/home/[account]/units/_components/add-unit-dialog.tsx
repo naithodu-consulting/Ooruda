@@ -52,6 +52,7 @@ export function AddUnitDialog({ associationId }: { associationId: string }) {
       type: 'Shop' as const,
       floor: '',
       area_sqft: '',
+      door_no: '',
     },
   });
 
@@ -176,6 +177,25 @@ export function AddUnitDialog({ associationId }: { associationId: string }) {
                 )}
               />
             </div>
+
+            <FormField
+              name="door_no"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Door Number</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Optional, e.g. Door No. 12"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Leave blank if not applicable.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <div className="flex justify-end pt-2">
               <Button type="submit" disabled={isPending}>

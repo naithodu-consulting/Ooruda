@@ -1,5 +1,7 @@
 'use server';
 
+import 'server-only';
+
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
@@ -72,6 +74,7 @@ export async function createSubMeterAction(
     unit_id: parsed.data.unitId,
     meter_label: parsed.data.meterLabel,
     meter_type: parsed.data.meterType,
+    load_kva: parsed.data.loadKva ?? null,
   });
 
   if (error) {
@@ -231,13 +234,9 @@ export async function deleteElectricityBillAction(
 }
 
 export type MeterReadingImportRow = {
-  unit_no: string;
   sub_meter_no: string;
   current_reading: number;
   period: string; // YYYY-MM, validated client-side
-  // Optional overrides — only applied when > 0; otherwise existing/derived values are used
-  previous_reading_override?: number;
-  minimum_charge_override?: number;
 };
 
 export type MeterReadingImportSkipped = {
@@ -260,6 +259,9 @@ export type MeterReadingImportResult = {
  * period must already exist; rows that don't match a bill or a sub_meter are
  * collected in `skipped`.
  */
+const PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+const MAX_IMPORT_ROWS = 500;
+
 export async function bulkImportMeterReadingsAction(
   associationId: string,
   rows: MeterReadingImportRow[],
@@ -270,30 +272,48 @@ export async function bulkImportMeterReadingsAction(
     return { success: false, imported: 0, skipped: [], error: roleError };
   }
 
+  if (rows.length === 0 || rows.length > MAX_IMPORT_ROWS) {
+    return { success: false, imported: 0, skipped: [], error: `Row count must be between 1 and ${MAX_IMPORT_ROWS}.` };
+  }
+
+  const firstPeriod = rows[0]!.period;
+  if (!PERIOD_REGEX.test(firstPeriod) || rows.some((r) => r.period !== firstPeriod)) {
+    return { success: false, imported: 0, skipped: [], error: 'Invalid or inconsistent period format (expected YYYY-MM).' };
+  }
+
   const client = getSupabaseServerClient();
 
-  // Fetch all units for this association (for unit_no → id lookup)
+  // Fetch all units for this association
   const { data: units } = await client
     .from('units')
-    .select('id, unit_no')
+    .select('id')
     .eq('association_id', associationId);
 
-  const unitByNo = new Map<string, string>(
-    (units ?? []).map((u) => [u.unit_no.toLowerCase(), u.id]),
-  );
-
-  // Fetch all active sub_meters linked to these units
   const unitIds = (units ?? []).map((u) => u.id);
 
+  // Fetch all active sub_meters for this association, including initial_reading
+  // and minimum_charge (used as fallbacks for the first bill of each meter).
   const { data: subMeters } = unitIds.length
     ? await client
         .from('sub_meters')
-        .select('id, meter_label, meter_type, unit_id')
+        .select('id, meter_label, initial_reading, minimum_charge')
         .in('unit_id', unitIds)
         .eq('is_active', true)
     : { data: [] };
 
   const smList = subMeters ?? [];
+
+  // Build a label → sub_meter map. Labels must be unique within the association.
+  const smByLabel = new Map<string, (typeof smList)[number]>();
+  const duplicateLabels = new Set<string>();
+  for (const sm of smList) {
+    const key = sm.meter_label.toLowerCase();
+    if (smByLabel.has(key)) {
+      duplicateLabels.add(key);
+    } else {
+      smByLabel.set(key, sm);
+    }
+  }
 
   // Fetch all bills for this association (period → bill lookup)
   const { data: bills } = await client
@@ -305,21 +325,18 @@ export async function bulkImportMeterReadingsAction(
     (bills ?? []).map((b) => [b.period, b.id]),
   );
 
-  // Fetch last known reading per sub_meter (to carry forward as previous)
+  // Fetch last known reading per sub_meter (to carry forward as previous_reading)
   const smIds = smList.map((s) => s.id);
   const { data: lastReadings } = smIds.length
     ? await client
         .from('meter_readings')
-        .select('sub_meter_id, period, current_reading, minimum_charge')
+        .select('sub_meter_id, period, current_reading')
         .in('sub_meter_id', smIds)
         .order('period', { ascending: false })
     : { data: [] };
 
-  // For each sub_meter, group readings by sub_meter_id, sorted desc — first entry is the latest
-  const lastReadingBySm = new Map<
-    string,
-    { period: string; current_reading: number; minimum_charge: number }[]
-  >();
+  // Group by sub_meter_id; first entry per meter is the most recent
+  const lastReadingBySm = new Map<string, { period: string; current_reading: number }[]>();
   for (const r of lastReadings ?? []) {
     if (!lastReadingBySm.has(r.sub_meter_id)) {
       lastReadingBySm.set(r.sub_meter_id, []);
@@ -327,20 +344,18 @@ export async function bulkImportMeterReadingsAction(
     lastReadingBySm.get(r.sub_meter_id)!.push({
       period: r.period,
       current_reading: r.current_reading,
-      minimum_charge: r.minimum_charge ?? 0,
     });
   }
 
   const skipped: MeterReadingImportSkipped[] = [];
 
-  // Resolve valid rows first, then upsert in one batch call.
   type UpsertRow = {
     sub_meter_id: string;
     mescom_bill_id: string;
     period: string;
     previous_reading: number;
     current_reading: number;
-    minimum_charge?: number;
+    minimum_charge: number;
   };
   const toUpsert: UpsertRow[] = [];
 
@@ -348,77 +363,65 @@ export async function bulkImportMeterReadingsAction(
     const row = rows[i]!;
     const rowNum = i + 1;
 
-    // Resolve bill
+    // Resolve MESCOM bill for the period
     const billId = billByPeriod.get(row.period);
     if (!billId) {
       skipped.push({
         row: rowNum,
         sub_meter_no: row.sub_meter_no,
-        reason: `No bill found for period ${row.period}. Add the bill first.`,
+        reason: `No MESCOM bill found for ${row.period}. Upload the bill first.`,
       });
       continue;
     }
 
-    // Resolve sub_meter
+    // Resolve sub_meter by label (association-wide; labels must be unique)
     const labelLower = row.sub_meter_no.toLowerCase();
-    let subMeter = smList.find(
-      (s) =>
-        s.meter_label.toLowerCase() === labelLower &&
-        s.unit_id === unitByNo.get(row.unit_no.toLowerCase()),
-    );
 
-    // Fallback: CommonArea meters — match by label only
-    if (!subMeter) {
-      const candidates = smList.filter(
-        (s) =>
-          s.meter_label.toLowerCase() === labelLower &&
-          s.meter_type === 'CommonArea',
-      );
-      if (candidates.length === 1) {
-        subMeter = candidates[0];
-      } else if (candidates.length > 1) {
-        skipped.push({
-          row: rowNum,
-          sub_meter_no: row.sub_meter_no,
-          reason: `Multiple common-area meters with label "${row.sub_meter_no}" found. Specify unit_no to disambiguate.`,
-        });
-        continue;
-      }
+    if (duplicateLabels.has(labelLower)) {
+      skipped.push({
+        row: rowNum,
+        sub_meter_no: row.sub_meter_no,
+        reason: `Multiple active meters share the label "${row.sub_meter_no}". Fix meter labels before importing.`,
+      });
+      continue;
     }
 
+    const subMeter = smByLabel.get(labelLower);
     if (!subMeter) {
       skipped.push({
         row: rowNum,
         sub_meter_no: row.sub_meter_no,
-        reason: `Sub-meter "${row.sub_meter_no}" not found or not active for unit "${row.unit_no}".`,
+        reason: `Sub-meter "${row.sub_meter_no}" not found or not active.`,
       });
       continue;
     }
 
-    // Determine previous reading: latest current_reading strictly before this period
+    // Previous reading: latest recorded reading before this period,
+    // falling back to sub_meters.initial_reading for the first-ever bill.
     const prevReadings = (lastReadingBySm.get(subMeter.id) ?? []).filter(
       (r) => r.period < row.period,
     );
     const previousReading =
-      prevReadings.length > 0 ? prevReadings[0]!.current_reading : 0;
-    const previousMinimumCharge =
-      prevReadings.length > 0 ? prevReadings[0]!.minimum_charge : 0;
+      prevReadings.length > 0
+        ? prevReadings[0]!.current_reading
+        : (subMeter.initial_reading ?? 0);
+
+    if (row.current_reading < previousReading) {
+      skipped.push({
+        row: rowNum,
+        sub_meter_no: row.sub_meter_no,
+        reason: `Current reading (${row.current_reading}) is less than previous reading (${previousReading}). Check for meter replacement.`,
+      });
+      continue;
+    }
 
     toUpsert.push({
       sub_meter_id: subMeter.id,
       mescom_bill_id: billId,
       period: row.period,
-      previous_reading:
-        row.previous_reading_override != null &&
-        row.previous_reading_override > 0 &&
-        row.previous_reading_override <= row.current_reading
-          ? row.previous_reading_override
-          : previousReading,
+      previous_reading: previousReading,
       current_reading: row.current_reading,
-      minimum_charge:
-        row.minimum_charge_override && row.minimum_charge_override > 0
-          ? row.minimum_charge_override
-          : previousMinimumCharge,
+      minimum_charge: subMeter.minimum_charge ?? 0,
     });
   }
 
@@ -566,6 +569,9 @@ export type SubMeterImportRow = {
   unit_no: string;
   sub_meter_no: string;
   meter_type: 'Unit' | 'CommonArea';
+  load_kva?: number | null;
+  initial_reading?: number;
+  minimum_charge?: number;
 };
 
 export type SubMeterImportSkipped = {
@@ -589,6 +595,10 @@ export async function bulkImportSubMetersAction(
   associationId: string,
   rows: SubMeterImportRow[],
 ): Promise<SubMeterImportResult> {
+  if (rows.length === 0 || rows.length > MAX_IMPORT_ROWS) {
+    return { success: false, imported: 0, skipped: [], error: `Row count must be between 1 and ${MAX_IMPORT_ROWS}.` };
+  }
+
   const client = getSupabaseServerClient();
 
   const { data: isSuperAdmin } = await client.rpc('is_super_admin');
@@ -629,7 +639,14 @@ export async function bulkImportSubMetersAction(
 
   const skipped: SubMeterImportSkipped[] = [];
 
-  type InsertRow = { unit_id: string; meter_label: string; meter_type: string };
+  type InsertRow = {
+    unit_id: string;
+    meter_label: string;
+    meter_type: string;
+    load_kva: number | null;
+    initial_reading: number;
+    minimum_charge: number;
+  };
   const toInsert: InsertRow[] = [];
 
   for (let i = 0; i < rows.length; i++) {
@@ -637,7 +654,11 @@ export async function bulkImportSubMetersAction(
     const rowNum = i + 1;
 
     if (!['Unit', 'CommonArea'].includes(row.meter_type)) {
-      skipped.push({ row: rowNum, sub_meter_no: row.sub_meter_no, reason: `Invalid meter_type "${row.meter_type}". Must be "Unit" or "CommonArea".` });
+      skipped.push({
+        row: rowNum,
+        sub_meter_no: row.sub_meter_no,
+        reason: `Invalid meter_type "${row.meter_type}". Must be "Unit" or "CommonArea".`,
+      });
       continue;
     }
 
@@ -649,25 +670,44 @@ export async function bulkImportSubMetersAction(
       // a placeholder so the FK is satisfied; matching during readings uses label only.
       unitId = units?.[0]?.id;
       if (!unitId) {
-        skipped.push({ row: rowNum, sub_meter_no: row.sub_meter_no, reason: 'No units found in this association.' });
+        skipped.push({
+          row: rowNum,
+          sub_meter_no: row.sub_meter_no,
+          reason: 'No units found in this association.',
+        });
         continue;
       }
     } else {
       unitId = unitByNo.get(row.unit_no.toLowerCase());
       if (!unitId) {
-        skipped.push({ row: rowNum, sub_meter_no: row.sub_meter_no, reason: `Unit "${row.unit_no}" not found.` });
+        skipped.push({
+          row: rowNum,
+          sub_meter_no: row.sub_meter_no,
+          reason: `Unit "${row.unit_no}" not found.`,
+        });
         continue;
       }
     }
 
     const key = `${unitId}::${row.sub_meter_no.toLowerCase()}`;
     if (existingSet.has(key)) {
-      skipped.push({ row: rowNum, sub_meter_no: row.sub_meter_no, reason: `Sub-meter "${row.sub_meter_no}" already exists for unit "${row.unit_no}".` });
+      skipped.push({
+        row: rowNum,
+        sub_meter_no: row.sub_meter_no,
+        reason: `Sub-meter "${row.sub_meter_no}" already exists for unit "${row.unit_no}".`,
+      });
       continue;
     }
 
     existingSet.add(key); // prevent duplicates within the same batch
-    toInsert.push({ unit_id: unitId, meter_label: row.sub_meter_no, meter_type: row.meter_type });
+    toInsert.push({
+      unit_id: unitId,
+      meter_label: row.sub_meter_no,
+      meter_type: row.meter_type,
+      load_kva: row.load_kva ?? null,
+      initial_reading: row.initial_reading ?? 0,
+      minimum_charge: row.minimum_charge ?? 0,
+    });
   }
 
   if (toInsert.length === 0) {

@@ -476,7 +476,6 @@ export function BillsSection(props: {
             )}
           </>
         )}
-
       </CardContent>
     </Card>
   );

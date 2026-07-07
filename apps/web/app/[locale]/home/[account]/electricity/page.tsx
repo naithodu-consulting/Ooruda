@@ -60,7 +60,7 @@ export default async function MescomPage({ params }: Props) {
     ? await client
         .from('sub_meters')
         .select(
-          'id, meter_label, meter_type, is_active, unit_id, units(unit_no)',
+          'id, meter_label, meter_type, is_active, unit_id, load_kva, units(unit_no)',
         )
         .in('unit_id', unitIds)
         .order('meter_label')
@@ -73,6 +73,7 @@ export default async function MescomPage({ params }: Props) {
     is_active: m.is_active,
     unit_id: m.unit_id,
     unit_no: (m.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
+    load_kva: m.load_kva ?? null,
   }));
 
   const activeSubMeters = subMeterRows.filter((m) => m.is_active);

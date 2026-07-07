@@ -6,9 +6,10 @@ import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Pencil } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
+import { Checkbox } from '@kit/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -114,7 +115,13 @@ function UnitDetailsForm(props: {
       type: props.unit.type as (typeof UNIT_TYPES)[number],
       floor: props.unit.floor?.toString() ?? '',
       area_sqft: props.unit.area_sqft.toString(),
+      door_no: props.unit.door_no ?? '',
       owner_id: props.unit.owner_id ?? UNASSIGNED,
+      bill_to: (props.unit.bill_to ?? 'auto') as 'auto' | 'owner' | 'tenant',
+      owner_is_company: props.unit.owner_is_company ?? false,
+      owner_company_name: props.unit.owner_company_name ?? '',
+      owner_company_address: props.unit.owner_company_address ?? '',
+      owner_company_gstin: props.unit.owner_company_gstin ?? '',
     },
   });
 
@@ -231,6 +238,22 @@ function UnitDetailsForm(props: {
           </div>
 
           <FormField
+            name="door_no"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Door Number</FormLabel>
+                <FormControl>
+                  <Input placeholder="Optional, e.g. Door No. 12" {...field} />
+                </FormControl>
+                <FormDescription>
+                  Leave blank if not applicable.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
             name="owner_id"
             render={({ field }) => (
               <FormItem>
@@ -261,6 +284,38 @@ function UnitDetailsForm(props: {
               </FormItem>
             )}
           />
+
+          <div className="border-t pt-4">
+            <p className="text-muted-foreground mb-3 text-xs font-medium tracking-wide uppercase">
+              Billing
+            </p>
+
+            <FormField
+              name="bill_to"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Bill to</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="auto">
+                        Auto (tenant if occupied, else owner)
+                      </SelectItem>
+                      <SelectItem value="owner">Always owner</SelectItem>
+                      <SelectItem value="tenant">Always tenant</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <OwnerCompanyFields form={form} />
         </form>
       </Form>
 
@@ -290,6 +345,10 @@ function TenantSection(props: {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   });
+  const [isCompany, setIsCompany] = useState(false);
+  const [companyName, setCompanyName] = useState('');
+  const [companyAddress, setCompanyAddress] = useState('');
+  const [companyGstin, setCompanyGstin] = useState('');
 
   if (props.tenancy) {
     const onEnd = () => {
@@ -340,6 +399,10 @@ function TenantSection(props: {
         {
           tenantId,
           startDate,
+          isCompany,
+          companyName: companyName || null,
+          companyAddress: companyAddress || null,
+          companyGstin: companyGstin || null,
         },
       );
 
@@ -355,7 +418,7 @@ function TenantSection(props: {
   };
 
   return (
-    <div className="flex flex-col gap-2 border-t pt-4">
+    <div className="flex flex-col gap-3 border-t pt-4">
       <span className="text-sm font-medium">Tenant</span>
 
       {props.eligibleTenants.length === 0 ? (
@@ -364,44 +427,177 @@ function TenantSection(props: {
           one from the Members page first.
         </p>
       ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <Select value={tenantId} onValueChange={(v) => setTenantId(v ?? '')}>
-            <SelectTrigger className="min-w-0 flex-1 basis-40">
-              <SelectValue>
-                {(v: string) =>
-                  props.eligibleTenants.find((t) => t.id === v)?.label ??
-                  'Select a tenant'
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {props.eligibleTenants.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={tenantId}
+              onValueChange={(v) => setTenantId(v ?? '')}
+            >
+              <SelectTrigger className="min-w-0 flex-1 basis-40">
+                <SelectValue>
+                  {(v: string) =>
+                    props.eligibleTenants.find((t) => t.id === v)?.label ??
+                    'Select a tenant'
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {props.eligibleTenants.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="w-36 shrink-0"
-          />
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-36 shrink-0"
+            />
+          </div>
+
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="tenant-is-company"
+              checked={isCompany}
+              onCheckedChange={(v) => setIsCompany(!!v)}
+              className="mt-0.5"
+            />
+            <label
+              htmlFor="tenant-is-company"
+              className="text-sm leading-snug select-none"
+            >
+              Tenant is a company
+            </label>
+          </div>
+
+          {isCompany && (
+            <div className="flex flex-col gap-2">
+              <Input
+                placeholder="Company name *"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+              />
+              <Input
+                placeholder="Company registered address (optional)"
+                value={companyAddress}
+                onChange={(e) => setCompanyAddress(e.target.value)}
+              />
+              <Input
+                placeholder="Company GSTIN (optional)"
+                value={companyGstin}
+                onChange={(e) => setCompanyGstin(e.target.value)}
+              />
+            </div>
+          )}
 
           <Button
             size="sm"
             variant="outline"
             disabled={isPending}
             onClick={onAssign}
-            className="shrink-0"
+            className="self-start"
           >
             {isPending && <Spinner className="mr-2 h-4 w-4" />}
             Assign
           </Button>
-        </div>
+        </>
       )}
+    </div>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function OwnerCompanyFields({ form }: { form: any }) {
+  const isCompany = useWatch({
+    control: form.control,
+    name: 'owner_is_company',
+  });
+
+  return (
+    <div className="flex flex-col gap-4">
+      <FormField
+        control={form.control}
+        name="owner_is_company"
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-start gap-3">
+            <FormControl>
+              <Checkbox
+                checked={!!field.value}
+                onCheckedChange={field.onChange}
+                className="mt-0.5"
+              />
+            </FormControl>
+            <div className="flex flex-col gap-0.5">
+              <FormLabel>Owner is a company</FormLabel>
+              <FormDescription>
+                Shows company name and GSTIN on bills instead of personal name.
+              </FormDescription>
+            </div>
+          </FormItem>
+        )}
+      />
+
+      {isCompany ? (
+        <>
+          <FormField
+            control={form.control}
+            name="owner_company_name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Company name</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="e.g. Acme Pvt. Ltd."
+                    {...(field as React.InputHTMLAttributes<HTMLInputElement>)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="owner_company_address"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Company registered address</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="Optional — leave blank to use unit address"
+                    {...(field as React.InputHTMLAttributes<HTMLInputElement>)}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Used on bills if the company&apos;s GST address differs from
+                  this unit.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="owner_company_gstin"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Company GSTIN</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="Optional, e.g. 29AABCU9603R1ZV"
+                    {...(field as React.InputHTMLAttributes<HTMLInputElement>)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

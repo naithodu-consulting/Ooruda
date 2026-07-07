@@ -42,25 +42,27 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
+import {
+  downloadXlsxTemplate,
+  parseSpreadsheetFile,
+} from '~/lib/parse-spreadsheet';
+
 import { bulkImportMeterReadingsAction } from '../_lib/electricity-actions';
 
-// 3 required columns + 2 optional overrides for testing large datasets
-const TEMPLATE_CSV = [
-  'unit_no,sub_meter_no,current_reading,previous_reading,minimum_charge',
-  'G-01,SM-1,1250,,',
-  '1-02,SM-5,980,900,150',
-  'COMMON,Common-Lift,320,,',
-].join('\n');
+// Association sends: SUB_METER_NO, CURRENT_METER_READING
+// normalizeHeader in parseSpreadsheetFile converts to: sub_meter_no, current_meter_reading
+const REQUIRED_COLUMNS = ['sub_meter_no', 'current_meter_reading'] as const;
 
-const REQUIRED_COLUMNS = [
-  'unit_no',
-  'sub_meter_no',
-  'current_reading',
-] as const;
+// Map association column name to our internal name
+const COLUMN_ALIASES: Record<string, string> = {
+  current_meter_reading: 'current_reading',
+};
 
 /** Returns YYYY-MM for the DB from a MM/YYYY display value */
 function toDbPeriod(mmYyyy: string): string {
-  const [mm, yyyy] = mmYyyy.split('/');
+  const parts = mmYyyy.split('/');
+  const mm = parts[0] ?? '';
+  const yyyy = parts[1] ?? '';
   return `${yyyy}-${mm}`;
 }
 
@@ -72,9 +74,8 @@ function getPeriodOptions(count = 7): { value: string; label: string }[] {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const yyyy = String(d.getFullYear());
-    const mmYyyy = `${mm}/${yyyy}`;
     options.push({
-      value: mmYyyy,
+      value: `${mm}/${yyyy}`,
       label: d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
     });
   }
@@ -83,40 +84,47 @@ function getPeriodOptions(count = 7): { value: string; label: string }[] {
 
 type ParsedRow = {
   _row: number;
-  unit_no: string;
   sub_meter_no: string;
   current_reading: number;
-  previous_reading?: number; // optional override — only used when > 0
-  minimum_charge?: number;   // optional override — only used when > 0
   _error?: string;
 };
 
 function downloadTemplate() {
-  const blob = new Blob([TEMPLATE_CSV], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'meter-readings-import-template.csv';
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadXlsxTemplate('meter-readings-import-template.xlsx', [
+    'SUB_METER_NO',
+    'CURRENT_METER_READING',
+  ], [
+    ['SM-1', 1250],
+    ['SM-5', 980],
+    ['Common-Lift', 320],
+  ]);
 }
 
-function parseCSV(text: string): ParsedRow[] {
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
+function normaliseRow(r: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(r)) {
+    out[COLUMN_ALIASES[k] ?? k] = v;
+  }
+  return out;
+}
 
-  if (lines.length < 2) return [];
+function parseRows(raw: Record<string, string>[]): ParsedRow[] {
+  if (raw.length === 0) return [];
 
-  const headers = lines[0]!.split(',').map((h) => h.trim().toLowerCase());
+  // Normalise aliases before checking headers
+  const normalised = raw.map(normaliseRow);
+  const headers = Object.keys(normalised[0]!);
 
-  const missing = REQUIRED_COLUMNS.filter((c) => !headers.includes(c));
+  // Check required columns (accounting for alias mapping)
+  const effectiveHeaders = [...headers, ...Object.keys(raw[0]!)];
+  const missing = REQUIRED_COLUMNS.filter(
+    (c) => !effectiveHeaders.includes(c) && !effectiveHeaders.includes(COLUMN_ALIASES[c] ?? c),
+  );
+
   if (missing.length > 0) {
     return [
       {
         _row: 0,
-        unit_no: '',
         sub_meter_no: '',
         current_reading: 0,
         _error: `Missing required columns: ${missing.join(', ')}`,
@@ -124,46 +132,37 @@ function parseCSV(text: string): ParsedRow[] {
     ];
   }
 
-  const col = (name: string) => headers.indexOf(name);
-  const hasCol = (name: string) => headers.includes(name);
+  // Collect duplicate labels
+  const duplicates = new Set<string>();
+  const labelCounts = new Map<string, number>();
+  for (const r of normalised) {
+    const label = (r['sub_meter_no'] ?? '').toLowerCase();
+    if (label) labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+  }
+  for (const [label, count] of labelCounts) {
+    if (count > 1) duplicates.add(label);
+  }
 
-  return lines.slice(1).map((line, i) => {
-    const cells = line.split(',').map((c) => c.trim());
-    const get = (name: string) => cells[col(name)] ?? '';
-
-    const unit_no = get('unit_no');
-    const sub_meter_no = get('sub_meter_no');
-    const currentReadingRaw = get('current_reading');
-    const currentReading = Number(currentReadingRaw);
-
-    // Optional overrides — treated as absent when blank or non-positive
-    const prevRaw = hasCol('previous_reading') ? get('previous_reading') : '';
-    const prevNum = prevRaw !== '' ? Number(prevRaw) : NaN;
-    const previous_reading =
-      !Number.isNaN(prevNum) && prevNum > 0 ? prevNum : undefined;
-
-    const minRaw = hasCol('minimum_charge') ? get('minimum_charge') : '';
-    const minNum = minRaw !== '' ? Number(minRaw) : NaN;
-    const minimum_charge =
-      !Number.isNaN(minNum) && minNum > 0 ? minNum : undefined;
+  return normalised.map((r, i) => {
+    const sub_meter_no = r['sub_meter_no'] ?? '';
+    const currentRaw = r['current_reading'] ?? '';
+    const currentReading = Number(currentRaw);
 
     let error: string | undefined;
-    if (!unit_no) error = 'unit_no is required';
-    else if (!sub_meter_no) error = 'sub_meter_no is required';
-    else if (
-      !currentReadingRaw ||
-      Number.isNaN(currentReading) ||
-      currentReading < 0
-    )
-      error = 'current_reading must be a non-negative number';
+    if (!sub_meter_no) {
+      error = 'sub_meter_no is required';
+    } else if (duplicates.has(sub_meter_no.toLowerCase())) {
+      error = `Duplicate sub_meter_no "${sub_meter_no}" in this file`;
+    } else if (currentRaw === '' || Number.isNaN(currentReading)) {
+      error = 'current_meter_reading must be a number';
+    } else if (currentReading < 0) {
+      error = 'current_meter_reading must be ≥ 0';
+    }
 
     return {
       _row: i + 1,
-      unit_no,
       sub_meter_no,
-      current_reading: currentReading,
-      previous_reading,
-      minimum_charge,
+      current_reading: Number.isNaN(currentReading) ? 0 : currentReading,
       _error: error,
     };
   });
@@ -181,7 +180,6 @@ export function ImportMeterReadingsDialog({
   const [isPending, startTransition] = useTransition();
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState('');
-  // Default to current month (first option)
   const [selectedPeriod, setSelectedPeriod] = useState<string>(
     periodOptions[0]!.value,
   );
@@ -197,16 +195,11 @@ export function ImportMeterReadingsDialog({
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setFileName(file.name);
     setResult(null);
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      setRows(parseCSV(text));
-    };
-    reader.readAsText(file);
+    parseSpreadsheetFile(file)
+      .then((raw) => setRows(parseRows(raw)))
+      .catch(() => toast.error('Failed to read the file. Please check it is a valid CSV or Excel file.'));
   }
 
   function handleOpenChange(next: boolean) {
@@ -222,22 +215,16 @@ export function ImportMeterReadingsDialog({
 
   function handleImport() {
     if (validRows.length === 0) return;
-
     const dbPeriod = toDbPeriod(selectedPeriod);
 
     startTransition(async () => {
       const res = await bulkImportMeterReadingsAction(
         associationId,
-        validRows.map(
-          ({ unit_no, sub_meter_no, current_reading, previous_reading, minimum_charge }) => ({
-            unit_no,
-            sub_meter_no,
-            current_reading,
-            period: dbPeriod,
-            previous_reading_override: previous_reading,
-            minimum_charge_override: minimum_charge,
-          }),
-        ),
+        validRows.map(({ sub_meter_no, current_reading }) => ({
+          sub_meter_no,
+          current_reading,
+          period: dbPeriod,
+        })),
       );
 
       if (!res.success) {
@@ -299,9 +286,9 @@ export function ImportMeterReadingsDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-muted-foreground text-xs">
-                  All readings in this import will be recorded for the selected
-                  month. Previous readings are auto-filled from the last
-                  recorded bill.
+                  All readings will be recorded for the selected month.
+                  Previous reading and minimum charge are auto-filled from
+                  sub-meter defaults.
                 </p>
               </div>
             )}
@@ -312,7 +299,7 @@ export function ImportMeterReadingsDialog({
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".csv,.xlsx,text/csv"
                   className="hidden"
                   id="readings-csv-upload"
                   onChange={handleFileChange}
@@ -327,7 +314,9 @@ export function ImportMeterReadingsDialog({
                     strokeWidth={1.5}
                   />
                   <p className="font-medium text-orange-600">
-                    {fileName ? fileName : 'Drop CSV here, or click to browse'}
+                    {fileName
+                      ? fileName
+                      : 'Drop CSV or Excel here, or click to browse'}
                   </p>
                 </label>
               </div>
@@ -336,19 +325,13 @@ export function ImportMeterReadingsDialog({
             {/* Instructions + template */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <p className="text-muted-foreground text-sm">
-                Required:{' '}
+                Columns:{' '}
                 <span className="font-medium">
-                  unit_no, sub_meter_no, current_reading
+                  SUB_METER_NO, CURRENT_METER_READING
                 </span>
                 <br />
-                Optional:{' '}
-                <span className="font-medium">
-                  previous_reading, minimum_charge
-                </span>{' '}
-                — leave blank to use existing values.
-                <br />
-                For common-area meters use{' '}
-                <span className="font-medium">COMMON</span> as unit_no.
+                Sub-meter labels must match those registered in the system.
+                Duplicate labels in the file are rejected.
               </p>
               <Button
                 variant="outline"
@@ -390,11 +373,8 @@ export function ImportMeterReadingsDialog({
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-10">#</TableHead>
-                        <TableHead>Unit</TableHead>
                         <TableHead>Sub-meter</TableHead>
-                        <TableHead>Prev</TableHead>
-                        <TableHead>Current</TableHead>
-                        <TableHead>Min charge</TableHead>
+                        <TableHead>Current Reading</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -407,16 +387,9 @@ export function ImportMeterReadingsDialog({
                           <TableCell className="text-muted-foreground text-xs">
                             {row._row}
                           </TableCell>
-                          <TableCell>{row.unit_no || '—'}</TableCell>
                           <TableCell>{row.sub_meter_no || '—'}</TableCell>
-                          <TableCell className="text-muted-foreground tabular-nums text-xs">
-                            {row.previous_reading ?? '—'}
-                          </TableCell>
                           <TableCell className="tabular-nums">
                             {row._error ? '—' : row.current_reading}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground tabular-nums text-xs">
-                            {row.minimum_charge ?? '—'}
                           </TableCell>
                           <TableCell>
                             {row._error ? (

@@ -73,6 +73,7 @@
     "tailwind-merge": "catalog:",
     "tw-animate-css": "catalog:",
     "urlpattern-polyfill": "catalog:",
+    "xlsx": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

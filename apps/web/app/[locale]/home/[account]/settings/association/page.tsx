@@ -110,6 +110,8 @@ export default async function AssociationSettingsPage({ params }: Props) {
           gst_rate: association.gst_rate,
           mescom_consumer_no: association.mescom_consumer_no,
           authorised_signatory: association.authorised_signatory ?? null,
+          sanctioned_load_kva: association.sanctioned_load_kva ?? null,
+          pan_number: association.pan_number ?? null,
         }}
         billingSettings={billingSettings ?? null}
       />
