@@ -134,6 +134,8 @@ export const deleteUserAction = adminActionClient
 
     logger.info({ userId }, `Super Admin has successfully deleted user`);
 
+    revalidateAdmin();
+
     redirect('/admin/accounts');
   });
 
