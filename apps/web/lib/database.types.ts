@@ -214,6 +214,7 @@ export type Database = {
           gst_rate: number | null
           gstin: string | null
           id: string
+          is_test: boolean
           logo_url: string | null
           mescom_consumer_no: string | null
           pan_number: string | null
@@ -232,6 +233,7 @@ export type Database = {
           gst_rate?: number | null
           gstin?: string | null
           id?: string
+          is_test?: boolean
           logo_url?: string | null
           mescom_consumer_no?: string | null
           pan_number?: string | null
@@ -250,6 +252,7 @@ export type Database = {
           gst_rate?: number | null
           gstin?: string | null
           id?: string
+          is_test?: boolean
           logo_url?: string | null
           mescom_consumer_no?: string | null
           pan_number?: string | null
@@ -1267,6 +1270,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          is_test: boolean
           mobile_number: string | null
         }
         Insert: {
@@ -1274,6 +1278,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          is_test?: boolean
           mobile_number?: string | null
         }
         Update: {
@@ -1281,6 +1286,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          is_test?: boolean
           mobile_number?: string | null
         }
         Relationships: []

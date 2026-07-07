@@ -15,6 +15,7 @@ import { PageBody, PageHeader } from '@kit/ui/page';
 interface SearchParams {
   page?: string;
   account_type?: 'all' | 'team' | 'personal';
+  kind?: 'all' | 'real' | 'test';
   query?: string;
 }
 
@@ -39,26 +40,56 @@ async function AccountsPage(props: AdminAccountsPageProps) {
 
   // Team accounts a user can be assigned to, with a role, plus the existing
   // users that can own a new association.
-  const [{ data: associationRows }, { data: userRows }, { data: authUsers }] =
-    await Promise.all([
-      adminClient
-        .from('accounts')
-        .select('id, name')
-        .eq('is_personal_account', false)
-        .order('name'),
-      adminClient
-        .from('accounts')
-        .select('id, name')
-        .eq('is_personal_account', true)
-        .order('name'),
-      adminClient.auth.admin.listUsers({ perPage: 1000 }),
-    ]);
+  // Validate kind param server-side — unknown values fall back to 'all'
+  const safeKind = (['all', 'real', 'test'] as const).includes(
+    searchParams.kind as 'all' | 'real' | 'test',
+  )
+    ? (searchParams.kind as 'all' | 'real' | 'test')
+    : ('all' as const);
+
+  const [
+    { data: associationRows },
+    { data: userRows },
+    { data: authUsers },
+    { data: testAssociations, error: testAssocError },
+    { data: testProfiles, error: testProfilesError },
+  ] = await Promise.all([
+    adminClient
+      .from('accounts')
+      .select('id, name')
+      .eq('is_personal_account', false)
+      .order('name'),
+    adminClient
+      .from('accounts')
+      .select('id, name')
+      .eq('is_personal_account', true)
+      .order('name'),
+    adminClient.auth.admin.listUsers({ perPage: 1000 }),
+    adminClient
+      .from('associations')
+      .select('account_id')
+      .eq('is_test', true),
+    adminClient
+      .from('profiles')
+      .select('id')
+      .eq('is_test', true),
+  ]);
 
   const superAdminIds = new Set(
     (authUsers?.users ?? [])
       .filter((user) => user.app_metadata?.role === 'super-admin')
       .map((user) => user.id),
   );
+
+  if (testAssocError)
+    console.error('Failed to load test associations', testAssocError);
+  if (testProfilesError)
+    console.error('Failed to load test profiles', testProfilesError);
+
+  const testAccountIds = new Set([
+    ...(testAssociations ?? []).map((r) => r.account_id),
+    ...(testProfiles ?? []).map((r) => r.id),
+  ]);
 
   const associations: AssociationOption[] = (associationRows ?? []).map(
     (association) => ({ id: association.id, name: association.name }),
@@ -101,6 +132,23 @@ async function AccountsPage(props: AdminAccountsPageProps) {
             queryBuilder.eq('is_personal_account', type === 'personal');
           }
 
+          if (safeKind !== 'all') {
+            const ids = [...testAccountIds];
+            if (safeKind === 'test') {
+              if (ids.length > 0) {
+                queryBuilder.in('id', ids);
+              } else {
+                // No test accounts — match nothing
+                queryBuilder.eq('id', '00000000-0000-0000-0000-000000000000');
+              }
+            } else {
+              // safeKind === 'real'
+              if (ids.length > 0) {
+                queryBuilder.not('id', 'in', `(${ids.join(',')})`);
+              }
+            }
+          }
+
           if (query) {
             queryBuilder.or(`name.ilike.%${query}%,email.ilike.%${query}%`);
           }
@@ -117,8 +165,10 @@ async function AccountsPage(props: AdminAccountsPageProps) {
               data={data}
               associations={associations}
               superAdminIds={superAdminIds}
+              testAccountIds={testAccountIds}
               filters={{
                 type: searchParams.account_type ?? 'all',
+                kind: safeKind,
                 query: searchParams.query ?? '',
               }}
             />
@@ -148,7 +198,8 @@ async function AccountsTableWithRoles(props: {
   page: number;
   associations: AssociationOption[];
   superAdminIds: Set<string>;
-  filters: { type: 'all' | 'team' | 'personal'; query: string };
+  testAccountIds: Set<string>;
+  filters: { type: 'all' | 'team' | 'personal'; kind: 'all' | 'real' | 'test'; query: string };
 }) {
   const adminClient = getSupabaseServerAdminClient();
 
@@ -202,6 +253,7 @@ async function AccountsTableWithRoles(props: {
       membershipsByAccountId={membershipsByAccountId}
       phoneByAccountId={phoneByAccountId}
       superAdminIds={props.superAdminIds}
+      testAccountIds={props.testAccountIds}
     />
   );
 }

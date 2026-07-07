@@ -49,6 +49,30 @@ function normalizeHeader(h: string): string {
   return h.trim().toLowerCase().replace(/\s+/g, '_');
 }
 
+/**
+ * Normalises a phone cell from an association XLSX.
+ * Handles three real-world formats:
+ *   - Excel numeric cells read as JS floats ("9876543210.0") → strip ".0"
+ *   - Numbers with internal spaces ("94482 53545") → collapse whitespace
+ *   - Trailing spaces ("9902335047 ") → trim
+ * The result is a bare digit string; normalizePhoneNumber() adds the +91 prefix.
+ */
+function cleanPhoneCell(raw: string): string {
+  return raw.replace(/\.0+$/, '').replace(/\s+/g, '').trim();
+}
+
+/**
+ * Normalises a unit number cell from an association XLSX.
+ * Excel stores numeric cells as floats, so "101" arrives as "101.0" when
+ * SheetJS stringifies it. Strip the decimal part when the value is a whole number.
+ */
+function cleanUnitNo(raw: string): string {
+  const trimmed = raw.trim();
+  return /^\d+\.0+$/.test(trimmed)
+    ? String(Math.round(parseFloat(trimmed)))
+    : trimmed;
+}
+
 const UNIT_STATUS_MAP: Record<string, 'Occupied' | 'Vacant'> = {
   'self occupied': 'Occupied',
   rented: 'Occupied',
@@ -61,6 +85,14 @@ const UNIT_STATUS_MAP: Record<string, 'Occupied' | 'Vacant'> = {
  */
 function mapUnitStatus(raw: string): 'Occupied' | 'Vacant' | null {
   return UNIT_STATUS_MAP[raw.trim().toLowerCase()] ?? null;
+}
+
+const COMPANY_SUFFIXES =
+  /\b(llp|pvt\.?\s*ltd|private\s+limited|limited|ltd|llc|corp|inc|bank|fund|solutions|consulting|innovation|advisory|agencies|buildcon|infotech|management|realty|healthcare|design)\b/i;
+
+/** Returns true when the name looks like a business entity rather than a person. */
+function isCompanyName(name: string): boolean {
+  return COMPANY_SUFFIXES.test(name.trim());
 }
 
 /**
@@ -82,7 +114,7 @@ function parseAssocFormat(
 
   for (let i = 0; i < raw.length; i++) {
     const r = raw[i]!;
-    const unitNo = r['unit_no'] ?? '';
+    const unitNo = cleanUnitNo(r['unit_no'] ?? '');
     const unitStatusRaw = r['unit_status'] ?? '';
 
     if (!unitStatusRaw) {
@@ -95,10 +127,38 @@ function parseAssocFormat(
     }
 
     const isRented = unitStatusRaw.trim().toLowerCase() === 'rented';
+    const isSelfOccupied = unitStatusRaw.trim().toLowerCase() === 'self occupied';
 
-    const ownerPhone = r['owner_mobile_no'] ?? '';
-    const ownerName = r['owner_name'] ?? '';
+    const ownerPhone = cleanPhoneCell(r['owner_mobile_no'] ?? '');
+    const ownerNameRaw = r['owner_name'] ?? '';
+    // Split joint-person ownership (e.g. "UJWAL N SALIAN & HARSHALATHA U SALIAN") to
+    // the first name only — one account per phone. Do NOT split if either side looks
+    // like a company name (e.g. "Patel & Sons LLP", "Ernst & Young Advisory").
+    const ownerName = (() => {
+      if (!ownerNameRaw.includes(' & ')) return ownerNameRaw;
+      const [first = '', second = ''] = ownerNameRaw.split(' & ', 2);
+      if (isCompanyName(first.trim()) || isCompanyName(second.trim())) return ownerNameRaw;
+      return first.trim();
+    })();
     const ownerEmail = r['owner_email_address'] ?? '';
+
+    const tenantNameRaw = r['tenant_or_organization_name'] ?? '';
+    const tenantPhone = cleanPhoneCell(r['tenant_mobile_no'] ?? '');
+
+    // For SELF OCCUPIED rows, the tenant column holds the occupying firm name
+    // (grey "informational" cells used for billing). Only treat it as a company
+    // name if it actually matches a business-entity pattern — avoids setting
+    // owner_is_company=true when an individual's name appears in that cell.
+    const selfOccupiedCompanyName =
+      isSelfOccupied && tenantNameRaw && isCompanyName(tenantNameRaw)
+        ? tenantNameRaw
+        : undefined;
+
+    // An owner name is a company if it matches common Indian business entity suffixes.
+    // In that case we still invite the contact phone but also write owner_is_company + name.
+    const ownerCompanyName =
+      selfOccupiedCompanyName ?? (isCompanyName(ownerName) ? ownerName : undefined);
+
     if (ownerPhone && ownerName) {
       rows.push({
         phone: ownerPhone,
@@ -108,17 +168,16 @@ function parseAssocFormat(
         association_name: associationName,
         unit_no: unitNo || undefined,
         unit_status: unitStatus,
+        owner_company_name: ownerCompanyName,
       });
     }
 
     if (isRented) {
-      const tenantPhone = r['tenant_mobile_no'] ?? '';
-      const tenantName = r['tenant_or_organization_name'] ?? '';
       const tenantEmail = r['tenant_email_address'] ?? '';
-      if (tenantPhone && tenantName) {
+      if (tenantPhone && tenantNameRaw) {
         rows.push({
           phone: tenantPhone,
-          name: tenantName,
+          name: tenantNameRaw,
           email: tenantEmail,
           role: 'tenant',
           association_name: associationName,

@@ -224,7 +224,7 @@ export function ImportUnitsDialog({
         render={
           <Button variant="outline" data-test="import-units-trigger">
             <Upload className="h-4 w-4" />
-            Import CSV
+            Import Units
           </Button>
         }
       />

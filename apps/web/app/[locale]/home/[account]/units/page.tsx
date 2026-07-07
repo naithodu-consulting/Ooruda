@@ -224,7 +224,7 @@ export default async function UnitsPage({ params }: Props) {
               associationName={accountData?.name ?? undefined}
             >
               <Button variant="outline" data-test="admin-bulk-invite-button">
-                Bulk Invite Users
+                Invite Members
               </Button>
             </AdminBulkInviteDialog>
           ) : null}

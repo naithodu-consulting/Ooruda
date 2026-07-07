@@ -574,6 +574,8 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 | `20260715000000_bill_sequences.sql` | Jul 15 | `bill_sequences` table + `allocate_bill_no()` RPC for FY-scoped, per-type atomic bill number allocation |
 | `20260715000001_billing_entity_fields.sql` | Jul 15 | Add `bill_to`, `owner_is_company`, `owner_company_*` to `units`; `is_company`, `company_*` to `tenancies`; `pan_number` to `associations` |
 | `20260716000000_sub_meters_initial_reading_min_charge.sql` | Jul 16 | Add `initial_reading` and `minimum_charge` columns to `sub_meters` for onboarding baseline and default monthly charge |
+| `20260707122210_test_flags_and_rename_test_data.sql` | Jul 7 | Add `is_test` to `associations` and `profiles`; rename Abish → Sandbox Residency, Prestige Meadows → Demo Towers; tag 11 test users |
+| `20260707132123_sync_test_user_account_names.sql` | Jul 7 | Sync `accounts.name` from `profiles.full_name` for all test users (display name fix) |
 
 ---
 
@@ -784,6 +786,43 @@ This change affects both bill generation and electricity bill PDFs (which show t
 
 - `xlsx` (SheetJS) added to `apps/web` and `packages/features/admin` for XLSX parsing and template generation.
 
+### Admin Panel: Test vs Real Tagging
+
+- `is_test` boolean column added to both `associations` and `profiles`.
+- Two test associations renamed: Abish Association → **Sandbox Residency**, Prestige Meadows → **Demo Towers**. Both marked `is_test = true`.
+- Eleven test users (phone numbers `+919911000001–020`) renamed to a `[Role] T. [Descriptor]` pattern (e.g. Arjun T. Admin) and marked `is_test = true`.
+- **Test badge**: amber "Test" tag shown next to the account name in the admin accounts list and on the team account detail page for test associations/users.
+- **Kind filter**: new "Kind" dropdown in the admin accounts table — filter to "All", "Real", or "Test". Filtering is server-side (accounts table queried with `.in()` / `.not().in()` against the precomputed test account ID set).
+
+### Admin Bulk Invite: XLSX Data Cleaning & Owner Enrichment
+
+Improvements to handle real-world data quality issues found in association-supplied XLSX files:
+
+- **Phone normalisation**: `cleanPhoneCell()` strips Excel float suffixes (`9876543210.0` → `9876543210`), collapses internal spaces (`94482 53545` → `9448253545`), and trims trailing whitespace before the `+91` prefix is added.
+- **Unit number float cleanup**: `cleanUnitNo()` converts Excel-numeric cells that arrive as `"101.0"` → `"101"`. Alphanumeric unit numbers (e.g. `G1A`) are passed through unchanged.
+- **Company owner detection**: `isCompanyName()` matches common Indian business entity suffixes (LLP, Pvt Ltd, Limited, Buildcon, Infotech, Management, Realty, etc.). When the owner name matches, `owner_is_company = true` and `owner_company_name` are written to the unit — no invite is suppressed, a contact is still created under that phone.
+- **SELF OCCUPIED firm name capture**: when a SELF OCCUPIED row has a grey-cell tenant/organisation name (the occupying firm), it is stored as `owner_company_name` on the unit for billing purposes. No tenancy row is created. If both the owner and tenant organisation are companies, the tenant company name takes priority as the billing entity.
+- **Joint ownership name handling**: when `OWNER_NAME` contains ` & ` (e.g. `UJWAL N SALIAN & HARSHALATHA U SALIAN`), only the first name is used for the account — one account per phone number.
+- **Server-side owner enrichment**: after all invites are processed, `bulkInviteMembersAction` fetches the resolved user IDs by phone and writes `owner_id`, `owner_is_company`, and `owner_company_name` to the relevant unit rows in a single pass.
+
+### Admin Panel: Delete User Cache Bust
+
+- `deleteUserAction` now calls `revalidateAdmin()` before `redirect()`, so the accounts list refreshes immediately after a user is deleted.
+
+### Admin Panel: Tabs & Label Renames
+
+- Account type filter replaced with **tabs**: All | Associations | Users (was a dropdown with All / Team / Personal).
+- "Type" column values renamed: "Team" → "Association", "Personal" → "User".
+- Account detail page badges renamed: "Personal Account" → "User Account", "Team Account" → "Association".
+- Units page button renames: "Bulk Invite Users" → **"Invite Members"**, "Import CSV" → **"Import Units"**.
+
+### Migration
+
+| Migration | Description |
+|---|---|
+| `20260707122210_test_flags_and_rename_test_data.sql` | Add `is_test` to `associations` and `profiles`; rename and mark test associations and users |
+| `20260707132123_sync_test_user_account_names.sql` | Sync `accounts.name` from `profiles.full_name` for all test users |
+
 ---
 
 
@@ -807,4 +846,4 @@ This change affects both bill generation and electricity bill PDFs (which show t
 
 ---
 
-*Last updated: 2026-07-07 (v4.0)*
+*Last updated: 2026-07-07 (v4.0 — test flags, admin panel tabs, bulk invite XLSX data cleaning)*
