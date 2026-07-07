@@ -1,12 +1,13 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useTransition } from 'react';
 
 import { AlertCircle, CheckCircle2, Download, Upload } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
+import { toast } from '@kit/ui/sonner';
 import {
   Dialog,
   DialogContent,
@@ -30,16 +31,108 @@ import {
   type BulkInviteRow,
 } from '../lib/server/admin-server-actions';
 
-const TEMPLATE_CSV = `phone,name,email,role,association_name\n9911000001,Rajesh Kumar,rajesh@example.com,prop_owner,Sunrise Apartments\n9922000002,Priya Shah,,tenant,Sunrise Apartments\n`;
+// Association-supplied XLSX format headers (after normalizing)
+const ASSOC_FORMAT_MARKER = 'owner_mobile_no';
 
 function downloadTemplate() {
-  const blob = new Blob([TEMPLATE_CSV], { type: 'text/csv' });
+  const csv = `phone,name,email,role,association_name\n9911000001,Rajesh Kumar,rajesh@example.com,prop_owner,Sunrise Apartments\n9922000002,Priya Shah,,tenant,Sunrise Apartments\n`;
+  const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = 'bulk-invite-template.csv';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function normalizeHeader(h: string): string {
+  return h.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+const UNIT_STATUS_MAP: Record<string, 'Occupied' | 'Vacant'> = {
+  'self occupied': 'Occupied',
+  rented: 'Occupied',
+  vacant: 'Vacant',
+};
+
+/**
+ * Maps the association XLSX UNIT_STATUS to our DB value.
+ * Returns null if the value is unrecognised (treated as a validation error).
+ */
+function mapUnitStatus(raw: string): 'Occupied' | 'Vacant' | null {
+  return UNIT_STATUS_MAP[raw.trim().toLowerCase()] ?? null;
+}
+
+/**
+ * Parses association-supplied XLSX format:
+ * UNIT_NO, OWNER_NAME, OWNER_MOBILE_NO, OWNER_EMAIL_ADDRESS,
+ * UNIT_STATUS, TENANT_OR_ORGANIZATION_NAME, TENANT_MOBILE_NO, TENANT_EMAIL_ADDRESS
+ *
+ * UNIT_STATUS is mandatory. Values:
+ *   SELF OCCUPIED → Occupied, owner invite only (no tenant row)
+ *   RENTED        → Occupied, owner + tenant invite rows
+ *
+ * Returns an error string if UNIT_STATUS is missing or invalid on any row.
+ */
+function parseAssocFormat(
+  raw: Record<string, string>[],
+  associationName: string,
+): BulkInviteRow[] | string {
+  const rows: BulkInviteRow[] = [];
+
+  for (let i = 0; i < raw.length; i++) {
+    const r = raw[i]!;
+    const unitNo = r['unit_no'] ?? '';
+    const unitStatusRaw = r['unit_status'] ?? '';
+
+    if (!unitStatusRaw) {
+      return `Row ${i + 1} (unit ${unitNo || '?'}): UNIT_STATUS is required.`;
+    }
+
+    const unitStatus = mapUnitStatus(unitStatusRaw);
+    if (!unitStatus) {
+      return `Row ${i + 1} (unit ${unitNo || '?'}): Unrecognised UNIT_STATUS "${unitStatusRaw}". Expected "SELF OCCUPIED", "RENTED", or "VACANT".`;
+    }
+
+    const isRented = unitStatusRaw.trim().toLowerCase() === 'rented';
+
+    const ownerPhone = r['owner_mobile_no'] ?? '';
+    const ownerName = r['owner_name'] ?? '';
+    const ownerEmail = r['owner_email_address'] ?? '';
+    if (ownerPhone && ownerName) {
+      rows.push({
+        phone: ownerPhone,
+        name: ownerName,
+        email: ownerEmail,
+        role: 'prop_owner',
+        association_name: associationName,
+        unit_no: unitNo || undefined,
+        unit_status: unitStatus,
+      });
+    }
+
+    if (isRented) {
+      const tenantPhone = r['tenant_mobile_no'] ?? '';
+      const tenantName = r['tenant_or_organization_name'] ?? '';
+      const tenantEmail = r['tenant_email_address'] ?? '';
+      if (tenantPhone && tenantName) {
+        rows.push({
+          phone: tenantPhone,
+          name: tenantName,
+          email: tenantEmail,
+          role: 'tenant',
+          association_name: associationName,
+          unit_no: unitNo || undefined,
+          unit_status: unitStatus,
+        });
+      }
+    }
+  }
+
+  if (rows.length === 0) {
+    return 'No valid owner/tenant rows found in the file.';
+  }
+  return rows;
 }
 
 type Step = 'upload' | 'preview' | 'result';
@@ -51,15 +144,20 @@ const ROLE_LABELS: Record<string, string> = {
   tenant: 'Tenant',
 };
 
+interface AdminBulkInviteDialogProps {
+  /** Pre-fill association name when opened from an association's units page */
+  associationName?: string;
+}
+
 export function AdminBulkInviteDialog(
-  props: React.PropsWithChildren<Record<never, never>>,
+  props: React.PropsWithChildren<AdminBulkInviteDialogProps>,
 ) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>('upload');
   const [rows, setRows] = useState<BulkInviteRow[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
   const [result, setResult] = useState<BulkInviteResult | null>(null);
-  const [pending, setPending] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const reset = () => {
@@ -67,7 +165,6 @@ export function AdminBulkInviteDialog(
     setRows([]);
     setParseError(null);
     setResult(null);
-    setPending(false);
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -76,29 +173,81 @@ export function AdminBulkInviteDialog(
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const parsed = parseCsv(text);
-      if (typeof parsed === 'string') {
-        setParseError(parsed);
-        return;
-      }
-      setRows(parsed);
-      setStep('preview');
-    };
-    reader.readAsText(file);
+    if (file.name.toLowerCase().endsWith('.xlsx')) {
+      import('xlsx').then((XLSX) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const data = new Uint8Array(ev.target!.result as ArrayBuffer);
+            const wb = XLSX.read(data, { type: 'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]!]!;
+            const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+              defval: '',
+            });
+            const normalized = raw.map((r) => {
+              const out: Record<string, string> = {};
+              for (const k of Object.keys(r)) {
+                out[normalizeHeader(k)] = String(r[k] ?? '').trim();
+              }
+              return out;
+            });
+
+            const isAssocFmt =
+              normalized.length > 0 &&
+              ASSOC_FORMAT_MARKER in (normalized[0] ?? {});
+
+            if (isAssocFmt) {
+              const assocName = props.associationName ?? '';
+              if (!assocName) {
+                setParseError(
+                  'Could not detect the association name. Please use the standard CSV format.',
+                );
+                return;
+              }
+              const parsed = parseAssocFormat(normalized, assocName);
+              if (typeof parsed === 'string') {
+                setParseError(parsed);
+                return;
+              }
+              setRows(parsed);
+              setStep('preview');
+            } else {
+              setParseError(
+                'Unrecognised XLSX format. Use the CSV template or the association-supplied member list.',
+              );
+            }
+          } catch {
+            setParseError('Failed to read the XLSX file. Please try again.');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    } else {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        const parsed = parseCsv(text);
+        if (typeof parsed === 'string') {
+          setParseError(parsed);
+          return;
+        }
+        setRows(parsed);
+        setStep('preview');
+      };
+      reader.readAsText(file);
+    }
   };
 
-  const handleImport = async () => {
-    setPending(true);
-    try {
-      const res = await bulkInviteMembersAction(rows);
-      setResult(res);
-      setStep('result');
-    } finally {
-      setPending(false);
-    }
+  const handleImport = () => {
+    startTransition(async () => {
+      try {
+        const res = await bulkInviteMembersAction(rows);
+        setResult(res);
+        setStep('result');
+      } catch {
+        toast.error('Import failed. Please try again.');
+      }
+    });
   };
 
   return (
@@ -113,11 +262,12 @@ export function AdminBulkInviteDialog(
 
       <DialogContent className="sm:max-w-2xl" style={{ maxWidth: '42rem' }}>
         <DialogHeader>
-          <DialogTitle>Bulk Invite Members via CSV</DialogTitle>
+          <DialogTitle>Bulk Invite Members</DialogTitle>
           <DialogDescription>
             <span className="flex flex-col gap-1.5">
               <span>
-                Upload a CSV file with these columns. Bad rows are skipped.
+                Upload a CSV or the association-supplied Excel file. Bad rows
+                are skipped.
               </span>
               <code className="bg-muted text-foreground block w-fit rounded px-2 py-0.5 text-xs">
                 phone, name, email (optional), role, association_name
@@ -142,13 +292,13 @@ export function AdminBulkInviteDialog(
             >
               <Upload className="text-muted-foreground h-8 w-8" />
               <span className="text-muted-foreground text-sm">
-                Click to select a CSV file
+                Click to select a CSV or Excel (.xlsx) file
               </span>
               <input
                 id="bulk-invite-csv"
                 ref={fileRef}
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,text/csv"
                 className="sr-only"
                 onChange={handleFileChange}
               />
@@ -156,7 +306,7 @@ export function AdminBulkInviteDialog(
 
             <div className="text-muted-foreground rounded-md border p-3 text-xs">
               <div className="mb-1.5 flex items-center justify-between">
-                <p className="font-semibold">Expected CSV format:</p>
+                <p className="font-semibold">Standard CSV format:</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -184,6 +334,18 @@ export function AdminBulkInviteDialog(
                   </code>
                 ))}
               </p>
+              {props.associationName && (
+                <p className="mt-2.5 border-t pt-2">
+                  <span className="font-medium">Association Excel format</span>{' '}
+                  also accepted for{' '}
+                  <span className="font-semibold">{props.associationName}</span>
+                  .{' '}
+                  <span className="font-medium">UNIT_STATUS</span> is mandatory
+                  — <code className="bg-background rounded px-1">SELF OCCUPIED</code> invites owner only,{' '}
+                  <code className="bg-background rounded px-1">RENTED</code> invites owner + tenant.
+                  Unit status is saved to the database.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -203,7 +365,8 @@ export function AdminBulkInviteDialog(
                     <TableHead>Phone</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead>Association</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -223,8 +386,11 @@ export function AdminBulkInviteDialog(
                           {ROLE_LABELS[row.role] ?? row.role}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm">
-                        {row.association_name}
+                      <TableCell className="text-muted-foreground text-xs">
+                        {row.unit_no || '—'}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {row.unit_status ?? '—'}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -286,7 +452,7 @@ export function AdminBulkInviteDialog(
               reset();
               setOpen(false);
             }}
-            disabled={pending}
+            disabled={isPending}
           >
             {step === 'result' ? 'Close' : 'Cancel'}
           </Button>
@@ -300,15 +466,15 @@ export function AdminBulkInviteDialog(
                   setRows([]);
                   if (fileRef.current) fileRef.current.value = '';
                 }}
-                disabled={pending}
+                disabled={isPending}
               >
                 Back
               </Button>
               <Button
                 onClick={handleImport}
-                disabled={pending || rows.length === 0}
+                disabled={isPending || rows.length === 0}
               >
-                {pending ? 'Importing…' : `Import ${rows.length} Members`}
+                {isPending ? 'Importing…' : `Import ${rows.length} Members`}
               </Button>
             </>
           )}

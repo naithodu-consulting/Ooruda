@@ -573,6 +573,7 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 | `20260714000000_door_no_load_kva.sql` | Jul 14 | Add optional `door_no` TEXT to `units`, `load_kva` NUMERIC to `sub_meters`, `sanctioned_load_kva` NUMERIC to `associations` |
 | `20260715000000_bill_sequences.sql` | Jul 15 | `bill_sequences` table + `allocate_bill_no()` RPC for FY-scoped, per-type atomic bill number allocation |
 | `20260715000001_billing_entity_fields.sql` | Jul 15 | Add `bill_to`, `owner_is_company`, `owner_company_*` to `units`; `is_company`, `company_*` to `tenancies`; `pan_number` to `associations` |
+| `20260716000000_sub_meters_initial_reading_min_charge.sql` | Jul 16 | Add `initial_reading` and `minimum_charge` columns to `sub_meters` for onboarding baseline and default monthly charge |
 
 ---
 
@@ -671,6 +672,107 @@ The electricity bill PDF footer was refactored to use the shared `DocumentFooter
 
 ---
 
+## Release v4.0 — Association Onboarding & XLSX Import (Jul 7, 2026)
+
+Branch: `week-4-enhancements`
+
+This release focuses on onboarding associations with their existing data. All import dialogs now accept Excel (XLSX) files alongside CSV, and the system understands the specific column formats used by associations in their own records.
+
+### Shared Spreadsheet Parsing Utility
+
+- New `apps/web/lib/parse-spreadsheet.ts` shared utility using SheetJS (`xlsx`).
+- `parseSpreadsheetFile(file)` — detects `.xlsx` vs `.csv` by extension; normalises all headers to `lowercase_with_underscores`; returns `Record<string, string>[]`.
+- `downloadXlsxTemplate(filename, headers, sampleRows)` — generates and downloads XLSX import templates.
+- Used by all four import dialogs, replacing the previous per-dialog CSV parsing.
+
+### XLSX Support Across All Import Dialogs
+
+All four bulk import dialogs now accept both `.csv` and `.xlsx` files:
+
+- **Import Units** (units page)
+- **Import Sub-meters** (electricity page, super admin)
+- **Import Meter Readings** (electricity page)
+- **Import Other Charges** (billing page)
+
+File upload labels and instructions updated to remove "CSV" references. Template downloads now produce `.xlsx` files.
+
+### Units Import: Association Column Format
+
+The units import dialog now understands the association's native column format:
+
+| Association column | System column |
+|---|---|
+| `AREA` | `area_sqft` |
+| `DOOR_NUMBER` | `door_no` |
+
+Files with columns `UNIT_NO, TYPE, FLOOR, AREA, DOOR_NUMBER` are accepted without any manual column remapping.
+
+### Admin Bulk Invite: Association User XLSX Format
+
+The admin bulk-invite dialog now auto-detects and handles the association's user data XLSX format:
+
+- **Detection**: presence of `OWNER_MOBILE_NO` column (after normalisation) identifies the association format.
+- **Format**: `UNIT_NO, OWNER_NAME, OWNER_MOBILE_NO, OWNER_EMAIL_ADDRESS, UNIT_STATUS, TENANT_OR_ORGANIZATION_NAME, TENANT_MOBILE_NO, TENANT_EMAIL_ADDRESS`
+- **Row expansion**: each association row expands to 1–2 invite rows:
+  - `SELF OCCUPIED` → owner invite only
+  - `RENTED` → owner invite + tenant invite (if tenant name + phone present)
+  - `VACANT` → owner invite only (builder as `prop_owner`)
+- **Unit status**: `SELF OCCUPIED` / `RENTED` → `Occupied`; `VACANT` → `Vacant`. Status is written to `units.status` after memberships are created.
+- **Validation**: `UNIT_STATUS` is mandatory; unrecognised values produce a clear parse-time error.
+- Preview table shows: phone, name, role, unit number, and status per expanded row.
+
+### Electricity: Sub-meter Onboarding Columns
+
+Two new columns added to `sub_meters`:
+
+| Column | Type | Purpose |
+|---|---|---|
+| `initial_reading` | `numeric(12,2)` | Last recorded reading before onboarding — used as the `previous_reading` fallback when calculating the first electricity bill |
+| `minimum_charge` | `numeric(10,2)` | Default monthly minimum charge for this meter — auto-filled on every meter reading without a per-reading override |
+
+**Sub-meter import** (CSV/XLSX) accepts association column aliases:
+
+| Association column | System column |
+|---|---|
+| `INITIAL_METER_READING` | `initial_reading` |
+| `MIN_CHARGES` | `minimum_charge` |
+
+Both fields are optional (default 0). Preview table shows Init. Reading and Min. Charge columns.
+
+### Electricity: Simplified Meter Readings Import
+
+The meter readings import was completely rewritten to match the format associations will supply:
+
+- **New format**: `SUB_METER_NO, CURRENT_METER_READING` only (2 columns).
+- Sub-meters are looked up by their label (`meter_label`) within the association — no unit number needed.
+- **Previous reading** auto-filled: last recorded reading before the selected period, falling back to `sub_meter.initial_reading` for newly onboarded meters.
+- **Minimum charge** auto-filled from `sub_meter.minimum_charge` — no per-row override needed.
+- **Duplicate detection**: duplicate sub-meter labels within the file are rejected at parse time with a clear error.
+- CommonArea meters are included naturally — their `meter_label` (e.g. `Common-Lift`) identifies them directly.
+- Template updated to 2-column format; instructions updated to explain auto-fill behaviour.
+
+### Code Quality & Security Improvements
+
+- **`server-only` guard**: `electricity-actions.ts` now imports `server-only` to prevent accidental client-side bundling.
+- **Server-side input validation**: `bulkImportMeterReadingsAction` validates period format (`YYYY-MM` regex) and enforces a 500-row cap on both bulk import actions.
+- **Unit status error logging**: unit status update failures in `bulkInviteMembersAction` are now logged via the structured logger (previously silently swallowed).
+- **Unit number case consistency**: deduplication key and DB query in the unit status update loop both normalise to uppercase, eliminating silent no-op updates.
+- **File parse errors surfaced**: both electricity import dialogs show a toast if the XLSX/CSV parse throws (previously: silent unhandled rejection).
+- **`useTransition` in admin bulk invite**: replaced manual `useState`/`setPending` with `useTransition` and added an error toast on action failure.
+- **Dead code removed**: redundant `seen` Map loop in meter readings dialog removed.
+
+### Migration
+
+| Migration | Description |
+|---|---|
+| `20260716000000_sub_meters_initial_reading_min_charge.sql` | Add `initial_reading` and `minimum_charge` columns to `sub_meters` |
+
+### Dependencies
+
+- `xlsx` (SheetJS) added to `apps/web` and `packages/features/admin` for XLSX parsing and template generation.
+
+---
+
 
 | Module | Status | Key Capabilities |
 |---|---|---|
@@ -692,4 +794,4 @@ The electricity bill PDF footer was refactored to use the shared `DocumentFooter
 
 ---
 
-*Last updated: 2026-07-06 (v3.7)*
+*Last updated: 2026-07-07 (v4.0)*

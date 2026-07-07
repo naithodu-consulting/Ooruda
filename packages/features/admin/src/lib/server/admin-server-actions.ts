@@ -548,6 +548,10 @@ export interface BulkInviteRow {
   email?: string;
   role: string;
   association_name: string;
+  /** Unit number from the association XLSX — used to update units.status */
+  unit_no?: string;
+  /** DB value to write to units.status when unit_no is provided */
+  unit_status?: 'Occupied' | 'Vacant';
 }
 
 export interface BulkInviteResult {
@@ -722,6 +726,30 @@ export async function bulkInviteMembersAction(
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       skipped.push({ row: rowNum, phone: normalised, reason: msg });
+    }
+  }
+
+  // Apply unit status updates for rows that carry unit_no + unit_status.
+  // Deduplicate by association_id + unit_no so each unit is written once.
+  // unit_no is normalised to uppercase to match the convention used at unit creation.
+  const unitStatusMap = new Map<string, { associationId: string; unit_no: string; unit_status: 'Occupied' | 'Vacant' }>();
+  for (const row of rows) {
+    if (!row.unit_no || !row.unit_status) continue;
+    const associationId = assocIdByName.get(row.association_name.trim().toLowerCase());
+    if (!associationId) continue;
+    const normalizedUnitNo = row.unit_no.trim().toUpperCase();
+    const key = `${associationId}::${normalizedUnitNo}`;
+    unitStatusMap.set(key, { associationId, unit_no: normalizedUnitNo, unit_status: row.unit_status });
+  }
+
+  for (const { associationId, unit_no, unit_status } of unitStatusMap.values()) {
+    const { error } = await adminClient
+      .from('units')
+      .update({ status: unit_status })
+      .eq('association_id', associationId)
+      .eq('unit_no', unit_no);
+    if (error) {
+      logger.error({ associationId, unit_no, error }, 'bulkInvite: failed to update unit status');
     }
   }
 

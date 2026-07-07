@@ -35,14 +35,23 @@ import {
 } from '@kit/ui/table';
 
 import {
+  downloadXlsxTemplate,
+  parseSpreadsheetFile,
+} from '~/lib/parse-spreadsheet';
+
+import {
   type BulkImportRow,
   bulkImportUnitsAction,
 } from '../_lib/units-actions';
 import { UNIT_TYPES } from '../_lib/units-schema';
 
-const TEMPLATE_CSV = `unit_no,type,floor,area_sqft,door_no\nG-01,Shop,0,450,Door No. 101\nG-02,Shop,0,380,\n1-01,Office,1,600,\nCA-01,Common Area,,0,\n`;
-
 const REQUIRED_COLUMNS = ['unit_no', 'type', 'area_sqft'] as const;
+
+// Accept column names as sent by associations (map → our internal names)
+const COLUMN_ALIASES: Record<string, string> = {
+  area: 'area_sqft',
+  door_number: 'door_no',
+};
 
 type ParsedRow = BulkImportRow & {
   _row: number;
@@ -50,25 +59,33 @@ type ParsedRow = BulkImportRow & {
 };
 
 function downloadTemplate() {
-  const blob = new Blob([TEMPLATE_CSV], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'units-import-template.csv';
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadXlsxTemplate('units-import-template.xlsx', [
+    'unit_no',
+    'type',
+    'floor',
+    'area_sqft',
+    'door_no',
+  ], [
+    ['G-01', 'Shop', 0, 450, 'Door No. 101'],
+    ['G-02', 'Shop', 0, 380, ''],
+    ['1-01', 'Office', 1, 600, ''],
+    ['CA-01', 'Common Area', '', 0, ''],
+  ]);
 }
 
-function parseCSV(text: string): ParsedRow[] {
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
+function normalizeRow(r: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(r)) {
+    out[COLUMN_ALIASES[k] ?? k] = v;
+  }
+  return out;
+}
 
-  if (lines.length < 2) return [];
+function parseRows(raw: Record<string, string>[]): ParsedRow[] {
+  if (raw.length === 0) return [];
 
-  const headers = lines[0]!.split(',').map((h) => h.trim().toLowerCase());
-
+  const normalized = raw.map(normalizeRow);
+  const headers = Object.keys(normalized[0]!);
   const missing = REQUIRED_COLUMNS.filter((c) => !headers.includes(c));
   if (missing.length > 0) {
     return [
@@ -83,17 +100,12 @@ function parseCSV(text: string): ParsedRow[] {
     ];
   }
 
-  const col = (name: string) => headers.indexOf(name);
-
-  return lines.slice(1).map((line, i) => {
-    const cells = line.split(',').map((c) => c.trim());
-    const get = (name: string) => cells[col(name)] ?? '';
-
-    const unit_no = get('unit_no');
-    const type = get('type');
-    const floor = get('floor');
-    let area_sqft = get('area_sqft');
-    const door_no_raw = get('door_no');
+  return normalized.map((r, i) => {
+    const unit_no = r['unit_no'] ?? '';
+    const type = r['type'] ?? '';
+    const floor = r['floor'] ?? '';
+    let area_sqft = r['area_sqft'] ?? '';
+    const door_no_raw = r['door_no'] ?? '';
     const door_no = door_no_raw === '' ? null : door_no_raw;
 
     const validType = UNIT_TYPES.includes(type as (typeof UNIT_TYPES)[number]);
@@ -121,7 +133,6 @@ function parseCSV(text: string): ParsedRow[] {
     if (
       !error &&
       floor !== '' &&
-      floor !== undefined &&
       (Number.isNaN(Number(floor)) || Number(floor) < -5 || Number(floor) > 200)
     )
       error = 'floor must be an integer between -5 and 200';
@@ -165,12 +176,7 @@ export function ImportUnitsDialog({
     setFileName(file.name);
     setResult(null);
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      setRows(parseCSV(text));
-    };
-    reader.readAsText(file);
+    parseSpreadsheetFile(file).then((raw) => setRows(parseRows(raw)));
   }
 
   function handleOpenChange(next: boolean) {
@@ -236,7 +242,7 @@ export function ImportUnitsDialog({
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".csv,.xlsx,text/csv"
                   className="hidden"
                   id="csv-upload"
                   onChange={handleFileChange}

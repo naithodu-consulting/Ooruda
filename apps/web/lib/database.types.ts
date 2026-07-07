@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "12"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -208,50 +203,6 @@ export type Database = {
           },
         ]
       }
-      association_payment_gateways: {
-        Row: {
-          association_id: string
-          created_at: string
-          id: string
-          is_active: boolean
-          key_id: string
-          key_secret: string
-          provider: string
-          updated_at: string
-          webhook_secret: string | null
-        }
-        Insert: {
-          association_id: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          key_id: string
-          key_secret: string
-          provider?: string
-          updated_at?: string
-          webhook_secret?: string | null
-        }
-        Update: {
-          association_id?: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          key_id?: string
-          key_secret?: string
-          provider?: string
-          updated_at?: string
-          webhook_secret?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "association_payment_gateways_association_id_fkey"
-            columns: ["association_id"]
-            isOneToOne: true
-            referencedRelation: "associations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       associations: {
         Row: {
           account_id: string
@@ -265,8 +216,8 @@ export type Database = {
           id: string
           logo_url: string | null
           mescom_consumer_no: string | null
-          registration_number: string | null
           pan_number: string | null
+          registration_number: string | null
           sanctioned_load_kva: number | null
           status: string
           updated_at: string
@@ -1220,8 +1171,6 @@ export type Database = {
           mode: string
           paid_at: string
           paid_by_role: string
-          payment_batch_id: string | null
-          razorpay_order_id: string | null
           razorpay_payment_id: string | null
           recorded_by: string | null
         }
@@ -1233,8 +1182,6 @@ export type Database = {
           mode: string
           paid_at?: string
           paid_by_role: string
-          payment_batch_id?: string | null
-          razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
           recorded_by?: string | null
         }
@@ -1246,8 +1193,6 @@ export type Database = {
           mode?: string
           paid_at?: string
           paid_by_role?: string
-          payment_batch_id?: string | null
-          razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
           recorded_by?: string | null
         }
@@ -1417,28 +1362,34 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          initial_reading: number
           is_active: boolean
           load_kva: number | null
           meter_label: string
           meter_type: string
+          minimum_charge: number
           unit_id: string
         }
         Insert: {
           created_at?: string
           id?: string
+          initial_reading?: number
           is_active?: boolean
           load_kva?: number | null
           meter_label: string
           meter_type?: string
+          minimum_charge?: number
           unit_id: string
         }
         Update: {
           created_at?: string
           id?: string
+          initial_reading?: number
           is_active?: boolean
           load_kva?: number | null
           meter_label?: string
           meter_type?: string
+          minimum_charge?: number
           unit_id?: string
         }
         Relationships: [
@@ -1986,19 +1937,6 @@ export type Database = {
         Args: { account_id: string; user_id: string }
         Returns: boolean
       }
-      record_payment: {
-        Args: {
-          p_amount: number
-          p_association_id: string
-          p_bill_id: string
-          p_mode: string
-          p_paid_by_role: string
-          p_payment_batch_id?: string
-          p_razorpay_order_id?: string
-          p_razorpay_payment_id?: string
-        }
-        Returns: string
-      }
       revoke_nonce: {
         Args: { p_id: string; p_reason?: string }
         Returns: boolean
@@ -2228,6 +2166,101 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      iceberg_namespaces: {
+        Row: {
+          bucket_name: string
+          catalog_id: string
+          created_at: string
+          id: string
+          metadata: Json
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          bucket_name: string
+          catalog_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          bucket_name?: string
+          catalog_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iceberg_namespaces_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "buckets_analytics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      iceberg_tables: {
+        Row: {
+          bucket_name: string
+          catalog_id: string
+          created_at: string
+          id: string
+          location: string
+          name: string
+          namespace_id: string
+          remote_table_id: string | null
+          shard_id: string | null
+          shard_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          bucket_name: string
+          catalog_id: string
+          created_at?: string
+          id?: string
+          location: string
+          name: string
+          namespace_id: string
+          remote_table_id?: string | null
+          shard_id?: string | null
+          shard_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bucket_name?: string
+          catalog_id?: string
+          created_at?: string
+          id?: string
+          location?: string
+          name?: string
+          namespace_id?: string
+          remote_table_id?: string | null
+          shard_id?: string | null
+          shard_key?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iceberg_tables_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "buckets_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "iceberg_tables_namespace_id_fkey"
+            columns: ["namespace_id"]
+            isOneToOne: false
+            referencedRelation: "iceberg_namespaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       migrations: {
         Row: {
@@ -2742,3 +2775,4 @@ export const Constants = {
     },
   },
 } as const
+
