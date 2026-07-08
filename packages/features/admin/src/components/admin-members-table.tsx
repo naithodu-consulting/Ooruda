@@ -30,14 +30,15 @@ type Memberships =
   };
 
 export function AdminMembersTable(props: { members: Memberships[] }) {
-  return <DataTable data={props.members} columns={getColumns()} />;
+  return <DataTable data={props.members} columns={getColumns()} manualSorting={false} />;
 }
 
 function getColumns(): ColumnDef<Memberships>[] {
   return [
     {
       header: 'Name',
-      enableSorting: false,
+      enableSorting: true,
+      accessorFn: (row) => row.name ?? row.email ?? '',
       cell: ({ row }) => {
         const name = row.original.name ?? row.original.email;
 
@@ -61,21 +62,25 @@ function getColumns(): ColumnDef<Memberships>[] {
       },
     },
     {
+      header: 'Phone',
+      enableSorting: true,
+      accessorFn: (row) => row.phone ?? '',
+      cell: ({ row }) => row.original.phone ?? '—',
+    },
+    {
       header: 'Email',
       accessorKey: 'email',
       enableSorting: false,
     },
     {
       header: 'Role',
-      enableSorting: false,
-      cell: ({ row }) => {
-        return row.original.role;
-      },
+      accessorKey: 'role',
+      enableSorting: true,
     },
     {
       header: 'Created At',
       accessorKey: 'created_at',
-      enableSorting: false,
+      enableSorting: true,
       cell: ({ row }) => {
         return renderDate(row.original.created_at);
       },

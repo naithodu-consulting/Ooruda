@@ -15,14 +15,15 @@ type Membership = Tables<'accounts_memberships'> & {
 };
 
 export function AdminMembershipsTable(props: { memberships: Membership[] }) {
-  return <DataTable data={props.memberships} columns={getColumns()} />;
+  return <DataTable data={props.memberships} columns={getColumns()} manualSorting={false} />;
 }
 
 function getColumns(): ColumnDef<Membership>[] {
   return [
     {
       header: 'Team',
-      enableSorting: false,
+      enableSorting: true,
+      accessorFn: (row) => row.account.name ?? '',
       cell: ({ row }) => {
         return (
           <Link
@@ -37,12 +38,12 @@ function getColumns(): ColumnDef<Membership>[] {
     {
       header: 'Role',
       accessorKey: 'account_role',
-      enableSorting: false,
+      enableSorting: true,
     },
     {
       header: 'Created At',
       accessorKey: 'created_at',
-      enableSorting: false,
+      enableSorting: true,
       cell: ({ row }) => {
         return renderDate(row.original.created_at);
       },

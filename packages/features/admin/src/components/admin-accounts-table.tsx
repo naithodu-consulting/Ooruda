@@ -98,6 +98,7 @@ export function AdminAccountsTable(
           pageIndex={props.page - 1}
           pageCount={props.pageCount}
           data={props.data}
+          manualSorting={false}
           columns={getColumns(
             props.membershipsByAccountId ?? {},
             props.phoneByAccountId ?? {},
@@ -229,6 +230,8 @@ function getColumns(
     {
       id: 'name',
       header: 'Name',
+      enableSorting: true,
+      accessorFn: (row) => row.name?.trim() ?? '',
       cell: ({ row }) => {
         const isTest = testAccountIds.has(row.original.id);
         return (
@@ -293,6 +296,8 @@ function getColumns(
     {
       id: 'created_at',
       header: 'Created At',
+      enableSorting: true,
+      accessorFn: (row) => row.created_at ?? '',
       cell: ({ row }) => {
         return new Date(row.original.created_at!).toLocaleDateString('en-IN', {
           year: 'numeric',
