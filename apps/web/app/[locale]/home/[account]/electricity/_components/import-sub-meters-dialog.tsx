@@ -245,8 +245,8 @@ export function ImportSubMetersDialog({
         }
       />
 
-      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
-        <div className="flex flex-col gap-6 p-6">
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
           <DialogHeader>
             <DialogTitle>Import sub-meters</DialogTitle>
           </DialogHeader>

@@ -688,6 +688,9 @@ export async function bulkInviteMembersAction(
         }
 
         userId = data.user.id;
+        // Register the newly created user so subsequent rows for the same phone
+        // skip createUser and go straight to the membership insert.
+        existingUserByPhone.set(normalised, userId);
 
         await adminClient.from('profiles').upsert(
           {
