@@ -30,6 +30,24 @@ const AssociationSchema = z.object({
   gst_enabled: z.boolean().default(false),
   gst_rate: z.coerce.number().min(0).max(100).nullable(),
   mescom_consumer_no: z.string().max(50).optional(),
+  authorised_signatory: z
+    .string()
+    .max(200)
+    .nullable()
+    .transform((v) => v || null),
+  // sanctioned_load_kva — informational only (total load for the association
+  // from the electricity board). Individual sub-meter load_kva values are what
+  // drive minimum-charge calculations; this field is for admin reference only.
+  sanctioned_load_kva: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? null : Number(v)),
+    z.number().positive('Load must be greater than 0').nullable().optional(),
+  ),
+  pan_number: z
+    .string()
+    .max(10, 'PAN must be 10 characters')
+    .regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Invalid PAN format')
+    .nullable()
+    .or(z.literal('').transform(() => null)),
 });
 
 const BillingSettingsSchema = z.object({
@@ -69,6 +87,10 @@ export async function updateAssociationAction(
     gst_enabled: formData.get('gst_enabled') === 'on',
     gst_rate: formData.get('gst_rate') || null,
     mescom_consumer_no: formData.get('mescom_consumer_no') || undefined,
+    authorised_signatory:
+      (formData.get('authorised_signatory') as string) || null,
+    sanctioned_load_kva: formData.get('sanctioned_load_kva') || null,
+    pan_number: (formData.get('pan_number') as string) || '',
   });
 
   if (!assocResult.success) {

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -72,17 +72,17 @@ export function PaymentsSection(props: {
   title?: string;
   description?: string;
   accountSlug?: string;
+  initialDuration?: string;
+  initialStatus?: string;
+  initialUnit?: string;
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const onPaymentSuccess = useCallback(() => router.refresh(), [router]);
 
-  const [statusVal, setStatusVal] = useState('all');
+  const [statusVal, setStatusVal] = useState(props.initialStatus ?? 'all');
   const [typeVal, setTypeVal] = useState('all');
-  const [durationVal, setDurationVal] = useState('all');
-  const [unitTab, setUnitTab] = useState(
-    () => searchParams.get('unit') ?? ALL_UNITS,
-  );
+  const [durationVal, setDurationVal] = useState(props.initialDuration ?? 'all');
+  const [unitTab, setUnitTab] = useState(props.initialUnit ?? ALL_UNITS);
   const [page, setPage] = useState(1);
 
   // Distinct units from all bills — used to render unit tabs for owner/tenant view
@@ -110,7 +110,12 @@ export function PaymentsSection(props: {
     }
 
     if (statusVal !== 'all') {
-      if (statusVal === 'paid') {
+      if (statusVal === 'collected') {
+        // Collected = any bill with money received (Paid or Partial)
+        rows = rows.filter(
+          (b) => b.status === 'Paid' || b.status === 'Partial',
+        );
+      } else if (statusVal === 'paid') {
         rows = rows.filter((b) => b.status === 'Paid');
       } else if (statusVal === 'unpaid') {
         rows = rows.filter((b) => b.status === 'Unpaid' && b.due_date >= today);

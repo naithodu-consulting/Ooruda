@@ -39,6 +39,9 @@ interface Props {
     gst_enabled: boolean;
     gst_rate: number | null;
     mescom_consumer_no: string | null;
+    authorised_signatory: string | null;
+    sanctioned_load_kva: number | null;
+    pan_number: string | null;
   };
   billingSettings: {
     electricity_due_day: number;
@@ -144,15 +147,49 @@ export function AssociationForm({ association, billingSettings }: Props) {
         </CardHeader>
 
         <CardContent>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="mescom_consumer_no">Consumer Number</Label>
-            <Input
-              id="mescom_consumer_no"
-              name="mescom_consumer_no"
-              defaultValue={association.mescom_consumer_no ?? ''}
-              placeholder="e.g. 1234567890"
-              className="max-w-xs"
-            />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="mescom_consumer_no">Consumer Number</Label>
+              <Input
+                id="mescom_consumer_no"
+                name="mescom_consumer_no"
+                defaultValue={association.mescom_consumer_no ?? ''}
+                placeholder="e.g. 1234567890"
+                className="max-w-xs"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="authorised_signatory">Authorised Signatory</Label>
+              <Input
+                id="authorised_signatory"
+                name="authorised_signatory"
+                defaultValue={association.authorised_signatory ?? ''}
+                placeholder="e.g. John Doe, Secretary"
+                className="max-w-xs"
+              />
+              <p className="text-muted-foreground text-xs">
+                Name shown on electricity bill PDFs.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="sanctioned_load_kva">Sanctioned Load (kVA)</Label>
+              <Input
+                id="sanctioned_load_kva"
+                name="sanctioned_load_kva"
+                type="number"
+                step="0.01"
+                min="0"
+                defaultValue={association.sanctioned_load_kva ?? ''}
+                placeholder="e.g. 100"
+                className="max-w-xs"
+              />
+              <p className="text-muted-foreground text-xs">
+                Total sanctioned load for the association from the electricity
+                board.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -186,6 +223,23 @@ export function AssociationForm({ association, billingSettings }: Props) {
               placeholder="29AABCS1429B1ZB"
               className="max-w-xs font-mono uppercase"
             />
+            <p className="text-muted-foreground text-xs">
+              Shown on bills when available.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="pan_number">PAN Number</Label>
+            <Input
+              id="pan_number"
+              name="pan_number"
+              defaultValue={association.pan_number ?? ''}
+              placeholder="AABCS1429B"
+              className="max-w-xs font-mono uppercase"
+            />
+            <p className="text-muted-foreground text-xs">
+              Shown on bills when GSTIN is not available.
+            </p>
           </div>
 
           <div className="flex flex-col gap-1.5">

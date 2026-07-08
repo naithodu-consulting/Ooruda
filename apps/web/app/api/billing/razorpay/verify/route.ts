@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
       p_paid_by_role: paidByRole,
       p_razorpay_payment_id: razorpayPaymentId,
       p_razorpay_order_id: razorpayOrderId,
-      p_payment_batch_id: paymentBatchId,
+      p_payment_batch_id: paymentBatchId ?? undefined,
     });
 
     if (error) {

@@ -28,6 +28,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -61,6 +62,7 @@ import {
   CreateSubMeterSchema,
   SUB_METER_TYPES,
 } from '../_lib/electricity-schema';
+import { ImportSubMetersDialog } from './import-sub-meters-dialog';
 
 export interface SubMeterRow {
   id: string;
@@ -69,6 +71,7 @@ export interface SubMeterRow {
   is_active: boolean;
   unit_id: string;
   unit_no: string;
+  load_kva: number | null;
 }
 
 export function SubMetersSection(props: {
@@ -76,6 +79,7 @@ export function SubMetersSection(props: {
   subMeters: SubMeterRow[];
   units: { id: string; unit_no: string }[];
   canManage: boolean;
+  isSuperAdmin?: boolean;
 }) {
   return (
     <Card className="border-0 shadow-none">
@@ -89,7 +93,10 @@ export function SubMetersSection(props: {
         </div>
 
         {props.canManage ? (
-          <div className="sm:shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
+            {props.isSuperAdmin && (
+              <ImportSubMetersDialog associationId={props.associationId} />
+            )}
             <AddSubMeterDialog
               associationId={props.associationId}
               units={props.units}
@@ -111,6 +118,7 @@ export function SubMetersSection(props: {
                   <TableHead>Meter</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Load (kVA)</TableHead>
                   <TableHead>Status</TableHead>
                   {props.canManage ? <TableHead /> : null}
                 </TableRow>
@@ -123,6 +131,9 @@ export function SubMetersSection(props: {
                     </TableCell>
                     <TableCell>{meter.unit_no}</TableCell>
                     <TableCell>{meter.meter_type}</TableCell>
+                    <TableCell>
+                      {meter.load_kva != null ? `${meter.load_kva} kVA` : '—'}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
@@ -239,6 +250,7 @@ function AddSubMeterForm(props: {
       unitId: props.units[0]?.id ?? '',
       meterLabel: '',
       meterType: 'Unit' as const,
+      loadKva: '',
     },
   });
 
@@ -329,6 +341,28 @@ function AddSubMeterForm(props: {
                   ))}
                 </SelectContent>
               </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          name="loadKva"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Sanctioned Load (kVA)</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Optional, e.g. 5"
+                  {...field}
+                />
+              </FormControl>
+              <FormDescription>
+                Leave blank if unknown. Used to calculate minimum charges.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

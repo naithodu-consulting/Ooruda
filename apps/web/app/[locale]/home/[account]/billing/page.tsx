@@ -9,12 +9,16 @@ import { BillsSection, type BillRow } from './_components/bills-section';
 
 interface Props {
   params: Promise<{ account: string }>;
+  searchParams: Promise<{ duration?: string; status?: string }>;
 }
 
 export const metadata = { title: 'Billing' };
 
-export default async function BillingPage({ params }: Props) {
-  const { account } = await params;
+export default async function BillingPage({ params, searchParams }: Props) {
+  const [{ account }, { duration, status }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const { accountId, role } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
@@ -121,6 +125,8 @@ export default async function BillingPage({ params }: Props) {
         periodOptions={periodOptions}
         isOtherChargesActive={isOtherChargesActive}
         accountSlug={account}
+        initialDuration={duration}
+        initialStatus={status}
       />
     </PageBody>
   );

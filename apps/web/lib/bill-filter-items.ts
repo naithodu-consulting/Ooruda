@@ -5,6 +5,7 @@ import {
 
 export const BILL_STATUS_ITEMS = {
   all: 'All Statuses',
+  collected: 'Collected',
   unpaid: 'Unpaid',
   paid: 'Paid',
   partial: 'Partial',

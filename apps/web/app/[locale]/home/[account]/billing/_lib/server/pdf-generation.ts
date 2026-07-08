@@ -1,5 +1,10 @@
 import 'server-only';
-import { renderBillPdf, renderReceiptPdf } from '@kit/pdf-templates';
+import type { BillingEntityData } from '@kit/pdf-templates';
+import {
+  renderBillPdf,
+  renderElectricityBillPdf,
+  renderReceiptPdf,
+} from '@kit/pdf-templates';
 import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
@@ -55,6 +60,105 @@ async function canAccessUnit(
   return checkUnitAccess(client, unitId, user.id);
 }
 
+type UnitBillingFields = {
+  bill_to: string;
+  owner_id: string | null;
+  owner_is_company: boolean;
+  owner_company_name: string | null;
+  owner_company_address: string | null;
+  owner_company_gstin: string | null;
+};
+
+type TenancyBillingRow = {
+  tenant_id: string;
+  is_company: boolean;
+  company_name: string | null;
+  company_address: string | null;
+  company_gstin: string | null;
+};
+
+/**
+ * Resolves the billing entity for a unit.
+ * - bill_to=auto: use active tenant if present, else owner.
+ * - bill_to=owner: always owner.
+ * - bill_to=tenant: use active tenant if present, else fall back to owner.
+ */
+async function resolveBillingEntity(
+  unitId: string,
+  unit: UnitBillingFields,
+): Promise<BillingEntityData> {
+  const admin = getSupabaseServerAdminClient();
+
+  let tenancy: TenancyBillingRow | null = null;
+
+  if (unit.bill_to !== 'owner') {
+    const { data } = await admin
+      .from('tenancies')
+      .select(
+        'tenant_id, is_company, company_name, company_address, company_gstin',
+      )
+      .eq('unit_id', unitId)
+      .eq('status', 'active')
+      .maybeSingle();
+    tenancy = (data as TenancyBillingRow | null) ?? null;
+  }
+
+  if (tenancy !== null) {
+    if (tenancy.is_company) {
+      return {
+        isCompany: true,
+        name: tenancy.company_name,
+        companyAddress: tenancy.company_address,
+        companyGstin: tenancy.company_gstin,
+      };
+    }
+    const { data: profileData } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', tenancy.tenant_id)
+      .maybeSingle();
+    const profile = profileData as { full_name: string | null } | null;
+    return {
+      isCompany: false,
+      name: profile?.full_name ?? null,
+      companyAddress: null,
+      companyGstin: null,
+    };
+  }
+
+  // Bill to owner
+  if (unit.owner_is_company) {
+    return {
+      isCompany: true,
+      name: unit.owner_company_name,
+      companyAddress: unit.owner_company_address,
+      companyGstin: unit.owner_company_gstin,
+    };
+  }
+
+  if (unit.owner_id) {
+    const { data: profileData } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', unit.owner_id)
+      .maybeSingle();
+    const profile = profileData as { full_name: string | null } | null;
+    return {
+      isCompany: false,
+      name: profile?.full_name ?? null,
+      companyAddress: null,
+      companyGstin: null,
+    };
+  }
+
+  return {
+    isCompany: false,
+    name: null,
+    companyAddress: null,
+    companyGstin: null,
+  };
+}
+
 /**
  * Returns the cached bill PDF if one exists, otherwise renders it, caches it
  * in the private `billing-documents` bucket, and stamps `bills.pdf_url`.
@@ -83,10 +187,10 @@ export async function getOrGenerateBillPdf(
     const { data: bill, error: billError } = await admin
       .from('bills')
       .select(
-        `id, association_id, unit_id, period, bill_no, total_amount, gst_amount, paid_amount, status, due_date, generated_at, pdf_url,
-         units(unit_no),
-         bill_line_items(description, payer, gst_applicable, amount),
-         associations(address, gstin, registration_number, gst_enabled, gst_rate, accounts(name, picture_url))`,
+        `id, association_id, unit_id, period, bill_no, bill_type, total_amount, gst_amount, paid_amount, status, due_date, generated_at, pdf_url,
+         units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin),
+         bill_line_items(description, gst_applicable, amount),
+         associations(address, gstin, pan_number, registration_number, gst_enabled, gst_rate, authorised_signatory, accounts(name, picture_url))`,
       )
       .eq('id', billId)
       .maybeSingle();
@@ -131,40 +235,187 @@ export async function getOrGenerateBillPdf(
     const association = bill.associations;
     const lineItems = bill.bill_line_items ?? [];
 
+    // Type-assert the extended unit fields Supabase's codegen doesn't see
+    type ExtendedUnit = {
+      unit_no: string;
+      door_no: string | null;
+      floor: number | null;
+      bill_to: string;
+      owner_id: string | null;
+      owner_is_company: boolean;
+      owner_company_name: string | null;
+      owner_company_address: string | null;
+      owner_company_gstin: string | null;
+    };
+    const unitData = bill.units as unknown as ExtendedUnit;
+
+    const billTo = await resolveBillingEntity(bill.unit_id, {
+      bill_to: unitData.bill_to ?? 'auto',
+      owner_id: unitData.owner_id,
+      owner_is_company: unitData.owner_is_company ?? false,
+      owner_company_name: unitData.owner_company_name ?? null,
+      owner_company_address: unitData.owner_company_address ?? null,
+      owner_company_gstin: unitData.owner_company_gstin ?? null,
+    });
+
+    type ExtendedAssoc = typeof association & { pan_number: string | null };
+    const assocData = association as unknown as ExtendedAssoc;
+    const panNumber = assocData.pan_number ?? null;
+
     let bytes: Buffer;
 
-    try {
-      bytes = await renderBillPdf({
-        association: {
-          name: association.accounts?.name ?? 'Association',
-          address: association.address,
-          gstin: association.gstin,
-          registrationNumber: association.registration_number ?? null,
-          logoUrl: association.accounts?.picture_url ?? null,
-          gstEnabled: association.gst_enabled,
-          gstRate: association.gst_rate,
-        },
-        unit: { unitNo: bill.units.unit_no },
-        bill: {
-          billNo: bill.bill_no,
-          period: bill.period,
-          dueDate: bill.due_date,
-          generatedAt: bill.generated_at,
-          totalAmount: bill.total_amount,
-          gstAmount: bill.gst_amount ?? null,
-          paidAmount: bill.paid_amount,
-          status: bill.status,
-        },
-        lineItems: lineItems.map((item) => ({
-          description: item.description,
-          payer: item.payer as 'Owner' | 'Tenant',
-          gstApplicable: item.gst_applicable,
-          amount: item.amount,
-        })),
+    if (bill.bill_type === 'electricity') {
+      // Fetch mescom_bill, sub_meters, and meter_readings to build the
+      // per-meter breakdown for the electricity bill PDF.
+      const { data: mescomBill } = await admin
+        .from('mescom_bills')
+        .select('id, invoice_amount, period_start, period_end')
+        .eq('association_id', bill.association_id)
+        .eq('period', bill.period)
+        .maybeSingle();
+
+      if (!mescomBill) {
+        const logger = await getLogger();
+        logger.warn(
+          { billId: bill.id, period: bill.period },
+          'generateElectricityBillPdf: no mescom bill found; rates will be zero',
+        );
+      }
+
+      const { data: subMeters } = await admin
+        .from('sub_meters')
+        .select('id, meter_label, load_kva')
+        .eq('unit_id', bill.unit_id)
+        .eq('is_active', true)
+        .order('meter_label');
+
+      const subMeterIds = (subMeters ?? []).map((m) => m.id);
+
+      // Fetch all readings for this mescom bill in one query.
+      // Then partition: readings matching this unit's sub-meters → per-meter
+      // breakdown table; all readings → denominator for the billing rate.
+      // Rate = invoice ÷ sum of all sub-meter consumed units (distributes
+      // transmission losses proportionally; includes CommonArea meters).
+      const { data: allReadingsForBill } = mescomBill
+        ? await admin
+            .from('meter_readings')
+            .select(
+              'sub_meter_id, previous_reading, current_reading, consumed_units, minimum_charge',
+            )
+            .eq('mescom_bill_id', mescomBill.id)
+        : { data: [] };
+
+      const unitSubMeterIdSet = new Set(subMeterIds);
+      const meterReadings = (allReadingsForBill ?? []).filter((r) =>
+        unitSubMeterIdSet.has(r.sub_meter_id),
+      );
+      const totalSubMeterUnits = (allReadingsForBill ?? []).reduce(
+        (sum, r) => sum + (r.consumed_units ?? 0),
+        0,
+      );
+
+      const blockRate =
+        mescomBill && totalSubMeterUnits > 0
+          ? mescomBill.invoice_amount / totalSubMeterUnits
+          : 0;
+
+      const meterInfoById = new Map(
+        (subMeters ?? []).map((m) => [
+          m.id,
+          { label: m.meter_label, loadKva: m.load_kva ?? null },
+        ]),
+      );
+
+      let minimumCharge = 0;
+      const meters = meterReadings.map((r) => {
+        const consumed = r.consumed_units ?? (r.current_reading - r.previous_reading);
+        const amount = Math.round(consumed * blockRate * 100) / 100;
+        minimumCharge += r.minimum_charge ?? 0;
+        const info = meterInfoById.get(r.sub_meter_id);
+        return {
+          meterLabel: info?.label ?? r.sub_meter_id,
+          previousReading: r.previous_reading,
+          currentReading: r.current_reading,
+          consumedUnits: consumed,
+          blockRate,
+          amount,
+          loadKva: info?.loadKva ?? null,
+        };
       });
-    } catch (error) {
-      logger.error({ billId, error }, 'Failed to render bill PDF');
-      throw error;
+
+      try {
+        bytes = await renderElectricityBillPdf({
+          association: {
+            name: association.accounts?.name ?? 'Association',
+            address: association.address,
+            logoUrl: association.accounts?.picture_url ?? null,
+            authorisedSignatory: association.authorised_signatory,
+          },
+          unit: {
+            unitNo: unitData.unit_no,
+            doorNo: unitData.door_no ?? null,
+            floor: unitData.floor ?? null,
+          },
+          billTo,
+          bill: {
+            billNo: bill.bill_no,
+            period: bill.period,
+            periodStart: mescomBill?.period_start ?? null,
+            periodEnd: mescomBill?.period_end ?? null,
+            dueDate: bill.due_date,
+            generatedAt: bill.generated_at,
+            totalAmount: bill.total_amount,
+            paidAmount: bill.paid_amount,
+          },
+          meters,
+          minimumCharge,
+        });
+      } catch (error) {
+        logger.error(
+          { billId, error },
+          'Failed to render electricity bill PDF',
+        );
+        throw error;
+      }
+    } else {
+      try {
+        bytes = await renderBillPdf({
+          association: {
+            name: association.accounts?.name ?? 'Association',
+            address: association.address,
+            gstin: association.gstin,
+            panNumber,
+            registrationNumber: association.registration_number ?? null,
+            logoUrl: association.accounts?.picture_url ?? null,
+            gstEnabled: association.gst_enabled,
+            gstRate: association.gst_rate,
+          },
+          unit: {
+            unitNo: unitData.unit_no,
+            doorNo: unitData.door_no ?? null,
+            floor: unitData.floor ?? null,
+          },
+          billTo,
+          bill: {
+            billNo: bill.bill_no,
+            period: bill.period,
+            dueDate: bill.due_date,
+            generatedAt: bill.generated_at,
+            totalAmount: bill.total_amount,
+            gstAmount: bill.gst_amount ?? null,
+            paidAmount: bill.paid_amount,
+            status: bill.status,
+          },
+          lineItems: lineItems.map((item) => ({
+            description: item.description,
+            gstApplicable: item.gst_applicable,
+            amount: item.amount,
+          })),
+        });
+      } catch (error) {
+        logger.error({ billId, error }, 'Failed to render bill PDF');
+        throw error;
+      }
     }
 
     const storagePath = `bills/${bill.association_id}/${bill.id}.pdf`;
@@ -233,8 +484,8 @@ export async function getOrGenerateReceiptPdf(
     const { data: payment, error: paymentError } = await admin
       .from('payments')
       .select(
-        `id, association_id, amount, mode, paid_by_role, paid_at,
-         bills(bill_no, period, unit_id, units(unit_no), associations(address, gstin, registration_number, accounts(name, picture_url))),
+        `id, association_id, amount, mode, paid_at,
+         bills(bill_no, period, unit_id, units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin), associations(address, gstin, pan_number, registration_number, accounts(name, picture_url))),
          receipts(id, receipt_no, pdf_url, generated_at)`,
       )
       .eq('id', paymentId)
@@ -289,7 +540,31 @@ export async function getOrGenerateReceiptPdf(
       // Signed URL creation failed (e.g. object missing) — fall through and regenerate.
     }
 
+    type ExtendedUnit = {
+      unit_no: string;
+      door_no: string | null;
+      floor: number | null;
+      bill_to: string;
+      owner_id: string | null;
+      owner_is_company: boolean;
+      owner_company_name: string | null;
+      owner_company_address: string | null;
+      owner_company_gstin: string | null;
+    };
+    const unitData = payment.bills.units as unknown as ExtendedUnit;
+
+    const billTo = await resolveBillingEntity(payment.bills.unit_id, {
+      bill_to: unitData.bill_to ?? 'auto',
+      owner_id: unitData.owner_id,
+      owner_is_company: unitData.owner_is_company ?? false,
+      owner_company_name: unitData.owner_company_name ?? null,
+      owner_company_address: unitData.owner_company_address ?? null,
+      owner_company_gstin: unitData.owner_company_gstin ?? null,
+    });
+
     const association = payment.bills.associations;
+    type ExtendedAssoc = typeof association & { pan_number: string | null };
+    const assocData = association as unknown as ExtendedAssoc;
 
     let bytes: Buffer;
 
@@ -299,10 +574,16 @@ export async function getOrGenerateReceiptPdf(
           name: association.accounts?.name ?? 'Association',
           address: association.address,
           gstin: association.gstin,
+          panNumber: assocData.pan_number ?? null,
           registrationNumber: association.registration_number ?? null,
           logoUrl: association.accounts?.picture_url ?? null,
         },
-        unit: { unitNo: payment.bills.units.unit_no },
+        unit: {
+          unitNo: unitData.unit_no,
+          doorNo: unitData.door_no ?? null,
+          floor: unitData.floor ?? null,
+        },
+        billTo,
         bill: { billNo: payment.bills.bill_no, period: payment.bills.period },
         receipt: {
           receiptNo: receipt.receipt_no,
@@ -311,7 +592,6 @@ export async function getOrGenerateReceiptPdf(
         payment: {
           amount: payment.amount,
           mode: payment.mode,
-          paidByRole: payment.paid_by_role as 'Owner' | 'Tenant',
           paidAt: payment.paid_at,
         },
       });

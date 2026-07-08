@@ -175,7 +175,7 @@ async function PersonalAccountPage(props: { account: Account }) {
             </span>
           </div>
 
-          <Badge variant={'outline'}>Personal Account</Badge>
+          <Badge variant={'outline'}>User Account</Badge>
 
           <If condition={isSuperAdminAccount}>
             <Badge variant={'outline'}>Super Admin</Badge>
@@ -210,7 +210,7 @@ async function TeamAccountPage(props: {
   // associations.id ≠ accounts.id — fetch the real association PK first.
   const { data: assocRow } = await adminClient
     .from('associations')
-    .select('id')
+    .select('id, is_test')
     .eq('account_id', props.account.id)
     .maybeSingle();
 
@@ -231,6 +231,8 @@ async function TeamAccountPage(props: {
             .maybeSingle()
         : Promise.resolve({ data: null }),
     ]);
+
+  const isTestAssociation = assocRow?.is_test ?? false;
 
   const initialPermissions: AssocPermissionRow[] = (rawPermissions ?? []).map(
     (r) => ({
@@ -275,7 +277,13 @@ async function TeamAccountPage(props: {
             </span>
           </div>
 
-          <Badge variant={'outline'}>Team Account</Badge>
+          <Badge variant={'outline'}>Association</Badge>
+
+          {isTestAssociation && (
+            <Badge className={'border-amber-400 bg-amber-50 text-amber-700'} variant={'outline'}>
+              Test
+            </Badge>
+          )}
         </div>
       </div>
 

@@ -12,7 +12,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     borderBottomWidth: 2,
-    borderBottomColor: '#3B82F6',
+    borderBottomColor: '#1a3a5c',
     paddingBottom: 12,
     marginBottom: 16,
   },
@@ -80,7 +80,6 @@ export const styles = StyleSheet.create({
     borderTopColor: '#e2e8f0',
   },
   colDescription: { flexGrow: 1, flexBasis: 0 },
-  colPayer: { width: 60 },
   colGst: { width: 40, textAlign: 'center' },
   colAmount: { width: 70, textAlign: 'right' },
   summaryBlock: {

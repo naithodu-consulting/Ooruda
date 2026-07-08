@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -388,8 +390,19 @@ export function SidebarNavigation({
 }>) {
   const currentLocale = useLocale();
   const currentPath = usePathname() ?? '';
-  const { open, isMobile } = useSidebar();
+  const { open, isMobile, setOpenMobile } = useSidebar();
   const t = useTranslations();
+
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [currentPath, isMobile, setOpenMobile]);
 
   const isNavigationExpanded = isMobile || open;
 

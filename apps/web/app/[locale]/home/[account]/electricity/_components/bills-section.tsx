@@ -1,25 +1,13 @@
 'use client';
 
-import React, { useMemo, useState, useTransition } from 'react';
+import React, { useEffect, useMemo, useState, useTransition } from 'react';
 
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogMedia,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@kit/ui/alert-dialog';
 import { Button } from '@kit/ui/button';
 import {
   Card,
@@ -67,6 +55,7 @@ import {
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
+import { TypeToConfirmDialog } from '../../_components/type-to-confirm-dialog';
 import {
   createElectricityBillAction,
   deleteElectricityBillAction,
@@ -81,6 +70,8 @@ export interface ElectricityBillRow {
   period: string;
   invoice_amount: number;
   block_consumption_units: number;
+  period_start: string | null;
+  period_end: string | null;
 }
 
 const unitsFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
@@ -209,9 +200,8 @@ export function BillsSection(props: {
         )}
 
         <p className="text-muted-foreground mt-3 text-xs">
-          Block rate = MESCOM invoice ÷ total sub-meter consumption.
-          Transmission losses are shared proportionally so the full invoice is
-          always recovered each month.
+          Rate per unit = MESCOM invoice ÷ block consumption units. Each
+          sub-meter is charged at this rate for its actual consumption.
         </p>
       </CardContent>
     </Card>
@@ -274,14 +264,35 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
 
   const periodOptions = useMemo(() => getPeriodOptions(), []);
 
+  function defaultDatesForPeriod(p: string) {
+    const [y, m] = p.split('-').map(Number);
+    const lastDay = new Date(y!, m!, 0).getDate();
+    return {
+      periodStart: `${p}-01`,
+      periodEnd: `${p}-${String(lastDay).padStart(2, '0')}`,
+    };
+  }
+
   const form = useForm({
     resolver: zodResolver(CreateElectricityBillSchema),
     defaultValues: {
       period: defaultPeriod,
       invoiceAmount: '',
       blockConsumptionUnits: '',
+      ...defaultDatesForPeriod(defaultPeriod),
     },
   });
+
+  const watchedPeriod = form.watch('period');
+
+  useEffect(() => {
+    if (/^\d{4}-(0[1-9]|1[0-2])$/.test(watchedPeriod)) {
+      const { periodStart, periodEnd } = defaultDatesForPeriod(watchedPeriod);
+      form.setValue('periodStart', periodStart);
+      form.setValue('periodEnd', periodEnd);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedPeriod, form]);
 
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
@@ -363,6 +374,33 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
           )}
         />
 
+        <div className="grid grid-cols-2 gap-3">
+          <FormField
+            name="periodStart"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Period start</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            name="periodEnd"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Period end</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
         <Button
           type="submit"
           disabled={isPending}
@@ -384,9 +422,8 @@ function DeleteElectricityBillButton(props: {
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [open, setOpen] = React.useState(false);
 
-  const onDelete = () => {
+  const onConfirm = () => {
     startTransition(async () => {
       const result = await deleteElectricityBillAction(
         props.associationId,
@@ -398,51 +435,23 @@ function DeleteElectricityBillButton(props: {
         return;
       }
 
-      setOpen(false);
       toast.success(`Electricity bill for ${props.period} deleted.`);
       router.refresh();
     });
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger
-        render={
-          <Button size="sm" variant="destructive">
-            Delete
-          </Button>
-        }
-      />
-
-      <AlertDialogContent size="sm">
-        <AlertDialogHeader>
-          <AlertDialogMedia className="bg-destructive/10 text-destructive">
-            <Trash2 />
-          </AlertDialogMedia>
-          <AlertDialogTitle>
-            Delete {formatPeriod(props.period)} bill?
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            This permanently removes the Electricity bill and all its recorded
-            meter readings. This action cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            variant="destructive"
-            onClick={(e) => {
-              e.preventDefault();
-              onDelete();
-            }}
-            disabled={isPending}
-          >
-            {isPending && <Spinner className="mr-2 h-4 w-4" />}
-            Delete bill
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <TypeToConfirmDialog
+      trigger={
+        <Button size="sm" variant="destructive">
+          Delete
+        </Button>
+      }
+      title={`Delete ${formatPeriod(props.period)} bill?`}
+      description="This permanently removes the Electricity bill and all its recorded meter readings. This action cannot be undone."
+      confirmValue="DELETE"
+      isPending={isPending}
+      onConfirm={onConfirm}
+    />
   );
 }

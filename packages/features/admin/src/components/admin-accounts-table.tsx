@@ -35,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@kit/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@kit/ui/tabs';
 
 import { ROLE_LABELS } from '../lib/server/schema/create-user.schema';
 import { AdminDeleteAccountDialog } from './admin-delete-account-dialog';
@@ -55,6 +56,7 @@ function roleLabel(role: string): string {
 
 const FiltersSchema = z.object({
   type: z.enum(['all', 'team', 'personal']),
+  kind: z.enum(['all', 'real', 'test']).default('all'),
   query: z.string().optional(),
 });
 
@@ -66,8 +68,11 @@ export function AdminAccountsTable(
     page: number;
     filters: {
       type: 'all' | 'team' | 'personal';
+      kind: 'all' | 'real' | 'test';
       query: string;
     };
+    // Set of account ids that are test accounts (from associations.is_test or profiles.is_test)
+    testAccountIds?: Set<string>;
     // Map of personal-account (user) id → the association memberships they
     // hold (association + role), used for both the Role column and the
     // Manage Roles dialog.
@@ -85,9 +90,7 @@ export function AdminAccountsTable(
 ) {
   return (
     <div className={'flex flex-col space-y-4'}>
-      <div className={'flex justify-end'}>
-        <AccountsTableFilters filters={props.filters} />
-      </div>
+      <AccountsTableFilters filters={props.filters} />
 
       <div className={'rounded-lg border p-2'}>
         <DataTable
@@ -100,6 +103,7 @@ export function AdminAccountsTable(
             props.phoneByAccountId ?? {},
             props.associations ?? [],
             props.superAdminIds ?? new Set(),
+            props.testAccountIds ?? new Set(),
           )}
         />
       </div>
@@ -114,6 +118,7 @@ function AccountsTableFilters(props: {
     resolver: zodResolver(FiltersSchema),
     defaultValues: {
       type: props.filters?.type ?? 'all',
+      kind: props.filters?.kind ?? 'all',
       query: props.filters?.query ?? '',
     },
     mode: 'onChange',
@@ -123,83 +128,91 @@ function AccountsTableFilters(props: {
   const router = useRouter();
   const pathName = usePathname();
 
-  const onSubmit = ({ type, query }: z.output<typeof FiltersSchema>) => {
+  const navigate = (overrides: Partial<z.output<typeof FiltersSchema>>) => {
+    const values = form.getValues() as z.output<typeof FiltersSchema>;
+    const merged = { ...values, ...overrides };
     const params = new URLSearchParams({
-      account_type: type,
-      query: query ?? '',
+      account_type: merged.type,
+      kind: merged.kind ?? 'all',
+      query: merged.query ?? '',
     });
-
-    const url = `${pathName}?${params.toString()}`;
-
-    router.push(url);
+    router.push(`${pathName}?${params.toString()}`);
   };
 
   const type = useWatch({ control: form.control, name: 'type' });
+  const kind = useWatch({ control: form.control, name: 'kind' });
 
-  const options = {
-    all: 'All Accounts',
-    team: 'Team',
-    personal: 'Personal',
+  const kindOptions = {
+    all: 'All',
+    real: 'Real',
+    test: 'Test',
   };
 
   return (
     <Form {...form}>
-      <form
-        className={'flex gap-2.5'}
-        onSubmit={form.handleSubmit((data) => onSubmit(data))}
-      >
-        <Select
-          value={type}
-          onValueChange={(value) => {
-            form.setValue(
-              'type',
-              value as z.output<typeof FiltersSchema>['type'],
-              {
-                shouldValidate: true,
-                shouldDirty: true,
-                shouldTouch: true,
-              },
-            );
+      <form onSubmit={form.handleSubmit((data) => navigate(data))}>
+        <div className={'flex items-center justify-between gap-3'}>
+          <Tabs
+            value={type}
+            onValueChange={(value) => {
+              const t = value as z.output<typeof FiltersSchema>['type'];
+              form.setValue('type', t, { shouldValidate: true });
+              navigate({ type: t });
+            }}
+          >
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="team">Associations</TabsTrigger>
+              <TabsTrigger value="personal">Users</TabsTrigger>
+            </TabsList>
+          </Tabs>
 
-            return onSubmit(form.getValues());
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder={'Account Type'}>
-              {(value: keyof typeof options) => options[value]}
-            </SelectValue>
-          </SelectTrigger>
+          <div className={'flex gap-2.5'}>
+            <Select
+              value={kind}
+              onValueChange={(value) => {
+                const k = value as z.output<typeof FiltersSchema>['kind'];
+                form.setValue('kind', k, { shouldValidate: true });
+                navigate({ kind: k });
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={'Kind'}>
+                  {(value: keyof typeof kindOptions) => kindOptions[value]}
+                </SelectValue>
+              </SelectTrigger>
 
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Account Type</SelectLabel>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>Kind</SelectLabel>
+                  {Object.entries(kindOptions).map(([key, value]) => (
+                    <SelectItem key={key} value={key}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
 
-              {Object.entries(options).map(([key, value]) => (
-                <SelectItem key={key} value={key}>
-                  {value}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+            <FormField
+              name={'query'}
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl className={'w-full min-w-36 md:min-w-72'}>
+                    <Input
+                      data-test={'admin-accounts-table-filter-input'}
+                      className={'w-full'}
+                      placeholder={'Search account...'}
+                      {...field}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
 
-        <FormField
-          name={'query'}
-          render={({ field }) => (
-            <FormItem>
-              <FormControl className={'w-full min-w-36 md:min-w-80'}>
-                <Input
-                  data-test={'admin-accounts-table-filter-input'}
-                  className={'w-full'}
-                  placeholder={`Search account...`}
-                  {...field}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
-
-        <button type="submit" hidden />
+            <button type="submit" hidden />
+          </div>
+        </div>
       </form>
     </Form>
   );
@@ -210,12 +223,14 @@ function getColumns(
   phoneByAccountId: Record<string, string>,
   associations: AssociationOption[],
   superAdminIds: Set<string>,
+  testAccountIds: Set<string>,
 ): ColumnDef<Account>[] {
   return [
     {
       id: 'name',
       header: 'Name',
       cell: ({ row }) => {
+        const isTest = testAccountIds.has(row.original.id);
         return (
           <div className={'flex items-center gap-2'}>
             <Link
@@ -228,6 +243,12 @@ function getColumns(
 
             {superAdminIds.has(row.original.id) && (
               <Badge variant={'outline'}>Super Admin</Badge>
+            )}
+
+            {isTest && (
+              <Badge className={'border-amber-400 bg-amber-50 text-amber-700'} variant={'outline'}>
+                Test
+              </Badge>
             )}
           </div>
         );
@@ -251,7 +272,7 @@ function getColumns(
       id: 'type',
       header: 'Type',
       cell: ({ row }) => {
-        return row.original.is_personal_account ? 'Personal' : 'Team';
+        return row.original.is_personal_account ? 'User' : 'Association';
       },
     },
     {

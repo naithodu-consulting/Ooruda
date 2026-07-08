@@ -134,6 +134,8 @@ export const deleteUserAction = adminActionClient
 
     logger.info({ userId }, `Super Admin has successfully deleted user`);
 
+    revalidateAdmin();
+
     redirect('/admin/accounts');
   });
 
@@ -548,6 +550,16 @@ export interface BulkInviteRow {
   email?: string;
   role: string;
   association_name: string;
+  /** Unit number from the association XLSX — used to update units.status */
+  unit_no?: string;
+  /** DB value to write to units.status when unit_no is provided */
+  unit_status?: 'Occupied' | 'Vacant';
+  /**
+   * When the owner row represents a company (e.g. "AAJEETH INNOVATION LLP"),
+   * set this to write owner_is_company + owner_company_name on the unit.
+   * Only applied on prop_owner rows.
+   */
+  owner_company_name?: string;
 }
 
 export interface BulkInviteResult {
@@ -722,6 +734,85 @@ export async function bulkInviteMembersAction(
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       skipped.push({ row: rowNum, phone: normalised, reason: msg });
+    }
+  }
+
+  // Build a phone → resolved userId map scoped to phones in this batch only.
+  // Avoids listUsers() pagination ceiling (1000-user hard cap).
+  const resolvedUserIdByPhone = new Map<string, string>();
+  {
+    const ownerPhones = rows
+      .filter((r) => r.role === 'prop_owner' && r.phone)
+      .map((r) => normalizePhoneNumber(r.phone))
+      .filter((p): p is string => Boolean(p));
+    if (ownerPhones.length > 0) {
+      const { data: ownerProfiles } = await adminClient
+        .from('profiles')
+        .select('id, mobile_number')
+        .in('mobile_number', ownerPhones);
+      for (const p of ownerProfiles ?? []) {
+        if (p.mobile_number) resolvedUserIdByPhone.set(p.mobile_number, p.id);
+      }
+    }
+  }
+
+  // Apply unit-level updates for rows that carry unit_no + unit_status.
+  // Deduplicate by association_id + unit_no so each unit is written once.
+  // unit_no is normalised to uppercase to match the convention used at unit creation.
+  // For prop_owner rows we also write: owner_id, owner_is_company, owner_company_name.
+  const unitUpdateMap = new Map<
+    string,
+    {
+      associationId: string;
+      unit_no: string;
+      unit_status: 'Occupied' | 'Vacant';
+      owner_id?: string;
+      owner_is_company?: boolean;
+      owner_company_name?: string | null;
+    }
+  >();
+
+  for (const row of rows) {
+    if (!row.unit_no || !row.unit_status) continue;
+    const associationId = assocIdByName.get(row.association_name.trim().toLowerCase());
+    if (!associationId) continue;
+    const normalizedUnitNo = row.unit_no.trim().toUpperCase();
+    const key = `${associationId}::${normalizedUnitNo}`;
+
+    const existing = unitUpdateMap.get(key) ?? {
+      associationId,
+      unit_no: normalizedUnitNo,
+      unit_status: row.unit_status,
+    };
+
+    if (row.role === 'prop_owner') {
+      const normPhone = normalizePhoneNumber(row.phone);
+      if (normPhone) {
+        const ownerId = resolvedUserIdByPhone.get(normPhone);
+        if (ownerId) existing.owner_id = ownerId;
+      }
+      if (row.owner_company_name) {
+        existing.owner_is_company = true;
+        existing.owner_company_name = row.owner_company_name;
+      }
+    }
+
+    unitUpdateMap.set(key, existing);
+  }
+
+  for (const { associationId, unit_no, unit_status, owner_id, owner_is_company, owner_company_name } of unitUpdateMap.values()) {
+    const { error } = await adminClient
+      .from('units')
+      .update({
+        status: unit_status,
+        ...(owner_id !== undefined ? { owner_id } : {}),
+        ...(owner_is_company !== undefined ? { owner_is_company } : {}),
+        ...(owner_company_name !== undefined ? { owner_company_name } : {}),
+      })
+      .eq('association_id', associationId)
+      .eq('unit_no', unit_no);
+    if (error) {
+      logger.error({ associationId, unit_no, error }, 'bulkInvite: failed to update unit');
     }
   }
 

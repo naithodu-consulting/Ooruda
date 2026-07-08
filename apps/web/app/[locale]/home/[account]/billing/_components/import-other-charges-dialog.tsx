@@ -39,14 +39,12 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
-import { bulkImportOtherChargesAction } from '../_lib/billing-actions';
+import {
+  downloadXlsxTemplate,
+  parseSpreadsheetFile,
+} from '~/lib/parse-spreadsheet';
 
-const TEMPLATE_CSV = [
-  'unit_no,label,amount',
-  'G-01,Clubhouse Access fee,500',
-  '1-02,Water charges excess,250',
-  '2-03,Repairs reimbursement,1200',
-].join('\n');
+import { bulkImportOtherChargesAction } from '../_lib/billing-actions';
 
 const REQUIRED_COLUMNS = ['unit_no', 'label', 'amount'] as const;
 
@@ -88,39 +86,28 @@ export function ImportOtherChargesDialog(props: Props) {
   const canSubmit = rows.length > 0 && !hasErrors && period;
 
   function downloadTemplate() {
-    const blob = new Blob([TEMPLATE_CSV], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'other-charges-import-template.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadXlsxTemplate('other-charges-import-template.xlsx', [
+      'unit_no', 'label', 'amount',
+    ], [
+      ['G-01', 'Clubhouse Access fee', 500],
+      ['1-02', 'Water charges excess', 250],
+      ['2-03', 'Repairs reimbursement', 1200],
+    ]);
   }
 
-  function parseCSV(text: string): ParsedRow[] {
-    const lines = text
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean);
+  function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
+    if (raw.length === 0) return [];
 
-    if (lines.length < 2) return [];
-
-    const headers = lines[0]!.split(',').map((h) => h.trim().toLowerCase());
-    const unitNoIdx = headers.indexOf('unit_no');
-    const labelIdx = headers.indexOf('label');
-    const amountIdx = headers.indexOf('amount');
-
-    if (unitNoIdx === -1 || labelIdx === -1 || amountIdx === -1) {
-      toast.error(`CSV must contain columns: ${REQUIRED_COLUMNS.join(', ')}`);
+    const headers = Object.keys(raw[0]!);
+    if (!REQUIRED_COLUMNS.every((c) => headers.includes(c))) {
+      toast.error(`File must contain columns: ${REQUIRED_COLUMNS.join(', ')}`);
       return [];
     }
 
-    const parsed: ParsedRow[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i]!.split(',').map((c) => c.trim());
-      const unit_no = cols[unitNoIdx] ?? '';
-      const label = cols[labelIdx] ?? '';
-      const amountRaw = cols[amountIdx] ?? '';
+    return raw.map((r, i) => {
+      const unit_no = r['unit_no'] ?? '';
+      const label = r['label'] ?? '';
+      const amountRaw = r['amount'] ?? '';
       const amount = parseFloat(amountRaw);
 
       let err: string | undefined;
@@ -132,15 +119,14 @@ export function ImportOtherChargesDialog(props: Props) {
         err = 'Amount must be positive';
       }
 
-      parsed.push({
+      return {
         _row: i + 1,
         unit_no,
         label,
         amount: isNaN(amount) ? 0 : amount,
         _error: err,
-      });
-    }
-    return parsed;
+      };
+    });
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,14 +136,7 @@ export function ImportOtherChargesDialog(props: Props) {
     setFile(selected);
     setFileName(selected.name);
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      if (text) {
-        setRows(parseCSV(text));
-      }
-    };
-    reader.readAsText(selected);
+    parseSpreadsheetFile(selected).then((raw) => setRows(parseRawRows(raw)));
   };
 
   const handleImport = () => {
@@ -205,7 +184,7 @@ export function ImportOtherChargesDialog(props: Props) {
       <DialogTrigger
         render={
           <Button size="sm" variant="outline" className="gap-1.5">
-            <Upload className="h-4 w-4" /> Import CSV
+            <Upload className="h-4 w-4" /> Import
           </Button>
         }
       />
@@ -214,10 +193,10 @@ export function ImportOtherChargesDialog(props: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5 text-blue-500" />
-            Import Other Charges CSV
+            Import Other Charges
           </DialogTitle>
           <DialogDescription>
-            Bulk import ad-hoc other charges for specific units from a CSV file.
+            Bulk import ad-hoc other charges for specific units from a CSV or Excel file.
           </DialogDescription>
         </DialogHeader>
 
@@ -257,21 +236,21 @@ export function ImportOtherChargesDialog(props: Props) {
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] text-white">
                   2
                 </span>
-                Upload CSV File
+                Upload File
               </h4>
               <button
                 type="button"
                 onClick={downloadTemplate}
                 className="text-xs font-semibold text-blue-600 hover:underline"
               >
-                Download CSV Template
+                Download Template
               </button>
             </div>
 
             <div className="mt-1">
               <input
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,text/csv"
                 id="other-charges-csv-upload"
                 className="hidden"
                 onChange={handleFileChange}
@@ -282,7 +261,7 @@ export function ImportOtherChargesDialog(props: Props) {
               >
                 <Upload className="text-muted-foreground/60 mb-2 h-8 w-8" />
                 <span className="text-sm font-medium">
-                  {fileName ? fileName : 'Drop CSV here, or click to browse'}
+                  {fileName ? fileName : 'Drop CSV or Excel here, or click to browse'}
                 </span>
                 <span className="text-muted-foreground mt-1 text-xs">
                   Required columns: unit_no, label, amount

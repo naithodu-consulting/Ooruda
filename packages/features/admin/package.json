@@ -37,5 +37,8 @@
     "react-dom": "catalog:",
     "react-hook-form": "catalog:",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "xlsx": "catalog:"
   }
 }

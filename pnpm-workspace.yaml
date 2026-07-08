@@ -96,6 +96,7 @@ catalog:
   vaul: ^1.1.2
   vitest: ^4.1.7
   wp-types: ^4.70.1
+  xlsx: ^0.18.5
   zod: 4.4.3
 
 catalogMode: prefer

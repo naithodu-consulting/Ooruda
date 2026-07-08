@@ -60,7 +60,7 @@ export default async function MescomPage({ params }: Props) {
     ? await client
         .from('sub_meters')
         .select(
-          'id, meter_label, meter_type, is_active, unit_id, units(unit_no)',
+          'id, meter_label, meter_type, is_active, unit_id, load_kva, units(unit_no)',
         )
         .in('unit_id', unitIds)
         .order('meter_label')
@@ -73,6 +73,7 @@ export default async function MescomPage({ params }: Props) {
     is_active: m.is_active,
     unit_id: m.unit_id,
     unit_no: (m.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
+    load_kva: m.load_kva ?? null,
   }));
 
   const activeSubMeters = subMeterRows.filter((m) => m.is_active);
@@ -80,7 +81,9 @@ export default async function MescomPage({ params }: Props) {
 
   const { data: bills } = await client
     .from('mescom_bills')
-    .select('id, period, invoice_amount, block_consumption_units')
+    .select(
+      'id, period, invoice_amount, block_consumption_units, period_start, period_end',
+    )
     .eq('association_id', association.id)
     .order('period', { ascending: false });
 
@@ -224,6 +227,7 @@ export default async function MescomPage({ params }: Props) {
             subMeters={subMeterRows}
             units={unitRows}
             canManage={canManage}
+            isSuperAdmin={!!isSuperAdmin}
           />
 
           <BillsSection

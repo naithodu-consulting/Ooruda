@@ -75,9 +75,5 @@ grant execute
   to authenticated;
 
 grant execute
-  on function public.create_bill_with_items(uuid, uuid, text, text, date, numeric, jsonb, varchar)
-  to authenticated;
-
-grant execute
   on function public.create_bill_with_items(uuid, uuid, text, text, date, numeric, jsonb, varchar, numeric)
   to authenticated;

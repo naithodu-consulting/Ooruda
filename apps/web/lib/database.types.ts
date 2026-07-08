@@ -251,45 +251,57 @@ export type Database = {
         Row: {
           account_id: string
           address: string | null
+          authorised_signatory: string | null
           brand_colour: string
           created_at: string
           gst_enabled: boolean
           gst_rate: number | null
           gstin: string | null
           id: string
+          is_test: boolean
           logo_url: string | null
           mescom_consumer_no: string | null
+          pan_number: string | null
           registration_number: string | null
+          sanctioned_load_kva: number | null
           status: string
           updated_at: string
         }
         Insert: {
           account_id: string
           address?: string | null
+          authorised_signatory?: string | null
           brand_colour?: string
           created_at?: string
           gst_enabled?: boolean
           gst_rate?: number | null
           gstin?: string | null
           id?: string
+          is_test?: boolean
           logo_url?: string | null
           mescom_consumer_no?: string | null
+          pan_number?: string | null
           registration_number?: string | null
+          sanctioned_load_kva?: number | null
           status?: string
           updated_at?: string
         }
         Update: {
           account_id?: string
           address?: string | null
+          authorised_signatory?: string | null
           brand_colour?: string
           created_at?: string
           gst_enabled?: boolean
           gst_rate?: number | null
           gstin?: string | null
           id?: string
+          is_test?: boolean
           logo_url?: string | null
           mescom_consumer_no?: string | null
+          pan_number?: string | null
           registration_number?: string | null
+          sanctioned_load_kva?: number | null
           status?: string
           updated_at?: string
         }
@@ -402,6 +414,35 @@ export type Database = {
             columns: ["charge_type_id"]
             isOneToOne: false
             referencedRelation: "charge_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bill_sequences: {
+        Row: {
+          association_id: string
+          bill_type: string
+          financial_year: number
+          next_val: number
+        }
+        Insert: {
+          association_id: string
+          bill_type: string
+          financial_year: number
+          next_val?: number
+        }
+        Update: {
+          association_id?: string
+          bill_type?: string
+          financial_year?: number
+          next_val?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_sequences_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
             referencedColumns: ["id"]
           },
         ]
@@ -773,6 +814,8 @@ export type Database = {
           invoice_amount: number
           invoice_file_url: string | null
           period: string
+          period_end: string | null
+          period_start: string | null
           uploaded_at: string
           uploaded_by: string | null
         }
@@ -784,6 +827,8 @@ export type Database = {
           invoice_amount: number
           invoice_file_url?: string | null
           period: string
+          period_end?: string | null
+          period_start?: string | null
           uploaded_at?: string
           uploaded_by?: string | null
         }
@@ -795,6 +840,8 @@ export type Database = {
           invoice_amount?: number
           invoice_file_url?: string | null
           period?: string
+          period_end?: string | null
+          period_start?: string | null
           uploaded_at?: string
           uploaded_by?: string | null
         }
@@ -1273,6 +1320,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          is_test: boolean
           mobile_number: string | null
         }
         Insert: {
@@ -1280,6 +1328,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          is_test?: boolean
           mobile_number?: string | null
         }
         Update: {
@@ -1287,6 +1336,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          is_test?: boolean
           mobile_number?: string | null
         }
         Relationships: []
@@ -1368,25 +1418,34 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          initial_reading: number
           is_active: boolean
+          load_kva: number | null
           meter_label: string
           meter_type: string
+          minimum_charge: number
           unit_id: string
         }
         Insert: {
           created_at?: string
           id?: string
+          initial_reading?: number
           is_active?: boolean
+          load_kva?: number | null
           meter_label: string
           meter_type?: string
+          minimum_charge?: number
           unit_id: string
         }
         Update: {
           created_at?: string
           id?: string
+          initial_reading?: number
           is_active?: boolean
+          load_kva?: number | null
           meter_label?: string
           meter_type?: string
+          minimum_charge?: number
           unit_id?: string
         }
         Relationships: [
@@ -1531,27 +1590,39 @@ export type Database = {
       }
       tenancies: {
         Row: {
+          company_address: string | null
+          company_gstin: string | null
+          company_name: string | null
           created_at: string
           end_date: string | null
           id: string
+          is_company: boolean
           start_date: string
           status: string
           tenant_id: string
           unit_id: string
         }
         Insert: {
+          company_address?: string | null
+          company_gstin?: string | null
+          company_name?: string | null
           created_at?: string
           end_date?: string | null
           id?: string
+          is_company?: boolean
           start_date: string
           status?: string
           tenant_id: string
           unit_id: string
         }
         Update: {
+          company_address?: string | null
+          company_gstin?: string | null
+          company_name?: string | null
           created_at?: string
           end_date?: string | null
           id?: string
+          is_company?: boolean
           start_date?: string
           status?: string
           tenant_id?: string
@@ -1616,10 +1687,16 @@ export type Database = {
         Row: {
           area_sqft: number
           association_id: string
+          bill_to: string
           created_at: string
+          door_no: string | null
           floor: number | null
           id: string
+          owner_company_address: string | null
+          owner_company_gstin: string | null
+          owner_company_name: string | null
           owner_id: string | null
+          owner_is_company: boolean
           status: string
           type: string
           unit_no: string
@@ -1627,10 +1704,16 @@ export type Database = {
         Insert: {
           area_sqft: number
           association_id: string
+          bill_to?: string
           created_at?: string
+          door_no?: string | null
           floor?: number | null
           id?: string
+          owner_company_address?: string | null
+          owner_company_gstin?: string | null
+          owner_company_name?: string | null
           owner_id?: string | null
+          owner_is_company?: boolean
           status?: string
           type?: string
           unit_no: string
@@ -1638,10 +1721,16 @@ export type Database = {
         Update: {
           area_sqft?: number
           association_id?: string
+          bill_to?: string
           created_at?: string
+          door_no?: string | null
           floor?: number | null
           id?: string
+          owner_company_address?: string | null
+          owner_company_gstin?: string | null
+          owner_company_name?: string | null
           owner_id?: string | null
+          owner_is_company?: boolean
           status?: string
           type?: string
           unit_no?: string
@@ -1700,6 +1789,14 @@ export type Database = {
           invited_by: string
         }
         Returns: Database["public"]["Tables"]["invitations"]["Row"][]
+      }
+      allocate_bill_no: {
+        Args: {
+          p_association_id: string
+          p_bill_type: string
+          p_period: string
+        }
+        Returns: string
       }
       association_role: { Args: { p_association_id: string }; Returns: string }
       can_action_account_member: {
@@ -1896,30 +1993,19 @@ export type Database = {
         Args: { account_id: string; user_id: string }
         Returns: boolean
       }
-      record_payment:
-        | {
-            Args: {
-              p_amount: number
-              p_association_id: string
-              p_bill_id: string
-              p_mode: string
-              p_paid_by_role: string
-            }
-            Returns: string
+      record_payment: {
+          Args: {
+            p_amount: number
+            p_association_id: string
+            p_bill_id: string
+            p_mode: string
+            p_paid_by_role: string
+            p_payment_batch_id?: string
+            p_razorpay_order_id?: string
+            p_razorpay_payment_id?: string
           }
-        | {
-            Args: {
-              p_amount: number
-              p_association_id: string
-              p_bill_id: string
-              p_mode: string
-              p_paid_by_role: string
-              p_payment_batch_id?: string
-              p_razorpay_order_id?: string
-              p_razorpay_payment_id?: string
-            }
-            Returns: string
-          }
+          Returns: string
+        }
       revoke_nonce: {
         Args: { p_id: string; p_reason?: string }
         Returns: boolean
