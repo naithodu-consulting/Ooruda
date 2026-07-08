@@ -131,6 +131,5 @@ begin
 end;
 $$;
 
--- Grant both old 5-arg and new 8-arg signatures.
-grant execute on function public.record_payment(uuid, uuid, numeric, text, text)                              to authenticated;
-grant execute on function public.record_payment(uuid, uuid, numeric, text, text, text, text, uuid)           to authenticated;
+-- Grant the 8-arg signature only (5-arg was dropped by 20260703000001).
+grant execute on function public.record_payment(uuid, uuid, numeric, text, text, text, text, uuid) to authenticated;
