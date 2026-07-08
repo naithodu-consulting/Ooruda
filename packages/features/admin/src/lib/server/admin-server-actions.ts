@@ -593,25 +593,22 @@ export async function bulkInviteMembersAction(
     (accounts ?? []).map((a) => [(a.name ?? '').trim().toLowerCase(), a.id]),
   );
 
-  // Build a phone → userId map from all existing auth users up-front to avoid
-  // an O(n) series of listUsers() calls (each returning only the first page).
+  // Resolve existing users for phones in this batch only — one indexed DB
+  // query instead of paginating all auth users via the Admin API.
   const existingUserByPhone = new Map<string, string>();
-  let page = 1;
-  while (true) {
-    const { data: pageData } = await adminClient.auth.admin.listUsers({
-      page,
-      perPage: 1000,
-    });
-    for (const u of pageData?.users ?? []) {
-      if (u.phone) {
-        // auth.users.phone stores without '+' (e.g. "919886215050").
-        // normalizePhoneNumber returns with '+'. Normalise the key so lookups match.
-        const normPhone = normalizePhoneNumber(u.phone) ?? u.phone;
-        existingUserByPhone.set(normPhone, u.id);
+  {
+    const batchPhones = rows
+      .map((r) => normalizePhoneNumber(r.phone))
+      .filter((p): p is string => Boolean(p));
+    if (batchPhones.length > 0) {
+      const { data: existingProfiles } = await adminClient
+        .from('profiles')
+        .select('id, mobile_number')
+        .in('mobile_number', batchPhones);
+      for (const p of existingProfiles ?? []) {
+        if (p.mobile_number) existingUserByPhone.set(p.mobile_number, p.id);
       }
     }
-    if ((pageData?.users ?? []).length < 1000) break;
-    page++;
   }
 
   let imported = 0;
@@ -745,29 +742,16 @@ export async function bulkInviteMembersAction(
     }
   }
 
-  // Build a phone → resolved userId map scoped to phones in this batch only.
-  // Avoids listUsers() pagination ceiling (1000-user hard cap).
-  const resolvedUserIdByPhone = new Map<string, string>();
-  {
-    const ownerPhones = rows
-      .filter((r) => r.role === 'prop_owner' && r.phone)
-      .map((r) => normalizePhoneNumber(r.phone))
-      .filter((p): p is string => Boolean(p));
-    if (ownerPhones.length > 0) {
-      const { data: ownerProfiles } = await adminClient
-        .from('profiles')
-        .select('id, mobile_number')
-        .in('mobile_number', ownerPhones);
-      for (const p of ownerProfiles ?? []) {
-        if (p.mobile_number) resolvedUserIdByPhone.set(p.mobile_number, p.id);
-      }
-    }
-  }
+  // existingUserByPhone now covers all batch phones (populated at startup + updated
+  // after each new createUser call), so reuse it directly for unit linking —
+  // no second profiles query needed.
+  const resolvedUserIdByPhone = existingUserByPhone;
 
   // Apply unit-level updates for rows that carry unit_no + unit_status.
   // Deduplicate by association_id + unit_no so each unit is written once.
   // unit_no is normalised to uppercase to match the convention used at unit creation.
-  // For prop_owner rows we also write: owner_id, owner_is_company, owner_company_name.
+  // For prop_owner rows: write owner_id, owner_is_company, owner_company_name.
+  // For tenant rows: write tenant_id so a tenancies record can be created.
   const unitUpdateMap = new Map<
     string,
     {
@@ -777,6 +761,7 @@ export async function bulkInviteMembersAction(
       owner_id?: string;
       owner_is_company?: boolean;
       owner_company_name?: string | null;
+      tenant_id?: string;
     }
   >();
 
@@ -805,11 +790,27 @@ export async function bulkInviteMembersAction(
       }
     }
 
+    if (row.role === 'tenant') {
+      const normPhone = normalizePhoneNumber(row.phone);
+      if (normPhone) {
+        const tenantId = resolvedUserIdByPhone.get(normPhone);
+        if (tenantId) existing.tenant_id = tenantId;
+      }
+    }
+
     unitUpdateMap.set(key, existing);
   }
 
-  for (const { associationId, unit_no, unit_status, owner_id, owner_is_company, owner_company_name } of unitUpdateMap.values()) {
-    const { error } = await adminClient
+  for (const {
+    associationId,
+    unit_no,
+    unit_status,
+    owner_id,
+    owner_is_company,
+    owner_company_name,
+    tenant_id,
+  } of unitUpdateMap.values()) {
+    const { data: updatedUnit, error } = await adminClient
       .from('units')
       .update({
         status: unit_status,
@@ -818,9 +819,33 @@ export async function bulkInviteMembersAction(
         ...(owner_company_name !== undefined ? { owner_company_name } : {}),
       })
       .eq('association_id', associationId)
-      .eq('unit_no', unit_no);
+      .eq('unit_no', unit_no)
+      .select('id')
+      .single();
+
     if (error) {
       logger.error({ associationId, unit_no, error }, 'bulkInvite: failed to update unit');
+      continue;
+    }
+
+    // For RENTED units with a resolved tenant, create an active tenancy.
+    // The DB enforces one active tenancy per unit (partial unique index on unit_id
+    // where end_date IS NULL), so ignore 23505 to make re-imports idempotent.
+    if (tenant_id && updatedUnit?.id) {
+      const { error: tenancyError } = await adminClient
+        .from('tenancies')
+        .insert({
+          unit_id: updatedUnit.id,
+          tenant_id,
+          start_date: new Date().toISOString().split('T')[0]!,
+          status: 'active',
+        });
+      if (tenancyError && tenancyError.code !== '23505') {
+        logger.error(
+          { unit_no, tenant_id, error: tenancyError },
+          'bulkInvite: failed to create tenancy',
+        );
+      }
     }
   }
 
