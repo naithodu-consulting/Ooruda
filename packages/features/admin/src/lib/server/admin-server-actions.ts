@@ -593,6 +593,15 @@ export async function bulkInviteMembersAction(
     (accounts ?? []).map((a) => [(a.name ?? '').trim().toLowerCase(), a.id]),
   );
 
+  // associations.id (FK used in units.association_id) differs from accounts.id.
+  // Build a lookup from accounts.id → associations.id so unit updates use the right FK.
+  const { data: assocRows } = await adminClient
+    .from('associations')
+    .select('id, account_id');
+  const assocRowIdByAccountId = new Map<string, string>(
+    (assocRows ?? []).map((a) => [a.account_id, a.id]),
+  );
+
   // Resolve existing users for phones in this batch only — one indexed DB
   // query instead of paginating all auth users via the Admin API.
   const existingUserByPhone = new Map<string, string>();
@@ -767,7 +776,9 @@ export async function bulkInviteMembersAction(
 
   for (const row of rows) {
     if (!row.unit_no || !row.unit_status) continue;
-    const associationId = assocIdByName.get(row.association_name.trim().toLowerCase());
+    const accountId = assocIdByName.get(row.association_name.trim().toLowerCase());
+    if (!accountId) continue;
+    const associationId = assocRowIdByAccountId.get(accountId);
     if (!associationId) continue;
     const normalizedUnitNo = row.unit_no.trim().toUpperCase();
     const key = `${associationId}::${normalizedUnitNo}`;
