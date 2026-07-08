@@ -356,7 +356,7 @@ export async function assignTenantAction(
 
   const { error: statusError } = await client
     .from('units')
-    .update({ status: 'Occupied' })
+    .update({ status: 'Rented' })
     .eq('id', unitId)
     .eq('association_id', associationId);
 
@@ -416,7 +416,7 @@ export async function endTenancyAction(
 
   const { error: statusError } = await client
     .from('units')
-    .update({ status: 'Vacant' })
+    .update({ status: 'Self Occupied' })
     .eq('id', unitId)
     .eq('association_id', associationId);
 

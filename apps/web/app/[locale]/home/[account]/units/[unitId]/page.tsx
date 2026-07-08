@@ -157,7 +157,7 @@ export default async function UnitDetailPage({ params }: Props) {
             <Badge
               variant="outline"
               className={
-                unit.status === 'Occupied' ? badgeExtras.success : undefined
+                unit.status !== 'Vacant' ? badgeExtras.success : undefined
               }
             >
               {unit.status}

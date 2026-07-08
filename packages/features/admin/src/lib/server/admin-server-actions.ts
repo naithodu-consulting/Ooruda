@@ -553,7 +553,7 @@ export interface BulkInviteRow {
   /** Unit number from the association XLSX — used to update units.status */
   unit_no?: string;
   /** DB value to write to units.status when unit_no is provided */
-  unit_status?: 'Occupied' | 'Vacant';
+  unit_status?: 'Self Occupied' | 'Rented' | 'Vacant';
   /**
    * When the owner row represents a company (e.g. "AAJEETH INNOVATION LLP"),
    * set this to write owner_is_company + owner_company_name on the unit.
@@ -766,7 +766,7 @@ export async function bulkInviteMembersAction(
     {
       associationId: string;
       unit_no: string;
-      unit_status: 'Occupied' | 'Vacant';
+      unit_status: 'Self Occupied' | 'Rented' | 'Vacant';
       owner_id?: string;
       owner_is_company?: boolean;
       owner_company_name?: string | null;

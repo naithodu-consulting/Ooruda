@@ -73,17 +73,18 @@ function cleanUnitNo(raw: string): string {
     : trimmed;
 }
 
-const UNIT_STATUS_MAP: Record<string, 'Occupied' | 'Vacant'> = {
-  'self occupied': 'Occupied',
-  rented: 'Occupied',
-  vacant: 'Vacant',
-};
+const UNIT_STATUS_MAP: Record<string, 'Self Occupied' | 'Rented' | 'Vacant'> =
+  {
+    'self occupied': 'Self Occupied',
+    rented: 'Rented',
+    vacant: 'Vacant',
+  };
 
 /**
  * Maps the association XLSX UNIT_STATUS to our DB value.
  * Returns null if the value is unrecognised (treated as a validation error).
  */
-function mapUnitStatus(raw: string): 'Occupied' | 'Vacant' | null {
+function mapUnitStatus(raw: string): 'Self Occupied' | 'Rented' | 'Vacant' | null {
   return UNIT_STATUS_MAP[raw.trim().toLowerCase()] ?? null;
 }
 

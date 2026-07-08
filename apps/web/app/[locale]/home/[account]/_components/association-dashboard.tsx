@@ -123,7 +123,7 @@ async function loadAssociationOverview(accountId: string, duration: string) {
       .from('units')
       .select('id', { count: 'exact', head: true })
       .eq('association_id', association.id)
-      .eq('status', 'Occupied'),
+      .in('status', ['Self Occupied', 'Rented']),
     billsQuery,
     client
       .from('mescom_bills')
