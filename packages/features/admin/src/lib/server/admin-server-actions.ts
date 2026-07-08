@@ -603,7 +603,12 @@ export async function bulkInviteMembersAction(
       perPage: 1000,
     });
     for (const u of pageData?.users ?? []) {
-      if (u.phone) existingUserByPhone.set(u.phone, u.id);
+      if (u.phone) {
+        // auth.users.phone stores without '+' (e.g. "919886215050").
+        // normalizePhoneNumber returns with '+'. Normalise the key so lookups match.
+        const normPhone = normalizePhoneNumber(u.phone) ?? u.phone;
+        existingUserByPhone.set(normPhone, u.id);
+      }
     }
     if ((pageData?.users ?? []).length < 1000) break;
     page++;
