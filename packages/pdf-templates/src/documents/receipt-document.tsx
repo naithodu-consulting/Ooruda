@@ -112,7 +112,7 @@ export function ReceiptDocument({
           </View>
         </View>
 
-        <DocumentFooter note="This is a system-generated receipt and does not require a signature." />
+        <DocumentFooter note="Electronically Generated, does not require Signature." />
       </Page>
     </Document>
   );

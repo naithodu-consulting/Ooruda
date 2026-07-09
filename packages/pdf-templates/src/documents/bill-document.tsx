@@ -185,7 +185,7 @@ export function BillDocument({
           </View>
         </View>
 
-        <DocumentFooter note="This is a system-generated bill and does not require a signature." />
+        <DocumentFooter note="Electronically Generated, does not require Signature." />
       </Page>
     </Document>
   );

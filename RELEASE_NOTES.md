@@ -597,6 +597,7 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 | `20260715000000_bill_sequences.sql` | Jul 15 | `bill_sequences` table + `allocate_bill_no()` RPC for FY-scoped, per-type atomic bill number allocation |
 | `20260715000001_billing_entity_fields.sql` | Jul 15 | Add `bill_to`, `owner_is_company`, `owner_company_*` to `units`; `is_company`, `company_*` to `tenancies`; `pan_number` to `associations` |
 | `20260716000000_sub_meters_initial_reading_min_charge.sql` | Jul 16 | Add `initial_reading` and `minimum_charge` columns to `sub_meters` for onboarding baseline and default monthly charge |
+| `20260716000001_super_admin_account_write_access.sql` | Jul 16 | Add `is_super_admin()` bypass to `accounts_settings_manage_update` policy and `account_image` storage policy so super admins can save association name and logo |
 | `20260707122210_test_flags_and_rename_test_data.sql` | Jul 7 | Add `is_test` to `associations` and `profiles`; rename Abish → Sandbox Residency, Prestige Meadows → Demo Towers; tag 11 test users |
 | `20260707132123_sync_test_user_account_names.sql` | Jul 7 | Sync `accounts.name` from `profiles.full_name` for all test users (display name fix) |
 | `20260708000001_unit_status_self_occupied_rented.sql` | Jul 8 | Drop `Occupied` CHECK; migrate existing rows; add CHECK for `Self Occupied`, `Rented`, `Vacant` |
@@ -1051,4 +1052,20 @@ Added an admin-only **Payment Gateway** settings card to the Association Setting
 
 ---
 
-*Last updated: 2026-07-09 (v4.7 — Razorpay async webhook safety net)*
+## Bug Fix — Super Admin Association Name / Logo Save
+
+Branch: `week-4`
+
+### Super Admin Write Access for Account Name and Logo
+
+Fixed "Couldn't save your changes" error when a super admin tried to update an association's name or logo from the Association Settings page.
+
+**Root cause:** The `accounts_settings_manage_update` RLS policy and the `account_image` storage policy both gate on `has_permission(auth.uid(), account_id, 'settings.manage')`, which checks `accounts_memberships`. Super admins are not actual members of associations they're inspecting, so `has_permission` returned false — blocking the `accounts` UPDATE and the storage upload even though `association_role()` correctly returns `'assoc_admin'` for super admins.
+
+**Fix (`20260716000001_super_admin_account_write_access.sql`):**
+- `accounts_settings_manage_update` policy: added `public.is_super_admin()` OR-branch to both USING and WITH CHECK clauses
+- `account_image` storage policy: added `public.is_super_admin()` OR-branch to the WITH CHECK clause (read access was already gated on `has_role_on_account` which super admins pass via existing bypass)
+
+---
+
+*Last updated: 2026-07-09 (v4.8 — Super admin account write access fix)*

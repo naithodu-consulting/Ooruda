@@ -190,7 +190,7 @@ export async function getOrGenerateBillPdf(
         `id, association_id, unit_id, period, bill_no, bill_type, total_amount, gst_amount, paid_amount, status, due_date, generated_at, pdf_url,
          units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin),
          bill_line_items(description, gst_applicable, amount),
-         associations(address, gstin, pan_number, registration_number, gst_enabled, gst_rate, authorised_signatory, accounts(name, picture_url))`,
+         associations(address, gstin, pan_number, registration_number, gst_enabled, gst_rate, accounts(name, picture_url))`,
       )
       .eq('id', billId)
       .maybeSingle();
@@ -350,7 +350,6 @@ export async function getOrGenerateBillPdf(
             name: association.accounts?.name ?? 'Association',
             address: association.address,
             logoUrl: association.accounts?.picture_url ?? null,
-            authorisedSignatory: association.authorised_signatory,
           },
           unit: {
             unitNo: unitData.unit_no,

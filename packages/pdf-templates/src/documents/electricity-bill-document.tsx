@@ -22,7 +22,6 @@ export interface ElectricityBillPdfData {
     name: string;
     address: string | null;
     logoUrl: string | null;
-    authorisedSignatory: string | null;
   };
   unit: { unitNo: string; doorNo?: string | null; floor?: number | null };
   billTo?: BillingEntityData | null;
@@ -190,33 +189,6 @@ const s = StyleSheet.create({
     borderColor: '#fecaca',
   },
 
-  // ── Signature row ─────────────────────────────────────────────────────────
-  signatureRow: {
-    marginTop: 28,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  signatureBlock: {
-    alignItems: 'center',
-    width: 160,
-  },
-  signatureLine: {
-    borderTopWidth: 1,
-    borderTopColor: '#94a3b8',
-    width: '100%',
-    paddingTop: 4,
-    textAlign: 'center',
-    fontSize: 8,
-    color: '#64748b',
-  },
-  signatureName: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginTop: 2,
-    color: '#1e293b',
-  },
-
   // ── Load note ─────────────────────────────────────────────────────────────
   loadNote: {
     marginBottom: 8,
@@ -376,13 +348,13 @@ export function ElectricityBillDocument({
           </View>
         </View>
 
-        {/* Sanctioned load note (if any meter has a load) */}
-        {meters.some((m) => m.loadKva != null) ? (
+        {/* Sanctioned load note (only if any meter has load > 0) */}
+        {meters.some((m) => m.loadKva != null && m.loadKva > 0) ? (
           <View style={s.loadNote}>
             <Text style={s.loadNoteText}>
               Sanctioned Load —{' '}
               {meters
-                .filter((m) => m.loadKva != null)
+                .filter((m) => m.loadKva != null && m.loadKva > 0)
                 .map((m) => `${m.meterLabel}: ${m.loadKva} kVA`)
                 .join('  |  ')}
             </Text>
@@ -403,29 +375,7 @@ export function ElectricityBillDocument({
           </View>
         ) : null}
 
-        {/* Receiver + Authorised Signatory */}
-        <View style={s.signatureRow}>
-          <View style={s.signatureBlock}>
-            <Text style={{ fontSize: 20, color: '#e2e8f0', marginBottom: 4 }}>
-              {''}
-            </Text>
-            <Text style={s.signatureLine}>Receiver's Signature</Text>
-          </View>
-
-          <View style={s.signatureBlock}>
-            <Text style={{ fontSize: 20, color: '#e2e8f0', marginBottom: 4 }}>
-              {''}
-            </Text>
-            <Text style={s.signatureLine}>Authorised Signatory</Text>
-            {association.authorisedSignatory ? (
-              <Text style={s.signatureName}>
-                {association.authorisedSignatory}
-              </Text>
-            ) : null}
-          </View>
-        </View>
-
-        <DocumentFooter note="This is a computer-generated bill and does not require a physical signature." />
+        <DocumentFooter note="Electronically Generated, does not require Signature." />
       </Page>
     </Document>
   );
