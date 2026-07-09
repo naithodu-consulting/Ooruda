@@ -15,7 +15,13 @@ type Membership = Tables<'accounts_memberships'> & {
 };
 
 export function AdminMembershipsTable(props: { memberships: Membership[] }) {
-  return <DataTable data={props.memberships} columns={getColumns()} manualSorting={false} />;
+  return (
+    <DataTable
+      data={props.memberships}
+      columns={getColumns()}
+      manualSorting={false}
+    />
+  );
 }
 
 function getColumns(): ColumnDef<Membership>[] {

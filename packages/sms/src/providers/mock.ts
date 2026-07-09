@@ -12,4 +12,15 @@ export class MockSmsProvider implements ISmsProvider {
       messageId: `mock-${Math.random().toString(36).slice(2, 9)}`,
     };
   }
+
+  async sendSms(phone: string, message: string): Promise<SmsResponse> {
+    console.log('\n[SMS MOCK] ===========================');
+    console.log(`[SMS MOCK] Phone:   ${phone}`);
+    console.log(`[SMS MOCK] Message: ${message}`);
+    console.log('[SMS MOCK] ===========================\n');
+    return {
+      success: true,
+      messageId: `mock-${Math.random().toString(36).slice(2, 9)}`,
+    };
+  }
 }

@@ -1,12 +1,6 @@
 import * as React from 'react';
 
-import {
-  Document,
-  Page,
-  StyleSheet,
-  Text,
-  View,
-} from '@react-pdf/renderer';
+import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 
 import { DocumentFooter } from '../components/document-footer';
 import { DocumentHeader } from '../components/document-header';

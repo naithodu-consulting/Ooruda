@@ -6,4 +6,5 @@ export interface SmsResponse {
 
 export interface ISmsProvider {
   sendOtp(phone: string, otp: string): Promise<SmsResponse>;
+  sendSms(phone: string, message: string): Promise<SmsResponse>;
 }

@@ -7,7 +7,6 @@ import { AlertCircle, CheckCircle2, Download, Upload } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
-import { toast } from '@kit/ui/sonner';
 import {
   Dialog,
   DialogContent,
@@ -16,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@kit/ui/dialog';
+import { toast } from '@kit/ui/sonner';
 import {
   Table,
   TableBody,
@@ -73,18 +73,19 @@ function cleanUnitNo(raw: string): string {
     : trimmed;
 }
 
-const UNIT_STATUS_MAP: Record<string, 'Self Occupied' | 'Rented' | 'Vacant'> =
-  {
-    'self occupied': 'Self Occupied',
-    rented: 'Rented',
-    vacant: 'Vacant',
-  };
+const UNIT_STATUS_MAP: Record<string, 'Self Occupied' | 'Rented' | 'Vacant'> = {
+  'self occupied': 'Self Occupied',
+  rented: 'Rented',
+  vacant: 'Vacant',
+};
 
 /**
  * Maps the association XLSX UNIT_STATUS to our DB value.
  * Returns null if the value is unrecognised (treated as a validation error).
  */
-function mapUnitStatus(raw: string): 'Self Occupied' | 'Rented' | 'Vacant' | null {
+function mapUnitStatus(
+  raw: string,
+): 'Self Occupied' | 'Rented' | 'Vacant' | null {
   return UNIT_STATUS_MAP[raw.trim().toLowerCase()] ?? null;
 }
 
@@ -128,7 +129,8 @@ function parseAssocFormat(
     }
 
     const isRented = unitStatusRaw.trim().toLowerCase() === 'rented';
-    const isSelfOccupied = unitStatusRaw.trim().toLowerCase() === 'self occupied';
+    const isSelfOccupied =
+      unitStatusRaw.trim().toLowerCase() === 'self occupied';
 
     const ownerPhone = cleanPhoneCell(r['owner_mobile_no'] ?? '');
     const ownerNameRaw = r['owner_name'] ?? '';
@@ -138,7 +140,8 @@ function parseAssocFormat(
     const ownerName = (() => {
       if (!ownerNameRaw.includes(' & ')) return ownerNameRaw;
       const [first = '', second = ''] = ownerNameRaw.split(' & ', 2);
-      if (isCompanyName(first.trim()) || isCompanyName(second.trim())) return ownerNameRaw;
+      if (isCompanyName(first.trim()) || isCompanyName(second.trim()))
+        return ownerNameRaw;
       return first.trim();
     })();
     const ownerEmail = r['owner_email_address'] ?? '';
@@ -158,7 +161,8 @@ function parseAssocFormat(
     // An owner name is a company if it matches common Indian business entity suffixes.
     // In that case we still invite the contact phone but also write owner_is_company + name.
     const ownerCompanyName =
-      selfOccupiedCompanyName ?? (isCompanyName(ownerName) ? ownerName : undefined);
+      selfOccupiedCompanyName ??
+      (isCompanyName(ownerName) ? ownerName : undefined);
 
     if (ownerPhone && ownerName) {
       rows.push({
@@ -399,11 +403,14 @@ export function AdminBulkInviteDialog(
                   <span className="font-medium">Association Excel format</span>{' '}
                   also accepted for{' '}
                   <span className="font-semibold">{props.associationName}</span>
-                  .{' '}
-                  <span className="font-medium">UNIT_STATUS</span> is mandatory
-                  — <code className="bg-background rounded px-1">SELF OCCUPIED</code> invites owner only,{' '}
-                  <code className="bg-background rounded px-1">RENTED</code> invites owner + tenant.
-                  Unit status is saved to the database.
+                  . <span className="font-medium">UNIT_STATUS</span> is
+                  mandatory —{' '}
+                  <code className="bg-background rounded px-1">
+                    SELF OCCUPIED
+                  </code>{' '}
+                  invites owner only,{' '}
+                  <code className="bg-background rounded px-1">RENTED</code>{' '}
+                  invites owner + tenant. Unit status is saved to the database.
                 </p>
               )}
             </div>
@@ -556,12 +563,7 @@ function parseCsv(text: string): BulkInviteRow[] | string {
   const roleIdx = header.indexOf('role');
   const assocIdx = header.indexOf('association_name');
 
-  if (
-    phoneIdx === -1 ||
-    nameIdx === -1 ||
-    roleIdx === -1 ||
-    assocIdx === -1
-  ) {
+  if (phoneIdx === -1 || nameIdx === -1 || roleIdx === -1 || assocIdx === -1) {
     return 'CSV must have columns: phone, name, role, association_name (email is optional).';
   }
 

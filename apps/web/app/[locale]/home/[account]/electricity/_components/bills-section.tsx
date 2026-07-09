@@ -158,7 +158,9 @@ export function BillsSection(props: {
                         {unitsFmt.format(metered)}
                       </TableCell>
                       <TableCell className="text-right font-medium text-blue-600 tabular-nums">
-                        {blockRate != null ? `₹${blockRate.toFixed(2)}/unit` : '—'}
+                        {blockRate != null
+                          ? `₹${blockRate.toFixed(2)}/unit`
+                          : '—'}
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
                         {metered > 0

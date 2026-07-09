@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { sendPaymentConfirmedNotification } from '~/lib/notify';
+
 import crypto from 'crypto';
 
 /**
@@ -140,7 +142,7 @@ export async function POST(req: NextRequest) {
   // Fetch bills scoped to the caller's units — enforces unit ownership.
   const { data: bills } = await client
     .from('bills')
-    .select('id, total_amount, paid_amount')
+    .select('id, total_amount, paid_amount, units!inner(unit_no)')
     .in('id', billIds)
     .in('unit_id', allowedUnitIds)
     .eq('association_id', associationId);
@@ -176,6 +178,31 @@ export async function POST(req: NextRequest) {
     }
 
     if (paymentId) paymentIds.push(paymentId as string);
+  }
+
+  // Fire-and-forget: send a payment confirmation SMS to the payer.
+  if (paymentIds.length > 0) {
+    const totalPaid = bills.reduce((sum, b) => {
+      const outstanding = Number(b.total_amount) - Number(b.paid_amount);
+      return sum + (outstanding > 0 ? outstanding : 0);
+    }, 0);
+    const unitNos = [
+      ...new Set(
+        bills.map(
+          (b) => (b.units as { unit_no: string } | null)?.unit_no ?? '',
+        ),
+      ),
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    void sendPaymentConfirmedNotification({
+      associationId,
+      recipientUserId: user.id,
+      unitNo: unitNos,
+      amount: totalPaid,
+      mode: 'Razorpay',
+    });
   }
 
   return NextResponse.json({ paymentIds });

@@ -86,13 +86,15 @@ export function ImportOtherChargesDialog(props: Props) {
   const canSubmit = rows.length > 0 && !hasErrors && period;
 
   function downloadTemplate() {
-    downloadXlsxTemplate('other-charges-import-template.xlsx', [
-      'unit_no', 'label', 'amount',
-    ], [
-      ['G-01', 'Clubhouse Access fee', 500],
-      ['1-02', 'Water charges excess', 250],
-      ['2-03', 'Repairs reimbursement', 1200],
-    ]);
+    downloadXlsxTemplate(
+      'other-charges-import-template.xlsx',
+      ['unit_no', 'label', 'amount'],
+      [
+        ['G-01', 'Clubhouse Access fee', 500],
+        ['1-02', 'Water charges excess', 250],
+        ['2-03', 'Repairs reimbursement', 1200],
+      ],
+    );
   }
 
   function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
@@ -196,7 +198,8 @@ export function ImportOtherChargesDialog(props: Props) {
             Import Other Charges
           </DialogTitle>
           <DialogDescription>
-            Bulk import ad-hoc other charges for specific units from a CSV or Excel file.
+            Bulk import ad-hoc other charges for specific units from a CSV or
+            Excel file.
           </DialogDescription>
         </DialogHeader>
 
@@ -261,7 +264,9 @@ export function ImportOtherChargesDialog(props: Props) {
               >
                 <Upload className="text-muted-foreground/60 mb-2 h-8 w-8" />
                 <span className="text-sm font-medium">
-                  {fileName ? fileName : 'Drop CSV or Excel here, or click to browse'}
+                  {fileName
+                    ? fileName
+                    : 'Drop CSV or Excel here, or click to browse'}
                 </span>
                 <span className="text-muted-foreground mt-1 text-xs">
                   Required columns: unit_no, label, amount

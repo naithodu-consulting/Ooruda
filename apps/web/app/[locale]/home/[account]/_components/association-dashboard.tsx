@@ -346,7 +346,10 @@ export async function AssociationDashboard({
 
           // All unpaid/partial bills across ALL periods
           const unpaidBills = unitBills.filter(
-            (b) => b.status === 'Unpaid' || b.status === 'Partial',
+            (b) =>
+              b.status === 'Unpaid' ||
+              b.status === 'Partial' ||
+              b.status === 'Overdue',
           );
 
           // Total outstanding across every period

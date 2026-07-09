@@ -918,11 +918,137 @@ Improvements to handle real-world data quality issues found in association-suppl
 | **Payments** | Complete | Record payments (cash/UPI/bank/cheque), payment history, PDF receipts, bill status auto-sync |
 | **Reports** | Partial | Arrears summary, payment summary, billing overview (more report types deferred) |
 | **Audit Logs** | Complete | Structured event log, all actions instrumented |
-| **Notifications** | Partial | Log view with read/unread state (push delivery not yet wired) |
+| **Notifications** | Partial | Log view with read/unread state; SMS delivery wired for bill_generated and payment_confirmed events |
 | **Admin Panel** | Complete | Create association, create/edit/remove users, manage roles, association permissions, bulk CSV member invite, payment gateway config per association |
-| **Self-Service Payments** | Complete | Owner/tenant Razorpay checkout (Pay individual bill, Pay All Pending), per-association gateway credentials, batch grouping |
+| **Self-Service Payments** | Complete | Owner/tenant Razorpay checkout (Pay individual bill, Pay All Pending), per-association gateway credentials (admin config UI), batch grouping |
 | **Dashboard** | Complete | Real-data metric cards with duration filter, clickable navigation to billing/payments, multi-unit billing summary with all-period outstanding aggregation, recent activity feed |
 
 ---
 
-*Last updated: 2026-07-09 (v4.2 — electricity Unit Rate column, bulk invite audit logging)*
+---
+
+## Release v4.7 — Razorpay Async Webhook (Jul 9, 2026)
+
+Branch: `week-4`
+
+### Razorpay Async Webhook Safety Net
+
+Handles the edge case where a user pays on Razorpay but the synchronous `/verify` call never reaches the server (browser closed, network drop, etc.). Razorpay retries the webhook until it gets a 200, so no payment is ever silently lost.
+
+**New route `app/api/billing/razorpay/webhook/route.ts`:**
+- Receives `payment.captured` events from Razorpay (all other events acknowledged and ignored)
+- Reads raw body before parsing for correct HMAC-SHA256 signature verification (`X-Razorpay-Signature` header vs `webhook_secret`)
+- Rejects requests if `webhook_secret` is not configured in gateway settings (prevents spoofing)
+- Reads `bill_ids`, `association_id`, `paid_by_role` from Razorpay order `notes` — no separate lookup table needed
+- Calls `record_payment` RPC via admin client (service_role) for each bill
+- Fully idempotent: if `/verify` already recorded the payment, the `payments_razorpay_bill_uniq` DB index rejects the duplicate and the webhook skips silently
+- Returns 500 on unexpected DB errors so Razorpay retries; returns 200 on success or duplicate
+
+**Fixed `app/api/billing/razorpay/create-order/route.ts`:**
+- Now embeds `notes: { bill_ids, association_id, paid_by_role }` in every Razorpay order so the webhook handler can identify the bills without a separate DB lookup
+
+**Migration `20260709200000_record_payment_webhook_bypass.sql`:**
+- Updates `record_payment()` to allow `service_role` callers to skip the user-session auth check (webhook has no user JWT). All existing user-facing auth paths are unchanged.
+- Grants `execute` to both `authenticated` and `service_role`
+
+**Prerequisite to activate:** Register the webhook URL in Razorpay Dashboard → Settings → Webhooks, select `payment.captured`, copy the generated webhook secret, and paste it into the association's Gateway Settings page. See TODO.md.
+
+---
+
+## Release v4.6 — Overdue Status Code Compatibility (Jul 9, 2026)
+
+Branch: `week-4`
+
+### Status Filter & Dashboard Fixes
+
+Companion fix for the `recompute_overdue_bills()` cron introduced in v4.5. The cron stores `'Overdue'` directly in `bills.status`, but all existing filter/display code assumed that status was always computed client-side and never stored. Updated four locations to handle `status='Overdue'` from the DB:
+
+- **`billing/_components/bills-section.tsx`** — overdue filter tab now also matches `b.status === 'Overdue'`
+- **`payments/_components/payments-section.tsx`** — overdue filter tab + Pay All Pending button include `'Overdue'` bills
+- **`units/page.tsx`** — DB query changed from `.eq('status', 'Unpaid')` to `.in('status', ['Unpaid', 'Partial', 'Overdue'])` so overdue units still show their badge count
+- **`_components/association-dashboard.tsx`** — outstanding balance calculation includes `'Overdue'` bills
+
+Both migrations (`20260702000004_razorpay_gateway`, `20260709112744_overdue_and_reminder_cron`) pushed to remote.
+
+---
+
+## Release v4.5 — Overdue Recompute & Reminder Cron (Jul 9, 2026)
+
+Branch: `week-4`
+
+### Automated Bill Status & Reminders
+
+**Migration `20260709112744_overdue_and_reminder_cron.sql`:**
+- Enables `pg_net` extension for outbound HTTP from the database
+- `public.recompute_overdue_bills()` — SQL function that transitions `Unpaid`/`Partial` bills to `Overdue` where `due_date < current_date`
+- `cron.schedule('overdue-recompute', '30 19 * * *', ...)` — fires daily at 1 AM IST; runs the overdue recompute function
+- `cron.schedule('send-reminders', '30 3 * * *', ...)` — fires daily at 9 AM IST; calls the `send-reminders` Edge Function via `pg_net`
+
+**New Edge Function `supabase/functions/send-reminders/index.ts`:**
+- Reads each association's `billing_settings.reminder_schedule_json` (`days_before` + `days_after` arrays)
+- Finds bills due on matching dates (e.g. 3 days before due, 1 day after due)
+- Batch-fetches unit owners and active tenants; batch-fetches phone numbers
+- Sends SMS via the same provider logic as `custom-sms-hook` (mock/MSG91/2Factor)
+- Logs every attempt to `notifications_log` with type `due_date_reminder` or `overdue_reminder`
+
+**Prerequisite:** One-time DB GUC configuration needed before reminder cron fires — see TODO.md → "Pre-launch: Cron Job Configuration".
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260709112744` | pg_net extension, `recompute_overdue_bills()` function, overdue + reminder cron schedules |
+
+---
+
+## Release v4.4 — Notification Event Wiring (Jul 9, 2026)
+
+Branch: `week-4`
+
+### SMS Notifications — Billing Events
+
+Wired billing events to send SMS notifications to owners and tenants via the existing `packages/sms` infrastructure.
+
+**SMS package extended (`packages/sms`):**
+- Added `sendSms(phone, message)` to `ISmsProvider` interface and all three providers (Mock, MSG91, 2Factor)
+- MSG91: uses Flow API with `MSG91_SMS_FLOW_ID` + `MSG91_SMS_SENDER_ID` env vars for DLT-compliant transactional SMS
+- 2Factor: uses TRANS_SMS endpoint
+
+**New notification service (`apps/web/lib/notify.ts`):**
+- `sendBillGeneratedNotifications(associationId, unitIds, monthLabel)` — batch fetches owners + active tenants for all billed units in two queries, then sends in parallel; fire-and-forget (never blocks billing)
+- `sendPaymentConfirmedNotification(params)` — single-user payment receipt SMS
+
+**Trigger points wired:**
+- `billing-actions.ts` → after successful bill generation batch, notifies each unit's owner and active tenant
+- `payments-actions.ts` → `recordPaymentAction` notifies the unit owner after manual payment recording
+- `verify/route.ts` → Razorpay self-service payment notifies the payer (owner/tenant) after successful checkout
+
+**All events logged to `notifications_log`** with `type`, `status` (Sent/Failed), `provider_key`, and `provider_ref` (provider message ID).
+
+| Feature | Status |
+|---|---|
+| Notifications | Partial → **SMS delivery wired for bill_generated and payment_confirmed** |
+
+### Migrations Changelog
+
+No new migrations (uses existing `notifications_log` table).
+
+---
+
+## Release v4.3 — Razorpay Gateway Config UI (Jul 9, 2026)
+
+Branch: `week-4`
+
+### Payment Gateway Settings
+
+Added an admin-only **Payment Gateway** settings card to the Association Settings page (`/settings/association`), completing the Razorpay self-service payment setup flow:
+
+- **Key ID / Key Secret / Webhook Secret** fields — credentials stored server-side via admin client; secrets never serialised into the React tree
+- **Enable online payments** toggle — controls `is_active` on `association_payment_gateways` per association
+- Insert vs update logic — first save creates the row (key secret required); subsequent saves allow partial updates (blank secret = keep existing)
+- Secret presence shown as `has_secret: boolean` indicator only — actual values never reach the client
+- Success/error toast feedback; `data-test` attributes on all interactive elements
+
+---
+
+*Last updated: 2026-07-09 (v4.7 — Razorpay async webhook safety net)*

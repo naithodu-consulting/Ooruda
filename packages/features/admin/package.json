@@ -17,6 +17,9 @@
     "clean": "git clean -xdf .turbo node_modules",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "xlsx": "catalog:"
+  },
   "devDependencies": {
     "@hookform/resolvers": "catalog:",
     "@kit/next": "workspace:*",
@@ -37,8 +40,5 @@
     "react-dom": "catalog:",
     "react-hook-form": "catalog:",
     "zod": "catalog:"
-  },
-  "dependencies": {
-    "xlsx": "catalog:"
   }
 }

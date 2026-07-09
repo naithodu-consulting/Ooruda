@@ -328,7 +328,8 @@ export async function getOrGenerateBillPdf(
 
       let minimumCharge = 0;
       const meters = meterReadings.map((r) => {
-        const consumed = r.consumed_units ?? (r.current_reading - r.previous_reading);
+        const consumed =
+          r.consumed_units ?? r.current_reading - r.previous_reading;
         const amount = Math.round(consumed * blockRate * 100) / 100;
         minimumCharge += r.minimum_charge ?? 0;
         const info = meterInfoById.get(r.sub_meter_id);

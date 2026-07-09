@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
+import { sendPaymentConfirmedNotification } from '~/lib/notify';
 import { getAssociationRole } from '~/lib/rbac';
 
 import {
@@ -75,17 +76,31 @@ export async function recordPaymentAction(
 
   const { data: bill } = await client
     .from('bills')
-    .select('bill_no, units!inner(unit_no)')
+    .select('bill_no, units!inner(unit_no, owner_id)')
     .eq('id', billId)
     .single();
+
+  const unitNo = bill?.units?.unit_no ?? '?';
+  const ownerId = bill?.units?.owner_id ?? null;
 
   await logAuditEvent({
     associationId,
     action: 'payment.recorded',
     entityType: 'payment',
     entityId: paymentId as unknown as string,
-    summary: `Unit ${bill?.units?.unit_no ?? '?'} — ₹${amount.toLocaleString('en-IN')} collected via ${mode}`,
+    summary: `Unit ${unitNo} — ₹${amount.toLocaleString('en-IN')} collected via ${mode}`,
   });
+
+  // Fire-and-forget: notify the unit owner of payment receipt.
+  if (ownerId) {
+    void sendPaymentConfirmedNotification({
+      associationId,
+      recipientUserId: ownerId,
+      unitNo,
+      amount,
+      mode,
+    });
+  }
 
   revalidatePath(PAYMENTS_PATH, 'page');
 

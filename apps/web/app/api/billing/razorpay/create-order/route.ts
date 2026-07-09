@@ -128,7 +128,12 @@ export async function POST(req: NextRequest) {
   // Amount in paise (Razorpay requires integer paise).
   const amountPaise = Math.round(totalOutstanding * 100);
 
+  // Determine the payer role so the webhook can pass it to record_payment.
+  const paidByRole = role === 'prop_owner' ? 'Owner' : 'Tenant';
+
   // Call Razorpay Orders API.
+  // Embed bill_ids + association_id + paid_by_role in notes so the async
+  // webhook handler can find the bills without a separate DB lookup table.
   const encoded = Buffer.from(
     `${gateway.key_id}:${gateway.key_secret}`,
   ).toString('base64');
@@ -142,6 +147,11 @@ export async function POST(req: NextRequest) {
       amount: amountPaise,
       currency: 'INR',
       receipt: billIds[0],
+      notes: {
+        bill_ids: billIds.join(','),
+        association_id: associationId,
+        paid_by_role: paidByRole,
+      },
     }),
   });
 

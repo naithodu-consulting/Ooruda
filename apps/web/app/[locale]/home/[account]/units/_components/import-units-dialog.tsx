@@ -59,18 +59,16 @@ type ParsedRow = BulkImportRow & {
 };
 
 function downloadTemplate() {
-  downloadXlsxTemplate('units-import-template.xlsx', [
-    'unit_no',
-    'type',
-    'floor',
-    'area_sqft',
-    'door_no',
-  ], [
-    ['G-01', 'Shop', 0, 450, 'Door No. 101'],
-    ['G-02', 'Shop', 0, 380, ''],
-    ['1-01', 'Office', 1, 600, ''],
-    ['CA-01', 'Common Area', '', 0, ''],
-  ]);
+  downloadXlsxTemplate(
+    'units-import-template.xlsx',
+    ['unit_no', 'type', 'floor', 'area_sqft', 'door_no'],
+    [
+      ['G-01', 'Shop', 0, 450, 'Door No. 101'],
+      ['G-02', 'Shop', 0, 380, ''],
+      ['1-01', 'Office', 1, 600, ''],
+      ['CA-01', 'Common Area', '', 0, ''],
+    ],
+  );
 }
 
 function normalizeRow(r: Record<string, string>): Record<string, string> {

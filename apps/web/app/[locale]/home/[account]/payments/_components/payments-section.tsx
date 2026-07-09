@@ -81,7 +81,9 @@ export function PaymentsSection(props: {
 
   const [statusVal, setStatusVal] = useState(props.initialStatus ?? 'all');
   const [typeVal, setTypeVal] = useState('all');
-  const [durationVal, setDurationVal] = useState(props.initialDuration ?? 'all');
+  const [durationVal, setDurationVal] = useState(
+    props.initialDuration ?? 'all',
+  );
   const [unitTab, setUnitTab] = useState(props.initialUnit ?? ALL_UNITS);
   const [page, setPage] = useState(1);
 
@@ -126,8 +128,9 @@ export function PaymentsSection(props: {
       } else if (statusVal === 'overdue') {
         rows = rows.filter(
           (b) =>
-            (b.status === 'Unpaid' || b.status === 'Partial') &&
-            b.due_date < today,
+            b.status === 'Overdue' ||
+            ((b.status === 'Unpaid' || b.status === 'Partial') &&
+              b.due_date < today),
         );
       }
     }
@@ -185,7 +188,9 @@ export function PaymentsSection(props: {
       .filter(
         (b) =>
           b.unit_no === unitTab &&
-          (b.status === 'Unpaid' || b.status === 'Partial'),
+          (b.status === 'Unpaid' ||
+            b.status === 'Partial' ||
+            b.status === 'Overdue'),
       )
       .map((b) => ({
         id: b.id,

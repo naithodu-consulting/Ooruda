@@ -136,8 +136,9 @@ export function BillsSection(props: {
       } else if (statusVal === 'overdue') {
         rows = rows.filter(
           (b) =>
-            (b.status === 'Unpaid' || b.status === 'Partial') &&
-            b.due_date < today,
+            b.status === 'Overdue' ||
+            ((b.status === 'Unpaid' || b.status === 'Partial') &&
+              b.due_date < today),
         );
       }
     }

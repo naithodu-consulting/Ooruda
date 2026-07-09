@@ -1,6 +1,8 @@
 import { Building2, DoorClosed, DoorOpen, Ruler } from 'lucide-react';
 
+import { AdminBulkInviteDialog } from '@kit/admin/components/admin-bulk-invite-dialog';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
+import { Button } from '@kit/ui/button';
 import { MetricCard } from '@kit/ui/metric-card';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
@@ -8,8 +10,6 @@ import { Trans } from '@kit/ui/trans';
 import { displayBillStatus } from '~/lib/bill-status';
 import { requireRole } from '~/lib/rbac';
 
-import { AdminBulkInviteDialog } from '@kit/admin/components/admin-bulk-invite-dialog';
-import { Button } from '@kit/ui/button';
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import { AddUnitDialog } from './_components/add-unit-dialog';
 import { ImportUnitsDialog } from './_components/import-units-dialog';
@@ -108,7 +108,7 @@ export default async function UnitsPage({ params }: Props) {
         .from('bills')
         .select('unit_id, status, due_date')
         .in('unit_id', unitIds)
-        .eq('status', 'Unpaid')
+        .in('status', ['Unpaid', 'Partial', 'Overdue'])
     : { data: [] };
 
   const overdueUnitIds = new Set(

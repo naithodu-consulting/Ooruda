@@ -6,6 +6,7 @@ import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
+import { sendBillGeneratedNotifications } from '~/lib/notify';
 import { getAssociationRole } from '~/lib/rbac';
 
 import { type GenerateBillsInput, GenerateBillsSchema } from './billing-schema';
@@ -225,6 +226,7 @@ export async function generateBillsAction(
 
   let created = 0;
   let skipped = 0;
+  const billedUnitIds: string[] = [];
 
   const roundToTwoDecimals = (val: number) => Math.round(val * 100) / 100;
 
@@ -392,20 +394,17 @@ export async function generateBillsAction(
             ? 'other_charges'
             : 'maintenance';
 
-      const { error: rpcError } = await client.rpc(
-        'create_bill_with_items',
-        {
-          p_association_id: associationId,
-          p_unit_id: unit.id,
-          p_period: period,
-          p_bill_no: billNo,
-          p_due_date: dueDate,
-          p_total_amount: totalAmount,
-          p_line_items: items,
-          p_bill_type: billCategory,
-          p_gst_amount: gstAmount,
-        },
-      );
+      const { error: rpcError } = await client.rpc('create_bill_with_items', {
+        p_association_id: associationId,
+        p_unit_id: unit.id,
+        p_period: period,
+        p_bill_no: billNo,
+        p_due_date: dueDate,
+        p_total_amount: totalAmount,
+        p_line_items: items,
+        p_bill_type: billCategory,
+        p_gst_amount: gstAmount,
+      });
 
       if (rpcError) {
         console.error(
@@ -422,6 +421,7 @@ export async function generateBillsAction(
       }
 
       created += 1;
+      billedUnitIds.push(unit.id);
       return true;
     };
 
@@ -489,12 +489,20 @@ export async function generateBillsAction(
       { month: 'long' },
     );
     const [periodYear] = period.split('-');
+
     await logAuditEvent({
       associationId,
       action: 'bills.generated',
       entityType: 'bill',
       summary: `Generated ${created} bill${created === 1 ? '' : 's'} for ${monthName} ${periodYear}`,
     });
+
+    // Fire-and-forget: send SMS to owners/tenants of billed units.
+    void sendBillGeneratedNotifications(
+      associationId,
+      [...new Set(billedUnitIds)],
+      `${monthName} ${periodYear}`,
+    );
   }
 
   revalidatePath(BILLING_PATH, 'page');
