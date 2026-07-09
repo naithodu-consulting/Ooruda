@@ -63,24 +63,26 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
   const isUserRestricted = role === 'prop_owner' || role === 'tenant';
 
   // For owners/tenants resolve their unit IDs first (needed to scope the query).
+  // A user may own one unit and rent another in the same association, so we
+  // union both ownership and active tenancy unit IDs regardless of their role.
   let unitIds: string[] = [];
   if (isUserRestricted) {
-    if (role === 'prop_owner') {
-      const { data: units } = await client
+    const [{ data: ownedUnits }, { data: tenancies }] = await Promise.all([
+      client
         .from('units')
         .select('id')
         .eq('association_id', association.id)
-        .eq('owner_id', userId);
-      unitIds = (units ?? []).map((u) => u.id);
-    } else {
-      const { data: tenancies } = await client
+        .eq('owner_id', userId),
+      client
         .from('tenancies')
         .select('unit_id, units!inner(association_id)')
         .eq('tenant_id', userId)
         .eq('status', 'active')
-        .eq('units.association_id', association.id);
-      unitIds = (tenancies ?? []).map((t) => t.unit_id);
-    }
+        .eq('units.association_id', association.id),
+    ]);
+    const owned = (ownedUnits ?? []).map((u) => u.id);
+    const rented = (tenancies ?? []).map((t) => t.unit_id);
+    unitIds = [...new Set([...owned, ...rented])];
 
     if (unitIds.length === 0) {
       return (

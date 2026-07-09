@@ -847,6 +847,12 @@ Improvements to handle real-world data quality issues found in association-suppl
 - New `load_kva` column added to `meter_readings` table for per-reading tracking
 - Dialog instructions updated to reflect the new column structure and fallback behaviour
 
+### Multi-Role Members: assoc_admin as Owner/Tenant
+
+- An `assoc_admin` can now be assigned as unit owner or tenant — the eligibility check now accepts `assoc_admin` in addition to the specific `prop_owner`/`tenant` role
+- A member who owns one unit and rents another in the same association now sees bills for both on the payments page — unit IDs are unioned from ownership and active tenancies instead of branching on a single role
+- Bulk XLSX invite: `assoc_admin` rows that carry a `unit_no` now write `owner_id` on the unit (admins are assumed to be unit owners; if an admin is a tenant, include a separate `tenant`-role row)
+
 ### Bug Fix: Bulk Invite Unit Linking
 
 - Fixed: unit association FK was resolved to `accounts.id` instead of `associations.id` (different UUIDs), causing all unit updates to silently fail
@@ -882,4 +888,4 @@ Improvements to handle real-world data quality issues found in association-suppl
 
 ---
 
-*Last updated: 2026-07-09 (v4.1 — unit status Self Occupied/Rented, CSV column restructure, meter readings load_kva)*
+*Last updated: 2026-07-09 (v4.1 — unit status Self Occupied/Rented, CSV column restructure, meter readings load_kva, multi-role member support)*

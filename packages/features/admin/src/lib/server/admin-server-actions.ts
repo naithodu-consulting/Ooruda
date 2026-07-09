@@ -783,13 +783,19 @@ export async function bulkInviteMembersAction(
     const normalizedUnitNo = row.unit_no.trim().toUpperCase();
     const key = `${associationId}::${normalizedUnitNo}`;
 
+    // unit_status is taken from the first row for this unit. If multiple rows
+    // reference the same unit with different statuses, the first one wins.
+    // Order rows in the CSV so the most authoritative status row comes first.
     const existing = unitUpdateMap.get(key) ?? {
       associationId,
       unit_no: normalizedUnitNo,
       unit_status: row.unit_status,
     };
 
-    if (row.role === 'prop_owner') {
+    // assoc_admin with a unit_no is treated as the unit owner (they manage
+    // the building because they own property in it). To register an admin
+    // as a tenant of a unit, add a separate row with role = tenant.
+    if (row.role === 'prop_owner' || row.role === 'assoc_admin') {
       const normPhone = normalizePhoneNumber(row.phone);
       if (normPhone) {
         const ownerId = resolvedUserIdByPhone.get(normPhone);

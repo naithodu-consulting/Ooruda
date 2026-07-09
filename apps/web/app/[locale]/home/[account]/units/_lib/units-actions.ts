@@ -125,17 +125,17 @@ export async function updateUnitAction(
   const ownerId = parsed.data.owner_id ?? null;
 
   if (ownerId) {
-    const isEligible = await isAssociationMemberWithRole(
+    const isEligible = await isAssociationMemberWithRoles(
       client,
       associationId,
       ownerId,
-      'prop_owner',
+      ['assoc_admin', 'prop_owner'],
     );
 
     if (!isEligible) {
       return {
         success: false,
-        error: 'That person is not a property owner on this association.',
+        error: 'That person is not a member of this association with an owner-eligible role.',
       };
     }
   }
@@ -228,9 +228,9 @@ export async function deleteUnitAction(
 
 /**
  * Assign or unassign a unit's owner. `ownerId: null` clears the owner.
- * Admin-only, and the owner must already hold the `prop_owner` role on this
- * association's account — we don't let an admin point owner_id at an
- * arbitrary user id.
+ * Admin-only. The person being assigned must be a member of this association
+ * with role `prop_owner` or `assoc_admin` — we don't let an admin point
+ * owner_id at an arbitrary user id.
  */
 export async function assignOwnerAction(
   unitId: string,
@@ -246,17 +246,17 @@ export async function assignOwnerAction(
   const client = getSupabaseServerClient();
 
   if (ownerId) {
-    const isEligible = await isAssociationMemberWithRole(
+    const isEligible = await isAssociationMemberWithRoles(
       client,
       associationId,
       ownerId,
-      'prop_owner',
+      ['assoc_admin', 'prop_owner'],
     );
 
     if (!isEligible) {
       return {
         success: false,
-        error: 'That person is not a property owner on this association.',
+        error: 'That person is not a member of this association with an owner-eligible role.',
       };
     }
   }
@@ -318,17 +318,17 @@ export async function assignTenantAction(
 
   const client = getSupabaseServerClient();
 
-  const isEligible = await isAssociationMemberWithRole(
+  const isEligible = await isAssociationMemberWithRoles(
     client,
     associationId,
     parsed.data.tenantId,
-    'tenant',
+    ['assoc_admin', 'tenant'],
   );
 
   if (!isEligible) {
     return {
       success: false,
-      error: 'That person is not a tenant on this association.',
+      error: 'That person is not a member of this association with a tenant-eligible role.',
     };
   }
 
@@ -585,12 +585,14 @@ export async function bulkImportUnitsAction(
   return { success: true, imported, skipped };
 }
 
-async function isAssociationMemberWithRole(
+async function isAssociationMemberWithRoles(
   client: SupabaseClient,
   associationId: string,
   userId: string,
-  role: 'prop_owner' | 'tenant',
+  roles: ('assoc_admin' | 'billing_operator' | 'prop_owner' | 'tenant')[],
 ): Promise<boolean> {
+  if (roles.length === 0) return false;
+
   const { data: association } = await client
     .from('associations')
     .select('account_id')
@@ -606,7 +608,7 @@ async function isAssociationMemberWithRole(
     .select('user_id')
     .eq('account_id', association.account_id)
     .eq('user_id', userId)
-    .eq('account_role', role)
+    .in('account_role', roles)
     .maybeSingle();
 
   return Boolean(membership);
