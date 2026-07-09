@@ -131,6 +131,7 @@ export function BillsSection(props: {
                   <TableHead className="text-right">Block Units</TableHead>
                   <TableHead className="text-right">Metered Units</TableHead>
                   <TableHead className="text-right">Block Rate</TableHead>
+                  <TableHead className="text-right">Unit Rate</TableHead>
                   {props.canManage ? <TableHead /> : null}
                 </TableRow>
               </TableHeader>
@@ -138,7 +139,9 @@ export function BillsSection(props: {
                 {props.bills.map((bill) => {
                   const metered = props.consumedByBill[bill.id] ?? 0;
                   const blockRate =
-                    bill.invoice_amount / bill.block_consumption_units;
+                    bill.block_consumption_units > 0
+                      ? bill.invoice_amount / bill.block_consumption_units
+                      : null;
 
                   return (
                     <TableRow key={bill.id}>
@@ -155,7 +158,12 @@ export function BillsSection(props: {
                         {unitsFmt.format(metered)}
                       </TableCell>
                       <TableCell className="text-right font-medium text-blue-600 tabular-nums">
-                        ₹{blockRate.toFixed(2)}/unit
+                        {blockRate != null ? `₹${blockRate.toFixed(2)}/unit` : '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {metered > 0
+                          ? `₹${(bill.invoice_amount / metered).toFixed(2)}/unit`
+                          : '—'}
                       </TableCell>
                       {props.canManage ? (
                         <TableCell>
@@ -200,8 +208,9 @@ export function BillsSection(props: {
         )}
 
         <p className="text-muted-foreground mt-3 text-xs">
-          Rate per unit = MESCOM invoice ÷ block consumption units. Each
-          sub-meter is charged at this rate for its actual consumption.
+          Block Rate = MESCOM invoice ÷ MESCOM block units. Unit Rate = MESCOM
+          invoice ÷ total sub-metered consumption, which is the effective rate
+          charged.
         </p>
       </CardContent>
     </Card>

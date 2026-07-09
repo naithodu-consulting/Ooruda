@@ -579,9 +579,14 @@ export async function bulkInviteMembersAction(
   const logger = await getLogger();
 
   const serverClient = getSupabaseServerClient();
-  if (!(await isSuperAdmin(serverClient))) {
+  const [isAdmin, { data: { user: actorUser } }] = await Promise.all([
+    isSuperAdmin(serverClient),
+    serverClient.auth.getUser(),
+  ]);
+  if (!isAdmin) {
     throw new Error('Only super admins can perform bulk invites.');
   }
+  const actorUserId = actorUser?.id ?? 'unknown';
 
   // Resolve all association names up-front to avoid N+1 queries.
   const { data: accounts } = await adminClient
@@ -622,6 +627,7 @@ export async function bulkInviteMembersAction(
 
   let imported = 0;
   const skipped: BulkInviteResult['skipped'] = [];
+  const importedByAssociation = new Map<string, number>();
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
@@ -741,6 +747,10 @@ export async function bulkInviteMembersAction(
       }
 
       imported++;
+      importedByAssociation.set(
+        associationId,
+        (importedByAssociation.get(associationId) ?? 0) + 1,
+      );
       logger.info(
         { phone: normalised, associationId, role: row.role },
         'Bulk invite: member added',
@@ -867,6 +877,27 @@ export async function bulkInviteMembersAction(
   }
 
   revalidatePath('/admin/accounts', 'page');
+
+  // Write one audit log entry per association that had members imported.
+  // Uses adminClient because the super-admin actor is not an association member
+  // and would fail the member_insert_own RLS policy on audit_logs.
+  if (actorUser?.id) {
+    await Promise.all(
+      [...importedByAssociation].map(async ([assocId, count]) => {
+        const { error } = await adminClient.from('audit_logs').insert({
+          association_id: assocId,
+          actor_user_id: actorUser.id,
+          action: 'members.bulk_imported',
+          entity_type: 'account',
+          entity_id: assocId,
+          summary: `Bulk import: ${count} member${count === 1 ? '' : 's'} added`,
+        });
+        if (error) {
+          logger.error({ assocId, error }, 'bulkInvite: failed to write audit log');
+        }
+      }),
+    );
+  }
 
   return { imported, skipped };
 }
