@@ -168,7 +168,7 @@ export default async function UnitsPage({ params }: Props) {
       .map((m) => toOption(m.user_id));
   }
 
-  const occupiedCount = unitRows.filter((u) => u.status === 'Occupied').length;
+  const occupiedCount = unitRows.filter((u) => u.status !== 'Vacant').length;
   const vacantCount = unitRows.length - occupiedCount;
   const totalAreaSqft = unitRows.reduce((sum, u) => sum + u.area_sqft, 0);
 

@@ -237,6 +237,9 @@ export type MeterReadingImportRow = {
   sub_meter_no: string;
   current_reading: number;
   period: string; // YYYY-MM, validated client-side
+  // Optional per-reading overrides; blank in CSV means "preserve existing value"
+  load_kva?: number | null;
+  minimum_charge?: number | null;
 };
 
 export type MeterReadingImportSkipped = {
@@ -291,12 +294,12 @@ export async function bulkImportMeterReadingsAction(
 
   const unitIds = (units ?? []).map((u) => u.id);
 
-  // Fetch all active sub_meters for this association, including initial_reading
-  // and minimum_charge (used as fallbacks for the first bill of each meter).
+  // Fetch all active sub_meters for this association. load_kva and minimum_charge
+  // here are defaults: used only when the readings CSV leaves those fields blank.
   const { data: subMeters } = unitIds.length
     ? await client
         .from('sub_meters')
-        .select('id, meter_label, initial_reading, minimum_charge')
+        .select('id, meter_label, initial_reading, minimum_charge, load_kva')
         .in('unit_id', unitIds)
         .eq('is_active', true)
     : { data: [] };
@@ -325,18 +328,20 @@ export async function bulkImportMeterReadingsAction(
     (bills ?? []).map((b) => [b.period, b.id]),
   );
 
-  // Fetch last known reading per sub_meter (to carry forward as previous_reading)
+  // Fetch last known reading per sub_meter (to carry forward previous_reading,
+  // minimum_charge, and load_kva when the CSV leaves those fields blank).
   const smIds = smList.map((s) => s.id);
   const { data: lastReadings } = smIds.length
     ? await client
         .from('meter_readings')
-        .select('sub_meter_id, period, current_reading')
+        .select('sub_meter_id, period, current_reading, minimum_charge, load_kva')
         .in('sub_meter_id', smIds)
+        .lte('period', firstPeriod)
         .order('period', { ascending: false })
     : { data: [] };
 
   // Group by sub_meter_id; first entry per meter is the most recent
-  const lastReadingBySm = new Map<string, { period: string; current_reading: number }[]>();
+  const lastReadingBySm = new Map<string, { period: string; current_reading: number; minimum_charge: number | null; load_kva: number | null }[]>();
   for (const r of lastReadings ?? []) {
     if (!lastReadingBySm.has(r.sub_meter_id)) {
       lastReadingBySm.set(r.sub_meter_id, []);
@@ -344,8 +349,26 @@ export async function bulkImportMeterReadingsAction(
     lastReadingBySm.get(r.sub_meter_id)!.push({
       period: r.period,
       current_reading: r.current_reading,
+      minimum_charge: r.minimum_charge,
+      load_kva: r.load_kva,
     });
   }
+
+  // Fetch existing readings for this period's bill so we can preserve
+  // load_kva / minimum_charge when the CSV leaves those fields blank.
+  const targetBillId = billByPeriod.get(firstPeriod);
+  const { data: existingReadings } = targetBillId && smIds.length
+    ? await client
+        .from('meter_readings')
+        .select('sub_meter_id, minimum_charge, load_kva')
+        .eq('mescom_bill_id', targetBillId)
+        .in('sub_meter_id', smIds)
+    : { data: [] };
+
+  type ExistingReading = { minimum_charge: number | null; load_kva: number | null };
+  const existingBySmId = new Map<string, ExistingReading>(
+    (existingReadings ?? []).map((r) => [r.sub_meter_id, { minimum_charge: r.minimum_charge, load_kva: r.load_kva }]),
+  );
 
   const skipped: MeterReadingImportSkipped[] = [];
 
@@ -356,6 +379,7 @@ export async function bulkImportMeterReadingsAction(
     previous_reading: number;
     current_reading: number;
     minimum_charge: number;
+    load_kva: number | null;
   };
   const toUpsert: UpsertRow[] = [];
 
@@ -401,10 +425,8 @@ export async function bulkImportMeterReadingsAction(
     const prevReadings = (lastReadingBySm.get(subMeter.id) ?? []).filter(
       (r) => r.period < row.period,
     );
-    const previousReading =
-      prevReadings.length > 0
-        ? prevReadings[0]!.current_reading
-        : (subMeter.initial_reading ?? 0);
+    const priorReading = prevReadings[0] ?? null;
+    const previousReading = priorReading?.current_reading ?? (subMeter.initial_reading ?? 0);
 
     if (row.current_reading < previousReading) {
       skipped.push({
@@ -415,13 +437,28 @@ export async function bulkImportMeterReadingsAction(
       continue;
     }
 
+    const existing = existingBySmId.get(subMeter.id);
+
+    // Resolution order for load_kva / minimum_charge:
+    // 1. CSV value  2. existing reading for this bill  3. most recent prior-period reading  4. sub_meter default  5. 0/null
+    const resolvedMinCharge =
+      row.minimum_charge != null
+        ? row.minimum_charge
+        : (existing?.minimum_charge ?? priorReading?.minimum_charge ?? subMeter.minimum_charge ?? 0);
+
+    const resolvedLoadKva =
+      row.load_kva != null
+        ? row.load_kva
+        : (existing?.load_kva ?? priorReading?.load_kva ?? subMeter.load_kva ?? null);
+
     toUpsert.push({
       sub_meter_id: subMeter.id,
       mescom_bill_id: billId,
       period: row.period,
       previous_reading: previousReading,
       current_reading: row.current_reading,
-      minimum_charge: subMeter.minimum_charge ?? 0,
+      minimum_charge: resolvedMinCharge,
+      load_kva: resolvedLoadKva,
     });
   }
 
@@ -569,9 +606,7 @@ export type SubMeterImportRow = {
   unit_no: string;
   sub_meter_no: string;
   meter_type: 'Unit' | 'CommonArea';
-  load_kva?: number | null;
   initial_reading?: number;
-  minimum_charge?: number;
 };
 
 export type SubMeterImportSkipped = {
@@ -595,10 +630,6 @@ export async function bulkImportSubMetersAction(
   associationId: string,
   rows: SubMeterImportRow[],
 ): Promise<SubMeterImportResult> {
-  if (rows.length === 0 || rows.length > MAX_IMPORT_ROWS) {
-    return { success: false, imported: 0, skipped: [], error: `Row count must be between 1 and ${MAX_IMPORT_ROWS}.` };
-  }
-
   const client = getSupabaseServerClient();
 
   const { data: isSuperAdmin } = await client.rpc('is_super_admin');
@@ -609,6 +640,10 @@ export async function bulkImportSubMetersAction(
       skipped: [],
       error: 'Only a super admin can bulk-import sub-meters.',
     };
+  }
+
+  if (rows.length === 0 || rows.length > MAX_IMPORT_ROWS) {
+    return { success: false, imported: 0, skipped: [], error: `Row count must be between 1 and ${MAX_IMPORT_ROWS}.` };
   }
 
   const adminClient = getSupabaseServerAdminClient();
@@ -643,9 +678,7 @@ export async function bulkImportSubMetersAction(
     unit_id: string;
     meter_label: string;
     meter_type: string;
-    load_kva: number | null;
     initial_reading: number;
-    minimum_charge: number;
   };
   const toInsert: InsertRow[] = [];
 
@@ -704,9 +737,7 @@ export async function bulkImportSubMetersAction(
       unit_id: unitId,
       meter_label: row.sub_meter_no,
       meter_type: row.meter_type,
-      load_kva: row.load_kva ?? null,
       initial_reading: row.initial_reading ?? 0,
-      minimum_charge: row.minimum_charge ?? 0,
     });
   }
 

@@ -599,6 +599,8 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 | `20260716000000_sub_meters_initial_reading_min_charge.sql` | Jul 16 | Add `initial_reading` and `minimum_charge` columns to `sub_meters` for onboarding baseline and default monthly charge |
 | `20260707122210_test_flags_and_rename_test_data.sql` | Jul 7 | Add `is_test` to `associations` and `profiles`; rename Abish → Sandbox Residency, Prestige Meadows → Demo Towers; tag 11 test users |
 | `20260707132123_sync_test_user_account_names.sql` | Jul 7 | Sync `accounts.name` from `profiles.full_name` for all test users (display name fix) |
+| `20260708000001_unit_status_self_occupied_rented.sql` | Jul 8 | Drop `Occupied` CHECK; migrate existing rows; add CHECK for `Self Occupied`, `Rented`, `Vacant` |
+| `20260709000001_meter_readings_load_kva.sql` | Jul 9 | Add nullable `load_kva` column to `meter_readings` for per-reading tracking |
 
 ---
 
@@ -848,6 +850,60 @@ Improvements to handle real-world data quality issues found in association-suppl
 
 ---
 
+## Release v4.1 — Unit Status Overhaul & CSV Column Restructure (Jul 8–9, 2026)
+
+### Unit Status: Self Occupied / Rented
+
+- Replaced the single `Occupied` status with two distinct values: **Self Occupied** (owner, no active tenant) and **Rented** (active tenant)
+- **Vacant** now means the unit has no owner (not yet sold / still with builder)
+- Status transitions: adding an owner → Self Occupied; adding a tenant → Rented; ending tenancy → reverts to Self Occupied
+- Units table filter updated: "Occupied" filter now matches both Self Occupied and Rented; new sub-filters for each
+- Association dashboard occupancy count updated to include both new statuses
+- Bulk XLSX import: `unit_status` column now accepts `Self Occupied`, `Rented`, `Vacant`
+
+### Electricity: CSV Column Restructure
+
+- **Sub Meter CSV** now only has: `UNIT_NO, SUB_METER_NO, METER_TYPE, INITIAL_METER_READING`; `LOAD_KVA` and `MIN_CHARGES` removed
+- **Current Readings CSV** now includes optional columns: `LOAD_KVA, MIN_CHARGES` — allow per-period overrides without touching the sub-meter record
+- Blank CSV value for `LOAD_KVA` / `MIN_CHARGES` → carry forward last month's recorded value automatically (no overwrite)
+- Full fallback chain: (1) CSV value → (2) existing reading for this bill → (3) most recent prior-period reading → (4) sub-meter default → (5) 0/null
+- New `load_kva` column added to `meter_readings` table for per-reading tracking
+- Dialog instructions updated to reflect the new column structure and fallback behaviour
+
+### Multi-Role Members: assoc_admin as Owner/Tenant
+
+- An `assoc_admin` can now be assigned as unit owner or tenant — the eligibility check now accepts `assoc_admin` in addition to the specific `prop_owner`/`tenant` role
+- A member who owns one unit and rents another in the same association now sees bills for both on the payments page — unit IDs are unioned from ownership and active tenancies instead of branching on a single role
+- Bulk XLSX invite: `assoc_admin` rows that carry a `unit_no` now write `owner_id` on the unit (admins are assumed to be unit owners; if an admin is a tenant, include a separate `tenant`-role row)
+
+### Bug Fix: Bulk Invite Unit Linking
+
+- Fixed: unit association FK was resolved to `accounts.id` instead of `associations.id` (different UUIDs), causing all unit updates to silently fail
+- Added a second lookup map `assocRowIdByAccountId` to correctly resolve `associations.id`
+
+### Migrations
+
+| Migration | Description |
+|---|---|
+| `20260708000001_unit_status_self_occupied_rented.sql` | Drop old `Occupied` CHECK; migrate data; add new CHECK for `Self Occupied`, `Rented`, `Vacant` |
+| `20260709000001_meter_readings_load_kva.sql` | Add nullable `load_kva` column to `meter_readings` |
+
+## Release v4.2 — Electricity Unit Rate & Audit Log Improvements (Jul 9, 2026)
+
+### Electricity Bills: Unit Rate Column
+
+- Added **Unit Rate** column to the electricity bills table — shows the effective rate charged to residents (`MESCOM invoice ÷ total sub-metered consumption`), distinct from the Block Rate (`invoice ÷ MESCOM block units`)
+- Both rates are now visible side by side, making it clear when MESCOM block units differ from actual sub-meter consumption
+- Footer text updated to accurately describe both rates
+- Defensive guard added: Block Rate and Unit Rate both display `—` when the denominator is zero (previously could render `Infinity/unit`)
+
+### Bulk Invite: Audit Logging
+
+- `bulkInviteMembersAction` now writes one `audit_logs` entry per association after a successful bulk import
+- Uses `adminClient` directly (super admin is not an association member, so standard RLS policy would reject the insert)
+- Audit inserts run in parallel (`Promise.all`) and errors are logged without failing the import
+
+---
 
 | Module | Status | Key Capabilities |
 |---|---|---|
@@ -869,4 +925,4 @@ Improvements to handle real-world data quality issues found in association-suppl
 
 ---
 
-*Last updated: 2026-07-08*
+*Last updated: 2026-07-09 (v4.2 — electricity Unit Rate column, bulk invite audit logging)*
