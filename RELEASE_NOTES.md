@@ -1068,4 +1068,22 @@ Fixed "Couldn't save your changes" error when a super admin tried to update an a
 
 ---
 
-*Last updated: 2026-07-09 (v4.8 — Super admin account write access fix)*
+## Bug Fix — Bulk Invite: existing users skipped on phone/email conflict
+
+Branch: `week-4`
+
+Users who already existed in `auth.users` but were absent from (or had a mismatched format in) `profiles.mobile_number` were not found by the upfront profile lookup. `createUser` then failed with "Phone number already registered by another user" or "This email address is already registered", and the row was skipped entirely — leaving them without association membership.
+
+**Fix:**
+- When `createUser` fails with a phone or email conflict, recover by looking up the existing `auth.users` row via new service-role-only DB functions (`get_user_id_by_phone`, `get_user_id_by_email`) and fall through to the membership insert instead of skipping.
+- Migration `20260716000002_get_user_id_by_phone.sql`: adds both lookup functions, restricted to `service_role`.
+
+### Migrations Changelog
+
+| Migration | Date | Description |
+|-----------|------|-------------|
+| `20260716000002_get_user_id_by_phone.sql` | Jul 16 | Add `get_user_id_by_phone` and `get_user_id_by_email` service-role functions for bulk-invite conflict recovery |
+
+---
+
+*Last updated: 2026-07-09 (v4.9 — Bulk invite conflict recovery)*

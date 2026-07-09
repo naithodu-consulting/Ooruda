@@ -701,28 +701,67 @@ export async function bulkInviteMembersAction(
           await adminClient.auth.admin.createUser(createPayload);
 
         if (createError) {
-          skipped.push({
-            row: rowNum,
-            phone: normalised,
-            reason: friendlyAuthError(createError.message),
-          });
-          continue;
+          // Phone or email already exists — look up the existing user and
+          // continue to the membership insert rather than skipping the row.
+          const errMsg = createError.message.toLowerCase();
+          const isPhoneConflict =
+            errMsg.includes('phone') &&
+            (errMsg.includes('exists') ||
+              errMsg.includes('registered') ||
+              errMsg.includes('already'));
+          const isEmailConflict =
+            row.email &&
+            errMsg.includes('email') &&
+            (errMsg.includes('exists') ||
+              errMsg.includes('registered') ||
+              errMsg.includes('already') ||
+              errMsg.includes('in use'));
+
+          let recoveredId: string | null = null;
+
+          if (isEmailConflict && row.email) {
+            const { data: foundId } = await adminClient.rpc(
+              'get_user_id_by_email',
+              { p_email: row.email.trim().toLowerCase() },
+            );
+            recoveredId = (foundId as string | null) ?? null;
+          }
+
+          if (!recoveredId && isPhoneConflict) {
+            const { data: foundId } = await adminClient.rpc(
+              'get_user_id_by_phone',
+              { p_phone: normalised },
+            );
+            recoveredId = (foundId as string | null) ?? null;
+          }
+
+          if (!recoveredId) {
+            skipped.push({
+              row: rowNum,
+              phone: normalised,
+              reason: friendlyAuthError(createError.message),
+            });
+            continue;
+          }
+
+          userId = recoveredId;
+          existingUserByPhone.set(normalised, recoveredId);
+        } else {
+          userId = data.user.id;
+          // Register the newly created user so subsequent rows for the same
+          // phone skip createUser and go straight to the membership insert.
+          existingUserByPhone.set(normalised, userId);
+
+          await adminClient.from('profiles').upsert(
+            {
+              id: userId,
+              full_name: row.name ?? '',
+              mobile_number: normalised,
+              ...(row.email ? { email: row.email.trim().toLowerCase() } : {}),
+            },
+            { onConflict: 'id' },
+          );
         }
-
-        userId = data.user.id;
-        // Register the newly created user so subsequent rows for the same phone
-        // skip createUser and go straight to the membership insert.
-        existingUserByPhone.set(normalised, userId);
-
-        await adminClient.from('profiles').upsert(
-          {
-            id: userId,
-            full_name: row.name ?? '',
-            mobile_number: normalised,
-            ...(row.email ? { email: row.email.trim().toLowerCase() } : {}),
-          },
-          { onConflict: 'id' },
-        );
       }
 
       // Add to association (skip if already a member).
