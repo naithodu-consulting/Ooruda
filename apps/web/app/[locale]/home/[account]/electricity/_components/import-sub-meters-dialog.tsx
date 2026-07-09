@@ -48,10 +48,8 @@ import { bulkImportSubMetersAction } from '../_lib/electricity-actions';
 const REQUIRED_COLUMNS = ['unit_no', 'sub_meter_no', 'meter_type'] as const;
 const VALID_METER_TYPES = ['Unit', 'CommonArea'] as const;
 
-// Association may send these column names; normalise to our internal names.
 const COLUMN_ALIASES: Record<string, string> = {
   initial_meter_reading: 'initial_reading',
-  min_charges: 'minimum_charge',
 };
 
 type ParsedRow = {
@@ -59,19 +57,17 @@ type ParsedRow = {
   unit_no: string;
   sub_meter_no: string;
   meter_type: 'Unit' | 'CommonArea' | '';
-  load_kva: number | null;
   initial_reading: number;
-  minimum_charge: number;
   _error?: string;
 };
 
 function downloadTemplate() {
   downloadXlsxTemplate('sub-meters-import-template.xlsx', [
-    'unit_no', 'sub_meter_no', 'meter_type', 'initial_meter_reading', 'load_kva', 'min_charges',
+    'unit_no', 'sub_meter_no', 'meter_type', 'initial_meter_reading',
   ], [
-    ['G-01', 'SM-1', 'Unit', 1250, 5, 50],
-    ['1-02', 'SM-5', 'Unit', 980, '', ''],
-    ['COMMON', 'Common-Lift', 'CommonArea', 320, 10, 100],
+    ['G-01', 'SM-1', 'Unit', 1250],
+    ['1-02', 'SM-5', 'Unit', 980],
+    ['COMMON', 'Common-Lift', 'CommonArea', 320],
   ]);
 }
 
@@ -103,9 +99,7 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
         unit_no: '',
         sub_meter_no: '',
         meter_type: '',
-        load_kva: null,
         initial_reading: 0,
-        minimum_charge: 0,
         _error: `Missing required columns: ${missing.join(', ')}`,
       },
     ];
@@ -119,16 +113,9 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
       (t) => t.toLowerCase() === meter_type_raw.toLowerCase(),
     );
 
-    const load_kva_raw = r['load_kva'] ?? '';
-    const load_kva = parseNum(load_kva_raw);
-
     const initial_reading_raw = r['initial_reading'] ?? '';
     const initial_reading_parsed = parseNum(initial_reading_raw);
     const initial_reading = initial_reading_parsed ?? 0;
-
-    const min_charge_raw = r['minimum_charge'] ?? '';
-    const min_charge_parsed = parseNum(min_charge_raw);
-    const minimum_charge = min_charge_parsed ?? 0;
 
     let error: string | undefined;
     if (!unit_no) error = 'unit_no is required';
@@ -138,25 +125,17 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
     else if (meter_type === 'CommonArea' && unit_no.toUpperCase() !== 'COMMON')
       error =
         'For CommonArea meters, unit_no must be "COMMON" (it is ignored by the system)';
-    else if (load_kva_raw !== '' && load_kva !== null && load_kva <= 0)
-      error = 'load_kva must be a positive number';
     else if (initial_reading_raw !== '' && initial_reading_parsed === null)
       error = 'initial_meter_reading must be a number';
     else if (initial_reading < 0)
       error = 'initial_meter_reading must be ≥ 0';
-    else if (min_charge_raw !== '' && min_charge_parsed === null)
-      error = 'min_charges must be a number';
-    else if (minimum_charge < 0)
-      error = 'min_charges must be ≥ 0';
 
     return {
       _row: i + 1,
       unit_no,
       sub_meter_no,
       meter_type: (meter_type ?? '') as 'Unit' | 'CommonArea' | '',
-      load_kva,
       initial_reading,
-      minimum_charge,
       _error: error,
     };
   });
@@ -207,13 +186,11 @@ export function ImportSubMetersDialog({
     startTransition(async () => {
       const res = await bulkImportSubMetersAction(
         associationId,
-        validRows.map(({ unit_no, sub_meter_no, meter_type, load_kva, initial_reading, minimum_charge }) => ({
+        validRows.map(({ unit_no, sub_meter_no, meter_type, initial_reading }) => ({
           unit_no,
           sub_meter_no,
           meter_type: meter_type as 'Unit' | 'CommonArea',
-          load_kva,
           initial_reading,
-          minimum_charge,
         })),
       );
 
@@ -290,9 +267,7 @@ export function ImportSubMetersDialog({
                 </span>
                 <br />
                 Optional:{' '}
-                <span className="font-medium">
-                  initial_meter_reading, load_kva, min_charges
-                </span>
+                <span className="font-medium">initial_meter_reading</span>
                 <br />
                 <span className="font-medium">meter_type</span>:{' '}
                 <span className="font-medium">Unit</span> or{' '}
@@ -350,8 +325,6 @@ export function ImportSubMetersDialog({
                         <TableHead>Sub-meter</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Init. Reading</TableHead>
-                        <TableHead>Load (kVA)</TableHead>
-                        <TableHead>Min. Charge</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -369,12 +342,6 @@ export function ImportSubMetersDialog({
                           <TableCell>{row.meter_type || '—'}</TableCell>
                           <TableCell className="tabular-nums">
                             {row.initial_reading}
-                          </TableCell>
-                          <TableCell className="tabular-nums">
-                            {row.load_kva != null ? row.load_kva : '—'}
-                          </TableCell>
-                          <TableCell className="tabular-nums">
-                            {row.minimum_charge > 0 ? row.minimum_charge : '—'}
                           </TableCell>
                           <TableCell>
                             {row._error ? (

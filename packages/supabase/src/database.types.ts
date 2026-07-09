@@ -817,6 +817,7 @@ export type Database = {
           created_at: string
           current_reading: number
           id: string
+          load_kva: number | null
           mescom_bill_id: string
           minimum_charge: number
           period: string
@@ -828,6 +829,7 @@ export type Database = {
           created_at?: string
           current_reading: number
           id?: string
+          load_kva?: number | null
           mescom_bill_id: string
           minimum_charge?: number
           period: string
@@ -839,6 +841,7 @@ export type Database = {
           created_at?: string
           current_reading?: number
           id?: string
+          load_kva?: number | null
           mescom_bill_id?: string
           minimum_charge?: number
           period?: string

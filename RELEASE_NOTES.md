@@ -576,6 +576,8 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 | `20260716000000_sub_meters_initial_reading_min_charge.sql` | Jul 16 | Add `initial_reading` and `minimum_charge` columns to `sub_meters` for onboarding baseline and default monthly charge |
 | `20260707122210_test_flags_and_rename_test_data.sql` | Jul 7 | Add `is_test` to `associations` and `profiles`; rename Abish → Sandbox Residency, Prestige Meadows → Demo Towers; tag 11 test users |
 | `20260707132123_sync_test_user_account_names.sql` | Jul 7 | Sync `accounts.name` from `profiles.full_name` for all test users (display name fix) |
+| `20260708000001_unit_status_self_occupied_rented.sql` | Jul 8 | Drop `Occupied` CHECK; migrate existing rows; add CHECK for `Self Occupied`, `Rented`, `Vacant` |
+| `20260709000001_meter_readings_load_kva.sql` | Jul 9 | Add nullable `load_kva` column to `meter_readings` for per-reading tracking |
 
 ---
 
@@ -825,6 +827,40 @@ Improvements to handle real-world data quality issues found in association-suppl
 
 ---
 
+## Release v4.1 — Unit Status Overhaul & CSV Column Restructure (Jul 8–9, 2026)
+
+### Unit Status: Self Occupied / Rented
+
+- Replaced the single `Occupied` status with two distinct values: **Self Occupied** (owner, no active tenant) and **Rented** (active tenant)
+- **Vacant** now means the unit has no owner (not yet sold / still with builder)
+- Status transitions: adding an owner → Self Occupied; adding a tenant → Rented; ending tenancy → reverts to Self Occupied
+- Units table filter updated: "Occupied" filter now matches both Self Occupied and Rented; new sub-filters for each
+- Association dashboard occupancy count updated to include both new statuses
+- Bulk XLSX import: `unit_status` column now accepts `Self Occupied`, `Rented`, `Vacant`
+
+### Electricity: CSV Column Restructure
+
+- **Sub Meter CSV** now only has: `UNIT_NO, SUB_METER_NO, METER_TYPE, INITIAL_METER_READING`; `LOAD_KVA` and `MIN_CHARGES` removed
+- **Current Readings CSV** now includes optional columns: `LOAD_KVA, MIN_CHARGES` — allow per-period overrides without touching the sub-meter record
+- Blank CSV value for `LOAD_KVA` / `MIN_CHARGES` → carry forward last month's recorded value automatically (no overwrite)
+- Full fallback chain: (1) CSV value → (2) existing reading for this bill → (3) most recent prior-period reading → (4) sub-meter default → (5) 0/null
+- New `load_kva` column added to `meter_readings` table for per-reading tracking
+- Dialog instructions updated to reflect the new column structure and fallback behaviour
+
+### Bug Fix: Bulk Invite Unit Linking
+
+- Fixed: unit association FK was resolved to `accounts.id` instead of `associations.id` (different UUIDs), causing all unit updates to silently fail
+- Added a second lookup map `assocRowIdByAccountId` to correctly resolve `associations.id`
+
+### Migrations
+
+| Migration | Description |
+|---|---|
+| `20260708000001_unit_status_self_occupied_rented.sql` | Drop old `Occupied` CHECK; migrate data; add new CHECK for `Self Occupied`, `Rented`, `Vacant` |
+| `20260709000001_meter_readings_load_kva.sql` | Add nullable `load_kva` column to `meter_readings` |
+
+---
+
 
 | Module | Status | Key Capabilities |
 |---|---|---|
@@ -846,4 +882,4 @@ Improvements to handle real-world data quality issues found in association-suppl
 
 ---
 
-*Last updated: 2026-07-07 (v4.0 — test flags, admin panel tabs, bulk invite XLSX data cleaning)*
+*Last updated: 2026-07-09 (v4.1 — unit status Self Occupied/Rented, CSV column restructure, meter readings load_kva)*

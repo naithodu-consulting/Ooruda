@@ -49,13 +49,11 @@ import {
 
 import { bulkImportMeterReadingsAction } from '../_lib/electricity-actions';
 
-// Association sends: SUB_METER_NO, CURRENT_METER_READING
-// normalizeHeader in parseSpreadsheetFile converts to: sub_meter_no, current_meter_reading
 const REQUIRED_COLUMNS = ['sub_meter_no', 'current_meter_reading'] as const;
 
-// Map association column name to our internal name
 const COLUMN_ALIASES: Record<string, string> = {
   current_meter_reading: 'current_reading',
+  min_charges: 'minimum_charge',
 };
 
 /** Returns YYYY-MM for the DB from a MM/YYYY display value */
@@ -86,17 +84,18 @@ type ParsedRow = {
   _row: number;
   sub_meter_no: string;
   current_reading: number;
+  load_kva: number | null;       // null = blank in CSV → preserve existing
+  minimum_charge: number | null; // null = blank in CSV → preserve existing
   _error?: string;
 };
 
 function downloadTemplate() {
   downloadXlsxTemplate('meter-readings-import-template.xlsx', [
-    'SUB_METER_NO',
-    'CURRENT_METER_READING',
+    'SUB_METER_NO', 'LOAD_KVA', 'MIN_CHARGES', 'CURRENT_METER_READING',
   ], [
-    ['SM-1', 1250],
-    ['SM-5', 980],
-    ['Common-Lift', 320],
+    ['SM-1', 5, 50, 1250],
+    ['SM-5', '', '', 980],
+    ['Common-Lift', 10, 100, 320],
   ]);
 }
 
@@ -127,6 +126,8 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
         _row: 0,
         sub_meter_no: '',
         current_reading: 0,
+        load_kva: null,
+        minimum_charge: null,
         _error: `Missing required columns: ${missing.join(', ')}`,
       },
     ];
@@ -148,6 +149,12 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
     const currentRaw = r['current_reading'] ?? '';
     const currentReading = Number(currentRaw);
 
+    const loadKvaRaw = r['load_kva'] ?? '';
+    const load_kva = loadKvaRaw === '' ? null : Number(loadKvaRaw);
+
+    const minChargeRaw = r['minimum_charge'] ?? '';
+    const minimum_charge = minChargeRaw === '' ? null : Number(minChargeRaw);
+
     let error: string | undefined;
     if (!sub_meter_no) {
       error = 'sub_meter_no is required';
@@ -157,12 +164,18 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
       error = 'current_meter_reading must be a number';
     } else if (currentReading < 0) {
       error = 'current_meter_reading must be ≥ 0';
+    } else if (load_kva !== null && (Number.isNaN(load_kva) || load_kva <= 0)) {
+      error = 'load_kva must be a positive number';
+    } else if (minimum_charge !== null && (Number.isNaN(minimum_charge) || minimum_charge < 0)) {
+      error = 'min_charges must be ≥ 0';
     }
 
     return {
       _row: i + 1,
       sub_meter_no,
       current_reading: Number.isNaN(currentReading) ? 0 : currentReading,
+      load_kva: Number.isNaN(load_kva ?? 0) ? null : load_kva,
+      minimum_charge: Number.isNaN(minimum_charge ?? 0) ? null : minimum_charge,
       _error: error,
     };
   });
@@ -220,10 +233,12 @@ export function ImportMeterReadingsDialog({
     startTransition(async () => {
       const res = await bulkImportMeterReadingsAction(
         associationId,
-        validRows.map(({ sub_meter_no, current_reading }) => ({
+        validRows.map(({ sub_meter_no, current_reading, load_kva, minimum_charge }) => ({
           sub_meter_no,
           current_reading,
           period: dbPeriod,
+          load_kva,
+          minimum_charge,
         })),
       );
 
@@ -325,10 +340,12 @@ export function ImportMeterReadingsDialog({
             {/* Instructions + template */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <p className="text-muted-foreground text-sm">
-                Columns:{' '}
-                <span className="font-medium">
-                  SUB_METER_NO, CURRENT_METER_READING
-                </span>
+                Required:{' '}
+                <span className="font-medium">SUB_METER_NO, CURRENT_METER_READING</span>
+                <br />
+                Optional:{' '}
+                <span className="font-medium">LOAD_KVA, MIN_CHARGES</span>
+                {' '}— leave blank to carry forward last month&apos;s values automatically (0 for brand-new meters).
                 <br />
                 Sub-meter labels must match those registered in the system.
                 Duplicate labels in the file are rejected.
@@ -374,6 +391,8 @@ export function ImportMeterReadingsDialog({
                       <TableRow>
                         <TableHead className="w-10">#</TableHead>
                         <TableHead>Sub-meter</TableHead>
+                        <TableHead>Load (kVA)</TableHead>
+                        <TableHead>Min. Charge</TableHead>
                         <TableHead>Current Reading</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
@@ -388,6 +407,12 @@ export function ImportMeterReadingsDialog({
                             {row._row}
                           </TableCell>
                           <TableCell>{row.sub_meter_no || '—'}</TableCell>
+                          <TableCell className="tabular-nums">
+                            {row.load_kva != null ? row.load_kva : '—'}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {row.minimum_charge != null ? row.minimum_charge : '—'}
+                          </TableCell>
                           <TableCell className="tabular-nums">
                             {row._error ? '—' : row.current_reading}
                           </TableCell>
