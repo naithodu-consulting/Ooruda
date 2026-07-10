@@ -234,9 +234,15 @@ export async function generateBillsAction(
 
   for (const unit of unitRows) {
     const existing = existingByUnit.get(unit.id) || [];
-    const hasElec = existing.some((b: string) => b.includes('-ELEC-'));
-    const hasMaint = existing.some((b: string) => b.includes('-MANT-'));
-    const hasOther = existing.some((b: string) => b.includes('-OTHR-'));
+    const hasElec = existing.some(
+      (b: string) => b.includes('-ELEC-') || b.includes('/ELT/'),
+    );
+    const hasMaint = existing.some(
+      (b: string) => b.includes('-MANT-') || b.includes('/MNT/'),
+    );
+    const hasOther = existing.some(
+      (b: string) => b.includes('-OTHR-') || b.includes('/OTH/'),
+    );
 
     if (unit.type === 'Common Area') {
       if (hasElec) {
@@ -386,26 +392,23 @@ export async function generateBillsAction(
       const totalAmount = roundToTwoDecimals(baseTotal + (gstAmount ?? 0));
 
       const billCategory =
-        typePrefix === 'ELEC'
+        typePrefix === 'ELT'
           ? 'electricity'
-          : typePrefix === 'OTHR'
+          : typePrefix === 'OTH'
             ? 'other_charges'
             : 'maintenance';
 
-      const { error: rpcError } = await client.rpc(
-        'create_bill_with_items',
-        {
-          p_association_id: associationId,
-          p_unit_id: unit.id,
-          p_period: period,
-          p_bill_no: billNo,
-          p_due_date: dueDate,
-          p_total_amount: totalAmount,
-          p_line_items: items,
-          p_bill_type: billCategory,
-          p_gst_amount: gstAmount,
-        },
-      );
+      const { error: rpcError } = await client.rpc('create_bill_with_items', {
+        p_association_id: associationId,
+        p_unit_id: unit.id,
+        p_period: period,
+        p_bill_no: billNo,
+        p_due_date: dueDate,
+        p_total_amount: totalAmount,
+        p_line_items: items,
+        p_bill_type: billCategory,
+        p_gst_amount: gstAmount,
+      });
 
       if (rpcError) {
         console.error(
@@ -430,7 +433,7 @@ export async function generateBillsAction(
       if (!hasElec && shouldGenElec) {
         const ok = await generateSpecificBill(
           'Electricity',
-          'ELEC',
+          'ELT',
           elecItems,
           elecDueDate,
         );
@@ -444,7 +447,7 @@ export async function generateBillsAction(
       if (!hasElec && shouldGenElec) {
         const ok = await generateSpecificBill(
           'Electricity',
-          'ELEC',
+          'ELT',
           elecItems,
           elecDueDate,
         );
@@ -457,7 +460,7 @@ export async function generateBillsAction(
       if (!hasMaint && shouldGenMaint) {
         const ok = await generateSpecificBill(
           'Maintenance',
-          'MANT',
+          'MNT',
           maintItems,
           maintDueDate,
         );
@@ -470,7 +473,7 @@ export async function generateBillsAction(
       if (!hasOther && shouldGenOther) {
         const ok = await generateSpecificBill(
           'Other Charges',
-          'OTHR',
+          'OTH',
           otherItems,
           otherDueDate,
         );

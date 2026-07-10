@@ -29,7 +29,7 @@ export function DashboardDurationSelect({ value }: { value: string }) {
       {options.map((opt) => (
         <button
           key={opt.value}
-          onClick={() => router.push(`${pathname}?d=${opt.value}`)}
+          onClick={() => router.replace(`${pathname}?d=${opt.value}`)}
           className={cn(
             'rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors',
             value === opt.value

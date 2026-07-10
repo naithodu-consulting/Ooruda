@@ -26,15 +26,6 @@ import {
 import { DataTable } from '@kit/ui/enhanced-data-table';
 import { Form, FormControl, FormField, FormItem } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@kit/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@kit/ui/tabs';
 
 import { ROLE_LABELS } from '../lib/server/schema/create-user.schema';
@@ -141,14 +132,6 @@ function AccountsTableFilters(props: {
   };
 
   const type = useWatch({ control: form.control, name: 'type' });
-  const kind = useWatch({ control: form.control, name: 'kind' });
-
-  const kindOptions = {
-    all: 'All',
-    real: 'Real',
-    test: 'Test',
-  };
-
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit((data) => navigate(data))}>
@@ -169,32 +152,6 @@ function AccountsTableFilters(props: {
           </Tabs>
 
           <div className={'flex gap-2.5'}>
-            <Select
-              value={kind}
-              onValueChange={(value) => {
-                const k = value as z.output<typeof FiltersSchema>['kind'];
-                form.setValue('kind', k, { shouldValidate: true });
-                navigate({ kind: k });
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={'Kind'}>
-                  {(value: keyof typeof kindOptions) => kindOptions[value]}
-                </SelectValue>
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>Kind</SelectLabel>
-                  {Object.entries(kindOptions).map(([key, value]) => (
-                    <SelectItem key={key} value={key}>
-                      {value}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-
             <FormField
               name={'query'}
               render={({ field }) => (
@@ -249,7 +206,10 @@ function getColumns(
             )}
 
             {isTest && (
-              <Badge className={'border-amber-400 bg-amber-50 text-amber-700'} variant={'outline'}>
+              <Badge
+                className={'border-amber-400 bg-amber-50 text-amber-700'}
+                variant={'outline'}
+              >
                 Test
               </Badge>
             )}

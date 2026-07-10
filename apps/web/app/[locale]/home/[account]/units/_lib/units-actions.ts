@@ -135,7 +135,8 @@ export async function updateUnitAction(
     if (!isEligible) {
       return {
         success: false,
-        error: 'That person is not a member of this association with an owner-eligible role.',
+        error:
+          'That person is not a member of this association with an owner-eligible role.',
       };
     }
   }
@@ -256,7 +257,8 @@ export async function assignOwnerAction(
     if (!isEligible) {
       return {
         success: false,
-        error: 'That person is not a member of this association with an owner-eligible role.',
+        error:
+          'That person is not a member of this association with an owner-eligible role.',
       };
     }
   }
@@ -328,7 +330,8 @@ export async function assignTenantAction(
   if (!isEligible) {
     return {
       success: false,
-      error: 'That person is not a member of this association with a tenant-eligible role.',
+      error:
+        'That person is not a member of this association with a tenant-eligible role.',
     };
   }
 

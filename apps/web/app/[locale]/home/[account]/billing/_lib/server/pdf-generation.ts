@@ -190,7 +190,7 @@ export async function getOrGenerateBillPdf(
         `id, association_id, unit_id, period, bill_no, bill_type, total_amount, gst_amount, paid_amount, status, due_date, generated_at, pdf_url,
          units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin),
          bill_line_items(description, gst_applicable, amount),
-         associations(address, gstin, pan_number, registration_number, gst_enabled, gst_rate, authorised_signatory, accounts(name, picture_url))`,
+         associations(address, gstin, pan_number, registration_number, gst_enabled, gst_rate, authorised_signatory, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts(name, picture_url))`,
       )
       .eq('id', billId)
       .maybeSingle();
@@ -258,7 +258,16 @@ export async function getOrGenerateBillPdf(
       owner_company_gstin: unitData.owner_company_gstin ?? null,
     });
 
-    type ExtendedAssoc = typeof association & { pan_number: string | null };
+    type ExtendedAssoc = typeof association & {
+      pan_number: string | null;
+      email: string | null;
+      phone: string | null;
+      bank_account_name: string | null;
+      bank_account_number: string | null;
+      bank_name: string | null;
+      bank_ifsc: string | null;
+      bank_branch: string | null;
+    };
     const assocData = association as unknown as ExtendedAssoc;
     const panNumber = assocData.pan_number ?? null;
 
@@ -328,7 +337,8 @@ export async function getOrGenerateBillPdf(
 
       let minimumCharge = 0;
       const meters = meterReadings.map((r) => {
-        const consumed = r.consumed_units ?? (r.current_reading - r.previous_reading);
+        const consumed =
+          r.consumed_units ?? r.current_reading - r.previous_reading;
         const amount = Math.round(consumed * blockRate * 100) / 100;
         minimumCharge += r.minimum_charge ?? 0;
         const info = meterInfoById.get(r.sub_meter_id);
@@ -349,7 +359,16 @@ export async function getOrGenerateBillPdf(
             name: association.accounts?.name ?? 'Association',
             address: association.address,
             logoUrl: association.accounts?.picture_url ?? null,
+            gstin: association.gstin,
+            registrationNumber: association.registration_number ?? null,
             authorisedSignatory: association.authorised_signatory,
+            email: assocData.email ?? null,
+            phone: assocData.phone ?? null,
+            bankAccountName: assocData.bank_account_name ?? null,
+            bankAccountNumber: assocData.bank_account_number ?? null,
+            bankName: assocData.bank_name ?? null,
+            bankIfsc: assocData.bank_ifsc ?? null,
+            bankBranch: assocData.bank_branch ?? null,
           },
           unit: {
             unitNo: unitData.unit_no,
@@ -389,6 +408,13 @@ export async function getOrGenerateBillPdf(
             logoUrl: association.accounts?.picture_url ?? null,
             gstEnabled: association.gst_enabled,
             gstRate: association.gst_rate,
+            email: assocData.email ?? null,
+            phone: assocData.phone ?? null,
+            bankAccountName: assocData.bank_account_name ?? null,
+            bankAccountNumber: assocData.bank_account_number ?? null,
+            bankName: assocData.bank_name ?? null,
+            bankIfsc: assocData.bank_ifsc ?? null,
+            bankBranch: assocData.bank_branch ?? null,
           },
           unit: {
             unitNo: unitData.unit_no,
@@ -484,8 +510,8 @@ export async function getOrGenerateReceiptPdf(
     const { data: payment, error: paymentError } = await admin
       .from('payments')
       .select(
-        `id, association_id, amount, mode, paid_at,
-         bills(bill_no, period, unit_id, units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin), associations(address, gstin, pan_number, registration_number, accounts(name, picture_url))),
+        `id, association_id, amount, mode, reference_no, paid_at,
+         bills(bill_no, period, unit_id, units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin), associations(address, gstin, pan_number, registration_number, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts(name, picture_url))),
          receipts(id, receipt_no, pdf_url, generated_at)`,
       )
       .eq('id', paymentId)
@@ -563,7 +589,16 @@ export async function getOrGenerateReceiptPdf(
     });
 
     const association = payment.bills.associations;
-    type ExtendedAssoc = typeof association & { pan_number: string | null };
+    type ExtendedAssoc = typeof association & {
+      pan_number: string | null;
+      email: string | null;
+      phone: string | null;
+      bank_account_name: string | null;
+      bank_account_number: string | null;
+      bank_name: string | null;
+      bank_ifsc: string | null;
+      bank_branch: string | null;
+    };
     const assocData = association as unknown as ExtendedAssoc;
 
     let bytes: Buffer;
@@ -577,6 +612,13 @@ export async function getOrGenerateReceiptPdf(
           panNumber: assocData.pan_number ?? null,
           registrationNumber: association.registration_number ?? null,
           logoUrl: association.accounts?.picture_url ?? null,
+          email: assocData.email ?? null,
+          phone: assocData.phone ?? null,
+          bankAccountName: assocData.bank_account_name ?? null,
+          bankAccountNumber: assocData.bank_account_number ?? null,
+          bankName: assocData.bank_name ?? null,
+          bankIfsc: assocData.bank_ifsc ?? null,
+          bankBranch: assocData.bank_branch ?? null,
         },
         unit: {
           unitNo: unitData.unit_no,
@@ -593,6 +635,9 @@ export async function getOrGenerateReceiptPdf(
           amount: payment.amount,
           mode: payment.mode,
           paidAt: payment.paid_at,
+          referenceNo:
+            (payment as unknown as { reference_no: string | null })
+              .reference_no ?? null,
         },
       });
     } catch (error) {

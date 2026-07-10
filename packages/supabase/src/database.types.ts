@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -203,13 +208,63 @@ export type Database = {
           },
         ]
       }
+      association_payment_gateways: {
+        Row: {
+          association_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          key_id: string
+          key_secret: string
+          provider: string
+          updated_at: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          association_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key_id: string
+          key_secret: string
+          provider?: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          association_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key_id?: string
+          key_secret?: string
+          provider?: string
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "association_payment_gateways_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: true
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       associations: {
         Row: {
           account_id: string
           address: string | null
           authorised_signatory: string | null
+          bank_account_name: string | null
+          bank_account_number: string | null
+          bank_branch: string | null
+          bank_ifsc: string | null
+          bank_name: string | null
           brand_colour: string
           created_at: string
+          email: string | null
           gst_enabled: boolean
           gst_rate: number | null
           gstin: string | null
@@ -218,6 +273,7 @@ export type Database = {
           logo_url: string | null
           mescom_consumer_no: string | null
           pan_number: string | null
+          phone: string | null
           registration_number: string | null
           sanctioned_load_kva: number | null
           status: string
@@ -227,8 +283,14 @@ export type Database = {
           account_id: string
           address?: string | null
           authorised_signatory?: string | null
+          bank_account_name?: string | null
+          bank_account_number?: string | null
+          bank_branch?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
           brand_colour?: string
           created_at?: string
+          email?: string | null
           gst_enabled?: boolean
           gst_rate?: number | null
           gstin?: string | null
@@ -237,6 +299,7 @@ export type Database = {
           logo_url?: string | null
           mescom_consumer_no?: string | null
           pan_number?: string | null
+          phone?: string | null
           registration_number?: string | null
           sanctioned_load_kva?: number | null
           status?: string
@@ -246,8 +309,14 @@ export type Database = {
           account_id?: string
           address?: string | null
           authorised_signatory?: string | null
+          bank_account_name?: string | null
+          bank_account_number?: string | null
+          bank_branch?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
           brand_colour?: string
           created_at?: string
+          email?: string | null
           gst_enabled?: boolean
           gst_rate?: number | null
           gstin?: string | null
@@ -256,6 +325,7 @@ export type Database = {
           logo_url?: string | null
           mescom_consumer_no?: string | null
           pan_number?: string | null
+          phone?: string | null
           registration_number?: string | null
           sanctioned_load_kva?: number | null
           status?: string
@@ -1177,8 +1247,11 @@ export type Database = {
           mode: string
           paid_at: string
           paid_by_role: string
+          payment_batch_id: string | null
+          razorpay_order_id: string | null
           razorpay_payment_id: string | null
           recorded_by: string | null
+          reference_no: string | null
         }
         Insert: {
           amount: number
@@ -1188,8 +1261,11 @@ export type Database = {
           mode: string
           paid_at?: string
           paid_by_role: string
+          payment_batch_id?: string | null
+          razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
           recorded_by?: string | null
+          reference_no?: string | null
         }
         Update: {
           amount?: number
@@ -1199,8 +1275,11 @@ export type Database = {
           mode?: string
           paid_at?: string
           paid_by_role?: string
+          payment_batch_id?: string | null
+          razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
           recorded_by?: string | null
+          reference_no?: string | null
         }
         Relationships: [
           {
@@ -1894,6 +1973,8 @@ export type Database = {
       get_config: { Args: never; Returns: Json }
       get_nonce_status: { Args: { p_id: string }; Returns: Json }
       get_upper_system_role: { Args: never; Returns: string }
+      get_user_id_by_email: { Args: { p_email: string }; Returns: string }
+      get_user_id_by_phone: { Args: { p_phone: string }; Returns: string }
       has_active_subscription: {
         Args: { target_account_id: string }
         Returns: boolean
@@ -1953,6 +2034,20 @@ export type Database = {
       is_team_member: {
         Args: { account_id: string; user_id: string }
         Returns: boolean
+      }
+      recompute_overdue_bills: { Args: never; Returns: undefined }
+      record_payment: {
+        Args: {
+          p_amount: number
+          p_association_id: string
+          p_bill_id: string
+          p_mode: string
+          p_paid_by_role: string
+          p_payment_batch_id?: string
+          p_razorpay_order_id?: string
+          p_razorpay_payment_id?: string
+        }
+        Returns: string
       }
       revoke_nonce: {
         Args: { p_id: string; p_reason?: string }
@@ -2183,101 +2278,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      iceberg_namespaces: {
-        Row: {
-          bucket_name: string
-          catalog_id: string
-          created_at: string
-          id: string
-          metadata: Json
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          bucket_name: string
-          catalog_id: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          bucket_name?: string
-          catalog_id?: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          name?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "iceberg_namespaces_catalog_id_fkey"
-            columns: ["catalog_id"]
-            isOneToOne: false
-            referencedRelation: "buckets_analytics"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      iceberg_tables: {
-        Row: {
-          bucket_name: string
-          catalog_id: string
-          created_at: string
-          id: string
-          location: string
-          name: string
-          namespace_id: string
-          remote_table_id: string | null
-          shard_id: string | null
-          shard_key: string | null
-          updated_at: string
-        }
-        Insert: {
-          bucket_name: string
-          catalog_id: string
-          created_at?: string
-          id?: string
-          location: string
-          name: string
-          namespace_id: string
-          remote_table_id?: string | null
-          shard_id?: string | null
-          shard_key?: string | null
-          updated_at?: string
-        }
-        Update: {
-          bucket_name?: string
-          catalog_id?: string
-          created_at?: string
-          id?: string
-          location?: string
-          name?: string
-          namespace_id?: string
-          remote_table_id?: string | null
-          shard_id?: string | null
-          shard_key?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "iceberg_tables_catalog_id_fkey"
-            columns: ["catalog_id"]
-            isOneToOne: false
-            referencedRelation: "buckets_analytics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "iceberg_tables_namespace_id_fkey"
-            columns: ["namespace_id"]
-            isOneToOne: false
-            referencedRelation: "iceberg_namespaces"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       migrations: {
         Row: {
@@ -2792,4 +2792,3 @@ export const Constants = {
     },
   },
 } as const
-

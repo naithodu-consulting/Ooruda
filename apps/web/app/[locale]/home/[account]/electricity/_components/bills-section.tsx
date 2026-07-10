@@ -158,7 +158,9 @@ export function BillsSection(props: {
                         {unitsFmt.format(metered)}
                       </TableCell>
                       <TableCell className="text-right font-medium text-blue-600 tabular-nums">
-                        {blockRate != null ? `₹${blockRate.toFixed(2)}/unit` : '—'}
+                        {blockRate != null
+                          ? `₹${blockRate.toFixed(2)}/unit`
+                          : '—'}
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
                         {metered > 0
@@ -252,7 +254,7 @@ function AddBillDialog(props: { associationId: string }) {
 function getPeriodOptions() {
   const options = [];
   const now = new Date();
-  for (let i = -6; i <= 0; i++) {
+  for (let i = -7; i <= -1; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const label = d.toLocaleDateString('en-US', {
@@ -269,7 +271,8 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
   const [isPending, startTransition] = useTransition();
 
   const now = new Date();
-  const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const defaultPeriod = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`;
 
   const periodOptions = useMemo(() => getPeriodOptions(), []);
 
@@ -329,7 +332,7 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
           name="period"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Period</FormLabel>
+              <FormLabel>Billing Period</FormLabel>
               <Select
                 items={periodOptions}
                 onValueChange={field.onChange}
@@ -348,7 +351,10 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription>One bill per calendar month.</FormDescription>
+              <FormDescription>
+                Select the month for which electricity was consumed. One bill
+                per calendar month.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

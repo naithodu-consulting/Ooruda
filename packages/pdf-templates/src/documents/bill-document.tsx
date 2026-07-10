@@ -8,7 +8,11 @@ import {
   type AssociationBranding,
 } from '../components/document-header';
 import { styles } from '../components/styles';
-import { formatDateLong, formatINR, formatPeriodLabel } from '../lib/format';
+import {
+  formatINR,
+  formatPeriodDateRange,
+  formatShortDate,
+} from '../lib/format';
 
 export interface BillingEntityData {
   isCompany: boolean;
@@ -35,13 +39,37 @@ export interface BillPdfData {
     dueDate: string;
     generatedAt: string;
     totalAmount: number;
-    /** Stored GST total (CGST + SGST) included in totalAmount. Null for pre-GST or non-GST bills. */
     gstAmount: number | null;
     paidAmount: number;
     status: string;
   };
   lineItems: BillPdfLineItem[];
   billTo?: BillingEntityData | null;
+}
+
+/** Bill-To address lines: [unit line, floor+association-address line], or company address as a single line. */
+function buildAddressLines(
+  billTo: BillingEntityData | null | undefined,
+  unit: BillPdfData['unit'],
+  associationAddress: string | null,
+): string[] {
+  if (billTo?.isCompany && billTo.companyAddress) {
+    return [billTo.companyAddress];
+  }
+  const lines: string[] = [];
+  if (unit.doorNo) {
+    lines.push(`${unit.unitNo}, ${unit.doorNo},`);
+  } else {
+    lines.push(`Unit ${unit.unitNo},`);
+  }
+  const floorAddr = [
+    unit.floor != null ? `Floor ${unit.floor}` : null,
+    associationAddress,
+  ]
+    .filter(Boolean)
+    .join(', ');
+  if (floorAddr) lines.push(floorAddr);
+  return lines;
 }
 
 export function BillDocument({
@@ -51,11 +79,8 @@ export function BillDocument({
   lineItems,
   billTo,
 }: BillPdfData) {
-  // Line item amounts are always pre-GST base amounts.
   const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
 
-  // Use stored gst_amount when available (new bills). Fall back to computing
-  // from line items for legacy bills that pre-date the gst_amount column.
   const gstTotal =
     bill.gstAmount ??
     (() => {
@@ -70,88 +95,99 @@ export function BillDocument({
   const halfRate = showGst ? association.gstRate! / 2 : 0;
   const cgst = Math.round((gstTotal / 2) * 100) / 100;
   const sgst = Math.round((gstTotal - cgst) * 100) / 100;
-  // totalAmount already includes GST for new bills; use it as the payable amount.
   const outstanding = Math.max(0, bill.totalAmount - bill.paidAmount);
+
+  const addressLines = buildAddressLines(billTo, unit, association.address);
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <DocumentHeader
-          association={association}
-          docTitle="Bill"
-          docNo={bill.billNo}
-          docDate={formatDateLong(bill.generatedAt)}
-        />
+        {/* Header: logo + name + address + contact strip */}
+        <DocumentHeader association={association} />
 
-        <View style={[styles.section, styles.infoGrid]}>
-          <View style={styles.infoCol}>
-            <Text style={styles.sectionTitle}>Bill To</Text>
-            {billTo?.name ? (
-              <Text style={{ fontWeight: 'bold' }}>{billTo.name}</Text>
-            ) : null}
-            {billTo?.isCompany && billTo.companyAddress ? (
-              <Text style={{ fontSize: 8, color: '#475569', marginTop: 1 }}>
-                {billTo.companyAddress}
-              </Text>
-            ) : (
-              <>
-                <Text style={{ fontSize: 8, color: '#475569', marginTop: 1 }}>
-                  {unit.doorNo
-                    ? `${unit.unitNo} / ${unit.doorNo}`
-                    : `Unit ${unit.unitNo}`}
-                </Text>
-                {unit.floor != null ? (
-                  <Text style={{ fontSize: 8, color: '#475569' }}>
-                    {`Floor ${unit.floor}`}
-                  </Text>
-                ) : null}
-                {association.address ? (
-                  <Text style={{ fontSize: 8, color: '#475569' }}>
-                    {association.address}
-                  </Text>
-                ) : null}
-              </>
-            )}
-            {billTo?.isCompany && billTo.companyGstin ? (
-              <Text style={{ fontSize: 8, color: '#475569' }}>
-                GSTIN: {billTo.companyGstin}
-              </Text>
-            ) : null}
-          </View>
-          <View style={styles.infoCol}>
-            <Text style={styles.sectionTitle}>Billing Period</Text>
-            <Text>{formatPeriodLabel(bill.period)}</Text>
-          </View>
-          <View style={styles.infoCol}>
-            <Text style={styles.sectionTitle}>Due Date</Text>
-            <Text>{formatDateLong(bill.dueDate)}</Text>
-          </View>
-          <View style={styles.infoCol}>
-            <Text style={styles.sectionTitle}>Status</Text>
-            <Text>{bill.status}</Text>
-          </View>
+        {/* INVOICE title */}
+        <View style={styles.docTitleBlock}>
+          <Text style={styles.docTitle}>Invoice</Text>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Charges</Text>
-          <View style={styles.table}>
-            <View style={styles.tableHeaderRow}>
-              <Text style={styles.colDescription}>Description</Text>
-              <Text style={styles.colGst}>GST</Text>
-              <Text style={styles.colAmount}>Amount</Text>
+        {/* Metadata: row-paired 2-col grid */}
+        <View style={styles.metaGrid}>
+          <View style={styles.metaGridRow}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Invoice Number:</Text>
+              <Text style={styles.metaValue}>{bill.billNo}</Text>
             </View>
-            {lineItems.map((item, i) => (
-              <View style={styles.tableRow} key={i}>
-                <Text style={styles.colDescription}>{item.description}</Text>
-                <Text style={styles.colGst}>
-                  {item.gstApplicable ? 'Yes' : '—'}
-                </Text>
-                <Text style={styles.colAmount}>{formatINR(item.amount)}</Text>
-              </View>
-            ))}
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Billing Period:</Text>
+              <Text style={styles.metaValue}>
+                {formatPeriodDateRange(bill.period)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.metaGridRow}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Due Date:</Text>
+              <Text style={styles.metaValue}>
+                {formatShortDate(bill.dueDate)}
+              </Text>
+            </View>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Invoice Date:</Text>
+              <Text style={styles.metaValue}>
+                {formatShortDate(bill.generatedAt)}
+              </Text>
+            </View>
           </View>
         </View>
 
+        {/* Bill To */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Bill To</Text>
+          {billTo?.name ? (
+            <Text style={styles.billToName}>{billTo.name}</Text>
+          ) : null}
+          {addressLines.map((line, i) => (
+            <Text style={styles.billToAddress} key={i}>
+              {line}
+            </Text>
+          ))}
+          {billTo?.isCompany && billTo.companyGstin ? (
+            <Text style={styles.billToAddress}>
+              GSTIN: {billTo.companyGstin}
+            </Text>
+          ) : null}
+        </View>
+
+        {/* Charges table */}
+        <View style={styles.table}>
+          <View style={styles.tableHeaderRow}>
+            <Text style={[styles.colDescription, styles.tableHeaderText]}>
+              Description
+            </Text>
+            <Text style={[styles.colGst, styles.tableHeaderText]}>GST</Text>
+            <Text style={[styles.colAmount, styles.tableHeaderText]}>
+              Amount
+            </Text>
+          </View>
+          {lineItems.map((item, i) => (
+            <View
+              style={i % 2 === 0 ? styles.tableRow : styles.tableRowAlt}
+              key={i}
+            >
+              <Text style={[styles.colDescription, { fontWeight: 'bold' }]}>
+                {item.description}
+              </Text>
+              <Text style={[styles.colGst, { textAlign: 'center' }]}>
+                {item.gstApplicable ? 'Yes' : '—'}
+              </Text>
+              <Text style={[styles.colAmount, { textAlign: 'right' }]}>
+                {formatINR(item.amount)}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Totals */}
         <View style={styles.summaryBlock}>
           <View style={styles.summaryRow}>
             <Text>Subtotal</Text>
@@ -171,6 +207,7 @@ export function BillDocument({
             </>
           ) : null}
 
+          <View style={styles.summaryDivider} />
           <View style={styles.summaryRowTotal}>
             <Text>Bill Amount (Payable)</Text>
             <Text>{formatINR(bill.totalAmount)}</Text>
@@ -185,7 +222,10 @@ export function BillDocument({
           </View>
         </View>
 
-        <DocumentFooter note="This is a system-generated bill and does not require a signature." />
+        <DocumentFooter
+          note="This is a system-generated bill and does not require a signature."
+          association={association}
+        />
       </Page>
     </Document>
   );

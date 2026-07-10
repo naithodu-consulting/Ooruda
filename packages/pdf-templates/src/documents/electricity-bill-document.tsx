@@ -1,16 +1,18 @@
 import * as React from 'react';
 
-import {
-  Document,
-  Page,
-  StyleSheet,
-  Text,
-  View,
-} from '@react-pdf/renderer';
+import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 
 import { DocumentFooter } from '../components/document-footer';
-import { DocumentHeader } from '../components/document-header';
-import { formatINR, formatPeriodLabel } from '../lib/format';
+import {
+  DocumentHeader,
+  type AssociationBranding,
+} from '../components/document-header';
+import { NAVY, styles as sharedStyles } from '../components/styles';
+import {
+  formatINR,
+  formatPeriodDateRange,
+  formatShortDate,
+} from '../lib/format';
 import type { BillingEntityData } from './bill-document';
 
 export interface ElectricityBillMeterRow {
@@ -24,11 +26,8 @@ export interface ElectricityBillMeterRow {
 }
 
 export interface ElectricityBillPdfData {
-  association: {
-    name: string;
-    address: string | null;
-    logoUrl: string | null;
-    authorisedSignatory: string | null;
+  association: AssociationBranding & {
+    authorisedSignatory?: string | null;
   };
   unit: { unitNo: string; doorNo?: string | null; floor?: number | null };
   billTo?: BillingEntityData | null;
@@ -47,112 +46,38 @@ export interface ElectricityBillPdfData {
 }
 
 const s = StyleSheet.create({
-  page: {
-    fontFamily: 'Noto Sans',
-    fontSize: 9,
-    padding: 36,
-    color: '#1e293b',
-  },
-
-  // ── Title strip ──────────────────────────────────────────────────────────
-  titleStrip: {
-    backgroundColor: '#1a3a5c',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 3,
-    marginBottom: 14,
-    alignItems: 'center',
-  },
-  titleText: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-  },
-
-  // ── Bill meta row (To + Bill details) ────────────────────────────────────
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  toLabel: {
-    fontSize: 7,
-    fontWeight: 'bold',
-    color: '#64748b',
-    textTransform: 'uppercase',
-    marginBottom: 3,
-    letterSpacing: 0.5,
-  },
-  toUnit: {
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  toAssoc: {
-    fontSize: 8,
-    color: '#475569',
-    marginTop: 1,
-  },
-  detailsBlock: {
-    alignItems: 'flex-end',
-    gap: 3,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  detailLabel: {
-    fontSize: 8,
-    color: '#64748b',
-    width: 54,
-    textAlign: 'right',
-  },
-  detailValue: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    minWidth: 88,
-  },
-  billNoValue: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    minWidth: 88,
-    color: '#1a3a5c',
-  },
-
   // ── Meter readings table ──────────────────────────────────────────────────
   table: {
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 3,
-    marginBottom: 10,
+    borderWidth: 1.25,
+    borderColor: NAVY,
+    borderRadius: 2,
     overflow: 'hidden',
+    marginBottom: 10,
   },
   tableHeaderRow: {
     flexDirection: 'row',
-    backgroundColor: '#1a3a5c',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    backgroundColor: '#FFFCF0',
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1.25,
+    borderBottomColor: NAVY,
   },
   tableHeaderText: {
     fontSize: 8,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: '#000000',
   },
   tableRow: {
     flexDirection: 'row',
     paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
   },
   tableRowAlt: {
     flexDirection: 'row',
     paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
     backgroundColor: '#f8fafc',
@@ -160,7 +85,7 @@ const s = StyleSheet.create({
   minChargeRow: {
     flexDirection: 'row',
     paddingVertical: 5,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
     backgroundColor: '#fffbeb',
@@ -168,19 +93,19 @@ const s = StyleSheet.create({
   totalRow: {
     flexDirection: 'row',
     paddingVertical: 7,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     borderTopWidth: 2,
-    borderTopColor: '#1a3a5c',
+    borderTopColor: NAVY,
     backgroundColor: '#eaf0f7',
     fontWeight: 'bold',
     fontSize: 10,
   },
-  colSl: { width: 22, fontSize: 8 },
-  colMeter: { flexGrow: 1, flexBasis: 0 },
-  colReading: { width: 52, textAlign: 'right' },
-  colConsumed: { width: 54, textAlign: 'right' },
-  colRate: { width: 52, textAlign: 'right' },
-  colAmount: { width: 62, textAlign: 'right' },
+  colSl: { width: 22, fontSize: 8, color: '#000000' },
+  colMeter: { flexGrow: 1, flexBasis: 0, color: '#000000' },
+  colReading: { width: 52, textAlign: 'right', color: '#000000' },
+  colConsumed: { width: 54, textAlign: 'right', color: '#000000' },
+  colRate: { width: 52, textAlign: 'right', color: '#000000' },
+  colAmount: { width: 62, textAlign: 'right', color: '#000000' },
 
   // ── Outstanding panel ─────────────────────────────────────────────────────
   outstandingPanel: {
@@ -220,7 +145,7 @@ const s = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     marginTop: 2,
-    color: '#1e293b',
+    color: '#000000',
   },
 
   // ── Load note ─────────────────────────────────────────────────────────────
@@ -239,19 +164,36 @@ const s = StyleSheet.create({
   },
 });
 
-function formatShortDate(iso: string): string {
-  const d = new Date(iso);
-  const dd = String(d.getUTCDate()).padStart(2, '0');
-  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const yyyy = d.getUTCFullYear();
-  return `${dd}-${mm}-${yyyy}`;
+/** Bill-To address lines: [unit line, floor+association-address line], or company address as a single line. */
+function buildAddressLines(
+  billTo: BillingEntityData | null | undefined,
+  unit: ElectricityBillPdfData['unit'],
+  associationAddress: string | null,
+): string[] {
+  if (billTo?.isCompany && billTo.companyAddress) {
+    return [billTo.companyAddress];
+  }
+  const lines: string[] = [];
+  if (unit.doorNo) {
+    lines.push(`${unit.unitNo}, ${unit.doorNo},`);
+  } else {
+    lines.push(`Unit ${unit.unitNo},`);
+  }
+  const floorAddr = [
+    unit.floor != null ? `Floor ${unit.floor}` : null,
+    associationAddress,
+  ]
+    .filter(Boolean)
+    .join(', ');
+  if (floorAddr) lines.push(floorAddr);
+  return lines;
 }
 
 function periodLabel(bill: ElectricityBillPdfData['bill']): string {
   if (bill.periodStart && bill.periodEnd) {
-    return `${formatShortDate(bill.periodStart)} to ${formatShortDate(bill.periodEnd)}`;
+    return `${formatShortDate(bill.periodStart)} - ${formatShortDate(bill.periodEnd)}`;
   }
-  return formatPeriodLabel(bill.period);
+  return formatPeriodDateRange(bill.period);
 }
 
 export function ElectricityBillDocument({
@@ -263,70 +205,63 @@ export function ElectricityBillDocument({
   minimumCharge,
 }: ElectricityBillPdfData) {
   const outstanding = Math.max(0, bill.totalAmount - bill.paidAmount);
+  const addressLines = buildAddressLines(billTo, unit, association.address);
 
   return (
     <Document>
-      <Page size="A4" style={s.page}>
-        {/* Shared header: logo + name + address + bill no + date */}
-        <DocumentHeader
-          association={{
-            name: association.name,
-            address: association.address,
-            gstin: null,
-            registrationNumber: null,
-            logoUrl: association.logoUrl,
-          }}
-          docTitle="Electricity Bill"
-          docNo={bill.billNo}
-          docDate={formatShortDate(bill.generatedAt)}
-        />
+      <Page size="A4" style={sharedStyles.page}>
+        {/* Shared header: logo + name + address + contact strip */}
+        <DocumentHeader association={association} />
 
-        {/* Title strip */}
-        <View style={s.titleStrip}>
-          <Text style={s.titleText}>Electricity Charges</Text>
+        {/* Title */}
+        <View style={sharedStyles.docTitleBlock}>
+          <Text style={sharedStyles.docTitle}>Electricity Bill</Text>
         </View>
 
-        {/* To + Bill details */}
-        <View style={s.metaRow}>
-          <View>
-            <Text style={s.toLabel}>Bill To</Text>
-            {billTo?.name ? <Text style={s.toUnit}>{billTo.name}</Text> : null}
-            {billTo?.isCompany && billTo.companyAddress ? (
-              <Text style={s.toAssoc}>{billTo.companyAddress}</Text>
-            ) : (
-              <>
-                <Text style={billTo?.name ? s.toAssoc : s.toUnit}>
-                  {unit.doorNo
-                    ? `${unit.unitNo} / ${unit.doorNo}`
-                    : `Unit ${unit.unitNo}`}
-                </Text>
-                {unit.floor != null ? (
-                  <Text style={s.toAssoc}>{`Floor ${unit.floor}`}</Text>
-                ) : null}
-              </>
-            )}
-            {billTo?.isCompany && billTo.companyGstin ? (
-              <Text style={s.toAssoc}>GSTIN: {billTo.companyGstin}</Text>
-            ) : null}
-            <Text style={s.toAssoc}>{association.name}</Text>
+        {/* Metadata: row-paired 2-col grid */}
+        <View style={sharedStyles.metaGrid}>
+          <View style={sharedStyles.metaGridRow}>
+            <View style={sharedStyles.metaRow}>
+              <Text style={sharedStyles.metaLabel}>Invoice Number:</Text>
+              <Text style={sharedStyles.metaValue}>{bill.billNo}</Text>
+            </View>
+            <View style={sharedStyles.metaRow}>
+              <Text style={sharedStyles.metaLabel}>Billing Period:</Text>
+              <Text style={sharedStyles.metaValue}>{periodLabel(bill)}</Text>
+            </View>
           </View>
-
-          <View style={s.detailsBlock}>
-            <View style={s.detailRow}>
-              <Text style={s.detailLabel}>Month</Text>
-              <Text style={s.detailValue}>
-                {formatPeriodLabel(bill.period)}
+          <View style={sharedStyles.metaGridRow}>
+            <View style={sharedStyles.metaRow}>
+              <Text style={sharedStyles.metaLabel}>Due Date:</Text>
+              <Text style={sharedStyles.metaValue}>
+                {formatShortDate(bill.dueDate)}
               </Text>
             </View>
-            <View style={s.detailRow}>
-              <Text style={s.detailLabel}>Period</Text>
-              <Text style={s.detailValue}>{periodLabel(bill)}</Text>
-            </View>
-            <View style={s.detailRow}>
-              <Text style={s.detailLabel}>Due Date</Text>
-              <Text style={s.detailValue}>{formatShortDate(bill.dueDate)}</Text>
+            <View style={sharedStyles.metaRow}>
+              <Text style={sharedStyles.metaLabel}>Invoice Date:</Text>
+              <Text style={sharedStyles.metaValue}>
+                {formatShortDate(bill.generatedAt)}
+              </Text>
             </View>
           </View>
+        </View>
+
+        {/* Bill To */}
+        <View style={sharedStyles.section}>
+          <Text style={sharedStyles.sectionTitle}>Bill To</Text>
+          {billTo?.name ? (
+            <Text style={sharedStyles.billToName}>{billTo.name}</Text>
+          ) : null}
+          {addressLines.map((line, i) => (
+            <Text style={sharedStyles.billToAddress} key={i}>
+              {line}
+            </Text>
+          ))}
+          {billTo?.isCompany && billTo.companyGstin ? (
+            <Text style={sharedStyles.billToAddress}>
+              GSTIN: {billTo.companyGstin}
+            </Text>
+          ) : null}
         </View>
 
         {/* Meter readings table */}
@@ -344,7 +279,9 @@ export function ElectricityBillDocument({
           {meters.map((m, i) => (
             <View style={i % 2 === 0 ? s.tableRow : s.tableRowAlt} key={i}>
               <Text style={s.colSl}>{i + 1}</Text>
-              <Text style={s.colMeter}>{m.meterLabel}</Text>
+              <Text style={s.colMeter}>
+                {m.meterLabel.replace(/^SM[\s-]+/i, '')}
+              </Text>
               <Text style={s.colReading}>{m.previousReading}</Text>
               <Text style={s.colReading}>{m.currentReading}</Text>
               <Text style={s.colConsumed}>{m.consumedUnits}</Text>
@@ -376,20 +313,23 @@ export function ElectricityBillDocument({
             <Text style={s.colReading} />
             <Text style={s.colConsumed} />
             <Text style={s.colRate} />
-            <Text style={[s.colAmount, { color: '#1a3a5c' }]}>
+            <Text style={[s.colAmount, { color: NAVY }]}>
               {formatINR(bill.totalAmount)}
             </Text>
           </View>
         </View>
 
-        {/* Sanctioned load note (if any meter has a load) */}
+        {/* Sanctioned load note */}
         {meters.some((m) => m.loadKva != null) ? (
           <View style={s.loadNote}>
             <Text style={s.loadNoteText}>
               Sanctioned Load —{' '}
               {meters
                 .filter((m) => m.loadKva != null)
-                .map((m) => `${m.meterLabel}: ${m.loadKva} kVA`)
+                .map(
+                  (m) =>
+                    `${m.meterLabel.replace(/^SM[\s-]+/i, '')}: ${m.loadKva} kVA`,
+                )
                 .join('  |  ')}
             </Text>
           </View>
@@ -409,7 +349,7 @@ export function ElectricityBillDocument({
           </View>
         ) : null}
 
-        {/* Receiver + Authorised Signatory */}
+        {/* Signatures */}
         <View style={s.signatureRow}>
           <View style={s.signatureBlock}>
             <Text style={{ fontSize: 20, color: '#e2e8f0', marginBottom: 4 }}>
@@ -417,7 +357,6 @@ export function ElectricityBillDocument({
             </Text>
             <Text style={s.signatureLine}>Receiver's Signature</Text>
           </View>
-
           <View style={s.signatureBlock}>
             <Text style={{ fontSize: 20, color: '#e2e8f0', marginBottom: 4 }}>
               {''}
@@ -431,7 +370,10 @@ export function ElectricityBillDocument({
           </View>
         </View>
 
-        <DocumentFooter note="This is a computer-generated bill and does not require a physical signature." />
+        <DocumentFooter
+          note="This is a system-generated bill and does not require a signature."
+          association={association}
+        />
       </Page>
     </Document>
   );

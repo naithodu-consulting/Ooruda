@@ -1,7 +1,6 @@
 import { ServerDataLoader } from '@makerkit/data-loader-supabase-nextjs';
 
 import { AdminAccountsTable } from '@kit/admin/components/admin-accounts-table';
-
 import { AdminCreateAssociationDialog } from '@kit/admin/components/admin-create-association-dialog';
 import { AdminCreateUserDialog } from '@kit/admin/components/admin-create-user-dialog';
 import { AdminGuard } from '@kit/admin/components/admin-guard';
@@ -65,14 +64,8 @@ async function AccountsPage(props: AdminAccountsPageProps) {
       .eq('is_personal_account', true)
       .order('name'),
     adminClient.auth.admin.listUsers({ perPage: 1000 }),
-    adminClient
-      .from('associations')
-      .select('account_id')
-      .eq('is_test', true),
-    adminClient
-      .from('profiles')
-      .select('id')
-      .eq('is_test', true),
+    adminClient.from('associations').select('account_id').eq('is_test', true),
+    adminClient.from('profiles').select('id').eq('is_test', true),
   ]);
 
   const superAdminIds = new Set(
@@ -112,8 +105,6 @@ async function AccountsPage(props: AdminAccountsPageProps) {
               Create Association
             </Button>
           </AdminCreateAssociationDialog>
-
-
 
           <AdminCreateUserDialog associations={associations}>
             <Button data-test="admin-create-user-button">Create User</Button>
@@ -199,7 +190,11 @@ async function AccountsTableWithRoles(props: {
   associations: AssociationOption[];
   superAdminIds: Set<string>;
   testAccountIds: Set<string>;
-  filters: { type: 'all' | 'team' | 'personal'; kind: 'all' | 'real' | 'test'; query: string };
+  filters: {
+    type: 'all' | 'team' | 'personal';
+    kind: 'all' | 'real' | 'test';
+    query: string;
+  };
 }) {
   const adminClient = getSupabaseServerAdminClient();
 

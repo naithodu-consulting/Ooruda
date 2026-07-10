@@ -5,7 +5,14 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Zap,
+  Wrench,
+  Receipt,
+} from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
 import { Badge } from '@kit/ui/badge';
@@ -45,6 +52,7 @@ import {
   TableHeader,
   TableRow,
 } from '@kit/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@kit/ui/tabs';
 import { cn } from '@kit/ui/utils';
 
 import { DownloadPdfButton } from '~/components/download-pdf-button';
@@ -57,6 +65,7 @@ import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
+import { formatPeriod } from '~/lib/format-period';
 
 import {
   generateBillsAction,
@@ -92,6 +101,14 @@ export interface BillRow {
   lineItems: BillLineItemRow[];
 }
 
+export interface PendingElectricityBill {
+  id: string;
+  period: string;
+  invoice_amount: number;
+  block_consumption_units: number;
+  uploaded_at: string;
+}
+
 interface PendingChargeWithUnit extends PendingOtherCharge {
   unit_no?: string | null;
   period: string;
@@ -109,6 +126,464 @@ export function BillsSection(props: {
   accountSlug?: string;
   initialDuration?: string;
   initialStatus?: string;
+  pendingElectricityBills?: PendingElectricityBill[];
+  maintenancePending?: boolean;
+  currentPeriod?: string;
+}) {
+  const draftCount =
+    (props.maintenancePending ? 1 : 0) +
+    ((props.pendingElectricityBills?.length ?? 0) > 0 ? 1 : 0) +
+    ((props.pendingCharges?.length ?? 0) > 0 ? 1 : 0);
+
+  return (
+    <Card className="border-0 shadow-none">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <CardTitle>Bills</CardTitle>
+
+        {props.canManage ? (
+          <div className="flex items-center gap-2 sm:shrink-0">
+            {props.isOtherChargesActive &&
+              props.units &&
+              props.periodOptions && (
+                <OtherChargesDialog
+                  associationId={props.associationId}
+                  units={props.units}
+                  pendingCharges={props.pendingCharges ?? []}
+                  periods={props.periodOptions}
+                />
+              )}
+            <GenerateBillsDialog associationId={props.associationId} />
+          </div>
+        ) : null}
+      </CardHeader>
+
+      <CardContent>
+        <Tabs defaultValue={draftCount > 0 ? 'draft' : 'generated'}>
+          <TabsList className="mb-4">
+            <TabsTrigger value="draft" className="relative">
+              Draft Bills
+              {draftCount > 0 && (
+                <span className="bg-primary text-primary-foreground ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold">
+                  {draftCount}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="generated">
+              Generated Bills
+              {props.bills.length > 0 && (
+                <span className="text-muted-foreground ml-2 text-[11px]">
+                  {props.bills.length}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="draft">
+            <DraftBillsTab
+              associationId={props.associationId}
+              maintenancePending={props.maintenancePending ?? false}
+              currentPeriod={props.currentPeriod ?? ''}
+              pendingElectricityBills={props.pendingElectricityBills ?? []}
+              pendingCharges={props.pendingCharges ?? []}
+              canManage={props.canManage}
+            />
+          </TabsContent>
+
+          <TabsContent value="generated">
+            <GeneratedBillsTab
+              bills={props.bills}
+              initialDuration={props.initialDuration}
+              initialStatus={props.initialStatus}
+            />
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Draft Bills tab ──────────────────────────────────────────────────────────
+
+const DRAFT_PAGE_SIZE = 20;
+
+type DraftTypeFilter = 'all' | 'maintenance' | 'electricity' | 'other_charges';
+
+function DraftBillsTab(props: {
+  associationId: string;
+  maintenancePending: boolean;
+  currentPeriod: string;
+  pendingElectricityBills: PendingElectricityBill[];
+  pendingCharges: (PendingOtherCharge & {
+    unit_no?: string | null;
+    period: string;
+  })[];
+  canManage: boolean;
+}) {
+  const [typeFilter, setTypeFilter] = useState<DraftTypeFilter>('all');
+  const [periodFilter, setPeriodFilter] = useState('all');
+  const [chargesPage, setChargesPage] = useState(1);
+
+  const hasAnything =
+    props.maintenancePending ||
+    props.pendingElectricityBills.length > 0 ||
+    props.pendingCharges.length > 0;
+
+  if (!hasAnything) {
+    return (
+      <p className="text-muted-foreground py-8 text-center text-sm">
+        No pending drafts. All bills have been generated.
+      </p>
+    );
+  }
+
+  const electricityTotal = props.pendingElectricityBills.reduce(
+    (s, mb) => s + mb.invoice_amount,
+    0,
+  );
+  const otherChargesTotal = props.pendingCharges.reduce(
+    (s, pc) => s + pc.amount,
+    0,
+  );
+
+  const totalSections =
+    (props.maintenancePending ? 1 : 0) +
+    (props.pendingElectricityBills.length > 0 ? 1 : 0) +
+    (props.pendingCharges.length > 0 ? 1 : 0);
+
+  // Collect all unique periods across pending items for the period filter
+  const allPeriods = Array.from(
+    new Set([
+      ...(props.maintenancePending ? [props.currentPeriod] : []),
+      ...props.pendingElectricityBills.map((mb) => mb.period),
+      ...props.pendingCharges.map((pc) => pc.period),
+    ]),
+  ).sort((a, b) => b.localeCompare(a));
+
+  // Apply filters
+  const showMaintenance =
+    props.maintenancePending &&
+    (typeFilter === 'all' || typeFilter === 'maintenance') &&
+    (periodFilter === 'all' || periodFilter === props.currentPeriod);
+
+  const filteredElectricity = props.pendingElectricityBills.filter(
+    (mb) =>
+      (typeFilter === 'all' || typeFilter === 'electricity') &&
+      (periodFilter === 'all' || periodFilter === mb.period),
+  );
+
+  const filteredCharges = props.pendingCharges.filter(
+    (pc) =>
+      (typeFilter === 'all' || typeFilter === 'other_charges') &&
+      (periodFilter === 'all' || periodFilter === pc.period),
+  );
+
+  // Pagination for other charges
+  const totalChargesPages = Math.ceil(filteredCharges.length / DRAFT_PAGE_SIZE);
+  const pagedCharges = filteredCharges.slice(
+    (chargesPage - 1) * DRAFT_PAGE_SIZE,
+    chargesPage * DRAFT_PAGE_SIZE,
+  );
+  const filteredOtherChargesTotal = filteredCharges.reduce(
+    (s, pc) => s + pc.amount,
+    0,
+  );
+
+  const hasFilteredResults =
+    showMaintenance ||
+    filteredElectricity.length > 0 ||
+    filteredCharges.length > 0;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Summary bar */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b pb-4 text-sm">
+        <span>
+          <span className="text-foreground font-semibold">{totalSections}</span>{' '}
+          <span className="text-muted-foreground">
+            draft{totalSections !== 1 ? 's' : ''} pending
+          </span>
+        </span>
+        {props.maintenancePending && (
+          <span>
+            <span className="text-muted-foreground">Maintenance</span>{' '}
+            <span className="text-foreground font-medium">
+              {formatPeriod(props.currentPeriod)}
+            </span>
+          </span>
+        )}
+        {electricityTotal > 0 && (
+          <span>
+            <span className="text-muted-foreground">Electricity</span>{' '}
+            <span className="text-foreground font-semibold">
+              {formatINR(electricityTotal)}
+            </span>
+          </span>
+        )}
+        {otherChargesTotal > 0 && (
+          <span>
+            <span className="text-muted-foreground">Other Charges</span>{' '}
+            <span className="text-foreground font-semibold">
+              {formatINR(otherChargesTotal)}
+            </span>
+          </span>
+        )}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          value={typeFilter}
+          onValueChange={(v) => {
+            setTypeFilter(v as DraftTypeFilter);
+            setChargesPage(1);
+          }}
+        >
+          <SelectTrigger className="h-8 w-44 text-xs">
+            <SelectValue>
+              {typeFilter === 'all'
+                ? 'All Types'
+                : typeFilter === 'maintenance'
+                  ? 'Maintenance'
+                  : typeFilter === 'electricity'
+                    ? 'Electricity'
+                    : 'Other Charges'}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            {props.maintenancePending && (
+              <SelectItem value="maintenance">Maintenance</SelectItem>
+            )}
+            {props.pendingElectricityBills.length > 0 && (
+              <SelectItem value="electricity">Electricity</SelectItem>
+            )}
+            {props.pendingCharges.length > 0 && (
+              <SelectItem value="other_charges">Other Charges</SelectItem>
+            )}
+          </SelectContent>
+        </Select>
+
+        {allPeriods.length > 1 && (
+          <Select
+            value={periodFilter}
+            onValueChange={(v) => {
+              if (v) setPeriodFilter(v);
+              setChargesPage(1);
+            }}
+          >
+            <SelectTrigger className="h-8 w-36 text-xs">
+              <SelectValue>
+                {periodFilter === 'all'
+                  ? 'All Periods'
+                  : formatPeriod(periodFilter)}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Periods</SelectItem>
+              {allPeriods.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {formatPeriod(p)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      <p className="text-muted-foreground text-xs">
+        These bills are staged and not yet visible to residents. Use{' '}
+        <span className="text-foreground font-medium">Generate Bills</span> to
+        finalise and publish them.
+      </p>
+
+      {!hasFilteredResults && (
+        <p className="text-muted-foreground py-6 text-center text-sm">
+          No drafts match the selected filters.
+        </p>
+      )}
+
+      <div className="flex flex-col gap-4">
+        {/* Pending Maintenance */}
+        {showMaintenance && (
+          <DraftSection
+            icon={<Wrench className="h-4 w-4" />}
+            title="Maintenance"
+            badge={formatPeriod(props.currentPeriod)}
+          >
+            <p className="text-muted-foreground px-1 text-sm">
+              Maintenance bills for{' '}
+              <span className="text-foreground font-medium">
+                {formatPeriod(props.currentPeriod)}
+              </span>{' '}
+              haven't been generated yet. All active units will receive a bill
+              when you click <span className="font-medium">Generate Bills</span>
+              .
+            </p>
+          </DraftSection>
+        )}
+
+        {/* Pending Electricity */}
+        {filteredElectricity.length > 0 && (
+          <DraftSection
+            icon={<Zap className="h-4 w-4" />}
+            title="Electricity"
+            badge={`${filteredElectricity.length} month${filteredElectricity.length !== 1 ? 's' : ''}`}
+            total={filteredElectricity.reduce(
+              (s, mb) => s + mb.invoice_amount,
+              0,
+            )}
+          >
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Period</TableHead>
+                  <TableHead className="text-right">Invoice Amount</TableHead>
+                  <TableHead className="text-right">Block Units</TableHead>
+                  <TableHead className="text-right">Uploaded</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredElectricity.map((mb) => (
+                  <TableRow key={mb.id}>
+                    <TableCell className="font-medium">
+                      {formatPeriod(mb.period)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {formatINR(mb.invoice_amount)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-right tabular-nums">
+                      {mb.block_consumption_units.toLocaleString('en-IN')} units
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-right text-xs">
+                      {new Date(mb.uploaded_at).toLocaleDateString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </DraftSection>
+        )}
+
+        {/* Pending Other Charges */}
+        {filteredCharges.length > 0 && (
+          <DraftSection
+            icon={<Receipt className="h-4 w-4" />}
+            title="Other Charges"
+            badge={`${filteredCharges.length} charge${filteredCharges.length !== 1 ? 's' : ''}`}
+            total={filteredOtherChargesTotal}
+          >
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Period</TableHead>
+                  <TableHead>Label</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pagedCharges.map((pc) => (
+                  <TableRow key={pc.id}>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {formatPeriod(pc.period)}
+                    </TableCell>
+                    <TableCell className="font-medium">{pc.label}</TableCell>
+                    <TableCell className="text-sm">
+                      {pc.unit_no ?? (
+                        <span className="text-muted-foreground">
+                          All units
+                          {pc.split_mode === 'per_sqft' ? ' (per sqft)' : ''}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {formatINR(pc.amount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {/* Subtotal row */}
+                <TableRow className="bg-muted/40 font-semibold">
+                  <TableCell colSpan={3} className="text-sm">
+                    Total
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatINR(filteredOtherChargesTotal)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+            {/* Pagination for other charges */}
+            {totalChargesPages > 1 && (
+              <div className="mt-3 flex items-center justify-end gap-2 text-sm">
+                <span className="text-muted-foreground">
+                  {(chargesPage - 1) * DRAFT_PAGE_SIZE + 1}–
+                  {Math.min(
+                    chargesPage * DRAFT_PAGE_SIZE,
+                    filteredCharges.length,
+                  )}{' '}
+                  of {filteredCharges.length}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={chargesPage === 1}
+                  onClick={() => setChargesPage((p) => p - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={chargesPage === totalChargesPages}
+                  onClick={() => setChargesPage((p) => p + 1)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </DraftSection>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DraftSection(props: {
+  icon: React.ReactNode;
+  title: string;
+  badge: string;
+  total?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-muted-foreground">{props.icon}</span>
+        <span className="text-sm font-semibold">{props.title}</span>
+        <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-medium">
+          {props.badge}
+        </span>
+        {props.total != null && (
+          <span className="text-foreground ml-auto text-sm font-bold tabular-nums">
+            {formatINR(props.total)}
+          </span>
+        )}
+      </div>
+      {props.children}
+    </div>
+  );
+}
+
+// ── Generated Bills tab ──────────────────────────────────────────────────────
+
+function GeneratedBillsTab(props: {
+  bills: BillRow[];
+  initialDuration?: string;
+  initialStatus?: string;
 }) {
   const [statusVal, setStatusVal] = useState(props.initialStatus ?? 'all');
   const [typeVal, setTypeVal] = useState('all');
@@ -120,7 +595,6 @@ export function BillsSection(props: {
   const durationItems = useMemo(() => getDurationItems(), []);
   const today = useMemo(() => todayInBillingZone(), []);
 
-  // Derived: filtered rows (instant — no network)
   const filtered = useMemo(() => {
     let rows = props.bills;
 
@@ -157,7 +631,6 @@ export function BillsSection(props: {
     return rows;
   }, [props.bills, statusVal, typeVal, durationVal, today]);
 
-  // Derived: summary metrics over filtered set
   const metrics = useMemo(() => {
     const totalBilled = filtered.reduce((s, b) => s + b.total_amount, 0);
     const totalCollected = filtered.reduce((s, b) => s + b.paid_amount, 0);
@@ -170,7 +643,6 @@ export function BillsSection(props: {
     };
   }, [filtered]);
 
-  // Derived: current page rows
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const paginated = useMemo(
@@ -183,303 +655,263 @@ export function BillsSection(props: {
     setPage(1);
   };
 
-  const isEmpty =
-    props.bills.length === 0 &&
-    statusVal === 'all' &&
-    typeVal === 'all' &&
-    durationVal === 'all';
+  if (props.bills.length === 0) {
+    return (
+      <p className="text-muted-foreground py-8 text-center text-sm">
+        No bills generated yet.
+      </p>
+    );
+  }
 
   return (
-    <Card className="border-0 shadow-none">
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex flex-col space-y-1.5">
-          <CardTitle>Bills</CardTitle>
+    <div className="flex flex-col gap-3.5">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4 border-b pb-4">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+            Payment Status
+          </span>
+          <Select
+            items={BILL_STATUS_ITEMS}
+            value={statusVal}
+            onValueChange={setFilter(setStatusVal)}
+          >
+            <SelectTrigger className="bg-background h-9 w-[150px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="unpaid">Unpaid</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="partial">Partial</SelectItem>
+              <SelectItem value="overdue">Overdue</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        {props.canManage ? (
-          <div className="flex items-center gap-2 sm:shrink-0">
-            {props.isOtherChargesActive &&
-              props.units &&
-              props.periodOptions && (
-                <OtherChargesDialog
-                  associationId={props.associationId}
-                  units={props.units}
-                  pendingCharges={props.pendingCharges ?? []}
-                  periods={props.periodOptions}
-                />
-              )}
-            <GenerateBillsDialog associationId={props.associationId} />
-          </div>
-        ) : null}
-      </CardHeader>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+            Bill Type
+          </span>
+          <Select
+            items={BILL_TYPE_FILTER_ITEMS}
+            value={typeVal}
+            onValueChange={setFilter(setTypeVal)}
+          >
+            <SelectTrigger className="bg-background h-9 w-[150px]">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="electricity">Electricity</SelectItem>
+              <SelectItem value="maintenance">Maintenance</SelectItem>
+              <SelectItem value="other_charges">Other Charges</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-      <CardContent className="flex flex-col gap-3.5">
-        {isEmpty ? (
-          <p className="text-muted-foreground text-sm">
-            No bills generated yet.
-          </p>
-        ) : (
-          <>
-            {/* Filters */}
-            <div className="flex flex-wrap items-center gap-4 border-b pb-4">
-              <div className="flex flex-col gap-1.5">
-                <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
-                  Payment Status
-                </span>
-                <Select
-                  items={BILL_STATUS_ITEMS}
-                  value={statusVal}
-                  onValueChange={setFilter(setStatusVal)}
-                >
-                  <SelectTrigger className="bg-background h-9 w-[150px]">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="unpaid">Unpaid</SelectItem>
-                    <SelectItem value="paid">Paid</SelectItem>
-                    <SelectItem value="partial">Partial</SelectItem>
-                    <SelectItem value="overdue">Overdue</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+            Duration
+          </span>
+          <Select
+            items={durationItems}
+            value={durationVal}
+            onValueChange={setFilter(setDurationVal)}
+          >
+            <SelectTrigger className="bg-background h-9 w-[180px]">
+              <SelectValue placeholder="Duration" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Time</SelectItem>
+              <SelectItem value="current_month">Current Month</SelectItem>
+              <SelectItem value="prev_month">Previous Month</SelectItem>
+              <SelectItem value="last_3m">Last 3 Months</SelectItem>
+              <SelectItem value="last_6m">Last 6 Months</SelectItem>
+              <SelectItem value="this_fy">{durationItems.this_fy}</SelectItem>
+              <SelectItem value="prev_fy">{durationItems.prev_fy}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-              <div className="flex flex-col gap-1.5">
-                <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
-                  Bill Type
-                </span>
-                <Select
-                  items={BILL_TYPE_FILTER_ITEMS}
-                  value={typeVal}
-                  onValueChange={setFilter(setTypeVal)}
-                >
-                  <SelectTrigger className="bg-background h-9 w-[150px]">
-                    <SelectValue placeholder="Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="electricity">Electricity</SelectItem>
-                    <SelectItem value="maintenance">Maintenance</SelectItem>
-                    <SelectItem value="other_charges">Other Charges</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
-                  Duration
-                </span>
-                <Select
-                  items={durationItems}
-                  value={durationVal}
-                  onValueChange={setFilter(setDurationVal)}
-                >
-                  <SelectTrigger className="bg-background h-9 w-[180px]">
-                    <SelectValue placeholder="Duration" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Time</SelectItem>
-                    <SelectItem value="current_month">Current Month</SelectItem>
-                    <SelectItem value="prev_month">Previous Month</SelectItem>
-                    <SelectItem value="last_3m">Last 3 Months</SelectItem>
-                    <SelectItem value="last_6m">Last 6 Months</SelectItem>
-                    <SelectItem value="this_fy">
-                      {durationItems.this_fy}
-                    </SelectItem>
-                    <SelectItem value="prev_fy">
-                      {durationItems.prev_fy}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Live metrics strip */}
-              {filtered.length > 0 && (
-                <div className="text-muted-foreground ml-auto flex flex-wrap items-center gap-4 text-sm">
-                  <span>
-                    <span className="text-foreground font-semibold">
-                      {filtered.length}
-                    </span>{' '}
-                    bills
-                  </span>
-                  <span>
-                    <span className="text-foreground font-semibold">
-                      {formatINR(metrics.totalCollected)}
-                    </span>{' '}
-                    collected
-                  </span>
-                  <span>
-                    <span className="text-foreground font-semibold">
-                      {formatINR(metrics.totalOutstanding)}
-                    </span>{' '}
-                    outstanding
-                  </span>
-                  {metrics.overdueCount > 0 && (
-                    <span className="font-semibold text-red-600">
-                      {metrics.overdueCount} overdue
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {filtered.length === 0 ? (
-              <p className="text-muted-foreground py-6 text-center text-sm">
-                No bills match the selected filters.
-              </p>
-            ) : (
-              <>
-                <div className="w-full">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Bill No.</TableHead>
-                        <TableHead>Unit</TableHead>
-                        <TableHead className="text-right">
-                          Maintenance
-                        </TableHead>
-                        <TableHead className="text-right">
-                          Electricity
-                        </TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead className="text-right">Paid</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginated.map((bill) => {
-                        const status = displayBillStatus(bill);
-                        const maintenanceLine = bill.lineItems.find((li) =>
-                          li.description.toLowerCase().includes('maintenance'),
-                        );
-                        const electricityLine = bill.lineItems.find((li) =>
-                          li.description.toLowerCase().includes('electricity'),
-                        );
-
-                        return (
-                          <TableRow key={bill.id}>
-                            <TableCell className="text-muted-foreground font-medium">
-                              {bill.bill_no}
-                            </TableCell>
-                            <TableCell className="font-semibold">
-                              {bill.unit_no}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold tabular-nums">
-                              {maintenanceLine
-                                ? formatINR(maintenanceLine.amount)
-                                : '—'}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold tabular-nums">
-                              {electricityLine
-                                ? formatINR(electricityLine.amount)
-                                : '—'}
-                            </TableCell>
-                            <TableCell className="text-right font-bold tabular-nums">
-                              {formatINR(bill.total_amount)}
-                            </TableCell>
-                            <TableCell className="text-right font-medium tabular-nums">
-                              {formatINR(bill.paid_amount)}
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  billStatusBadgeClassName(status),
-                                  'border-0 bg-transparent px-0 font-bold shadow-none',
-                                )}
-                              >
-                                <span
-                                  className={cn(
-                                    'mr-2 inline-block h-2 w-2 rounded-full',
-                                    status === 'Paid'
-                                      ? 'bg-green-500'
-                                      : status === 'Overdue'
-                                        ? 'bg-red-500'
-                                        : status === 'Partial'
-                                          ? 'bg-orange-500'
-                                          : 'bg-yellow-500',
-                                  )}
-                                />
-                                {status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center justify-end gap-2">
-                                <BillLineItemsDialog
-                                  billNo={bill.bill_no}
-                                  period={bill.period}
-                                  lineItems={bill.lineItems}
-                                  gstAmount={bill.gst_amount}
-                                />
-                                <DownloadPdfButton
-                                  href={`/api/billing/bills/${bill.id}/pdf`}
-                                  label="Download bill PDF"
-                                  dataTest={`download-bill-${bill.id}`}
-                                  showLabel
-                                />
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="bg-muted/10 rounded-b-lg border-t px-4 py-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-muted-foreground text-sm">
-                        Showing{' '}
-                        <span className="text-foreground font-medium">
-                          {(safePage - 1) * PAGE_SIZE + 1}–
-                          {Math.min(safePage * PAGE_SIZE, filtered.length)}
-                        </span>{' '}
-                        of{' '}
-                        <span className="text-foreground font-medium">
-                          {filtered.length}
-                        </span>{' '}
-                        bills
-                      </p>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setPage((p) => Math.max(1, p - 1))}
-                          disabled={safePage === 1}
-                          className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                          Previous
-                        </button>
-
-                        <span className="text-muted-foreground px-3 text-sm">
-                          {safePage} / {totalPages}
-                        </span>
-
-                        <button
-                          onClick={() =>
-                            setPage((p) => Math.min(totalPages, p + 1))
-                          }
-                          disabled={safePage === totalPages}
-                          className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Next
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
+        {filtered.length > 0 && (
+          <div className="text-muted-foreground ml-auto flex flex-wrap items-center gap-4 text-sm">
+            <span>
+              <span className="text-foreground font-semibold">
+                {filtered.length}
+              </span>{' '}
+              bills
+            </span>
+            <span>
+              <span className="text-foreground font-semibold">
+                {formatINR(metrics.totalCollected)}
+              </span>{' '}
+              collected
+            </span>
+            <span>
+              <span className="text-foreground font-semibold">
+                {formatINR(metrics.totalOutstanding)}
+              </span>{' '}
+              outstanding
+            </span>
+            {metrics.overdueCount > 0 && (
+              <span className="font-semibold text-red-600">
+                {metrics.overdueCount} overdue
+              </span>
             )}
-          </>
+          </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="text-muted-foreground py-6 text-center text-sm">
+          No bills match the selected filters.
+        </p>
+      ) : (
+        <>
+          <div className="w-full">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Bill No.</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead className="text-right">Maintenance</TableHead>
+                  <TableHead className="text-right">Electricity</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Paid</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginated.map((bill) => {
+                  const status = displayBillStatus(bill);
+                  const maintenanceLine = bill.lineItems.find((li) =>
+                    li.description.toLowerCase().includes('maintenance'),
+                  );
+                  const electricityLine = bill.lineItems.find((li) =>
+                    li.description.toLowerCase().includes('electricity'),
+                  );
+
+                  return (
+                    <TableRow key={bill.id}>
+                      <TableCell className="text-muted-foreground font-medium">
+                        {bill.bill_no}
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        {bill.unit_no}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {maintenanceLine
+                          ? formatINR(maintenanceLine.amount)
+                          : '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {electricityLine
+                          ? formatINR(electricityLine.amount)
+                          : '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-bold tabular-nums">
+                        {formatINR(bill.total_amount)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {formatINR(bill.paid_amount)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            billStatusBadgeClassName(status),
+                            'border-0 bg-transparent px-0 font-bold shadow-none',
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'mr-2 inline-block h-2 w-2 rounded-full',
+                              status === 'Paid'
+                                ? 'bg-green-500'
+                                : status === 'Overdue'
+                                  ? 'bg-red-500'
+                                  : status === 'Partial'
+                                    ? 'bg-orange-500'
+                                    : 'bg-yellow-500',
+                            )}
+                          />
+                          {status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-2">
+                          <BillLineItemsDialog
+                            billNo={bill.bill_no}
+                            period={bill.period}
+                            lineItems={bill.lineItems}
+                            gstAmount={bill.gst_amount}
+                          />
+                          <DownloadPdfButton
+                            href={`/api/billing/bills/${bill.id}/pdf`}
+                            label="Download bill PDF"
+                            dataTest={`download-bill-${bill.id}`}
+                            showLabel
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="bg-muted/10 rounded-b-lg border-t px-4 py-3">
+              <div className="flex items-center justify-between">
+                <p className="text-muted-foreground text-sm">
+                  Showing{' '}
+                  <span className="text-foreground font-medium">
+                    {(safePage - 1) * PAGE_SIZE + 1}–
+                    {Math.min(safePage * PAGE_SIZE, filtered.length)}
+                  </span>{' '}
+                  of{' '}
+                  <span className="text-foreground font-medium">
+                    {filtered.length}
+                  </span>{' '}
+                  bills
+                </p>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={safePage === 1}
+                    className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </button>
+
+                  <span className="text-muted-foreground px-3 text-sm">
+                    {safePage} / {totalPages}
+                  </span>
+
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safePage === totalPages}
+                    className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
+
+// ── Generate Bills dialog ────────────────────────────────────────────────────
 
 function GenerateBillsDialog(props: { associationId: string }) {
   const [open, setOpen] = useState(false);

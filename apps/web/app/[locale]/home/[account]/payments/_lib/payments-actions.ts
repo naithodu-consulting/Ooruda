@@ -52,7 +52,7 @@ export async function recordPaymentAction(
     };
   }
 
-  const { amount, mode, paid_by_role } = parsed.data;
+  const { amount, mode, paid_by_role, reference_no } = parsed.data;
   const client = getSupabaseServerClient();
 
   const { data: paymentId, error } = await client.rpc('record_payment' as any, {
@@ -71,6 +71,14 @@ export async function recordPaymentAction(
       summary: `Failed to record payment for bill ${billId}: ${error.message}`,
     });
     return { success: false, error: error.message };
+  }
+
+  // Persist reference_no if provided (RPC doesn't accept it, so update after).
+  if (reference_no?.trim()) {
+    await client
+      .from('payments')
+      .update({ reference_no: reference_no.trim() })
+      .eq('id', paymentId as string);
   }
 
   const { data: bill } = await client

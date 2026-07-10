@@ -1082,4 +1082,65 @@ The v4.9 reactive fix was incomplete: users whose phone/email was later removed 
 
 ---
 
-*Last updated: 2026-07-10 (v4.10 — Bulk invite comprehensive auth.users lookup)*
+---
+
+## Release v5.0 — Billing UX overhaul, bill number format v2, font & PDF fixes (Jul 17, 2026)
+
+### Billing: Draft Bills tab
+
+A new **Draft Bills** tab sits alongside **Generated Bills** on the Billing page, giving admins visibility into staged-but-not-yet-published charges before clicking Generate Bills.
+
+- **Maintenance** — always shown for the current month if no maintenance bills have been generated yet
+- **Electricity** — shows each `mescom_bills` entry whose period has no generated unit bills yet
+- **Other Charges** — lists all rows in `pending_other_charges`
+- Summary bar mirrors the Generated Bills metrics strip (section counts, totals)
+- Type and period filters; Other Charges paginate at 20 rows per page
+- Tab badge counts section groups (max 3), not individual items, matching the in-tab summary
+- Hint text ("These bills are staged…") positioned below filters; neutral section styling matching Generated Bills
+
+### Billing: Bill number format v2
+
+New format: `{INITIALS}/{FY}/{TYPE}/{NNNNNN}`  
+Example: `PRM/26-27/MNT/000001`
+
+- **INITIALS** — first letter of each word in the association account name, up to 3 words (e.g. "Prashanth Residency Manor" → `PRM`)
+- **FY** — Indian financial year formatted as `YY-YY` (e.g. `26-27`)
+- **TYPE** — `MNT` (maintenance), `ELT` (electricity), `OTH` (other charges); future: `SNK`, `DGU`
+- **NNNNNN** — 6-digit zero-padded counter, independent per (association, type, financial year)
+- Existing bills keep their old format; duplicate-detection guards handle both old and new formats
+- `bill_sequences` check constraint expanded to allow both legacy codes and new codes
+
+### Electricity & Billing: period selector fixes
+
+- Electricity period selectors (Add Bill, Import Meter Readings) now exclude the current month — electricity billed this month is for last month's consumption
+- Default period pre-selects the previous month
+
+### Font & styling fixes
+
+- `body` now explicitly sets `font-family: var(--font-sans)` so dialog portals (rendered outside the root layout) inherit Inter correctly
+- `--font-mono` replaced with a system monospace stack (Geist Mono was never loaded)
+- Dashboard duration select uses `router.replace` instead of `router.push` to avoid polluting browser history
+
+### PDF fixes
+
+- Electricity bill PDF: header no longer overflows for long association names (`flex: 1` + `paddingRight` on the brand block); `associationName` font size reduced to 12
+- Electricity bill PDF: sub-meter labels strip the `SM ` prefix (e.g. "SM G2" → "G2")
+- Bill and receipt PDFs: association contact details (email, phone, bank details) now passed through correctly; `referenceNo` included on receipts
+
+### Bug fixes
+
+- `billing_settings` upsert: `.update()` silently matched 0 rows when no row existed for a new association; replaced with `.upsert(..., { onConflict: 'association_id' })`
+- Draft Bills tab badge was counting raw item counts instead of section groups, causing mismatch with the "N drafts pending" summary text
+- PDF generation: duplicate `ExtendedAssocElec` type cast removed; electricity path now reuses `assocData`
+- Filter dropdowns in Draft Bills now display human-readable labels ("All Types", "Other Charges") instead of raw keys
+
+### Migrations Changelog
+
+| Migration | Date | Description |
+|-----------|------|-------------|
+| `20260717000000_associations_contact_bank.sql` | Jul 17 | Add contact and bank fields to `associations` table |
+| `20260717000001_bill_no_format_v2.sql` | Jul 17 | Expand `bill_sequences` check constraint; replace `allocate_bill_no` with new `PREFIX/FY/TYPE/NNNNNN` format |
+
+---
+
+*Last updated: 2026-07-17 (v5.0 — Billing UX, bill number format v2, font & PDF fixes)*

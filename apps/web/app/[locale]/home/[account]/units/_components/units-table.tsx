@@ -27,7 +27,14 @@ import { TypeToConfirmDialog } from '../../_components/type-to-confirm-dialog';
 import { deleteUnitAction } from '../_lib/units-actions';
 import { EditUnitDialog } from './edit-unit-dialog';
 
-type UnitFilter = 'all' | 'occupied' | 'self_occupied' | 'rented' | 'vacant' | 'ground' | 'overdue';
+type UnitFilter =
+  | 'all'
+  | 'occupied'
+  | 'self_occupied'
+  | 'rented'
+  | 'vacant'
+  | 'ground'
+  | 'overdue';
 
 const FILTERS: { id: UnitFilter; label: string }[] = [
   { id: 'all', label: 'All units' },

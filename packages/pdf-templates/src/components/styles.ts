@@ -1,117 +1,248 @@
 import { StyleSheet } from '@react-pdf/renderer';
 
+/** Brand indigo-purple used across all bill/receipt PDFs (name, title, table border, footer bar). */
+export const NAVY = '#230344';
+/** Table header background. */
+export const CREAM = '#FFFCF0';
+/** "Ooruda" link accent in the footer. */
+export const GOLD = '#FFDE59';
+
 export const styles = StyleSheet.create({
   page: {
     fontFamily: 'Noto Sans',
     fontSize: 9,
-    padding: 36,
-    color: '#1e293b',
+    paddingTop: 36,
+    paddingHorizontal: 36,
+    paddingBottom: 130, // leave room for bank-details + dark-bar footer
+    color: '#000000',
   },
-  headerRow: {
+
+  // ── Header ───────────────────────────────────────────────────────────────
+  headerLogoNameRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    borderBottomWidth: 2,
-    borderBottomColor: '#1a3a5c',
-    paddingBottom: 12,
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 4,
   },
   logo: {
-    width: 48,
-    height: 48,
+    width: 56,
+    height: 56,
     objectFit: 'contain',
+    marginRight: 12,
   },
-  brandBlock: {
-    flexDirection: 'row',
-    gap: 10,
+  headerNameBlock: {
+    flex: 1,
     alignItems: 'center',
   },
   associationName: {
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: 'bold',
+    color: NAVY,
+    textAlign: 'center',
   },
-  metaText: {
+  headerAddress: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#000000',
+    textAlign: 'center',
+    marginTop: 3,
+  },
+  headerContactRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  headerContactText: {
     fontSize: 8,
-    color: '#64748b',
+    color: '#000000',
   },
+  headerRuleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  headerRuleLine: {
+    flex: 1,
+    borderBottomWidth: 0.75,
+    borderBottomColor: '#000000',
+  },
+  headerRuleDot: {
+    fontSize: 6,
+    color: '#000000',
+    marginHorizontal: 3,
+  },
+
+  // ── Doc title ─────────────────────────────────────────────────────────────
   docTitleBlock: {
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 14,
   },
   docTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
+    color: NAVY,
     textTransform: 'uppercase',
+    letterSpacing: 1.5,
   },
+
+  // ── Metadata grid (2-col, row-paired) ────────────────────────────────────
+  metaGrid: {
+    flexDirection: 'column',
+    gap: 3,
+    marginBottom: 14,
+  },
+  metaGridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  metaLabel: {
+    fontSize: 8.5,
+    color: '#000000',
+  },
+  metaValue: {
+    fontSize: 8.5,
+    fontWeight: 'bold',
+    color: '#000000',
+  },
+
+  // ── Bill To ───────────────────────────────────────────────────────────────
   section: {
     marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    color: '#64748b',
-    textTransform: 'uppercase',
+    fontSize: 8.5,
+    color: '#000000',
     marginBottom: 4,
   },
-  infoGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  billToName: {
+    fontSize: 9.5,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 2,
   },
-  infoCol: {
-    flexDirection: 'column',
-    gap: 2,
+  billToAddress: {
+    fontSize: 8.5,
+    color: '#000000',
+    lineHeight: 1.4,
   },
+
+  // ── Table ─────────────────────────────────────────────────────────────────
   table: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: 1.25,
+    borderColor: NAVY,
     borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 12,
   },
   tableHeaderRow: {
     flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    backgroundColor: CREAM,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1.25,
+    borderBottomColor: NAVY,
+  },
+  tableHeaderText: {
+    fontSize: 8.5,
     fontWeight: 'bold',
+    color: '#000000',
   },
   tableRow: {
     flexDirection: 'row',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
   },
-  colDescription: { flexGrow: 1, flexBasis: 0 },
-  colGst: { width: 40, textAlign: 'center' },
-  colAmount: { width: 70, textAlign: 'right' },
+  tableRowAlt: {
+    flexDirection: 'row',
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  colDescription: { flexGrow: 1, flexBasis: 0, color: '#000000' },
+  colGst: { width: 44, textAlign: 'center', color: '#000000' },
+  colAmount: { width: 72, textAlign: 'right', color: '#000000' },
+
+  // ── Summary / totals ──────────────────────────────────────────────────────
   summaryBlock: {
-    marginTop: 12,
     alignSelf: 'flex-end',
-    width: 220,
+    width: 240,
+    marginBottom: 10,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 3,
+    fontSize: 9,
+    color: '#000000',
+  },
+  summaryDivider: {
+    borderBottomWidth: 0.75,
+    borderBottomColor: '#000000',
+    marginVertical: 4,
   },
   summaryRowTotal: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 5,
-    borderTopWidth: 1,
-    borderTopColor: '#1e293b',
-    marginTop: 3,
     fontWeight: 'bold',
     fontSize: 10,
+    color: '#000000',
   },
+
+  // ── Footer (absolute, bottom of page) ────────────────────────────────────
   footer: {
     position: 'absolute',
-    bottom: 24,
-    left: 36,
-    right: 36,
-    fontSize: 7,
-    color: '#94a3b8',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  footerRuleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 36,
+    marginBottom: 8,
+  },
+  footerBankSection: {
+    paddingHorizontal: 36,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  footerBankCol: {
+    flexDirection: 'column',
+    gap: 3,
+  },
+  footerBankText: {
+    fontSize: 8,
+    color: '#000000',
+  },
+  footerBankValue: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    color: '#000000',
+  },
+  footerDarkBar: {
+    backgroundColor: NAVY,
+    marginHorizontal: -36,
+    paddingVertical: 8,
+    paddingHorizontal: 36,
+    alignItems: 'center',
+    gap: 3,
+  },
+  footerDarkBarText: {
+    fontSize: 7.5,
+    color: '#ffffff',
     textAlign: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    paddingTop: 8,
   },
 });

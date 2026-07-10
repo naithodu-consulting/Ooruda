@@ -48,6 +48,43 @@ const AssociationSchema = z.object({
     .regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Invalid PAN format')
     .nullable()
     .or(z.literal('').transform(() => null)),
+  email: z
+    .string()
+    .email()
+    .max(200)
+    .nullable()
+    .or(z.literal('').transform(() => null)),
+  phone: z
+    .string()
+    .max(20)
+    .nullable()
+    .transform((v) => v || null),
+  bank_account_name: z
+    .string()
+    .max(200)
+    .nullable()
+    .transform((v) => v || null),
+  bank_account_number: z
+    .string()
+    .max(50)
+    .nullable()
+    .transform((v) => v || null),
+  bank_name: z
+    .string()
+    .max(100)
+    .nullable()
+    .transform((v) => v || null),
+  bank_ifsc: z
+    .string()
+    .max(11)
+    .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'Invalid IFSC format')
+    .nullable()
+    .or(z.literal('').transform(() => null)),
+  bank_branch: z
+    .string()
+    .max(100)
+    .nullable()
+    .transform((v) => v || null),
 });
 
 const BillingSettingsSchema = z.object({
@@ -91,10 +128,21 @@ export async function updateAssociationAction(
       (formData.get('authorised_signatory') as string) || null,
     sanctioned_load_kva: formData.get('sanctioned_load_kva') || null,
     pan_number: (formData.get('pan_number') as string) || '',
+    email: (formData.get('email') as string) || '',
+    phone: (formData.get('phone') as string) || null,
+    bank_account_name: (formData.get('bank_account_name') as string) || null,
+    bank_account_number:
+      (formData.get('bank_account_number') as string) || null,
+    bank_name: (formData.get('bank_name') as string) || null,
+    bank_ifsc: (formData.get('bank_ifsc') as string) || '',
+    bank_branch: (formData.get('bank_branch') as string) || null,
   });
 
   if (!assocResult.success) {
-    return { success: false, error: 'Invalid form data. Check GSTIN format.' };
+    return {
+      success: false,
+      error: 'Invalid form data. Check GSTIN, PAN, IFSC, or email format.',
+    };
   }
 
   const billingResult = BillingSettingsSchema.safeParse({
@@ -120,8 +168,10 @@ export async function updateAssociationAction(
 
   const { error: billingError } = await client
     .from('billing_settings')
-    .update(billingResult.data)
-    .eq('association_id', associationId);
+    .upsert(
+      { ...billingResult.data, association_id: associationId },
+      { onConflict: 'association_id' },
+    );
 
   if (billingError) {
     return { success: false, error: billingError.message };

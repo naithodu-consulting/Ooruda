@@ -5,7 +5,11 @@ import { Trans } from '@kit/ui/trans';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
-import { BillsSection, type BillRow } from './_components/bills-section';
+import {
+  BillsSection,
+  type BillRow,
+  type PendingElectricityBill,
+} from './_components/bills-section';
 
 interface Props {
   params: Promise<{ account: string }>;
@@ -37,33 +41,45 @@ export default async function BillingPage({ params, searchParams }: Props) {
   }
 
   // Fetch all independent data in parallel — no filter logic here.
-  const [billsResult, unitsResult, otherChargesCTResult, pendingChargesResult] =
-    await Promise.all([
-      client
-        .from('bills')
-        .select(
-          'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, gst_amount, units(unit_no), bill_line_items(id, description, payer, gst_applicable, amount)',
-        )
-        .eq('association_id', association.id)
-        .order('period', { ascending: false })
-        .order('bill_no'),
-      client
-        .from('units')
-        .select('id, unit_no')
-        .eq('association_id', association.id)
-        .order('unit_no'),
-      client
-        .from('charge_types')
-        .select('is_active')
-        .eq('association_id', association.id)
-        .eq('key', 'other_charges')
-        .maybeSingle(),
-      client
-        .from('pending_other_charges')
-        .select('id, unit_id, period, label, amount, split_mode')
-        .eq('association_id', association.id)
-        .order('created_at', { ascending: false }),
-    ]);
+  const [
+    billsResult,
+    unitsResult,
+    otherChargesCTResult,
+    pendingChargesResult,
+    mescomBillsResult,
+  ] = await Promise.all([
+    client
+      .from('bills')
+      .select(
+        'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, gst_amount, units(unit_no), bill_line_items(id, description, payer, gst_applicable, amount)',
+      )
+      .eq('association_id', association.id)
+      .order('period', { ascending: false })
+      .order('bill_no'),
+    client
+      .from('units')
+      .select('id, unit_no')
+      .eq('association_id', association.id)
+      .order('unit_no'),
+    client
+      .from('charge_types')
+      .select('is_active')
+      .eq('association_id', association.id)
+      .eq('key', 'other_charges')
+      .maybeSingle(),
+    client
+      .from('pending_other_charges')
+      .select('id, unit_id, period, label, amount, split_mode')
+      .eq('association_id', association.id)
+      .order('created_at', { ascending: false }),
+    client
+      .from('mescom_bills')
+      .select(
+        'id, period, invoice_amount, block_consumption_units, uploaded_at',
+      )
+      .eq('association_id', association.id)
+      .order('period', { ascending: false }),
+  ]);
 
   const unitRows = (unitsResult.data ?? []) as {
     id: string;
@@ -78,15 +94,45 @@ export default async function BillingPage({ params, searchParams }: Props) {
     unit_no: pc.unit_id ? (unitNoById.get(pc.unit_id) ?? null) : null,
   }));
 
+  const now = new Date();
+  const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
   // Generate period options for the OtherCharges dialog (last 7 months).
   const periodOptions: string[] = [];
-  const now = new Date();
   for (let i = 0; i < 7; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     periodOptions.push(
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
     );
   }
+
+  // Periods that already have generated electricity / maintenance bills.
+  const generatedElecPeriods = new Set(
+    (billsResult.data ?? [])
+      .filter((b) => b.bill_type === 'electricity')
+      .map((b) => b.period),
+  );
+  const generatedMaintPeriods = new Set(
+    (billsResult.data ?? [])
+      .filter((b) => b.bill_type === 'maintenance')
+      .map((b) => b.period),
+  );
+
+  // Pending electricity: mescom_bills whose period has no generated unit bills yet.
+  const pendingElectricityBills: PendingElectricityBill[] = (
+    mescomBillsResult.data ?? []
+  )
+    .filter((mb) => !generatedElecPeriods.has(mb.period))
+    .map((mb) => ({
+      id: mb.id,
+      period: mb.period,
+      invoice_amount: Number(mb.invoice_amount),
+      block_consumption_units: Number(mb.block_consumption_units),
+      uploaded_at: mb.uploaded_at,
+    }));
+
+  // Pending maintenance: show current month if no maintenance bills exist yet.
+  const maintenancePending = !generatedMaintPeriods.has(currentPeriod);
 
   const billRows: BillRow[] = (billsResult.data ?? []).map((b) => ({
     id: b.id,
@@ -127,6 +173,9 @@ export default async function BillingPage({ params, searchParams }: Props) {
         accountSlug={account}
         initialDuration={duration}
         initialStatus={status}
+        pendingElectricityBills={pendingElectricityBills}
+        maintenancePending={maintenancePending}
+        currentPeriod={currentPeriod}
       />
     </PageBody>
   );

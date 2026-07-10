@@ -56,9 +56,7 @@ export function parseSpreadsheetFile(
             return;
           }
 
-          const headers = lines[0]!
-            .split(',')
-            .map((h) => normalizeHeader(h));
+          const headers = lines[0]!.split(',').map((h) => normalizeHeader(h));
           const rows = lines.slice(1).map((line) => {
             const cells = line.split(',').map((c) => c.trim());
             const row: Record<string, string> = {};

@@ -86,25 +86,19 @@ function AgeingBar(props: {
   );
 }
 
-async function loadAssociationOverview(accountId: string, duration: string) {
+async function loadAssociationOverview(
+  associationId: string,
+  associationStatus: string,
+  duration: string,
+) {
   const client = getSupabaseServerClient();
   const currentMonth = currentPeriod();
   const periods = getPeriodsForDuration(duration);
 
-  const { data: association } = await client
-    .from('associations')
-    .select('id, status')
-    .eq('account_id', accountId)
-    .single();
-
-  if (!association) {
-    return null;
-  }
-
   let billsQuery = client
     .from('bills')
     .select('total_amount, paid_amount, status, due_date')
-    .eq('association_id', association.id);
+    .eq('association_id', associationId);
   if (periods) {
     billsQuery = billsQuery.in('period', periods);
   }
@@ -114,23 +108,30 @@ async function loadAssociationOverview(accountId: string, duration: string) {
     { count: occupiedUnits },
     { data: bills },
     { data: mescomBill },
+    { data: recentActivity },
   ] = await Promise.all([
     client
       .from('units')
       .select('id', { count: 'exact', head: true })
-      .eq('association_id', association.id),
+      .eq('association_id', associationId),
     client
       .from('units')
       .select('id', { count: 'exact', head: true })
-      .eq('association_id', association.id)
+      .eq('association_id', associationId)
       .in('status', ['Self Occupied', 'Rented']),
     billsQuery,
     client
       .from('mescom_bills')
       .select('id')
-      .eq('association_id', association.id)
+      .eq('association_id', associationId)
       .eq('period', currentMonth)
       .maybeSingle(),
+    client
+      .from('audit_logs')
+      .select('action, summary, created_at')
+      .eq('association_id', associationId)
+      .order('created_at', { ascending: false })
+      .limit(5),
   ]);
 
   const billed = (bills ?? []).reduce((sum, b) => sum + b.total_amount, 0);
@@ -168,15 +169,8 @@ async function loadAssociationOverview(accountId: string, duration: string) {
     }
   }
 
-  const { data: recentActivity } = await client
-    .from('audit_logs')
-    .select('action, summary, created_at')
-    .eq('association_id', association.id)
-    .order('created_at', { ascending: false })
-    .limit(5);
-
   return {
-    status: association.status,
+    status: associationStatus,
     currentMonth,
     periodDisplay: overviewPeriodDisplay(duration, periods),
     totalUnits: totalUnits ?? 0,
@@ -216,22 +210,15 @@ interface PaymentWithBillAndReceipt {
   receipts: { receipt_no: string } | null;
 }
 
-async function loadMyBillSummary(accountId: string, userId: string) {
+async function loadMyBillSummary(
+  accountId: string,
+  associationId: string,
+  assocName: string,
+  userId: string,
+) {
   const client = getSupabaseServerClient();
 
-  const { data: association } = await client
-    .from('associations')
-    .select('id, accounts(name)')
-    .eq('account_id', accountId)
-    .single();
-
-  if (!association) {
-    return null;
-  }
-
-  const assocName = (association.accounts as any)?.name ?? 'Association';
-
-  const units = await getAccessibleUnits(client, association.id, userId);
+  const units = await getAccessibleUnits(client, associationId, userId);
 
   if (units.length === 0) {
     return null;
@@ -297,12 +284,18 @@ async function loadMyBillSummary(accountId: string, userId: string) {
 export async function AssociationDashboard({
   account,
   accountId,
+  associationId,
+  associationStatus,
+  assocName,
   userId,
   role,
   duration = 'current_month',
 }: {
   account: string;
   accountId: string;
+  associationId: string;
+  associationStatus: string;
+  assocName: string;
   userId: string;
   role: PropOpsRole;
   duration?: string;
@@ -310,7 +303,12 @@ export async function AssociationDashboard({
   const isPersonal = role === 'prop_owner' || role === 'tenant';
 
   if (isPersonal) {
-    const summary = await loadMyBillSummary(accountId, userId);
+    const summary = await loadMyBillSummary(
+      accountId,
+      associationId,
+      assocName,
+      userId,
+    );
 
     if (!summary) {
       return (
@@ -326,7 +324,7 @@ export async function AssociationDashboard({
       );
     }
 
-    const { units, bills, payments, assocName } = summary;
+    const { units, bills, payments } = summary;
 
     return (
       <div className="flex flex-col gap-8">
@@ -619,21 +617,12 @@ export async function AssociationDashboard({
     );
   }
 
-  const overview = await loadAssociationOverview(accountId, duration);
+  const overview = await loadAssociationOverview(
+    associationId,
+    associationStatus,
+    duration,
+  );
   const canManage = hasMinimumRole(role, 'billing_operator');
-
-  if (!overview) {
-    return (
-      <Card>
-        <CardContent className="py-16 text-center">
-          <p className="text-muted-foreground text-sm">
-            We couldn&apos;t load this association&apos;s details. Please
-            refresh, and contact support if it keeps happening.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
 
   const ageingMax = Math.max(
     overview.ageing.d0to7,

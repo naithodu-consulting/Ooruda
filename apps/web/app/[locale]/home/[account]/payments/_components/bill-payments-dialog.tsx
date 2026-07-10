@@ -30,6 +30,7 @@ export interface PaymentRow {
   id: string;
   amount: number;
   mode: string;
+  reference_no: string | null;
   paid_by_role: string;
   paid_at: string;
   receipt_no: string | null;
@@ -87,7 +88,16 @@ export function BillPaymentsDialog(props: {
                   <TableCell>
                     {formatTimestampDateDMY(payment.paid_at)}
                   </TableCell>
-                  <TableCell>{payment.mode}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span>{payment.mode}</span>
+                      {payment.reference_no ? (
+                        <span className="text-muted-foreground font-mono text-xs">
+                          {payment.reference_no}
+                        </span>
+                      ) : null}
+                    </div>
+                  </TableCell>
                   <TableCell>{payment.paid_by_role}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatINR(payment.amount)}

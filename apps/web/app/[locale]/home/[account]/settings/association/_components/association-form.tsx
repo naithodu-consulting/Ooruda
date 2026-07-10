@@ -42,6 +42,13 @@ interface Props {
     authorised_signatory: string | null;
     sanctioned_load_kva: number | null;
     pan_number: string | null;
+    email: string | null;
+    phone: string | null;
+    bank_account_name: string | null;
+    bank_account_number: string | null;
+    bank_name: string | null;
+    bank_ifsc: string | null;
+    bank_branch: string | null;
   };
   billingSettings: {
     electricity_due_day: number;
@@ -133,6 +140,105 @@ export function AssociationForm({ association, billingSettings }: Props) {
               Society or association registration number issued by the
               Registrar.
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Contact ────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Contact</CardTitle>
+          <CardDescription>
+            Shown in the header of all bill and receipt PDFs.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              defaultValue={association.email ?? ''}
+              placeholder="accounts@myassociation.com"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="phone">Phone</Label>
+            <Input
+              id="phone"
+              name="phone"
+              type="tel"
+              defaultValue={association.phone ?? ''}
+              placeholder="+91 98765 43210"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Bank Details ────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Bank Details</CardTitle>
+          <CardDescription>
+            Shown in the footer of all bill and receipt PDFs for payment
+            transfers.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <Label htmlFor="bank_account_name">Account Name</Label>
+            <Input
+              id="bank_account_name"
+              name="bank_account_name"
+              defaultValue={association.bank_account_name ?? ''}
+              placeholder="Prism Commercial Complex Owners Association"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="bank_account_number">Account Number</Label>
+            <Input
+              id="bank_account_number"
+              name="bank_account_number"
+              defaultValue={association.bank_account_number ?? ''}
+              placeholder="50200097016501"
+              className="font-mono"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="bank_name">Bank Name</Label>
+            <Input
+              id="bank_name"
+              name="bank_name"
+              defaultValue={association.bank_name ?? ''}
+              placeholder="HDFC Bank"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="bank_ifsc">IFSC Code</Label>
+            <Input
+              id="bank_ifsc"
+              name="bank_ifsc"
+              defaultValue={association.bank_ifsc ?? ''}
+              placeholder="HDFC0000094"
+              className="font-mono uppercase"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="bank_branch">Branch</Label>
+            <Input
+              id="bank_branch"
+              name="bank_branch"
+              defaultValue={association.bank_branch ?? ''}
+              placeholder="Kadri, Mangalore"
+            />
           </div>
         </CardContent>
       </Card>

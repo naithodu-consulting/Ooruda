@@ -112,6 +112,13 @@ export default async function AssociationSettingsPage({ params }: Props) {
           authorised_signatory: association.authorised_signatory ?? null,
           sanctioned_load_kva: association.sanctioned_load_kva ?? null,
           pan_number: association.pan_number ?? null,
+          email: association.email ?? null,
+          phone: association.phone ?? null,
+          bank_account_name: association.bank_account_name ?? null,
+          bank_account_number: association.bank_account_number ?? null,
+          bank_name: association.bank_name ?? null,
+          bank_ifsc: association.bank_ifsc ?? null,
+          bank_branch: association.bank_branch ?? null,
         }}
         billingSettings={billingSettings ?? null}
       />

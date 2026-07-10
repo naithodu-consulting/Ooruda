@@ -579,15 +579,18 @@ export async function bulkInviteMembersAction(
   const logger = await getLogger();
 
   const serverClient = getSupabaseServerClient();
-  const [isAdmin, { data: { user: actorUser } }] = await Promise.all([
+  const [
+    isAdmin,
+    {
+      data: { user: actorUser },
+    },
+  ] = await Promise.all([
     isSuperAdmin(serverClient),
     serverClient.auth.getUser(),
   ]);
   if (!isAdmin) {
     throw new Error('Only super admins can perform bulk invites.');
   }
-  const actorUserId = actorUser?.id ?? 'unknown';
-
   // Resolve all association names up-front to avoid N+1 queries.
   const { data: accounts } = await adminClient
     .from('accounts')
@@ -803,7 +806,9 @@ export async function bulkInviteMembersAction(
 
   for (const row of rows) {
     if (!row.unit_no || !row.unit_status) continue;
-    const accountId = assocIdByName.get(row.association_name.trim().toLowerCase());
+    const accountId = assocIdByName.get(
+      row.association_name.trim().toLowerCase(),
+    );
     if (!accountId) continue;
     const associationId = assocRowIdByAccountId.get(accountId);
     if (!associationId) continue;
@@ -868,7 +873,10 @@ export async function bulkInviteMembersAction(
       .single();
 
     if (error) {
-      logger.error({ associationId, unit_no, error }, 'bulkInvite: failed to update unit');
+      logger.error(
+        { associationId, unit_no, error },
+        'bulkInvite: failed to update unit',
+      );
       continue;
     }
 
@@ -910,7 +918,10 @@ export async function bulkInviteMembersAction(
           summary: `Bulk import: ${count} member${count === 1 ? '' : 's'} added`,
         });
         if (error) {
-          logger.error({ assocId, error }, 'bulkInvite: failed to write audit log');
+          logger.error(
+            { assocId, error },
+            'bulkInvite: failed to write audit log',
+          );
         }
       }),
     );

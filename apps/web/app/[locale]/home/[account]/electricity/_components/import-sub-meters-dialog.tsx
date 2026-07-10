@@ -62,13 +62,15 @@ type ParsedRow = {
 };
 
 function downloadTemplate() {
-  downloadXlsxTemplate('sub-meters-import-template.xlsx', [
-    'unit_no', 'sub_meter_no', 'meter_type', 'initial_meter_reading',
-  ], [
-    ['G-01', 'SM-1', 'Unit', 1250],
-    ['1-02', 'SM-5', 'Unit', 980],
-    ['COMMON', 'Common-Lift', 'CommonArea', 320],
-  ]);
+  downloadXlsxTemplate(
+    'sub-meters-import-template.xlsx',
+    ['unit_no', 'sub_meter_no', 'meter_type', 'initial_meter_reading'],
+    [
+      ['G-01', 'SM-1', 'Unit', 1250],
+      ['1-02', 'SM-5', 'Unit', 980],
+      ['COMMON', 'Common-Lift', 'CommonArea', 320],
+    ],
+  );
 }
 
 function normaliseRow(r: Record<string, string>): Record<string, string> {
@@ -82,7 +84,7 @@ function normaliseRow(r: Record<string, string>): Record<string, string> {
 function parseNum(raw: string): number | null {
   if (raw === '') return null;
   const n = Number(raw);
-  return Number.isNaN(n) ? null : n;
+  return Number.isNaN(n) ? null : Math.round(n * 100) / 100;
 }
 
 function parseRows(raw: Record<string, string>[]): ParsedRow[] {
@@ -127,8 +129,7 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
         'For CommonArea meters, unit_no must be "COMMON" (it is ignored by the system)';
     else if (initial_reading_raw !== '' && initial_reading_parsed === null)
       error = 'initial_meter_reading must be a number';
-    else if (initial_reading < 0)
-      error = 'initial_meter_reading must be ≥ 0';
+    else if (initial_reading < 0) error = 'initial_meter_reading must be ≥ 0';
 
     return {
       _row: i + 1,
@@ -168,7 +169,11 @@ export function ImportSubMetersDialog({
     setResult(null);
     parseSpreadsheetFile(file)
       .then((raw) => setRows(parseRows(raw)))
-      .catch(() => toast.error('Failed to read the file. Please check it is a valid CSV or Excel file.'));
+      .catch(() =>
+        toast.error(
+          'Failed to read the file. Please check it is a valid CSV or Excel file.',
+        ),
+      );
   }
 
   function handleOpenChange(next: boolean) {
@@ -186,12 +191,14 @@ export function ImportSubMetersDialog({
     startTransition(async () => {
       const res = await bulkImportSubMetersAction(
         associationId,
-        validRows.map(({ unit_no, sub_meter_no, meter_type, initial_reading }) => ({
-          unit_no,
-          sub_meter_no,
-          meter_type: meter_type as 'Unit' | 'CommonArea',
-          initial_reading,
-        })),
+        validRows.map(
+          ({ unit_no, sub_meter_no, meter_type, initial_reading }) => ({
+            unit_no,
+            sub_meter_no,
+            meter_type: meter_type as 'Unit' | 'CommonArea',
+            initial_reading,
+          }),
+        ),
       );
 
       if (!res.success) {
@@ -271,9 +278,9 @@ export function ImportSubMetersDialog({
                 <br />
                 <span className="font-medium">meter_type</span>:{' '}
                 <span className="font-medium">Unit</span> or{' '}
-                <span className="font-medium">CommonArea</span>. For
-                common-area meters use{' '}
-                <span className="font-medium">COMMON</span> as unit_no.
+                <span className="font-medium">CommonArea</span>. For common-area
+                meters use <span className="font-medium">COMMON</span> as
+                unit_no.
                 <br />
                 <span className="font-medium">initial_meter_reading</span> is
                 last month&apos;s reading at onboarding — used as the baseline

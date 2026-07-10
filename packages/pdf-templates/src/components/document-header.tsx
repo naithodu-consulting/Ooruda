@@ -12,53 +12,64 @@ export interface AssociationBranding {
   panNumber?: string | null;
   registrationNumber: string | null;
   logoUrl: string | null;
+  email?: string | null;
+  phone?: string | null;
+  bankAccountName?: string | null;
+  bankAccountNumber?: string | null;
+  bankName?: string | null;
+  bankIfsc?: string | null;
+  bankBranch?: string | null;
 }
 
 interface Props {
   association: AssociationBranding;
-  docTitle: string;
-  docNo: string;
-  docDate: string;
 }
 
-export function DocumentHeader({
-  association,
-  docTitle,
-  docNo,
-  docDate,
-}: Props) {
+export function DocumentHeader({ association }: Props) {
+  const contactId = association.gstin
+    ? `GSTIN: ${association.gstin}`
+    : association.panNumber
+      ? `PAN - ${association.panNumber}`
+      : null;
+
   return (
-    <View style={styles.headerRow}>
-      <View style={styles.brandBlock}>
+    <View>
+      {/* Row 1: logo + name + address */}
+      <View style={styles.headerLogoNameRow}>
         {association.logoUrl ? (
-          // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop
+          // eslint-disable-next-line jsx-a11y/alt-text
           <Image style={styles.logo} src={association.logoUrl} />
         ) : (
-          // Falls back to the Ooruda brand mark until the association uploads its own logo.
-          <OorudaMark size={40} />
+          <View style={{ marginRight: 12 }}>
+            <OorudaMark size={48} />
+          </View>
         )}
-        <View>
+        <View style={styles.headerNameBlock}>
           <Text style={styles.associationName}>{association.name}</Text>
           {association.address ? (
-            <Text style={styles.metaText}>{association.address}</Text>
-          ) : null}
-          {association.registrationNumber ? (
-            <Text style={styles.metaText}>
-              Reg. No: {association.registrationNumber}
-            </Text>
-          ) : null}
-          {association.gstin ? (
-            <Text style={styles.metaText}>GSTIN: {association.gstin}</Text>
-          ) : association.panNumber ? (
-            <Text style={styles.metaText}>PAN: {association.panNumber}</Text>
+            <Text style={styles.headerAddress}>{association.address}</Text>
           ) : null}
         </View>
       </View>
 
-      <View style={styles.docTitleBlock}>
-        <Text style={styles.docTitle}>{docTitle}</Text>
-        <Text style={styles.metaText}>No: {docNo}</Text>
-        <Text style={styles.metaText}>Date: {docDate}</Text>
+      {/* Contact strip: email | PAN/GSTIN | phone */}
+      {(association.email ?? contactId ?? association.phone) ? (
+        <View style={styles.headerContactRow}>
+          <Text style={styles.headerContactText}>
+            {association.email ?? ''}
+          </Text>
+          <Text style={styles.headerContactText}>{contactId ?? ''}</Text>
+          <Text style={styles.headerContactText}>
+            {association.phone ?? ''}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Single separator below contact row */}
+      <View style={styles.headerRuleRow}>
+        <View style={styles.headerRuleLine} />
+        <Text style={styles.headerRuleDot}>◆</Text>
+        <View style={styles.headerRuleLine} />
       </View>
     </View>
   );

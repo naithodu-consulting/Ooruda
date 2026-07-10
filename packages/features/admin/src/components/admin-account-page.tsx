@@ -206,18 +206,19 @@ async function TeamAccountPage(props: {
 }) {
   const adminClient = getSupabaseServerAdminClient();
 
-  const [members, { data: rawPermissions }, { data: assocRow }] = await Promise.all([
-    getMembers(props.account.slug ?? ''),
-    adminClient
-      .from('assoc_admin_permissions')
-      .select('target_role, can_invite, can_edit, can_delete')
-      .eq('association_id', props.account.id),
-    adminClient
-      .from('associations')
-      .select('is_test')
-      .eq('account_id', props.account.id)
-      .maybeSingle(),
-  ]);
+  const [members, { data: rawPermissions }, { data: assocRow }] =
+    await Promise.all([
+      getMembers(props.account.slug ?? ''),
+      adminClient
+        .from('assoc_admin_permissions')
+        .select('target_role, can_invite, can_edit, can_delete')
+        .eq('association_id', props.account.id),
+      adminClient
+        .from('associations')
+        .select('is_test')
+        .eq('account_id', props.account.id)
+        .maybeSingle(),
+    ]);
 
   const isTestAssociation = assocRow?.is_test ?? false;
 
@@ -267,7 +268,10 @@ async function TeamAccountPage(props: {
           <Badge variant={'outline'}>Association</Badge>
 
           {isTestAssociation && (
-            <Badge className={'border-amber-400 bg-amber-50 text-amber-700'} variant={'outline'}>
+            <Badge
+              className={'border-amber-400 bg-amber-50 text-amber-700'}
+              variant={'outline'}
+            >
               Test
             </Badge>
           )}

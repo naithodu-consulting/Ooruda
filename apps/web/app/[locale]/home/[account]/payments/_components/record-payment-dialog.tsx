@@ -40,6 +40,15 @@ import { formatINR } from '~/lib/format-inr';
 import { recordPaymentAction } from '../_lib/payments-actions';
 import { PAYMENT_MODES, RecordPaymentSchema } from '../_lib/payments-schema';
 
+const REFERENCE_PLACEHOLDERS: Record<string, string> = {
+  UPI: 'UPI transaction ID',
+  NEFT: 'UTR number',
+  NetBanking: 'UTR / transaction reference',
+  Card: 'Transaction ID',
+  Wallet: 'Transaction ID',
+  Cash: 'Voucher / receipt number',
+};
+
 export function RecordPaymentDialog(props: {
   billId: string;
   billNo: string;
@@ -86,8 +95,15 @@ function RecordPaymentForm(props: {
 
   const form = useForm({
     resolver: zodResolver(RecordPaymentSchema),
-    defaultValues: { amount: '', mode: 'Cash', paid_by_role: 'Owner' },
+    defaultValues: {
+      amount: '',
+      mode: 'Cash' as const,
+      paid_by_role: 'Owner' as const,
+      reference_no: '',
+    },
   });
+
+  const selectedMode = form.watch('mode');
 
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
@@ -147,6 +163,32 @@ function RecordPaymentForm(props: {
             </FormItem>
           )}
         />
+
+        {selectedMode !== 'Razorpay' && (
+          <FormField
+            name="reference_no"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  Reference No{' '}
+                  <span className="text-muted-foreground font-normal">
+                    (optional)
+                  </span>
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder={
+                      REFERENCE_PLACEHOLDERS[selectedMode] ?? 'Reference number'
+                    }
+                    maxLength={100}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <FormField
           name="paid_by_role"

@@ -21,6 +21,7 @@ type RawPayment = {
   id: string;
   amount: number;
   mode: string;
+  reference_no: string | null;
   paid_by_role: string;
   paid_at: string;
   receipts: { receipt_no: string } | { receipt_no: string }[] | null;
@@ -34,7 +35,7 @@ function receiptNoOf(payment: RawPayment): string | null {
 }
 
 const BILL_WITH_PAYMENTS_SELECT =
-  'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, units(unit_no), payments(id, amount, mode, paid_by_role, paid_at, receipts(receipt_no))';
+  'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, units(unit_no), payments(id, amount, mode, reference_no, paid_by_role, paid_at, receipts(receipt_no))';
 
 export default async function PaymentsPage({ params, searchParams }: Props) {
   const [{ account }, { duration, status }] = await Promise.all([
@@ -137,6 +138,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         id: p.id,
         amount: p.amount,
         mode: p.mode,
+        reference_no: p.reference_no ?? null,
         paid_by_role: p.paid_by_role,
         paid_at: p.paid_at,
         receipt_no: receiptNoOf(p),

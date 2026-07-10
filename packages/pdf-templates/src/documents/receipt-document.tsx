@@ -8,7 +8,11 @@ import {
   type AssociationBranding,
 } from '../components/document-header';
 import { styles } from '../components/styles';
-import { formatDateLong, formatINR, formatPeriodLabel } from '../lib/format';
+import {
+  formatINR,
+  formatPeriodDateRange,
+  formatShortDate,
+} from '../lib/format';
 import type { BillingEntityData } from './bill-document';
 
 export interface ReceiptPdfData {
@@ -21,7 +25,33 @@ export interface ReceiptPdfData {
     amount: number;
     mode: string;
     paidAt: string;
+    referenceNo?: string | null;
   };
+}
+
+/** Bill-To address lines: [unit line, floor+association-address line], or company address as a single line. */
+function buildAddressLines(
+  billTo: BillingEntityData | null | undefined,
+  unit: ReceiptPdfData['unit'],
+  associationAddress: string | null,
+): string[] {
+  if (billTo?.isCompany && billTo.companyAddress) {
+    return [billTo.companyAddress];
+  }
+  const lines: string[] = [];
+  if (unit.doorNo) {
+    lines.push(`${unit.unitNo}, ${unit.doorNo},`);
+  } else {
+    lines.push(`Unit ${unit.unitNo},`);
+  }
+  const floorAddr = [
+    unit.floor != null ? `Floor ${unit.floor}` : null,
+    associationAddress,
+  ]
+    .filter(Boolean)
+    .join(', ');
+  if (floorAddr) lines.push(floorAddr);
+  return lines;
 }
 
 export function ReceiptDocument({
@@ -32,87 +62,102 @@ export function ReceiptDocument({
   receipt,
   payment,
 }: ReceiptPdfData) {
+  const addressLines = buildAddressLines(billTo, unit, association.address);
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <DocumentHeader
-          association={association}
-          docTitle="Payment Receipt"
-          docNo={receipt.receiptNo}
-          docDate={formatDateLong(receipt.generatedAt)}
-        />
+        {/* Header: logo + name + address + contact strip */}
+        <DocumentHeader association={association} />
 
-        <View style={[styles.section, styles.infoGrid]}>
-          <View style={styles.infoCol}>
-            <Text style={styles.sectionTitle}>Bill To</Text>
-            {billTo?.name ? (
-              <Text style={{ fontWeight: 'bold' }}>{billTo.name}</Text>
-            ) : null}
-            {billTo?.isCompany && billTo.companyAddress ? (
-              <Text style={{ fontSize: 8, color: '#475569', marginTop: 1 }}>
-                {billTo.companyAddress}
+        {/* Title */}
+        <View style={styles.docTitleBlock}>
+          <Text style={styles.docTitle}>Payment Receipt</Text>
+        </View>
+
+        {/* Metadata: row-paired 2-col grid */}
+        <View style={styles.metaGrid}>
+          <View style={styles.metaGridRow}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Receipt Number:</Text>
+              <Text style={styles.metaValue}>{receipt.receiptNo}</Text>
+            </View>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Billing Period:</Text>
+              <Text style={styles.metaValue}>
+                {formatPeriodDateRange(bill.period)}
               </Text>
-            ) : (
-              <>
-                <Text style={{ fontSize: 8, color: '#475569', marginTop: 1 }}>
-                  {unit.doorNo
-                    ? `${unit.unitNo} / ${unit.doorNo}`
-                    : `Unit ${unit.unitNo}`}
-                </Text>
-                {unit.floor != null ? (
-                  <Text style={{ fontSize: 8, color: '#475569' }}>
-                    {`Floor ${unit.floor}`}
-                  </Text>
-                ) : null}
-                {association.address ? (
-                  <Text style={{ fontSize: 8, color: '#475569' }}>
-                    {association.address}
-                  </Text>
-                ) : null}
-              </>
-            )}
-            {billTo?.isCompany && billTo.companyGstin ? (
-              <Text style={{ fontSize: 8, color: '#475569' }}>
-                GSTIN: {billTo.companyGstin}
+            </View>
+          </View>
+          <View style={styles.metaGridRow}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Invoice Number:</Text>
+              <Text style={styles.metaValue}>{bill.billNo}</Text>
+            </View>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Payment Date:</Text>
+              <Text style={styles.metaValue}>
+                {formatShortDate(payment.paidAt)}
               </Text>
-            ) : null}
-          </View>
-          <View style={styles.infoCol}>
-            <Text style={styles.sectionTitle}>Bill No.</Text>
-            <Text>{bill.billNo}</Text>
-          </View>
-          <View style={styles.infoCol}>
-            <Text style={styles.sectionTitle}>Billing Period</Text>
-            <Text>{formatPeriodLabel(bill.period)}</Text>
+            </View>
           </View>
         </View>
 
+        {/* Received From */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payment Details</Text>
-          <View style={styles.table}>
-            <View style={styles.tableHeaderRow}>
-              <Text style={styles.colDescription}>Mode</Text>
-              <Text style={styles.colDescription}>Paid On</Text>
-              <Text style={styles.colAmount}>Amount</Text>
-            </View>
-            <View style={styles.tableRow}>
-              <Text style={styles.colDescription}>{payment.mode}</Text>
-              <Text style={styles.colDescription}>
-                {formatDateLong(payment.paidAt)}
-              </Text>
-              <Text style={styles.colAmount}>{formatINR(payment.amount)}</Text>
-            </View>
+          <Text style={styles.sectionTitle}>Received From</Text>
+          {billTo?.name ? (
+            <Text style={styles.billToName}>{billTo.name}</Text>
+          ) : null}
+          {addressLines.map((line, i) => (
+            <Text style={styles.billToAddress} key={i}>
+              {line}
+            </Text>
+          ))}
+          {billTo?.isCompany && billTo.companyGstin ? (
+            <Text style={styles.billToAddress}>
+              GSTIN: {billTo.companyGstin}
+            </Text>
+          ) : null}
+        </View>
+
+        {/* Payment details table */}
+        <View style={styles.table}>
+          <View style={styles.tableHeaderRow}>
+            <Text style={[styles.colDescription, styles.tableHeaderText]}>
+              Mode
+            </Text>
+            <Text style={[styles.colDescription, styles.tableHeaderText]}>
+              Reference
+            </Text>
+            <Text style={[styles.colAmount, styles.tableHeaderText]}>
+              Amount
+            </Text>
+          </View>
+          <View style={styles.tableRow}>
+            <Text style={styles.colDescription}>{payment.mode}</Text>
+            <Text style={styles.colDescription}>
+              {payment.referenceNo ?? '—'}
+            </Text>
+            <Text style={[styles.colAmount, { textAlign: 'right' }]}>
+              {formatINR(payment.amount)}
+            </Text>
           </View>
         </View>
 
+        {/* Total */}
         <View style={styles.summaryBlock}>
+          <View style={styles.summaryDivider} />
           <View style={styles.summaryRowTotal}>
             <Text>Amount Received</Text>
             <Text>{formatINR(payment.amount)}</Text>
           </View>
         </View>
 
-        <DocumentFooter note="This is a system-generated receipt and does not require a signature." />
+        <DocumentFooter
+          note="This is a system-generated receipt and does not require a signature."
+          association={association}
+        />
       </Page>
     </Document>
   );
