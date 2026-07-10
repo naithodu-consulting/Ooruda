@@ -1852,6 +1852,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      find_users_by_phones_or_emails: {
+        Args: { p_emails: string[]; p_phones: string[] }
+        Returns: {
+          email: string
+          id: string
+          phone: string
+        }[]
+      }
       get_account_invitations: {
         Args: { account_slug: string }
         Returns: {

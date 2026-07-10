@@ -574,6 +574,9 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 | `20260715000000_bill_sequences.sql` | Jul 15 | `bill_sequences` table + `allocate_bill_no()` RPC for FY-scoped, per-type atomic bill number allocation |
 | `20260715000001_billing_entity_fields.sql` | Jul 15 | Add `bill_to`, `owner_is_company`, `owner_company_*` to `units`; `is_company`, `company_*` to `tenancies`; `pan_number` to `associations` |
 | `20260716000000_sub_meters_initial_reading_min_charge.sql` | Jul 16 | Add `initial_reading` and `minimum_charge` columns to `sub_meters` for onboarding baseline and default monthly charge |
+| `20260716000001_super_admin_account_write_access.sql` | Jul 16 | Add `is_super_admin()` bypass to `accounts_settings_manage_update` policy and `account_image` storage policy so super admins can save association name and logo |
+| `20260716000002_get_user_id_by_phone.sql` | Jul 16 | Add `get_user_id_by_phone` and `get_user_id_by_email` service-role functions for bulk-invite conflict recovery |
+| `20260716000003_find_users_by_phones_or_emails.sql` | Jul 16 | Add `find_users_by_phones_or_emails` batch function for comprehensive auth.users lookup by phone AND email in bulk invite |
 | `20260707122210_test_flags_and_rename_test_data.sql` | Jul 7 | Add `is_test` to `associations` and `profiles`; rename Abish → Sandbox Residency, Prestige Meadows → Demo Towers; tag 11 test users |
 | `20260707132123_sync_test_user_account_names.sql` | Jul 7 | Sync `accounts.name` from `profiles.full_name` for all test users (display name fix) |
 | `20260708000001_unit_status_self_occupied_rented.sql` | Jul 8 | Drop `Occupied` CHECK; migrate existing rows; add CHECK for `Self Occupied`, `Rented`, `Vacant` |
@@ -902,4 +905,181 @@ Improvements to handle real-world data quality issues found in association-suppl
 
 ---
 
-*Last updated: 2026-07-09 (v4.2 — electricity Unit Rate column, bulk invite audit logging)*
+---
+
+## Release v4.7 — Razorpay Async Webhook (Jul 9, 2026)
+
+Branch: `week-4`
+
+### Razorpay Async Webhook Safety Net
+
+Handles the edge case where a user pays on Razorpay but the synchronous `/verify` call never reaches the server (browser closed, network drop, etc.). Razorpay retries the webhook until it gets a 200, so no payment is ever silently lost.
+
+**New route `app/api/billing/razorpay/webhook/route.ts`:**
+- Receives `payment.captured` events from Razorpay (all other events acknowledged and ignored)
+- Reads raw body before parsing for correct HMAC-SHA256 signature verification (`X-Razorpay-Signature` header vs `webhook_secret`)
+- Rejects requests if `webhook_secret` is not configured in gateway settings (prevents spoofing)
+- Reads `bill_ids`, `association_id`, `paid_by_role` from Razorpay order `notes` — no separate lookup table needed
+- Calls `record_payment` RPC via admin client (service_role) for each bill
+- Fully idempotent: if `/verify` already recorded the payment, the `payments_razorpay_bill_uniq` DB index rejects the duplicate and the webhook skips silently
+- Returns 500 on unexpected DB errors so Razorpay retries; returns 200 on success or duplicate
+
+**Fixed `app/api/billing/razorpay/create-order/route.ts`:**
+- Now embeds `notes: { bill_ids, association_id, paid_by_role }` in every Razorpay order so the webhook handler can identify the bills without a separate DB lookup
+
+**Migration `20260709200000_record_payment_webhook_bypass.sql`:**
+- Updates `record_payment()` to allow `service_role` callers to skip the user-session auth check (webhook has no user JWT). All existing user-facing auth paths are unchanged.
+- Grants `execute` to both `authenticated` and `service_role`
+
+**Prerequisite to activate:** Register the webhook URL in Razorpay Dashboard → Settings → Webhooks, select `payment.captured`, copy the generated webhook secret, and paste it into the association's Gateway Settings page. See TODO.md.
+
+---
+
+## Release v4.6 — Overdue Status Code Compatibility (Jul 9, 2026)
+
+Branch: `week-4`
+
+### Status Filter & Dashboard Fixes
+
+Companion fix for the `recompute_overdue_bills()` cron introduced in v4.5. The cron stores `'Overdue'` directly in `bills.status`, but all existing filter/display code assumed that status was always computed client-side and never stored. Updated four locations to handle `status='Overdue'` from the DB:
+
+- **`billing/_components/bills-section.tsx`** — overdue filter tab now also matches `b.status === 'Overdue'`
+- **`payments/_components/payments-section.tsx`** — overdue filter tab + Pay All Pending button include `'Overdue'` bills
+- **`units/page.tsx`** — DB query changed from `.eq('status', 'Unpaid')` to `.in('status', ['Unpaid', 'Partial', 'Overdue'])` so overdue units still show their badge count
+- **`_components/association-dashboard.tsx`** — outstanding balance calculation includes `'Overdue'` bills
+
+Both migrations (`20260702000004_razorpay_gateway`, `20260709112744_overdue_and_reminder_cron`) pushed to remote.
+
+---
+
+## Release v4.5 — Overdue Recompute & Reminder Cron (Jul 9, 2026)
+
+Branch: `week-4`
+
+### Automated Bill Status & Reminders
+
+**Migration `20260709112744_overdue_and_reminder_cron.sql`:**
+- Enables `pg_net` extension for outbound HTTP from the database
+- `public.recompute_overdue_bills()` — SQL function that transitions `Unpaid`/`Partial` bills to `Overdue` where `due_date < current_date`
+- `cron.schedule('overdue-recompute', '30 19 * * *', ...)` — fires daily at 1 AM IST; runs the overdue recompute function
+- `cron.schedule('send-reminders', '30 3 * * *', ...)` — fires daily at 9 AM IST; calls the `send-reminders` Edge Function via `pg_net`
+
+**New Edge Function `supabase/functions/send-reminders/index.ts`:**
+- Reads each association's `billing_settings.reminder_schedule_json` (`days_before` + `days_after` arrays)
+- Finds bills due on matching dates (e.g. 3 days before due, 1 day after due)
+- Batch-fetches unit owners and active tenants; batch-fetches phone numbers
+- Sends SMS via the same provider logic as `custom-sms-hook` (mock/MSG91/2Factor)
+- Logs every attempt to `notifications_log` with type `due_date_reminder` or `overdue_reminder`
+
+**Prerequisite:** One-time DB GUC configuration needed before reminder cron fires — see TODO.md → "Pre-launch: Cron Job Configuration".
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260709112744` | pg_net extension, `recompute_overdue_bills()` function, overdue + reminder cron schedules |
+
+---
+
+## Release v4.4 — Notification Event Wiring (Jul 9, 2026)
+
+Branch: `week-4`
+
+### SMS Notifications — Billing Events
+
+Wired billing events to send SMS notifications to owners and tenants via the existing `packages/sms` infrastructure.
+
+**SMS package extended (`packages/sms`):**
+- Added `sendSms(phone, message)` to `ISmsProvider` interface and all three providers (Mock, MSG91, 2Factor)
+- MSG91: uses Flow API with `MSG91_SMS_FLOW_ID` + `MSG91_SMS_SENDER_ID` env vars for DLT-compliant transactional SMS
+- 2Factor: uses TRANS_SMS endpoint
+
+**New notification service (`apps/web/lib/notify.ts`):**
+- `sendBillGeneratedNotifications(associationId, unitIds, monthLabel)` — batch fetches owners + active tenants for all billed units in two queries, then sends in parallel; fire-and-forget (never blocks billing)
+- `sendPaymentConfirmedNotification(params)` — single-user payment receipt SMS
+
+**Trigger points wired:**
+- `billing-actions.ts` → after successful bill generation batch, notifies each unit's owner and active tenant
+- `payments-actions.ts` → `recordPaymentAction` notifies the unit owner after manual payment recording
+- `verify/route.ts` → Razorpay self-service payment notifies the payer (owner/tenant) after successful checkout
+
+**All events logged to `notifications_log`** with `type`, `status` (Sent/Failed), `provider_key`, and `provider_ref` (provider message ID).
+
+| Feature | Status |
+|---|---|
+| Notifications | Partial → **SMS delivery wired for bill_generated and payment_confirmed** |
+
+### Migrations Changelog
+
+No new migrations (uses existing `notifications_log` table).
+
+---
+
+## Release v4.3 — Razorpay Gateway Config UI (Jul 9, 2026)
+
+Branch: `week-4`
+
+### Payment Gateway Settings
+
+Added an admin-only **Payment Gateway** settings card to the Association Settings page (`/settings/association`), completing the Razorpay self-service payment setup flow:
+
+- **Key ID / Key Secret / Webhook Secret** fields — credentials stored server-side via admin client; secrets never serialised into the React tree
+- **Enable online payments** toggle — controls `is_active` on `association_payment_gateways` per association
+- Insert vs update logic — first save creates the row (key secret required); subsequent saves allow partial updates (blank secret = keep existing)
+- Secret presence shown as `has_secret: boolean` indicator only — actual values never reach the client
+- Success/error toast feedback; `data-test` attributes on all interactive elements
+
+---
+
+## Bug Fix — Super Admin Association Name / Logo Save
+
+Branch: `week-4`
+
+### Super Admin Write Access for Account Name and Logo
+
+Fixed "Couldn't save your changes" error when a super admin tried to update an association's name or logo from the Association Settings page.
+
+**Root cause:** The `accounts_settings_manage_update` RLS policy and the `account_image` storage policy both gate on `has_permission(auth.uid(), account_id, 'settings.manage')`, which checks `accounts_memberships`. Super admins are not actual members of associations they're inspecting, so `has_permission` returned false — blocking the `accounts` UPDATE and the storage upload even though `association_role()` correctly returns `'assoc_admin'` for super admins.
+
+**Fix (`20260716000001_super_admin_account_write_access.sql`):**
+- `accounts_settings_manage_update` policy: added `public.is_super_admin()` OR-branch to both USING and WITH CHECK clauses
+- `account_image` storage policy: added `public.is_super_admin()` OR-branch to the WITH CHECK clause (read access was already gated on `has_role_on_account` which super admins pass via existing bypass)
+
+---
+
+## Bug Fix — Bulk Invite: existing users skipped on phone/email conflict (v4.9)
+
+Branch: `week-4`
+
+Users who already existed in `auth.users` but were absent from (or had a mismatched format in) `profiles.mobile_number` were not found by the upfront profile lookup. `createUser` then failed with "Phone number already registered by another user" or "This email address is already registered", and the row was skipped entirely — leaving them without association membership.
+
+**Initial fix (v4.9):**
+- When `createUser` fails with a phone or email conflict, recover by looking up the existing `auth.users` row via new service-role-only DB functions (`get_user_id_by_phone`, `get_user_id_by_email`) and fall through to the membership insert instead of skipping.
+- Migration `20260716000002_get_user_id_by_phone.sql`: adds both lookup functions, restricted to `service_role`.
+
+---
+
+## Bug Fix — Bulk Invite: comprehensive upfront auth.users lookup (v4.10)
+
+Branch: `week-4`
+
+The v4.9 reactive fix was incomplete: users whose phone/email was later removed from `auth.users` (or whose auth credentials differed from the CSV) were still skipped because the initial lookup only queried `profiles.mobile_number`, which can be stale or missing.
+
+**Root cause:** the upfront resolution used `profiles.mobile_number` — a denormalized field that may be null, cleared, or in a different format after a previous import to another association. Users existed in `auth.users` under their original credentials but didn't appear in the profiles query.
+
+**Fix:**
+- New `find_users_by_phones_or_emails(p_phones, p_emails)` Postgres function (migration `20260716000003`) queries `auth.users` directly by all batch phones AND all batch emails in a single round-trip. Restricted to `service_role`.
+- Upfront lookup in `bulkInviteMembersAction` replaced: now calls `find_users_by_phones_or_emails` instead of querying `profiles`. Builds both `existingUserByPhone` and `existingUserByEmail` maps from the result.
+- Per-row user resolution checks the phone map first, then the email map, before attempting `createUser`. If either matches, the existing user is used and `createUser` is never called for that row.
+- The reactive conflict-recovery path (v4.9) is retained as a last-resort fallback.
+
+### Migrations Changelog
+
+| Migration | Date | Description |
+|-----------|------|-------------|
+| `20260716000002_get_user_id_by_phone.sql` | Jul 16 | Add `get_user_id_by_phone` and `get_user_id_by_email` service-role functions for bulk-invite conflict recovery |
+| `20260716000003_find_users_by_phones_or_emails.sql` | Jul 16 | Add `find_users_by_phones_or_emails` batch function for comprehensive upfront auth.users lookup by phone AND email |
+
+---
+
+*Last updated: 2026-07-10 (v4.10 — Bulk invite comprehensive auth.users lookup)*

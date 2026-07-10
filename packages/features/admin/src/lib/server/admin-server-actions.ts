@@ -607,20 +607,28 @@ export async function bulkInviteMembersAction(
     (assocRows ?? []).map((a) => [a.account_id, a.id]),
   );
 
-  // Resolve existing users for phones in this batch only — one indexed DB
-  // query instead of paginating all auth users via the Admin API.
+  // Resolve existing users for phones AND emails in this batch by querying
+  // auth.users directly (not profiles) — this catches users whose
+  // profiles.mobile_number was cleared or never populated after a previous
+  // import to another association.
   const existingUserByPhone = new Map<string, string>();
+  const existingUserByEmail = new Map<string, string>();
   {
     const batchPhones = rows
       .map((r) => normalizePhoneNumber(r.phone))
       .filter((p): p is string => Boolean(p));
-    if (batchPhones.length > 0) {
-      const { data: existingProfiles } = await adminClient
-        .from('profiles')
-        .select('id, mobile_number')
-        .in('mobile_number', batchPhones);
-      for (const p of existingProfiles ?? []) {
-        if (p.mobile_number) existingUserByPhone.set(p.mobile_number, p.id);
+    const batchEmails = rows
+      .map((r) => r.email?.trim().toLowerCase())
+      .filter((e): e is string => Boolean(e));
+
+    if (batchPhones.length > 0 || batchEmails.length > 0) {
+      const { data: foundUsers } = await adminClient.rpc(
+        'find_users_by_phones_or_emails',
+        { p_phones: batchPhones, p_emails: batchEmails },
+      );
+      for (const u of foundUsers ?? []) {
+        if (u.phone) existingUserByPhone.set(u.phone, u.id);
+        if (u.email) existingUserByEmail.set(u.email, u.id);
       }
     }
   }
@@ -671,12 +679,21 @@ export async function bulkInviteMembersAction(
     }
 
     try {
-      const existingUserId = existingUserByPhone.get(normalised);
+      // Check phone map first, then email — catches users whose phone was
+      // cleared from their profile after a previous import.
+      let existingUserId = existingUserByPhone.get(normalised);
+      if (!existingUserId && row.email) {
+        existingUserId = existingUserByEmail.get(
+          row.email.trim().toLowerCase(),
+        );
+      }
 
       let userId: string;
 
       if (existingUserId) {
         userId = existingUserId;
+        // Keep the phone map warm so unit-update logic can resolve this user.
+        existingUserByPhone.set(normalised, existingUserId);
       } else {
         // Create the auth user (phone confirmed; email confirmed if provided).
         const createPayload: Parameters<
