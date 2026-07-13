@@ -80,7 +80,7 @@ export function TypeToConfirmDialog({
           />
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="bg-transparent">
           <Button
             variant="outline"
             disabled={isPending}
@@ -90,6 +90,7 @@ export function TypeToConfirmDialog({
           </Button>
           <Button
             variant="destructive"
+            className="bg-red-600 text-white hover:bg-red-700"
             disabled={!canDelete || isPending}
             onClick={() => {
               if (canDelete) onConfirm();

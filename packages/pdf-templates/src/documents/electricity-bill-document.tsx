@@ -65,7 +65,7 @@ const s = StyleSheet.create({
     borderBottomColor: NAVY,
   },
   tableHeaderText: {
-    fontSize: 8,
+    fontSize: 8.5,
     fontWeight: 'bold',
     color: '#000000',
   },
@@ -96,15 +96,15 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 7,
     paddingHorizontal: 10,
-    borderTopWidth: 2,
+    borderTopWidth: 1.25,
     borderTopColor: NAVY,
-    backgroundColor: '#F1E9FA',
+    backgroundColor: CREAM,
     fontWeight: 'bold',
     fontSize: 10,
   },
   colSl: { width: 22, fontSize: 8, color: '#000000' },
   colMeter: { flexGrow: 1, flexBasis: 0, color: '#000000' },
-  colReading: { width: 64, textAlign: 'right', color: '#000000' },
+  colReading: { width: 76, textAlign: 'right', color: '#000000' },
   colConsumed: { width: 54, textAlign: 'right', color: '#000000' },
   colRate: { width: 52, textAlign: 'right', color: '#000000' },
   colAmount: { width: 62, textAlign: 'right', color: '#000000' },
@@ -224,24 +224,13 @@ export function ElectricityBillDocument({
           ) : null}
         </View>
 
-        {/* Description caption */}
-        <View style={sharedStyles.section}>
-          <Text style={sharedStyles.sectionTitle}>
-            Electricity Bill for {formatPeriodLabel(bill.period)}
-          </Text>
-        </View>
-
         {/* Meter readings table */}
         <View style={s.table}>
           <View style={s.tableHeaderRow}>
             <Text style={[s.colSl, s.tableHeaderText]}>SL</Text>
             <Text style={[s.colMeter, s.tableHeaderText]}>Description</Text>
-            <Text style={[s.colReading, s.tableHeaderText]}>
-              Previous Reading
-            </Text>
-            <Text style={[s.colReading, s.tableHeaderText]}>
-              Current Reading
-            </Text>
+            <Text style={[s.colReading, s.tableHeaderText]}>Prev. Reading</Text>
+            <Text style={[s.colReading, s.tableHeaderText]}>Curr. Reading</Text>
             <Text style={[s.colConsumed, s.tableHeaderText]}>Units</Text>
             <Text style={[s.colRate, s.tableHeaderText]}>Rate/Unit</Text>
             <Text style={[s.colAmount, s.tableHeaderText]}>Amount</Text>
@@ -251,7 +240,7 @@ export function ElectricityBillDocument({
             <View style={i % 2 === 0 ? s.tableRow : s.tableRowAlt} key={i}>
               <Text style={s.colSl}>{i + 1}</Text>
               <Text style={s.colMeter}>
-                {m.meterLabel.replace(/^SM[\s-]+/i, '')}
+                {m.meterLabel.replace(/^SM\s*[-–]?\s*/i, 'Sub-meter ')}
               </Text>
               <Text style={s.colReading}>{m.previousReading}</Text>
               <Text style={s.colReading}>{m.currentReading}</Text>
@@ -277,7 +266,9 @@ export function ElectricityBillDocument({
 
           <View style={s.totalRow}>
             <Text style={s.colSl} />
-            <Text style={s.colMeter}>Total</Text>
+            <Text style={[s.colMeter, { color: NAVY }]}>
+              Electricity Charges for {formatPeriodLabel(bill.period)}
+            </Text>
             <Text style={s.colReading} />
             <Text style={s.colReading} />
             <Text style={s.colConsumed} />
@@ -297,7 +288,7 @@ export function ElectricityBillDocument({
                 .filter((m) => m.loadKva != null)
                 .map(
                   (m) =>
-                    `${m.meterLabel.replace(/^SM[\s-]+/i, '')}: ${m.loadKva} kVA`,
+                    `${m.meterLabel.replace(/^SM\s*[-–]?\s*/i, 'Sub-meter ')}: ${m.loadKva} kVA`,
                 )
                 .join('  |  ')}
             </Text>
