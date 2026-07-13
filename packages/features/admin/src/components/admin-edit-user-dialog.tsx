@@ -82,8 +82,8 @@ export function AdminEditUserDialog(
     resolver: zodResolver(FormSchema),
     defaultValues: {
       fullName: props.userName,
-      // Show only the 10-digit national number; the +91 prefix is fixed in the UI.
-      phone: (props.userPhone || '').replace(/\D/g, '').slice(-10),
+      // PhoneInput expects E.164 (e.g. "+918826262459") — it parses country + national internally.
+      phone: props.userPhone || '',
       email: props.userEmail || '',
       role: props.currentRole || '',
     },
