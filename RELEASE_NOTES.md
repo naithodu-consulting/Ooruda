@@ -1203,7 +1203,31 @@ Example: `PRM/26-27/MNT/000001`
 | `20260719000000_super_admin_delete_all_billing.sql` | Jul 19 | Add `super_admin_delete_all_bills` / `super_admin_delete_all_payments` RPCs |
 | `20260720000000_invalidate_bill_pdf_cache_again.sql` | Jul 20 | Re-invalidate cached bill/receipt PDFs after template changes |
 | `20260721000000_bill_line_items_area_rate.sql` | Jul 21 | Add `bill_line_items.area_sqft` / `rate_per_sqft` |
+| `20260710000001_payments_reference_no.sql` | Jul 13 | Add `payments.reference_no` for bookkeeping reference numbers |
 
 ---
 
-*Last updated: 2026-07-21*
+## Release v4.11 — Reference Numbers, Dashboard Defaults & UX Fixes (Jul 13, 2026)
+
+### Payment Reference Numbers
+- Added a free-text **Reference No** field to the Record Payment dialog (mode-specific placeholder: "UPI transaction ID", "UTR number", etc.; hidden for Razorpay)
+- Reference is stored in a new `payments.reference_no` column and displayed below the payment mode in the payments list
+- Reference appears on the receipt PDF in the Payment Details table
+
+### Dashboard Improvements
+- **Default filter changed to "All Time"** — the dashboard duration filter now defaults to All Time instead of Current Month
+- **Performance**: association lookup moved to the page level and passed as props, eliminating a sequential DB round-trip; all dashboard queries now run in a single `Promise.all` inside a Suspense boundary
+
+### Billing UI
+- **Unit filter dropdown** now correctly displays "All Units" instead of the raw value `all`
+- **Breakdown tooltip**: hovering over a truncated line-item description in the billing table shows the full text in a tooltip
+
+### Admin Panel
+- **Edit User dialog**: phone number now falls back to `profiles.mobile_number` for users who registered via email/Google (previously showed blank)
+- **Super admin accounts view**: removed the All/Real/Test kind filter dropdown
+
+### PDF & Dialog Fixes
+- Electricity bill PDF: abbreviated column headers (Prev./Curr. Reading), wider reading columns, normalised meter labels to "Sub-meter X" prefix, period shown in total row
+- TypeToConfirmDialog: explicit red styling for the destructive action button
+
+*Last updated: 2026-07-13*
