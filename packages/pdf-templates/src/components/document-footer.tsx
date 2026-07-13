@@ -22,11 +22,7 @@ export function DocumentFooter({ note, association }: Props) {
     <View style={styles.footer} fixed>
       {hasBank ? (
         <>
-          <View style={styles.footerRuleRow}>
-            <View style={styles.headerRuleLine} />
-            <Text style={styles.headerRuleDot}>◆</Text>
-            <View style={styles.headerRuleLine} />
-          </View>
+          <View style={styles.footerRule} />
 
           <View style={styles.footerBankSection}>
             <View style={styles.footerBankCol}>

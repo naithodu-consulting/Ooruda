@@ -205,7 +205,7 @@ export function AssociationForm({ association, billingSettings }: Props) {
               id="bank_account_number"
               name="bank_account_number"
               defaultValue={association.bank_account_number ?? ''}
-              placeholder="50200097016501"
+              placeholder="40200097006000"
               className="font-mono"
             />
           </div>
@@ -216,7 +216,7 @@ export function AssociationForm({ association, billingSettings }: Props) {
               id="bank_name"
               name="bank_name"
               defaultValue={association.bank_name ?? ''}
-              placeholder="HDFC Bank"
+              placeholder="Axis Bank"
             />
           </div>
 
@@ -226,7 +226,7 @@ export function AssociationForm({ association, billingSettings }: Props) {
               id="bank_ifsc"
               name="bank_ifsc"
               defaultValue={association.bank_ifsc ?? ''}
-              placeholder="HDFC0000094"
+              placeholder="AXIS0000100"
               className="font-mono uppercase"
             />
           </div>
@@ -237,7 +237,7 @@ export function AssociationForm({ association, billingSettings }: Props) {
               id="bank_branch"
               name="bank_branch"
               defaultValue={association.bank_branch ?? ''}
-              placeholder="Kadri, Mangalore"
+              placeholder="Lalbagh, Mangalore"
             />
           </div>
         </CardContent>

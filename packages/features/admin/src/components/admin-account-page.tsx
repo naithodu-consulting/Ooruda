@@ -61,9 +61,14 @@ export function AdminAccountPage(props: {
 async function PersonalAccountPage(props: { account: Account }) {
   const adminClient = getSupabaseServerAdminClient();
 
-  const [memberships, userResult] = await Promise.all([
+  const [memberships, userResult, profileResult] = await Promise.all([
     getMemberships(props.account.id),
     adminClient.auth.admin.getUserById(props.account.id),
+    adminClient
+      .from('profiles')
+      .select('mobile_number')
+      .eq('id', props.account.id)
+      .maybeSingle(),
   ]);
 
   if (userResult.error) {
@@ -109,8 +114,9 @@ async function PersonalAccountPage(props: { account: Account }) {
                 userId={props.account.id}
                 userName={props.account.name ?? ''}
                 userPhone={
-                  normalizePhoneNumber(userResult.data.user.phone) ??
-                  userResult.data.user.phone ??
+                  normalizePhoneNumber(userResult.data.user.phone) ||
+                  userResult.data.user.phone ||
+                  profileResult.data?.mobile_number ||
                   ''
                 }
                 userEmail={userResult.data.user.email ?? ''}

@@ -26,7 +26,6 @@ import { daysBetweenYmd, todayInBillingZone } from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 import { type PropOpsRole, hasMinimumRole } from '~/lib/rbac';
-import { getAccessibleUnits } from '~/lib/unit-access';
 
 import { DashboardDurationSelect } from './dashboard-duration-select';
 
@@ -113,11 +112,13 @@ async function loadAssociationOverview(
     client
       .from('units')
       .select('id', { count: 'exact', head: true })
-      .eq('association_id', associationId),
+      .eq('association_id', associationId)
+      .neq('type', 'Common Area'),
     client
       .from('units')
       .select('id', { count: 'exact', head: true })
       .eq('association_id', associationId)
+      .neq('type', 'Common Area')
       .in('status', ['Self Occupied', 'Rented']),
     billsQuery,
     client
@@ -218,15 +219,50 @@ async function loadMyBillSummary(
 ) {
   const client = getSupabaseServerClient();
 
-  const units = await getAccessibleUnits(client, associationId, userId);
+  // Resolve owned vs rented separately (rather than via getAccessibleUnits'
+  // collapsed list) because the two need different bill scoping: owned
+  // units show every bill ever generated, but rented units must only show
+  // bills attributed to THIS tenancy — otherwise a new tenant on a unit
+  // would see every past tenant's bill/payment history on that unit.
+  const [{ data: ownedUnits }, { data: tenancies }] = await Promise.all([
+    client
+      .from('units')
+      .select('id, unit_no')
+      .eq('association_id', associationId)
+      .eq('owner_id', userId)
+      .order('unit_no'),
+    client
+      .from('tenancies')
+      .select('id, unit_id, units!inner(id, unit_no, association_id)')
+      .eq('tenant_id', userId)
+      .eq('status', 'active')
+      .eq('units.association_id', associationId),
+  ]);
+
+  const rentedTenancies = tenancies ?? [];
+  const myTenancyIds = rentedTenancies.map((t) => t.id);
+
+  // Mirror getAccessibleUnits' fallback: owners see their owned units;
+  // a user with no owned units falls back to their rented units.
+  const usingOwned = (ownedUnits ?? []).length > 0;
+  const units: { id: string; unit_no: string }[] = usingOwned
+    ? (ownedUnits ?? [])
+    : rentedTenancies
+        .map(
+          (t) => t.units as unknown as { id: string; unit_no: string } | null,
+        )
+        .filter((u): u is { id: string; unit_no: string } => u !== null);
 
   if (units.length === 0) {
     return null;
   }
 
-  // Fetch ALL bills for ALL owned units, newest period first, with line items
   const unitIds = units.map((u) => u.id);
-  const { data: allBills } = await client
+
+  // Fetch bills for these units, newest period first, with line items.
+  // Owned units: unrestricted. Rented units: scoped to this tenant's own
+  // tenancy (or bills predating any tenancy, which no tenant was billed for).
+  let billsQuery = client
     .from('bills')
     .select(`
       id,
@@ -243,7 +279,19 @@ async function loadMyBillSummary(
       )
     `)
     .in('unit_id', unitIds)
-    .order('period', { ascending: false });
+    .order('period', { ascending: false })
+    .order('bill_no', { ascending: false });
+
+  if (!usingOwned) {
+    billsQuery =
+      myTenancyIds.length > 0
+        ? billsQuery.or(
+            `tenancy_id.is.null,tenancy_id.in.(${myTenancyIds.join(',')})`,
+          )
+        : billsQuery.is('tenancy_id', null);
+  }
+
+  const { data: allBills } = await billsQuery;
 
   const bills = (allBills as unknown as BillWithLineItems[]) ?? [];
 
@@ -268,8 +316,7 @@ async function loadMyBillSummary(
         )
       `)
       .in('bill_id', billIds)
-      .order('paid_at', { ascending: false })
-      .limit(10);
+      .order('paid_at', { ascending: false });
     payments = (paymentsData as unknown as PaymentWithBillAndReceipt[]) ?? [];
   }
 
@@ -342,9 +389,33 @@ export async function AssociationDashboard({
             unitBills.some((b) => b.id === p.bill_id),
           );
 
-          // All unpaid/partial bills across ALL periods
+          const PREVIEW_COUNT = 4;
+
+          // Unpaid/overdue bills surface first; within each group, newest period first.
+          const statusOrder = (b: (typeof unitBills)[number]) => {
+            const s = displayBillStatus(b);
+            if (s === 'Overdue') return 0;
+            if (s === 'Unpaid' || s === 'Partial') return 1;
+            return 2;
+          };
+          const sortedBills = [...unitBills].sort(
+            (a, b) =>
+              statusOrder(a) - statusOrder(b) ||
+              b.period.localeCompare(a.period),
+          );
+          const previewBills = sortedBills.slice(0, PREVIEW_COUNT);
+          const previewPayments = unitPayments.slice(0, PREVIEW_COUNT);
+
+          // All unpaid/partial/overdue bills across ALL periods. Status can
+          // already be persisted as 'Overdue' (not just derived at render
+          // time via displayBillStatus), so it must be included here too —
+          // otherwise a bill that's overdue in storage silently drops out of
+          // the outstanding total and "all paid" is shown incorrectly.
           const unpaidBills = unitBills.filter(
-            (b) => b.status === 'Unpaid' || b.status === 'Partial',
+            (b) =>
+              b.status === 'Unpaid' ||
+              b.status === 'Partial' ||
+              b.status === 'Overdue',
           );
 
           // Total outstanding across every period
@@ -505,9 +576,19 @@ export async function AssociationDashboard({
                 {/* Bill History */}
                 <Card className="border-slate-100 shadow-sm dark:border-slate-800">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-bold">
-                      Bill history
-                    </CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm font-bold">
+                        Bill history
+                      </CardTitle>
+                      {unitBills.length > PREVIEW_COUNT && (
+                        <Link
+                          href={`/home/${account}/payments`}
+                          className="rounded-full border border-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200"
+                        >
+                          View all
+                        </Link>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
                     {unitBills.length === 0 ? (
@@ -515,7 +596,7 @@ export async function AssociationDashboard({
                         No bill history yet.
                       </p>
                     ) : (
-                      unitBills.slice(0, 3).map((b) => {
+                      previewBills.map((b) => {
                         const billStatus = displayBillStatus(b);
                         return (
                           <div
@@ -555,9 +636,19 @@ export async function AssociationDashboard({
                 {/* My Payments */}
                 <Card className="border-slate-100 shadow-sm dark:border-slate-800">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-bold">
-                      My payments
-                    </CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm font-bold">
+                        My payments
+                      </CardTitle>
+                      {unitPayments.length > PREVIEW_COUNT && (
+                        <Link
+                          href={`/home/${account}/payments`}
+                          className="rounded-full border border-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200"
+                        >
+                          View all
+                        </Link>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
                     {unitPayments.length === 0 ? (
@@ -565,7 +656,7 @@ export async function AssociationDashboard({
                         No payments recorded yet.
                       </p>
                     ) : (
-                      unitPayments.slice(0, 3).map((p) => {
+                      previewPayments.map((p) => {
                         const receiptNo =
                           p.receipts?.receipt_no ||
                           `RCP-${p.id.slice(0, 4).toUpperCase()}`;

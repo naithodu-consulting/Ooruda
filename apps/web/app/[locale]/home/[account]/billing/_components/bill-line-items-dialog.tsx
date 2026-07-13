@@ -29,6 +29,8 @@ export interface BillLineItemRow {
   payer: string;
   gst_applicable: boolean;
   amount: number;
+  area_sqft?: number | null;
+  rate_per_sqft?: number | null;
 }
 
 export function BillLineItemsDialog(props: {
@@ -43,6 +45,7 @@ export function BillLineItemsDialog(props: {
   const gst = props.gstAmount ?? 0;
   const halfGst = gst / 2;
   const total = subtotal + gst;
+  const hasAreaColumns = props.lineItems.some((li) => li.area_sqft != null);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -74,6 +77,12 @@ export function BillLineItemsDialog(props: {
           <TableHeader>
             <TableRow>
               <TableHead>Charge</TableHead>
+              {hasAreaColumns && (
+                <>
+                  <TableHead className="text-right">Area (sq.ft)</TableHead>
+                  <TableHead className="text-right">Rate/sq.ft</TableHead>
+                </>
+              )}
               <TableHead>Payer</TableHead>
               <TableHead className="text-right">Amount</TableHead>
             </TableRow>
@@ -82,6 +91,16 @@ export function BillLineItemsDialog(props: {
             {props.lineItems.map((li) => (
               <TableRow key={li.id}>
                 <TableCell>{li.description}</TableCell>
+                {hasAreaColumns && (
+                  <>
+                    <TableCell className="text-right tabular-nums">
+                      {li.area_sqft ?? '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {li.rate_per_sqft ?? '—'}
+                    </TableCell>
+                  </>
+                )}
                 <TableCell>{li.payer}</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {formatINR(li.amount)}

@@ -12,6 +12,7 @@ import {
   formatINR,
   formatPeriodDateRange,
   formatShortDate,
+  ordinalFloorLabel,
 } from '../lib/format';
 import type { BillingEntityData } from './bill-document';
 
@@ -45,7 +46,7 @@ function buildAddressLines(
     lines.push(`Unit ${unit.unitNo},`);
   }
   const floorAddr = [
-    unit.floor != null ? `Floor ${unit.floor}` : null,
+    unit.floor != null ? ordinalFloorLabel(unit.floor) : null,
     associationAddress,
   ]
     .filter(Boolean)

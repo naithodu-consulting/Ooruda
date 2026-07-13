@@ -399,6 +399,7 @@ export type Database = {
       bill_line_items: {
         Row: {
           amount: number
+          area_sqft: number | null
           bill_id: string
           charge_type_id: string | null
           created_at: string
@@ -406,9 +407,11 @@ export type Database = {
           gst_applicable: boolean
           id: string
           payer: string
+          rate_per_sqft: number | null
         }
         Insert: {
           amount: number
+          area_sqft?: number | null
           bill_id: string
           charge_type_id?: string | null
           created_at?: string
@@ -416,9 +419,11 @@ export type Database = {
           gst_applicable?: boolean
           id?: string
           payer: string
+          rate_per_sqft?: number | null
         }
         Update: {
           amount?: number
+          area_sqft?: number | null
           bill_id?: string
           charge_type_id?: string | null
           created_at?: string
@@ -426,6 +431,7 @@ export type Database = {
           gst_applicable?: boolean
           id?: string
           payer?: string
+          rate_per_sqft?: number | null
         }
         Relationships: [
           {
@@ -572,6 +578,7 @@ export type Database = {
           pdf_url: string | null
           period: string
           status: string
+          tenancy_id: string | null
           total_amount: number
           unit_id: string
         }
@@ -589,6 +596,7 @@ export type Database = {
           pdf_url?: string | null
           period: string
           status?: string
+          tenancy_id?: string | null
           total_amount?: number
           unit_id: string
         }
@@ -606,6 +614,7 @@ export type Database = {
           pdf_url?: string | null
           period?: string
           status?: string
+          tenancy_id?: string | null
           total_amount?: number
           unit_id?: string
         }
@@ -615,6 +624,13 @@ export type Database = {
             columns: ["association_id"]
             isOneToOne: false
             referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bills_tenancy_id_fkey"
+            columns: ["tenancy_id"]
+            isOneToOne: false
+            referencedRelation: "tenancies"
             referencedColumns: ["id"]
           },
           {
@@ -1875,6 +1891,21 @@ export type Database = {
             }
             Returns: string
           }
+        | {
+            Args: {
+              p_association_id: string
+              p_bill_no: string
+              p_bill_type?: string
+              p_due_date: string
+              p_gst_amount?: number
+              p_line_items: Json
+              p_period: string
+              p_tenancy_id?: string | null
+              p_total_amount: number
+              p_unit_id: string
+            }
+            Returns: string
+          }
       create_invitation: {
         Args: { account_id: string; email: string; role: string }
         Returns: {
@@ -2052,6 +2083,18 @@ export type Database = {
       revoke_nonce: {
         Args: { p_id: string; p_reason?: string }
         Returns: boolean
+      }
+      super_admin_delete_all_bills: {
+        Args: { p_association_id: string }
+        Returns: {
+          deleted_bills: number
+          deleted_payments: number
+          deleted_receipts: number
+        }[]
+      }
+      super_admin_delete_all_payments: {
+        Args: { p_association_id: string }
+        Returns: { deleted_payments: number; deleted_receipts: number }[]
       }
       team_account_workspace: {
         Args: { account_slug: string }

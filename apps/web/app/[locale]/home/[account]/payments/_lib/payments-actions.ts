@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
@@ -144,4 +145,70 @@ export async function voidPaymentAction(
   revalidatePath(PAYMENTS_PATH, 'page');
 
   return { success: true };
+}
+
+const BILLING_DOCUMENTS_BUCKET = 'billing-documents';
+
+/**
+ * Super-admin-only bulk delete: wipes every payment (cascading to
+ * receipts) for the association, leaving the bills themselves intact —
+ * they revert to their pre-payment Unpaid/Overdue state via the existing
+ * `sync_bill_payment_status` trigger.
+ *
+ * Authorization is enforced inside the `super_admin_delete_all_payments`
+ * RPC itself (security definer, checks `is_super_admin()`), not via
+ * `requireBillingAccess`, for the same reason as `deleteAllBillsAction` in
+ * billing-actions.ts — a super admin viewing an "opened workspace"
+ * resolves to `assoc_admin` too, so that role check can't distinguish a
+ * real customer admin from a super admin doing a mass wipe.
+ */
+export async function deleteAllPaymentsAction(
+  associationId: string,
+): Promise<
+  ActionResult & { deletedPayments?: number; deletedReceipts?: number }
+> {
+  const client = getSupabaseServerClient();
+
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+  if (!isSuperAdmin) {
+    return { success: false, error: 'Only a super admin can do that.' };
+  }
+
+  const { data, error } = await client
+    .rpc('super_admin_delete_all_payments', {
+      p_association_id: associationId,
+    })
+    .single();
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  // Best-effort cleanup of orphaned cached receipt PDFs.
+  const admin = getSupabaseServerAdminClient();
+  const prefix = `receipts/${associationId}`;
+  const { data: objects } = await admin.storage
+    .from(BILLING_DOCUMENTS_BUCKET)
+    .list(prefix);
+  if (objects && objects.length > 0) {
+    await admin.storage
+      .from(BILLING_DOCUMENTS_BUCKET)
+      .remove(objects.map((o) => `${prefix}/${o.name}`));
+  }
+
+  await logAuditEvent({
+    associationId,
+    action: 'payments.bulk_deleted',
+    entityType: 'payment',
+    summary: `Deleted ${data.deleted_payments} payments, ${data.deleted_receipts} receipts (super admin bulk delete)`,
+  });
+
+  revalidatePath(PAYMENTS_PATH, 'page');
+  revalidatePath('/home/[account]/billing', 'page');
+
+  return {
+    success: true,
+    deletedPayments: data.deleted_payments,
+    deletedReceipts: data.deleted_receipts,
+  };
 }

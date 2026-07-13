@@ -850,56 +850,61 @@ export async function bulkInviteMembersAction(
     unitUpdateMap.set(key, existing);
   }
 
-  for (const {
-    associationId,
-    unit_no,
-    unit_status,
-    owner_id,
-    owner_is_company,
-    owner_company_name,
-    tenant_id,
-  } of unitUpdateMap.values()) {
-    const { data: updatedUnit, error } = await adminClient
-      .from('units')
-      .update({
-        status: unit_status,
-        ...(owner_id !== undefined ? { owner_id } : {}),
-        ...(owner_is_company !== undefined ? { owner_is_company } : {}),
-        ...(owner_company_name !== undefined ? { owner_company_name } : {}),
-      })
-      .eq('association_id', associationId)
-      .eq('unit_no', unit_no)
-      .select('id')
-      .single();
+  // All unit updates are independent — run them in parallel.
+  await Promise.allSettled(
+    [...unitUpdateMap.values()].map(
+      async ({
+        associationId,
+        unit_no,
+        unit_status,
+        owner_id,
+        owner_is_company,
+        owner_company_name,
+        tenant_id,
+      }) => {
+        const { data: updatedUnit, error } = await adminClient
+          .from('units')
+          .update({
+            status: unit_status,
+            ...(owner_id !== undefined ? { owner_id } : {}),
+            ...(owner_is_company !== undefined ? { owner_is_company } : {}),
+            ...(owner_company_name !== undefined ? { owner_company_name } : {}),
+          })
+          .eq('association_id', associationId)
+          .eq('unit_no', unit_no)
+          .select('id')
+          .single();
 
-    if (error) {
-      logger.error(
-        { associationId, unit_no, error },
-        'bulkInvite: failed to update unit',
-      );
-      continue;
-    }
+        if (error) {
+          logger.error(
+            { associationId, unit_no, error },
+            'bulkInvite: failed to update unit',
+          );
+          return;
+        }
 
-    // For RENTED units with a resolved tenant, create an active tenancy.
-    // The DB enforces one active tenancy per unit (partial unique index on unit_id
-    // where end_date IS NULL), so ignore 23505 to make re-imports idempotent.
-    if (tenant_id && updatedUnit?.id) {
-      const { error: tenancyError } = await adminClient
-        .from('tenancies')
-        .insert({
-          unit_id: updatedUnit.id,
-          tenant_id,
-          start_date: new Date().toISOString().split('T')[0]!,
-          status: 'active',
-        });
-      if (tenancyError && tenancyError.code !== '23505') {
-        logger.error(
-          { unit_no, tenant_id, error: tenancyError },
-          'bulkInvite: failed to create tenancy',
-        );
-      }
-    }
-  }
+        // For RENTED units with a resolved tenant, create an active tenancy.
+        // The DB enforces one active tenancy per unit (partial unique index on
+        // unit_id where end_date IS NULL), so ignore 23505 for idempotency.
+        if (tenant_id && updatedUnit?.id) {
+          const { error: tenancyError } = await adminClient
+            .from('tenancies')
+            .insert({
+              unit_id: updatedUnit.id,
+              tenant_id,
+              start_date: new Date().toISOString().split('T')[0]!,
+              status: 'active',
+            });
+          if (tenancyError && tenancyError.code !== '23505') {
+            logger.error(
+              { unit_no, tenant_id, error: tenancyError },
+              'bulkInvite: failed to create tenancy',
+            );
+          }
+        }
+      },
+    ),
+  );
 
   revalidatePath('/admin/accounts', 'page');
 

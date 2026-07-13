@@ -48,3 +48,20 @@ export function formatPeriodDateRange(period: string): string {
   const lastDay = new Date(Date.UTC(year, month, 0));
   return `${formatShortDate(firstDay)} - ${formatShortDate(lastDay)}`;
 }
+
+/** Returns "Ground Floor", "Basement N", or "2nd Floor" / "3rd Floor" / "11th Floor" etc. */
+export function ordinalFloorLabel(floor: number): string {
+  if (floor === 0) return 'Ground Floor';
+  if (floor < 0) return `Basement ${Math.abs(floor)}`;
+
+  const remainder100 = floor % 100;
+  const remainder10 = floor % 10;
+  let suffix = 'th';
+  if (remainder100 < 11 || remainder100 > 13) {
+    if (remainder10 === 1) suffix = 'st';
+    else if (remainder10 === 2) suffix = 'nd';
+    else if (remainder10 === 3) suffix = 'rd';
+  }
+
+  return `${floor}${suffix} Floor`;
+}

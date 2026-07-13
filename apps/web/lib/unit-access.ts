@@ -2,6 +2,28 @@ import 'server-only';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 /**
+ * Returns the id of the user's currently active tenancy on a unit, or null
+ * if they have no active tenancy there. Used both for unit-level access
+ * checks and for scoping a tenant's bills/receipts to their own tenancy
+ * period (see `getOrGenerateBillPdf`'s tenancy match check).
+ */
+export async function getActiveTenancyId(
+  client: SupabaseClient,
+  unitId: string,
+  userId: string,
+): Promise<string | null> {
+  const { data: tenancy } = await client
+    .from('tenancies')
+    .select('id')
+    .eq('unit_id', unitId)
+    .eq('tenant_id', userId)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  return tenancy?.id ?? null;
+}
+
+/**
  * Checks if the current user has access to a specific unit either as an owner or an active tenant.
  */
 export async function checkUnitAccess(
@@ -20,15 +42,7 @@ export async function checkUnitAccess(
     return true;
   }
 
-  const { data: tenancy } = await client
-    .from('tenancies')
-    .select('id')
-    .eq('unit_id', unitId)
-    .eq('tenant_id', userId)
-    .eq('status', 'active')
-    .maybeSingle();
-
-  return !!tenancy;
+  return (await getActiveTenancyId(client, unitId, userId)) !== null;
 }
 
 /**

@@ -40,6 +40,8 @@ import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
+import { DangerZoneDeleteAll } from '../../_components/danger-zone-delete-all';
+import { deleteAllPaymentsAction } from '../_lib/payments-actions';
 import { BillPaymentsDialog, type PaymentRow } from './bill-payments-dialog';
 import { RecordPaymentDialog } from './record-payment-dialog';
 
@@ -63,6 +65,8 @@ export function PaymentsSection(props: {
   bills: BillPaymentRow[];
   canManage: boolean;
   canVoid: boolean;
+  isSuperAdmin?: boolean;
+  deletionCounts?: { payments: number; receipts: number } | null;
   title?: string;
   description?: string;
   accountSlug?: string;
@@ -71,6 +75,7 @@ export function PaymentsSection(props: {
 }) {
   const [statusVal, setStatusVal] = useState(props.initialStatus ?? 'all');
   const [typeVal, setTypeVal] = useState('all');
+  const [unitVal, setUnitVal] = useState('all');
   const [durationVal, setDurationVal] = useState(
     props.initialDuration ?? 'all',
   );
@@ -110,6 +115,10 @@ export function PaymentsSection(props: {
       rows = rows.filter((b) => b.bill_type === typeVal);
     }
 
+    if (unitVal !== 'all') {
+      rows = rows.filter((b) => b.unit_no === unitVal);
+    }
+
     if (durationVal !== 'all') {
       const periods = getPeriodsForDuration(durationVal);
       if (periods) {
@@ -119,7 +128,7 @@ export function PaymentsSection(props: {
     }
 
     return rows;
-  }, [props.bills, statusVal, typeVal, durationVal, today]);
+  }, [props.bills, statusVal, typeVal, unitVal, durationVal, today]);
 
   // Derived: summary metrics
   const metrics = useMemo(() => {
@@ -147,6 +156,13 @@ export function PaymentsSection(props: {
     setPage(1);
   };
 
+  const unitOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return props.bills
+      .map((b) => b.unit_no)
+      .filter((u) => u && !seen.has(u) && seen.add(u));
+  }, [props.bills]);
+
   const isEmpty =
     props.bills.length === 0 &&
     statusVal === 'all' &&
@@ -155,12 +171,28 @@ export function PaymentsSection(props: {
 
   return (
     <Card className="border-0 shadow-none">
-      <CardHeader>
-        <CardTitle>{props.title ?? 'Payments'}</CardTitle>
-        <CardDescription>
-          {props.description ??
-            'Record payments against bills and track receipts.'}
-        </CardDescription>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <CardTitle>{props.title ?? 'Payments'}</CardTitle>
+          <CardDescription>
+            {props.description ??
+              'Record payments against bills and track receipts.'}
+          </CardDescription>
+        </div>
+
+        {props.isSuperAdmin && props.deletionCounts ? (
+          <DangerZoneDeleteAll
+            confirmValue={props.accountSlug ?? ''}
+            buttonLabel="Delete all payments"
+            dialogTitle="Delete all payments for this association?"
+            description={`This permanently deletes ${props.deletionCounts.payments} payments and ${props.deletionCounts.receipts} receipts. Bills themselves are kept and revert to their unpaid state. This cannot be undone.`}
+            disabled={props.deletionCounts.payments === 0}
+            onDelete={() => deleteAllPaymentsAction(props.associationId)}
+            formatSuccessMessage={(result) =>
+              `Deleted ${result.deletedPayments ?? 0} payments, ${result.deletedReceipts ?? 0} receipts.`
+            }
+          />
+        ) : null}
       </CardHeader>
 
       <CardContent className="flex flex-col gap-3.5">
@@ -232,6 +264,27 @@ export function PaymentsSection(props: {
               </SelectContent>
             </Select>
           </div>
+
+          {unitOptions.length > 1 && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+                Unit
+              </span>
+              <Select value={unitVal} onValueChange={setFilter(setUnitVal)}>
+                <SelectTrigger className="bg-background h-9 w-[120px]">
+                  <SelectValue placeholder="Unit" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Units</SelectItem>
+                  {unitOptions.map((u) => (
+                    <SelectItem key={u} value={u}>
+                      {u}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Live metrics strip */}
           {filtered.length > 0 && (

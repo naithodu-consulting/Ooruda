@@ -51,6 +51,11 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
 
   const client = getSupabaseServerClient();
 
+  // isSuperAdmin gates the "Delete all payments" danger-zone action — a
+  // super admin viewing an "opened workspace" resolves `role` to
+  // 'assoc_admin' too, so this must be checked independently of `role`.
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+
   const { data: association } = await client
     .from('associations')
     .select('id')
@@ -61,12 +66,40 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     throw new Error('Unable to load the association for this account.');
   }
 
+  let deletionCounts: { payments: number; receipts: number } | null = null;
+  if (isSuperAdmin) {
+    const [{ count: paymentsCount }, { count: receiptsCount }] =
+      await Promise.all([
+        client
+          .from('payments')
+          .select('id', { count: 'exact', head: true })
+          .eq('association_id', association.id),
+        client
+          .from('receipts')
+          .select('id, payments!inner(association_id)', {
+            count: 'exact',
+            head: true,
+          })
+          .eq('payments.association_id', association.id),
+      ]);
+    deletionCounts = {
+      payments: paymentsCount ?? 0,
+      receipts: receiptsCount ?? 0,
+    };
+  }
+
   const isUserRestricted = role === 'prop_owner' || role === 'tenant';
 
-  // For owners/tenants resolve their unit IDs first (needed to scope the query).
-  // A user may own one unit and rent another in the same association, so we
-  // union both ownership and active tenancy unit IDs regardless of their role.
-  let unitIds: string[] = [];
+  // For owners/tenants resolve their unit IDs first (needed to scope the
+  // query). A user may own one unit and rent another in the same
+  // association, so we resolve both independently:
+  // - owned units: the user sees every bill ever generated for them.
+  // - rented units: the user must only see bills attributed to their OWN
+  //   tenancy (bills.tenancy_id) — otherwise a new tenant on a unit would
+  //   see every past tenant's bill/payment history on that same unit.
+  let ownedUnitIds: string[] = [];
+  let rentedUnitIds: string[] = [];
+  let myTenancyIds: string[] = [];
   if (isUserRestricted) {
     const [{ data: ownedUnits }, { data: tenancies }] = await Promise.all([
       client
@@ -76,16 +109,16 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         .eq('owner_id', userId),
       client
         .from('tenancies')
-        .select('unit_id, units!inner(association_id)')
+        .select('id, unit_id, units!inner(association_id)')
         .eq('tenant_id', userId)
         .eq('status', 'active')
         .eq('units.association_id', association.id),
     ]);
-    const owned = (ownedUnits ?? []).map((u) => u.id);
-    const rented = (tenancies ?? []).map((t) => t.unit_id);
-    unitIds = [...new Set([...owned, ...rented])];
+    ownedUnitIds = (ownedUnits ?? []).map((u) => u.id);
+    rentedUnitIds = (tenancies ?? []).map((t) => t.unit_id);
+    myTenancyIds = (tenancies ?? []).map((t) => t.id);
 
-    if (unitIds.length === 0) {
+    if (ownedUnitIds.length === 0 && rentedUnitIds.length === 0) {
       return (
         <PageBody>
           <TeamAccountLayoutPageHeader
@@ -116,7 +149,39 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     .order('bill_no');
 
   if (isUserRestricted) {
-    query = query.in('unit_id', unitIds);
+    // Owned units: every bill, regardless of tenancy. Rented units: only
+    // bills attributed to this tenant's own tenancy (or predating any
+    // tenancy — self-occupied period bills with no tenant to hide from).
+    const filters: string[] = [];
+    if (ownedUnitIds.length > 0) {
+      filters.push(`unit_id.in.(${ownedUnitIds.join(',')})`);
+    }
+    if (rentedUnitIds.length > 0) {
+      const tenancyFilter =
+        myTenancyIds.length > 0
+          ? `or(tenancy_id.is.null,tenancy_id.in.(${myTenancyIds.join(',')}))`
+          : 'tenancy_id.is.null';
+      filters.push(
+        `and(unit_id.in.(${rentedUnitIds.join(',')}),${tenancyFilter})`,
+      );
+    }
+    if (filters.length === 0) {
+      // No accessible units — return nothing rather than falling through to
+      // an empty .or('') which PostgREST treats as no filter (returns all rows).
+      return (
+        <PageBody>
+          <TeamAccountLayoutPageHeader
+            account={account}
+            title={<Trans i18nKey="association.nav.payments" />}
+            description=""
+          />
+          <p className="text-muted-foreground py-8 text-center text-sm">
+            No units found for your account.
+          </p>
+        </PageBody>
+      );
+    }
+    query = query.or(filters.join(','));
   } else {
     query = query.eq('association_id', association.id);
   }
@@ -164,6 +229,8 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
           (role === 'assoc_admin' || role === 'billing_operator')
         }
         canVoid={!isUserRestricted && role === 'assoc_admin'}
+        isSuperAdmin={!!isSuperAdmin}
+        deletionCounts={deletionCounts}
         title={isUserRestricted ? 'Your payments' : 'Payments'}
         initialDuration={duration}
         initialStatus={status}

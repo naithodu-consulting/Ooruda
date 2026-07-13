@@ -11,7 +11,7 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole } from '~/lib/rbac';
-import { checkUnitAccess } from '~/lib/unit-access';
+import { getActiveTenancyId } from '~/lib/unit-access';
 
 const BUCKET = 'billing-documents';
 
@@ -32,10 +32,19 @@ export interface GeneratedPdf {
  * Unit-level scoping ("my unit only") is enforced at the app layer
  * everywhere else (see association-dashboard.tsx's owned/tenancy lookup),
  * so we replicate that same check here before serving a PDF.
+ *
+ * Owners may access every bill/receipt for a unit they own, regardless of
+ * which tenancy was active when it was generated. Tenants may only access
+ * bills/receipts attributed to their OWN tenancy (`billTenancyId`) — a bill
+ * with no tenancy_id predates any tenant (self-occupied period) and stays
+ * accessible, but a bill attributed to a *different* tenancy belongs to a
+ * past or future tenant on the same unit and must stay hidden from this one.
  */
 async function canAccessUnit(
   associationId: string,
   unitId: string,
+  ownerId: string | null,
+  billTenancyId: string | null,
 ): Promise<boolean> {
   const role = await getAssociationRole(associationId);
 
@@ -57,7 +66,17 @@ async function canAccessUnit(
     return false;
   }
 
-  return checkUnitAccess(client, unitId, user.id);
+  if (ownerId && ownerId === user.id) {
+    return true;
+  }
+
+  const tenancyId = await getActiveTenancyId(client, unitId, user.id);
+
+  if (!tenancyId) {
+    return false;
+  }
+
+  return billTenancyId === null || billTenancyId === tenancyId;
 }
 
 type UnitBillingFields = {
@@ -79,26 +98,32 @@ type TenancyBillingRow = {
 
 /**
  * Resolves the billing entity for a unit.
- * - bill_to=auto: use active tenant if present, else owner.
+ * - bill_to=auto: use the tenancy that was active when the bill was
+ *   generated, if any, else owner.
  * - bill_to=owner: always owner.
- * - bill_to=tenant: use active tenant if present, else fall back to owner.
+ * - bill_to=tenant: use that tenancy if present, else fall back to owner.
+ *
+ * `tenancyId` is the specific tenancy row the bill was attributed to at
+ * generation time (`bills.tenancy_id`) — NOT "whichever tenancy happens to
+ * be active right now". Resolving against the current active tenancy would
+ * make an old bill's "Bill To" name silently change to a new tenant's name
+ * after a tenancy turnover and PDF cache regeneration.
  */
 async function resolveBillingEntity(
-  unitId: string,
   unit: UnitBillingFields,
+  tenancyId: string | null,
 ): Promise<BillingEntityData> {
   const admin = getSupabaseServerAdminClient();
 
   let tenancy: TenancyBillingRow | null = null;
 
-  if (unit.bill_to !== 'owner') {
+  if (unit.bill_to !== 'owner' && tenancyId) {
     const { data } = await admin
       .from('tenancies')
       .select(
         'tenant_id, is_company, company_name, company_address, company_gstin',
       )
-      .eq('unit_id', unitId)
-      .eq('status', 'active')
+      .eq('id', tenancyId)
       .maybeSingle();
     tenancy = (data as TenancyBillingRow | null) ?? null;
   }
@@ -187,9 +212,9 @@ export async function getOrGenerateBillPdf(
     const { data: bill, error: billError } = await admin
       .from('bills')
       .select(
-        `id, association_id, unit_id, period, bill_no, bill_type, total_amount, gst_amount, paid_amount, status, due_date, generated_at, pdf_url,
+        `id, association_id, unit_id, period, bill_no, bill_type, total_amount, gst_amount, paid_amount, status, due_date, generated_at, pdf_url, tenancy_id,
          units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin),
-         bill_line_items(description, gst_applicable, amount),
+         bill_line_items(description, gst_applicable, amount, area_sqft, rate_per_sqft),
          associations(address, gstin, pan_number, registration_number, gst_enabled, gst_rate, authorised_signatory, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts(name, picture_url))`,
       )
       .eq('id', billId)
@@ -211,7 +236,15 @@ export async function getOrGenerateBillPdf(
       return null;
     }
 
-    if (!(await canAccessUnit(bill.association_id, bill.unit_id))) {
+    if (
+      !(await canAccessUnit(
+        bill.association_id,
+        bill.unit_id,
+        (bill.units as unknown as { owner_id: string | null } | null)
+          ?.owner_id ?? null,
+        bill.tenancy_id,
+      ))
+    ) {
       logger.warn(
         { billId, associationId: bill.association_id, unitId: bill.unit_id },
         "Caller is not authorized to access this bill's unit",
@@ -249,14 +282,17 @@ export async function getOrGenerateBillPdf(
     };
     const unitData = bill.units as unknown as ExtendedUnit;
 
-    const billTo = await resolveBillingEntity(bill.unit_id, {
-      bill_to: unitData.bill_to ?? 'auto',
-      owner_id: unitData.owner_id,
-      owner_is_company: unitData.owner_is_company ?? false,
-      owner_company_name: unitData.owner_company_name ?? null,
-      owner_company_address: unitData.owner_company_address ?? null,
-      owner_company_gstin: unitData.owner_company_gstin ?? null,
-    });
+    const billTo = await resolveBillingEntity(
+      {
+        bill_to: unitData.bill_to ?? 'auto',
+        owner_id: unitData.owner_id,
+        owner_is_company: unitData.owner_is_company ?? false,
+        owner_company_name: unitData.owner_company_name ?? null,
+        owner_company_address: unitData.owner_company_address ?? null,
+        owner_company_gstin: unitData.owner_company_gstin ?? null,
+      },
+      bill.tenancy_id,
+    );
 
     type ExtendedAssoc = typeof association & {
       pan_number: string | null;
@@ -436,6 +472,8 @@ export async function getOrGenerateBillPdf(
             description: item.description,
             gstApplicable: item.gst_applicable,
             amount: item.amount,
+            areaSqft: item.area_sqft ?? null,
+            ratePerSqft: item.rate_per_sqft ?? null,
           })),
         });
       } catch (error) {
@@ -511,7 +549,7 @@ export async function getOrGenerateReceiptPdf(
       .from('payments')
       .select(
         `id, association_id, amount, mode, reference_no, paid_at,
-         bills(bill_no, period, unit_id, units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin), associations(address, gstin, pan_number, registration_number, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts(name, picture_url))),
+         bills(bill_no, period, unit_id, tenancy_id, units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin), associations(address, gstin, pan_number, registration_number, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts(name, picture_url))),
          receipts(id, receipt_no, pdf_url, generated_at)`,
       )
       .eq('id', paymentId)
@@ -541,7 +579,15 @@ export async function getOrGenerateReceiptPdf(
       return null;
     }
 
-    if (!(await canAccessUnit(payment.association_id, payment.bills.unit_id))) {
+    if (
+      !(await canAccessUnit(
+        payment.association_id,
+        payment.bills.unit_id,
+        (payment.bills.units as unknown as { owner_id: string | null } | null)
+          ?.owner_id ?? null,
+        payment.bills.tenancy_id,
+      ))
+    ) {
       logger.warn(
         {
           paymentId,
@@ -579,14 +625,17 @@ export async function getOrGenerateReceiptPdf(
     };
     const unitData = payment.bills.units as unknown as ExtendedUnit;
 
-    const billTo = await resolveBillingEntity(payment.bills.unit_id, {
-      bill_to: unitData.bill_to ?? 'auto',
-      owner_id: unitData.owner_id,
-      owner_is_company: unitData.owner_is_company ?? false,
-      owner_company_name: unitData.owner_company_name ?? null,
-      owner_company_address: unitData.owner_company_address ?? null,
-      owner_company_gstin: unitData.owner_company_gstin ?? null,
-    });
+    const billTo = await resolveBillingEntity(
+      {
+        bill_to: unitData.bill_to ?? 'auto',
+        owner_id: unitData.owner_id,
+        owner_is_company: unitData.owner_is_company ?? false,
+        owner_company_name: unitData.owner_company_name ?? null,
+        owner_company_address: unitData.owner_company_address ?? null,
+        owner_company_gstin: unitData.owner_company_gstin ?? null,
+      },
+      payment.bills.tenancy_id,
+    );
 
     const association = payment.bills.associations;
     type ExtendedAssoc = typeof association & {

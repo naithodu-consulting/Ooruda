@@ -24,17 +24,17 @@ export const styles = StyleSheet.create({
     marginBottom: 4,
   },
   logo: {
-    width: 56,
-    height: 56,
+    width: 104,
+    height: 104,
     objectFit: 'contain',
-    marginRight: 12,
+    marginRight: 14,
   },
   headerNameBlock: {
     flex: 1,
     alignItems: 'center',
   },
   associationName: {
-    fontSize: 17,
+    fontSize: 13,
     fontWeight: 'bold',
     color: NAVY,
     textAlign: 'center',
@@ -58,20 +58,10 @@ export const styles = StyleSheet.create({
     fontSize: 8,
     color: '#000000',
   },
-  headerRuleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  headerRuleLine: {
-    flex: 1,
-    borderBottomWidth: 0.75,
+  headerRule: {
+    borderBottomWidth: 1,
     borderBottomColor: '#000000',
-  },
-  headerRuleDot: {
-    fontSize: 6,
-    color: '#000000',
-    marginHorizontal: 3,
+    marginBottom: 6,
   },
 
   // ── Doc title ─────────────────────────────────────────────────────────────
@@ -170,8 +160,10 @@ export const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   colDescription: { flexGrow: 1, flexBasis: 0, color: '#000000' },
-  colGst: { width: 44, textAlign: 'center', color: '#000000' },
-  colAmount: { width: 72, textAlign: 'right', color: '#000000' },
+  colArea: { width: 56, textAlign: 'right', color: '#000000' },
+  colRate: { width: 56, textAlign: 'right', color: '#000000' },
+  colGst: { width: 36, textAlign: 'center', color: '#000000' },
+  colAmount: { width: 68, textAlign: 'right', color: '#000000' },
 
   // ── Summary / totals ──────────────────────────────────────────────────────
   summaryBlock: {
@@ -207,9 +199,9 @@ export const styles = StyleSheet.create({
     left: 0,
     right: 0,
   },
-  footerRuleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  footerRule: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#000000',
     marginHorizontal: 36,
     marginBottom: 8,
   },

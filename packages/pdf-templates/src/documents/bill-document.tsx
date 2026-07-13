@@ -11,7 +11,9 @@ import { styles } from '../components/styles';
 import {
   formatINR,
   formatPeriodDateRange,
+  formatPeriodLabel,
   formatShortDate,
+  ordinalFloorLabel,
 } from '../lib/format';
 
 export interface BillingEntityData {
@@ -25,6 +27,10 @@ export interface BillPdfLineItem {
   description: string;
   gstApplicable: boolean;
   amount: number;
+  /** Unit area (sq ft) used to compute this line item — set only for per-sqft charges. */
+  areaSqft?: number | null;
+  /** Rate per sq ft used to compute this line item — set only for per-sqft charges. */
+  ratePerSqft?: number | null;
 }
 
 export interface BillPdfData {
@@ -63,7 +69,7 @@ function buildAddressLines(
     lines.push(`Unit ${unit.unitNo},`);
   }
   const floorAddr = [
-    unit.floor != null ? `Floor ${unit.floor}` : null,
+    unit.floor != null ? ordinalFloorLabel(unit.floor) : null,
     associationAddress,
   ]
     .filter(Boolean)
@@ -98,6 +104,11 @@ export function BillDocument({
   const outstanding = Math.max(0, bill.totalAmount - bill.paidAmount);
 
   const addressLines = buildAddressLines(billTo, unit, association.address);
+
+  // Only show Area/Rate columns when at least one line item is a per-sqft
+  // charge — an association fully on a per-unit/flat maintenance model
+  // never populates these, so its bills render the plain 2-column table.
+  const hasAreaColumns = lineItems.some((item) => item.areaSqft != null);
 
   return (
     <Document>
@@ -164,6 +175,16 @@ export function BillDocument({
             <Text style={[styles.colDescription, styles.tableHeaderText]}>
               Description
             </Text>
+            {hasAreaColumns ? (
+              <>
+                <Text style={[styles.colArea, styles.tableHeaderText]}>
+                  Area (sq.ft)
+                </Text>
+                <Text style={[styles.colRate, styles.tableHeaderText]}>
+                  Rate/sq.ft
+                </Text>
+              </>
+            ) : null}
             <Text style={[styles.colGst, styles.tableHeaderText]}>GST</Text>
             <Text style={[styles.colAmount, styles.tableHeaderText]}>
               Amount
@@ -175,8 +196,18 @@ export function BillDocument({
               key={i}
             >
               <Text style={[styles.colDescription, { fontWeight: 'bold' }]}>
-                {item.description}
+                {item.description} for {formatPeriodLabel(bill.period)}
               </Text>
+              {hasAreaColumns ? (
+                <>
+                  <Text style={styles.colArea}>
+                    {item.areaSqft != null ? item.areaSqft : '—'}
+                  </Text>
+                  <Text style={styles.colRate}>
+                    {item.ratePerSqft != null ? item.ratePerSqft : '—'}
+                  </Text>
+                </>
+              ) : null}
               <Text style={[styles.colGst, { textAlign: 'center' }]}>
                 {item.gstApplicable ? 'Yes' : '—'}
               </Text>

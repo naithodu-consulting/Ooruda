@@ -30,6 +30,11 @@ export default async function BillingPage({ params, searchParams }: Props) {
 
   const client = getSupabaseServerClient();
 
+  // isSuperAdmin gates the "Delete all bills" danger-zone action — a super
+  // admin viewing an "opened workspace" resolves `role` to 'assoc_admin'
+  // too, so this must be checked independently rather than via `role`.
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+
   const { data: association } = await client
     .from('associations')
     .select('id')
@@ -51,7 +56,7 @@ export default async function BillingPage({ params, searchParams }: Props) {
     client
       .from('bills')
       .select(
-        'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, gst_amount, units(unit_no), bill_line_items(id, description, payer, gst_applicable, amount)',
+        'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, gst_amount, units(unit_no), bill_line_items(id, description, payer, gst_applicable, amount, area_sqft, rate_per_sqft)',
       )
       .eq('association_id', association.id)
       .order('period', { ascending: false })
@@ -80,6 +85,35 @@ export default async function BillingPage({ params, searchParams }: Props) {
       .eq('association_id', association.id)
       .order('period', { ascending: false }),
   ]);
+
+  // Only fetch these counts for super admins — they drive the danger-zone
+  // "Delete all bills" summary and would be wasted work for everyone else.
+  let deletionCounts: {
+    bills: number;
+    payments: number;
+    receipts: number;
+  } | null = null;
+  if (isSuperAdmin) {
+    const [{ count: paymentsCount }, { count: receiptsCount }] =
+      await Promise.all([
+        client
+          .from('payments')
+          .select('id', { count: 'exact', head: true })
+          .eq('association_id', association.id),
+        client
+          .from('receipts')
+          .select('id, payments!inner(association_id)', {
+            count: 'exact',
+            head: true,
+          })
+          .eq('payments.association_id', association.id),
+      ]);
+    deletionCounts = {
+      bills: billsResult.data?.length ?? 0,
+      payments: paymentsCount ?? 0,
+      receipts: receiptsCount ?? 0,
+    };
+  }
 
   const unitRows = (unitsResult.data ?? []) as {
     id: string;
@@ -166,6 +200,8 @@ export default async function BillingPage({ params, searchParams }: Props) {
         bills={billRows}
         canManage={canManage}
         canDelete={canDelete}
+        isSuperAdmin={!!isSuperAdmin}
+        deletionCounts={deletionCounts}
         units={unitRows}
         pendingCharges={pendingCharges}
         periodOptions={periodOptions}

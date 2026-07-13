@@ -7,11 +7,13 @@ import {
   DocumentHeader,
   type AssociationBranding,
 } from '../components/document-header';
-import { NAVY, styles as sharedStyles } from '../components/styles';
+import { CREAM, NAVY, styles as sharedStyles } from '../components/styles';
 import {
   formatINR,
   formatPeriodDateRange,
+  formatPeriodLabel,
   formatShortDate,
+  ordinalFloorLabel,
 } from '../lib/format';
 import type { BillingEntityData } from './bill-document';
 
@@ -56,7 +58,7 @@ const s = StyleSheet.create({
   },
   tableHeaderRow: {
     flexDirection: 'row',
-    backgroundColor: '#FFFCF0',
+    backgroundColor: CREAM,
     paddingVertical: 7,
     paddingHorizontal: 10,
     borderBottomWidth: 1.25,
@@ -88,7 +90,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    backgroundColor: '#fffbeb',
+    backgroundColor: CREAM,
   },
   totalRow: {
     flexDirection: 'row',
@@ -96,57 +98,16 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     borderTopWidth: 2,
     borderTopColor: NAVY,
-    backgroundColor: '#eaf0f7',
+    backgroundColor: '#F1E9FA',
     fontWeight: 'bold',
     fontSize: 10,
   },
   colSl: { width: 22, fontSize: 8, color: '#000000' },
   colMeter: { flexGrow: 1, flexBasis: 0, color: '#000000' },
-  colReading: { width: 52, textAlign: 'right', color: '#000000' },
+  colReading: { width: 64, textAlign: 'right', color: '#000000' },
   colConsumed: { width: 54, textAlign: 'right', color: '#000000' },
   colRate: { width: 52, textAlign: 'right', color: '#000000' },
   colAmount: { width: 62, textAlign: 'right', color: '#000000' },
-
-  // ── Outstanding panel ─────────────────────────────────────────────────────
-  outstandingPanel: {
-    alignSelf: 'flex-end',
-    flexDirection: 'row',
-    gap: 4,
-    marginBottom: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: '#fef2f2',
-    borderRadius: 3,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-  },
-
-  // ── Signature row ─────────────────────────────────────────────────────────
-  signatureRow: {
-    marginTop: 28,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  signatureBlock: {
-    alignItems: 'center',
-    width: 160,
-  },
-  signatureLine: {
-    borderTopWidth: 1,
-    borderTopColor: '#94a3b8',
-    width: '100%',
-    paddingTop: 4,
-    textAlign: 'center',
-    fontSize: 8,
-    color: '#64748b',
-  },
-  signatureName: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginTop: 2,
-    color: '#000000',
-  },
 
   // ── Load note ─────────────────────────────────────────────────────────────
   loadNote: {
@@ -180,7 +141,7 @@ function buildAddressLines(
     lines.push(`Unit ${unit.unitNo},`);
   }
   const floorAddr = [
-    unit.floor != null ? `Floor ${unit.floor}` : null,
+    unit.floor != null ? ordinalFloorLabel(unit.floor) : null,
     associationAddress,
   ]
     .filter(Boolean)
@@ -204,7 +165,6 @@ export function ElectricityBillDocument({
   meters,
   minimumCharge,
 }: ElectricityBillPdfData) {
-  const outstanding = Math.max(0, bill.totalAmount - bill.paidAmount);
   const addressLines = buildAddressLines(billTo, unit, association.address);
 
   return (
@@ -264,13 +224,24 @@ export function ElectricityBillDocument({
           ) : null}
         </View>
 
+        {/* Description caption */}
+        <View style={sharedStyles.section}>
+          <Text style={sharedStyles.sectionTitle}>
+            Electricity Bill for {formatPeriodLabel(bill.period)}
+          </Text>
+        </View>
+
         {/* Meter readings table */}
         <View style={s.table}>
           <View style={s.tableHeaderRow}>
             <Text style={[s.colSl, s.tableHeaderText]}>SL</Text>
             <Text style={[s.colMeter, s.tableHeaderText]}>Description</Text>
-            <Text style={[s.colReading, s.tableHeaderText]}>Previous</Text>
-            <Text style={[s.colReading, s.tableHeaderText]}>Current</Text>
+            <Text style={[s.colReading, s.tableHeaderText]}>
+              Previous Reading
+            </Text>
+            <Text style={[s.colReading, s.tableHeaderText]}>
+              Current Reading
+            </Text>
             <Text style={[s.colConsumed, s.tableHeaderText]}>Units</Text>
             <Text style={[s.colRate, s.tableHeaderText]}>Rate/Unit</Text>
             <Text style={[s.colAmount, s.tableHeaderText]}>Amount</Text>
@@ -293,14 +264,12 @@ export function ElectricityBillDocument({
           {minimumCharge > 0 ? (
             <View style={s.minChargeRow}>
               <Text style={s.colSl}>{meters.length + 1}</Text>
-              <Text style={[s.colMeter, { color: '#92400e' }]}>
-                Minimum Charge
-              </Text>
+              <Text style={[s.colMeter, { color: NAVY }]}>Minimum Charge</Text>
               <Text style={s.colReading} />
               <Text style={s.colReading} />
               <Text style={s.colConsumed} />
               <Text style={s.colRate} />
-              <Text style={[s.colAmount, { color: '#92400e' }]}>
+              <Text style={[s.colAmount, { color: NAVY }]}>
                 {formatINR(minimumCharge)}
               </Text>
             </View>
@@ -334,41 +303,6 @@ export function ElectricityBillDocument({
             </Text>
           </View>
         ) : null}
-
-        {/* Outstanding amount (if partial/unpaid) */}
-        {outstanding > 0 ? (
-          <View style={s.outstandingPanel}>
-            <Text style={{ fontSize: 8, color: '#64748b' }}>Paid</Text>
-            <Text style={{ fontSize: 8 }}>{formatINR(bill.paidAmount)}</Text>
-            <Text style={{ fontSize: 8, color: '#64748b', marginLeft: 10 }}>
-              Outstanding
-            </Text>
-            <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#dc2626' }}>
-              {formatINR(outstanding)}
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Signatures */}
-        <View style={s.signatureRow}>
-          <View style={s.signatureBlock}>
-            <Text style={{ fontSize: 20, color: '#e2e8f0', marginBottom: 4 }}>
-              {''}
-            </Text>
-            <Text style={s.signatureLine}>Receiver's Signature</Text>
-          </View>
-          <View style={s.signatureBlock}>
-            <Text style={{ fontSize: 20, color: '#e2e8f0', marginBottom: 4 }}>
-              {''}
-            </Text>
-            <Text style={s.signatureLine}>Authorised Signatory</Text>
-            {association.authorisedSignatory ? (
-              <Text style={s.signatureName}>
-                {association.authorisedSignatory}
-              </Text>
-            ) : null}
-          </View>
-        </View>
 
         <DocumentFooter
           note="This is a system-generated bill and does not require a signature."

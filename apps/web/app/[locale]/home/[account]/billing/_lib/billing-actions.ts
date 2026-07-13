@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { getLogger } from '@kit/shared/logger';
+import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
@@ -52,6 +53,7 @@ export async function generateBillsAction(
   const { period, billType } = parsed.data;
   const client = getSupabaseServerClient();
 
+  // Fetch units first — we need unitIds before the parallel wave below.
   const { data: units } = await client
     .from('units')
     .select('id, unit_no, type, area_sqft')
@@ -63,13 +65,51 @@ export async function generateBillsAction(
     return { success: false, error: 'Add units before generating bills.' };
   }
 
-  const { data: chargeTypes } = await client
-    .from('charge_types')
-    .select(
-      'id, key, name, calc_method, rate_or_amount, default_payer, gst_applicable',
-    )
-    .eq('association_id', associationId)
-    .eq('is_active', true);
+  const unitIds = unitRows.map((u) => u.id);
+
+  // All of these are independent of each other — fire in parallel.
+  const [
+    { data: chargeTypes },
+    { data: activeTenancies },
+    { data: overrides },
+    { data: billingSettings },
+    { data: association, error: associationError },
+    { data: existingBills },
+  ] = await Promise.all([
+    client
+      .from('charge_types')
+      .select(
+        'id, key, name, calc_method, rate_or_amount, default_payer, gst_applicable',
+      )
+      .eq('association_id', associationId)
+      .eq('is_active', true),
+    client
+      .from('tenancies')
+      .select('id, unit_id')
+      .in('unit_id', unitIds)
+      .eq('status', 'active'),
+    client
+      .from('unit_charge_overrides')
+      .select(
+        'unit_id, charge_type_id, payer_override, rate_or_amount_override, is_excluded',
+      )
+      .in('unit_id', unitIds),
+    client
+      .from('billing_settings')
+      .select('electricity_due_day, maintenance_due_day, other_charges_due_day')
+      .eq('association_id', associationId)
+      .single(),
+    client
+      .from('associations')
+      .select('gst_enabled, gst_rate')
+      .eq('id', associationId)
+      .single(),
+    client
+      .from('bills')
+      .select('unit_id, bill_no')
+      .eq('association_id', associationId)
+      .eq('period', period),
+  ]);
 
   const activeChargeTypes = chargeTypes ?? [];
 
@@ -77,37 +117,20 @@ export async function generateBillsAction(
     return { success: false, error: 'No active charge types to bill.' };
   }
 
-  const unitIds = unitRows.map((u) => u.id);
-
-  const { data: overrides } = await client
-    .from('unit_charge_overrides')
-    .select(
-      'unit_id, charge_type_id, payer_override, rate_or_amount_override, is_excluded',
-    )
-    .in('unit_id', unitIds);
-
-  const overrideByKey = new Map(
-    (overrides ?? []).map((o) => [`${o.unit_id}:${o.charge_type_id}`, o]),
-  );
-
-  const { data: billingSettings } = await client
-    .from('billing_settings')
-    .select('electricity_due_day, maintenance_due_day, other_charges_due_day')
-    .eq('association_id', associationId)
-    .single();
-
-  const { data: association, error: associationError } = await client
-    .from('associations')
-    .select('gst_enabled, gst_rate')
-    .eq('id', associationId)
-    .single();
-
   if (associationError || !association) {
     return {
       success: false,
       error: 'Could not load association settings.',
     };
   }
+
+  const tenancyIdByUnit = new Map(
+    (activeTenancies ?? []).map((t) => [t.unit_id, t.id]),
+  );
+
+  const overrideByKey = new Map(
+    (overrides ?? []).map((o) => [`${o.unit_id}:${o.charge_type_id}`, o]),
+  );
 
   const gstEnabled = association.gst_enabled ?? false;
   const gstRate = association.gst_rate ?? 0;
@@ -135,87 +158,87 @@ export async function generateBillsAction(
   const otherChargesCT = activeChargeTypes.find(
     (c) => c.key === 'other_charges',
   );
-
-  const { data: pendingCharges } = otherChargesCT
-    ? await client
-        .from('pending_other_charges')
-        .select('id, unit_id, label, amount, split_mode')
-        .eq('association_id', associationId)
-        .eq('period', period)
-    : { data: [] };
-
-  const pendingRows = pendingCharges ?? [];
-
   const hasElectricityChargeType = activeChargeTypes.some(
     (c) => c.calc_method === 'electricity',
   );
+
+  // Fetch pending other charges and the MESCOM bill in parallel — both are
+  // independent of each other and only need chargeTypes (resolved above).
+  const [{ data: pendingCharges }, { data: mescomBill }] = await Promise.all([
+    otherChargesCT
+      ? client
+          .from('pending_other_charges')
+          .select('id, unit_id, label, amount, split_mode')
+          .eq('association_id', associationId)
+          .eq('period', period)
+      : Promise.resolve({
+          data: [] as {
+            id: string;
+            unit_id: string | null;
+            label: string;
+            amount: number;
+            split_mode: string | null;
+          }[],
+        }),
+    hasElectricityChargeType
+      ? client
+          .from('mescom_bills')
+          .select('invoice_amount')
+          .eq('association_id', associationId)
+          .eq('period', period)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const pendingRows = pendingCharges ?? [];
 
   let blockRate: number | null = null;
   const consumedByUnit: Record<string, number> = {};
   const minimumChargeByUnit: Record<string, number> = {};
 
-  if (hasElectricityChargeType) {
-    const { data: mescomBill } = await client
-      .from('mescom_bills')
-      .select('invoice_amount')
-      .eq('association_id', associationId)
-      .eq('period', period)
-      .maybeSingle();
+  if (hasElectricityChargeType && mescomBill && mescomBill.invoice_amount > 0) {
+    const { data: subMeters } = await client
+      .from('sub_meters')
+      .select('id, unit_id')
+      .in('unit_id', unitIds);
 
-    if (mescomBill && mescomBill.invoice_amount > 0) {
-      const { data: subMeters } = await client
-        .from('sub_meters')
-        .select('id, unit_id')
-        .in('unit_id', unitIds);
+    const subMeterIds = (subMeters ?? []).map((m) => m.id);
+    const unitIdBySubMeter = new Map(
+      (subMeters ?? []).map((m) => [m.id, m.unit_id]),
+    );
 
-      const subMeterIds = (subMeters ?? []).map((m) => m.id);
-      const unitIdBySubMeter = new Map(
-        (subMeters ?? []).map((m) => [m.id, m.unit_id]),
-      );
+    if (subMeterIds.length > 0) {
+      const { data: readings } = await client
+        .from('meter_readings')
+        .select('sub_meter_id, consumed_units, minimum_charge')
+        .eq('period', period)
+        .in('sub_meter_id', subMeterIds);
 
-      if (subMeterIds.length > 0) {
-        const { data: readings } = await client
-          .from('meter_readings')
-          .select('sub_meter_id, consumed_units, minimum_charge')
-          .eq('period', period)
-          .in('sub_meter_id', subMeterIds);
-
-        let totalSubMeterUnits = 0;
-        for (const r of readings ?? []) {
-          const unitId = unitIdBySubMeter.get(r.sub_meter_id);
-          if (unitId) {
-            consumedByUnit[unitId] =
-              (consumedByUnit[unitId] ?? 0) + (r.consumed_units ?? 0);
-            minimumChargeByUnit[unitId] =
-              (minimumChargeByUnit[unitId] ?? 0) + (r.minimum_charge ?? 0);
-          }
-          totalSubMeterUnits += r.consumed_units ?? 0;
+      let totalSubMeterUnits = 0;
+      for (const r of readings ?? []) {
+        const unitId = unitIdBySubMeter.get(r.sub_meter_id);
+        if (unitId) {
+          consumedByUnit[unitId] =
+            (consumedByUnit[unitId] ?? 0) + (r.consumed_units ?? 0);
+          minimumChargeByUnit[unitId] =
+            (minimumChargeByUnit[unitId] ?? 0) + (r.minimum_charge ?? 0);
         }
+        totalSubMeterUnits += r.consumed_units ?? 0;
+      }
 
-        // Rate = invoice ÷ sum of all sub-meter consumed units for this association.
-        // Includes CommonArea meters (their unit_id rows are in unitIds since the
-        // units query at the top fetches all units without a type filter).
-        // This is higher than the MESCOM block rate — transmission losses are
-        // distributed proportionally so the full invoice is always recovered.
-        if (totalSubMeterUnits > 0) {
-          blockRate = mescomBill.invoice_amount / totalSubMeterUnits;
-        } else {
-          const logger = await getLogger();
-          logger.warn(
-            { associationId, period },
-            'generateBills: no sub-meter readings found; electricity blockRate stays null',
-          );
-        }
+      if (totalSubMeterUnits > 0) {
+        blockRate = mescomBill.invoice_amount / totalSubMeterUnits;
+      } else {
+        const logger = await getLogger();
+        logger.warn(
+          { associationId, period },
+          'generateBills: no sub-meter readings found; electricity blockRate stays null',
+        );
       }
     }
   }
 
-  const { data: existingBills } = await client
-    .from('bills')
-    .select('unit_id, bill_no')
-    .eq('association_id', associationId)
-    .eq('period', period);
-
+  // existingBills was already fetched in the parallel wave above.
   const existingByUnit = new Map<string, string[]>();
   for (const b of existingBills ?? []) {
     const list = existingByUnit.get(b.unit_id) ?? [];
@@ -262,6 +285,8 @@ export async function generateBillsAction(
       payer: string;
       gst_applicable: boolean;
       amount: number;
+      area_sqft?: number;
+      rate_per_sqft?: number;
     };
 
     const elecItems: LineItem[] = [];
@@ -300,15 +325,18 @@ export async function generateBillsAction(
           continue;
         }
 
-        amount =
-          chargeType.calc_method === 'per_sqft' ? rate * unit.area_sqft : rate;
+        const isPerSqft = chargeType.calc_method === 'per_sqft';
+        amount = isPerSqft ? rate * unit.area_sqft : rate;
 
-        const item = {
+        const item: LineItem = {
           charge_type_id: chargeType.id,
           description: chargeType.name,
           payer,
           gst_applicable: chargeType.gst_applicable,
           amount: roundToTwoDecimals(amount),
+          ...(isPerSqft
+            ? { area_sqft: unit.area_sqft, rate_per_sqft: rate }
+            : {}),
         };
 
         if (chargeType.key === 'maintenance') {
@@ -408,6 +436,7 @@ export async function generateBillsAction(
         p_line_items: items,
         p_bill_type: billCategory,
         p_gst_amount: gstAmount,
+        p_tenancy_id: tenancyIdByUnit.get(unit.id) ?? null,
       });
 
       if (rpcError) {
@@ -428,61 +457,64 @@ export async function generateBillsAction(
       return true;
     };
 
-    // Common area units only get electricity bills.
+    // Build the list of bill types to generate for this unit, then fire them
+    // in parallel. Each type hits a different sequence counter so there's no
+    // DB-level contention between them.
+    const billsToGenerate: { type: string; promise: Promise<boolean> }[] = [];
+
     if (unit.type === 'Common Area') {
-      if (!hasElec && shouldGenElec) {
-        const ok = await generateSpecificBill(
-          'Electricity',
-          'ELT',
-          elecItems,
-          elecDueDate,
-        );
-        if (!ok)
-          return {
-            success: false,
-            error: 'Failed to generate electricity bill',
-          };
-      }
+      if (!hasElec && shouldGenElec)
+        billsToGenerate.push({
+          type: 'electricity',
+          promise: generateSpecificBill(
+            'Electricity',
+            'ELT',
+            elecItems,
+            elecDueDate,
+          ),
+        });
     } else {
-      if (!hasElec && shouldGenElec) {
-        const ok = await generateSpecificBill(
-          'Electricity',
-          'ELT',
-          elecItems,
-          elecDueDate,
-        );
-        if (!ok)
-          return {
-            success: false,
-            error: 'Failed to generate electricity bill',
-          };
-      }
-      if (!hasMaint && shouldGenMaint) {
-        const ok = await generateSpecificBill(
-          'Maintenance',
-          'MNT',
-          maintItems,
-          maintDueDate,
-        );
-        if (!ok)
-          return {
-            success: false,
-            error: 'Failed to generate maintenance bill',
-          };
-      }
-      if (!hasOther && shouldGenOther) {
-        const ok = await generateSpecificBill(
-          'Other Charges',
-          'OTH',
-          otherItems,
-          otherDueDate,
-        );
-        if (!ok)
-          return {
-            success: false,
-            error: 'Failed to generate other charges bill',
-          };
-      }
+      if (!hasElec && shouldGenElec)
+        billsToGenerate.push({
+          type: 'electricity',
+          promise: generateSpecificBill(
+            'Electricity',
+            'ELT',
+            elecItems,
+            elecDueDate,
+          ),
+        });
+      if (!hasMaint && shouldGenMaint)
+        billsToGenerate.push({
+          type: 'maintenance',
+          promise: generateSpecificBill(
+            'Maintenance',
+            'MNT',
+            maintItems,
+            maintDueDate,
+          ),
+        });
+      if (!hasOther && shouldGenOther)
+        billsToGenerate.push({
+          type: 'other charges',
+          promise: generateSpecificBill(
+            'Other Charges',
+            'OTH',
+            otherItems,
+            otherDueDate,
+          ),
+        });
+    }
+
+    const results = await Promise.all(billsToGenerate.map((b) => b.promise));
+    const failedTypes = billsToGenerate
+      .filter((_, i) => !results[i])
+      .map((b) => b.type);
+    if (failedTypes.length > 0) {
+      return {
+        success: false,
+        error: `Failed to generate ${failedTypes.join(', ')} bill${failedTypes.length > 1 ? 's' : ''}`,
+      };
     }
   }
 
@@ -691,4 +723,75 @@ export async function bulkImportOtherChargesAction(
 
   revalidatePath(BILLING_PATH, 'page');
   return { success: true, imported: toInsert.length, skipped };
+}
+
+const BILLING_DOCUMENTS_BUCKET = 'billing-documents';
+
+/**
+ * Super-admin-only bulk delete: wipes every bill (cascading to
+ * bill_line_items, payments, receipts) for the association, resets bill
+ * numbering, and cleans up orphaned cached PDFs from storage.
+ *
+ * Authorization is enforced inside the `super_admin_delete_all_bills` RPC
+ * itself (security definer, checks `is_super_admin()`) — NOT via the
+ * `assoc_admin`-scoped `requireBillingAccess` helper used elsewhere in this
+ * file, because a super admin viewing an "opened workspace" resolves to
+ * `assoc_admin` too (see `getAssociationRole`), so that check alone can't
+ * tell a real customer admin apart from a super admin doing a mass wipe.
+ */
+export async function deleteAllBillsAction(associationId: string): Promise<
+  ActionResult & {
+    deletedBills?: number;
+    deletedPayments?: number;
+    deletedReceipts?: number;
+  }
+> {
+  const client = getSupabaseServerClient();
+
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+  if (!isSuperAdmin) {
+    return { success: false, error: 'Only a super admin can do that.' };
+  }
+
+  const { data, error } = await client
+    .rpc('super_admin_delete_all_bills', { p_association_id: associationId })
+    .single();
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  // Best-effort cleanup of cached PDFs orphaned by the delete above — the
+  // storage bucket has no FK/cascade tie to the bills table.
+  const admin = getSupabaseServerAdminClient();
+  for (const prefix of [
+    `bills/${associationId}`,
+    `receipts/${associationId}`,
+  ]) {
+    const { data: objects } = await admin.storage
+      .from(BILLING_DOCUMENTS_BUCKET)
+      .list(prefix);
+    if (objects && objects.length > 0) {
+      await admin.storage
+        .from(BILLING_DOCUMENTS_BUCKET)
+        .remove(objects.map((o) => `${prefix}/${o.name}`));
+    }
+  }
+
+  await logAuditEvent({
+    associationId,
+    action: 'bills.bulk_deleted',
+    entityType: 'bill',
+    summary: `Deleted ${data.deleted_bills} bills, ${data.deleted_payments} payments, ${data.deleted_receipts} receipts (super admin bulk delete)`,
+  });
+
+  revalidatePath(BILLING_PATH, 'page');
+  revalidatePath('/home/[account]/payments', 'page');
+
+  return {
+    success: true,
+    deletedBills: data.deleted_bills,
+    deletedPayments: data.deleted_payments,
+    deletedReceipts: data.deleted_receipts,
+  };
 }

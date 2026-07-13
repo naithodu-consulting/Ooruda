@@ -376,9 +376,29 @@ export async function bulkImportMeterReadingsAction(
     });
   }
 
+  // Block import if unit bills have already been generated for this period —
+  // overwriting readings after billing would silently alter historical unit rates.
+  // Check unconditionally: unit bills can exist even if the MESCOM bill was later deleted.
+  const { count: generatedBillCount } = await client
+    .from('bills')
+    .select('id', { count: 'exact', head: true })
+    .eq('association_id', associationId)
+    .eq('period', firstPeriod)
+    .eq('bill_type', 'electricity');
+
+  if ((generatedBillCount ?? 0) > 0) {
+    return {
+      success: false,
+      imported: 0,
+      skipped: [],
+      error: `Electricity bills have already been generated for ${firstPeriod}. Readings cannot be changed after billing.`,
+    };
+  }
+
+  const targetBillId = billByPeriod.get(firstPeriod);
+
   // Fetch existing readings for this period's bill so we can preserve
   // load_kva / minimum_charge when the CSV leaves those fields blank.
-  const targetBillId = billByPeriod.get(firstPeriod);
   const { data: existingReadings } =
     targetBillId && smIds.length
       ? await client
@@ -570,59 +590,43 @@ export async function recordMeterReadingsAction(
     return { success: false, error: 'That bill was not found.' };
   }
 
-  const { data: existingReadings } = await client
+  // Block if unit bills have already been generated for this period.
+  const { count: generatedBillCount } = await client
+    .from('bills')
+    .select('id', { count: 'exact', head: true })
+    .eq('association_id', associationId)
+    .eq('period', bill.period)
+    .eq('bill_type', 'electricity');
+
+  if ((generatedBillCount ?? 0) > 0) {
+    return {
+      success: false,
+      error: `Electricity bills have already been generated for ${bill.period}. Readings cannot be changed after billing.`,
+    };
+  }
+
+  const toUpsert = parsed.data.readings.map((reading) => ({
+    sub_meter_id: reading.subMeterId,
+    mescom_bill_id: bill.id,
+    period: bill.period,
+    previous_reading: reading.previousReading,
+    current_reading: reading.currentReading,
+    minimum_charge: reading.minimumCharge,
+  }));
+
+  const { error: upsertError } = await client
     .from('meter_readings')
-    .select('id, sub_meter_id')
-    .eq('mescom_bill_id', bill.id);
+    .upsert(toUpsert, { onConflict: 'mescom_bill_id,sub_meter_id' });
 
-  const existingBySubMeter = new Map(
-    (existingReadings ?? []).map((r) => [r.sub_meter_id, r.id]),
-  );
-
-  for (const reading of parsed.data.readings) {
-    const existingId = existingBySubMeter.get(reading.subMeterId);
-
-    if (existingId) {
-      const { error } = await client
-        .from('meter_readings')
-        .update({
-          previous_reading: reading.previousReading,
-          current_reading: reading.currentReading,
-          minimum_charge: reading.minimumCharge,
-        })
-        .eq('id', existingId);
-
-      if (error) {
-        await logAuditEvent({
-          associationId,
-          action: 'meter_readings.record.failed',
-          entityType: 'mescom_bill',
-          entityId: bill.id,
-          summary: `Failed to record meter readings for ${bill.period}: ${error.message}`,
-        });
-        return { success: false, error: error.message };
-      }
-    } else {
-      const { error } = await client.from('meter_readings').insert({
-        sub_meter_id: reading.subMeterId,
-        mescom_bill_id: bill.id,
-        period: bill.period,
-        previous_reading: reading.previousReading,
-        current_reading: reading.currentReading,
-        minimum_charge: reading.minimumCharge,
-      });
-
-      if (error) {
-        await logAuditEvent({
-          associationId,
-          action: 'meter_readings.record.failed',
-          entityType: 'mescom_bill',
-          entityId: bill.id,
-          summary: `Failed to record meter readings for ${bill.period}: ${error.message}`,
-        });
-        return { success: false, error: error.message };
-      }
-    }
+  if (upsertError) {
+    await logAuditEvent({
+      associationId,
+      action: 'meter_readings.record.failed',
+      entityType: 'mescom_bill',
+      entityId: bill.id,
+      summary: `Failed to record meter readings for ${bill.period}: ${upsertError.message}`,
+    });
+    return { success: false, error: upsertError.message };
   }
 
   await logAuditEvent({

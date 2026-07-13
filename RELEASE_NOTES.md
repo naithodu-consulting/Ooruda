@@ -1133,6 +1133,8 @@ Example: `PRM/26-27/MNT/000001`
 - Draft Bills tab badge was counting raw item counts instead of section groups, causing mismatch with the "N drafts pending" summary text
 - PDF generation: duplicate `ExtendedAssocElec` type cast removed; electricity path now reuses `assocData`
 - Filter dropdowns in Draft Bills now display human-readable labels ("All Types", "Other Charges") instead of raw keys
+- Generated Bills Overdue filter now correctly matches bills where the cron has already set `status = 'Overdue'` in the DB (previously only matched bills still in `Unpaid`/`Partial` state)
+- `recompute_overdue_bills()` cron function now skips bills with `total_amount = 0`; 24 existing zero-amount bills corrected from `Overdue` → `Unpaid` on remote
 
 ### Migrations Changelog
 
@@ -1140,7 +1142,68 @@ Example: `PRM/26-27/MNT/000001`
 |-----------|------|-------------|
 | `20260717000000_associations_contact_bank.sql` | Jul 17 | Add contact and bank fields to `associations` table |
 | `20260717000001_bill_no_format_v2.sql` | Jul 17 | Expand `bill_sequences` check constraint; replace `allocate_bill_no` with new `PREFIX/FY/TYPE/NNNNNN` format |
+| `20260713000002_fix_recompute_overdue_zero_amount.sql` | Jul 13 | Fix `recompute_overdue_bills()` to skip zero-amount bills |
 
 ---
 
-*Last updated: 2026-07-17 (v5.0 — Billing UX, bill number format v2, font & PDF fixes)*
+## Bug Fix — Exclude Common Area from Units List and Dashboard Counts (Jul 10, 2026)
+
+### Units & Dashboard: Common Area Filtering
+
+- **Units Page** — `Common Area` type units are now filtered out from the main Units & Owners page table and metric cards (Total, Occupied, Vacant). This prevents them from incorrectly counting towards vacant commercial/residential spaces.
+- **Dashboard** — `Common Area` type units are also excluded from the total units and occupied units counts on the association overview dashboard.
+- **Database** — Common Area units remain in the database to support electricity sub-meters and utility billing mapping.
+
+---
+
+## Billing PDF Redesign, Tenancy Data Isolation, Super-Admin Bulk Delete (Jul 18–21, 2026)
+
+### PDF Redesign — Bill, Receipt, Electricity Bill
+
+- Header: association logo enlarged (~2x), name font reduced for balance, single continuous separator rule (was two segments with a decorative gap that read as "broken")
+- Contact strip now shows `Email:` / `Phone No:` labels instead of bare values
+- Unit floor formatted as ordinal ("2nd Floor", "3rd Floor", "11th Floor", "Ground Floor", "Basement N") in Bill To / Received From addresses
+- Line item descriptions now read "{Charge Name} for {Month Year}" (e.g. "Maintenance for July 2026")
+- Electricity bill: added "Electricity Bill for {Month Year}" caption above the meter table; renamed Previous/Current columns to "Previous Reading"/"Current Reading"; removed the Paid/Outstanding panel and both signature blocks; colors aligned to the shared navy/cream palette
+- Bank details, brand colors, header/footer layout matched to the association's reference invoice template
+
+### Per-sqft Maintenance: Area & Rate columns
+
+- `bill_line_items` gained nullable `area_sqft` / `rate_per_sqft`, populated only when the charge type is `calc_method = 'per_sqft'` at generation time
+- Bill PDF and the in-app "View breakdown" dialog show Area (sq.ft) / Rate/sq.ft columns after Description, but only when at least one line item on that bill actually has them — an association fully on a per-unit/flat maintenance model renders the plain table, and historical per-sqft bills keep their original values even after a later switch to per-unit billing
+
+### Tenancy Data Isolation (privacy fix)
+
+- Bills/payments previously had no link to the tenancy that was active when they were generated, so a **new tenant on a unit could see every past tenant's bill/payment history** (amounts, payment mode, receipt numbers) once assigned to that unit
+- Added `bills.tenancy_id`, stamped at generation time from the unit's currently active tenancy; backfilled for existing bills by matching period against tenancy date ranges
+- PDF download authorization now checks that a tenant's own tenancy matches the bill's `tenancy_id` (owners are unaffected — they still see every bill for units they own)
+- "Bill To" on a bill/receipt now resolves from the bill's own recorded tenancy, not whichever tenancy happens to be active *now* — prevents an old bill's payer name from silently changing after a tenant turnover and PDF cache regeneration
+- Owner dashboard and Payments page bill/payment lists scoped the same way for rented units
+
+### Super-Admin Bulk Delete
+
+- "Delete all bills" (billing page) and "Delete all payments" (payments page) buttons, visible only to super admins (checked independently of the `assoc_admin`-equivalent role granted when viewing an opened workspace)
+- Type-to-confirm (association slug) dialog showing live bill/payment/receipt counts before deletion
+- Backed by `security definer` RPCs (`super_admin_delete_all_bills`, `super_admin_delete_all_payments`) with an explicit `is_super_admin()` check inside — not reliant on RLS, since RLS can't distinguish a real assoc_admin from an impersonating super admin
+- Deleting bills cascades to line items/payments/receipts, resets bill numbering, and cleans up orphaned cached PDFs from storage; deleting payments leaves bills intact (they revert to their unpaid state)
+
+### Bug fixes
+
+- Owner dashboard "Total Amount Due" only checked for `status IN ('Unpaid','Partial')`, missing bills already persisted as `'Overdue'` — such bills silently dropped out of the outstanding total, showing "All paid" when money was actually owed
+- Owner dashboard "Bill history" / "My payments" cards hard-capped at 3 items with no way to see the rest — a unit with 5 bills only showed 3
+- `admin-account-page.tsx`: the newly-added `profiles.mobile_number` phone fallback was unreachable because `??` doesn't treat `''` (the typical value of `auth.users.phone` for phone-OTP-only accounts) as absent — switched to `||`
+- `GenerateBillsSchema`: a `.refine()` meant to give a friendly "Please select a bill type" message could never fire (the underlying `z.enum()` already rejects `undefined` before refine runs) — moved the message onto the enum itself
+- Parallelized bill generation (electricity/maintenance/other charges) had regressed to a generic "Failed to generate one or more bills" error; restored per-type error messages
+
+### Migrations Changelog
+
+| Migration | Date | Description |
+|-----------|------|-------------|
+| `20260718000000_bills_tenancy_id.sql` | Jul 18 | Add `bills.tenancy_id`, backfill from tenancy date-range overlap |
+| `20260719000000_super_admin_delete_all_billing.sql` | Jul 19 | Add `super_admin_delete_all_bills` / `super_admin_delete_all_payments` RPCs |
+| `20260720000000_invalidate_bill_pdf_cache_again.sql` | Jul 20 | Re-invalidate cached bill/receipt PDFs after template changes |
+| `20260721000000_bill_line_items_area_rate.sql` | Jul 21 | Add `bill_line_items.area_sqft` / `rate_per_sqft` |
+
+---
+
+*Last updated: 2026-07-21*

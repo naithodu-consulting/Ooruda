@@ -59,6 +59,7 @@ export default async function UnitsPage({ params }: Props) {
       'id, unit_no, type, floor, area_sqft, door_no, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin, bill_to, status',
     )
     .eq('association_id', association.id)
+    .neq('type', 'Common Area')
     .order('unit_no');
 
   const unitRows = (units ?? []) as UnitRow[];

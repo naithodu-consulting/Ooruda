@@ -53,6 +53,7 @@ import {
   TableRow,
 } from '@kit/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@kit/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@kit/ui/tooltip';
 import { cn } from '@kit/ui/utils';
 
 import { DownloadPdfButton } from '~/components/download-pdf-button';
@@ -67,7 +68,9 @@ import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
+import { DangerZoneDeleteAll } from '../../_components/danger-zone-delete-all';
 import {
+  deleteAllBillsAction,
   generateBillsAction,
   type PendingOtherCharge,
 } from '../_lib/billing-actions';
@@ -119,6 +122,12 @@ export function BillsSection(props: {
   bills: BillRow[];
   canManage: boolean;
   canDelete: boolean;
+  isSuperAdmin?: boolean;
+  deletionCounts?: {
+    bills: number;
+    payments: number;
+    receipts: number;
+  } | null;
   units?: { id: string; unit_no: string }[];
   pendingCharges?: PendingChargeWithUnit[];
   periodOptions?: string[];
@@ -140,21 +149,37 @@ export function BillsSection(props: {
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <CardTitle>Bills</CardTitle>
 
-        {props.canManage ? (
-          <div className="flex items-center gap-2 sm:shrink-0">
-            {props.isOtherChargesActive &&
-              props.units &&
-              props.periodOptions && (
-                <OtherChargesDialog
-                  associationId={props.associationId}
-                  units={props.units}
-                  pendingCharges={props.pendingCharges ?? []}
-                  periods={props.periodOptions}
-                />
-              )}
-            <GenerateBillsDialog associationId={props.associationId} />
-          </div>
-        ) : null}
+        <div className="flex items-center gap-2 sm:shrink-0">
+          {props.canManage ? (
+            <>
+              {props.isOtherChargesActive &&
+                props.units &&
+                props.periodOptions && (
+                  <OtherChargesDialog
+                    associationId={props.associationId}
+                    units={props.units}
+                    pendingCharges={props.pendingCharges ?? []}
+                    periods={props.periodOptions}
+                  />
+                )}
+              <GenerateBillsDialog associationId={props.associationId} />
+            </>
+          ) : null}
+
+          {props.isSuperAdmin && props.deletionCounts ? (
+            <DangerZoneDeleteAll
+              confirmValue={props.accountSlug ?? ''}
+              buttonLabel="Delete all bills"
+              dialogTitle="Delete all bills for this association?"
+              description={`This permanently deletes ${props.deletionCounts.bills} bills, ${props.deletionCounts.payments} payments, and ${props.deletionCounts.receipts} receipts for this association, and resets bill numbering. This cannot be undone.`}
+              disabled={props.deletionCounts.bills === 0}
+              onDelete={() => deleteAllBillsAction(props.associationId)}
+              formatSuccessMessage={(result) =>
+                `Deleted ${result.deletedBills ?? 0} bills, ${result.deletedPayments ?? 0} payments, ${result.deletedReceipts ?? 0} receipts.`
+              }
+            />
+          ) : null}
+        </div>
       </CardHeader>
 
       <CardContent>
@@ -192,6 +217,7 @@ export function BillsSection(props: {
           <TabsContent value="generated">
             <GeneratedBillsTab
               bills={props.bills}
+              units={props.units}
               initialDuration={props.initialDuration}
               initialStatus={props.initialStatus}
             />
@@ -582,11 +608,13 @@ function DraftSection(props: {
 
 function GeneratedBillsTab(props: {
   bills: BillRow[];
+  units?: { id: string; unit_no: string }[];
   initialDuration?: string;
   initialStatus?: string;
 }) {
   const [statusVal, setStatusVal] = useState(props.initialStatus ?? 'all');
   const [typeVal, setTypeVal] = useState('all');
+  const [unitVal, setUnitVal] = useState('all');
   const [durationVal, setDurationVal] = useState(
     props.initialDuration ?? 'all',
   );
@@ -610,14 +638,19 @@ function GeneratedBillsTab(props: {
       } else if (statusVal === 'overdue') {
         rows = rows.filter(
           (b) =>
-            (b.status === 'Unpaid' || b.status === 'Partial') &&
-            b.due_date < today,
+            b.status === 'Overdue' ||
+            ((b.status === 'Unpaid' || b.status === 'Partial') &&
+              b.due_date < today),
         );
       }
     }
 
     if (typeVal !== 'all') {
       rows = rows.filter((b) => b.bill_type === typeVal);
+    }
+
+    if (unitVal !== 'all') {
+      rows = rows.filter((b) => b.unit_no === unitVal);
     }
 
     if (durationVal !== 'all') {
@@ -629,7 +662,7 @@ function GeneratedBillsTab(props: {
     }
 
     return rows;
-  }, [props.bills, statusVal, typeVal, durationVal, today]);
+  }, [props.bills, statusVal, typeVal, unitVal, durationVal, today]);
 
   const metrics = useMemo(() => {
     const totalBilled = filtered.reduce((s, b) => s + b.total_amount, 0);
@@ -654,6 +687,22 @@ function GeneratedBillsTab(props: {
     setter(val ?? 'all');
     setPage(1);
   };
+
+  const unitOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return props.bills
+      .map((b) => b.unit_no)
+      .filter((u) => u && !seen.has(u) && seen.add(u));
+  }, [props.bills]);
+
+  const unitSelectItems = useMemo(
+    () =>
+      ({
+        all: 'All Units',
+        ...Object.fromEntries(unitOptions.map((u) => [u, u])),
+      }) as Record<string, string>,
+    [unitOptions],
+  );
 
   if (props.bills.length === 0) {
     return (
@@ -734,6 +783,31 @@ function GeneratedBillsTab(props: {
           </Select>
         </div>
 
+        {unitOptions.length > 1 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+              Unit
+            </span>
+            <Select
+              items={unitSelectItems}
+              value={unitVal}
+              onValueChange={setFilter(setUnitVal)}
+            >
+              <SelectTrigger className="bg-background h-9 w-[120px]">
+                <SelectValue placeholder="Unit" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Units</SelectItem>
+                {unitOptions.map((u) => (
+                  <SelectItem key={u} value={u}>
+                    {u}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         {filtered.length > 0 && (
           <div className="text-muted-foreground ml-auto flex flex-wrap items-center gap-4 text-sm">
             <span>
@@ -775,8 +849,7 @@ function GeneratedBillsTab(props: {
                 <TableRow>
                   <TableHead>Bill No.</TableHead>
                   <TableHead>Unit</TableHead>
-                  <TableHead className="text-right">Maintenance</TableHead>
-                  <TableHead className="text-right">Electricity</TableHead>
+                  <TableHead>Breakdown</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead className="text-right">Paid</TableHead>
                   <TableHead>Status</TableHead>
@@ -786,12 +859,17 @@ function GeneratedBillsTab(props: {
               <TableBody>
                 {paginated.map((bill) => {
                   const status = displayBillStatus(bill);
-                  const maintenanceLine = bill.lineItems.find((li) =>
-                    li.description.toLowerCase().includes('maintenance'),
-                  );
-                  const electricityLine = bill.lineItems.find((li) =>
-                    li.description.toLowerCase().includes('electricity'),
-                  );
+                  const breakdownItems = bill.lineItems
+                    .filter((li) => li.amount > 0)
+                    .map((li) => {
+                      const desc = li.description.toLowerCase();
+                      const icon = desc.includes('electricity')
+                        ? '⚡'
+                        : desc.includes('maintenance')
+                          ? '🔧'
+                          : '📄';
+                      return { icon, label: li.description, amount: li.amount };
+                    });
 
                   return (
                     <TableRow key={bill.id}>
@@ -801,15 +879,32 @@ function GeneratedBillsTab(props: {
                       <TableCell className="font-semibold">
                         {bill.unit_no}
                       </TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums">
-                        {maintenanceLine
-                          ? formatINR(maintenanceLine.amount)
-                          : '—'}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums">
-                        {electricityLine
-                          ? formatINR(electricityLine.amount)
-                          : '—'}
+                      <TableCell>
+                        {breakdownItems.length > 0 ? (
+                          <div className="flex flex-col gap-0.5">
+                            {breakdownItems.map((item, i) => (
+                              <span
+                                key={i}
+                                className="text-muted-foreground flex items-center gap-1 text-xs tabular-nums"
+                              >
+                                <span>{item.icon}</span>
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <span className="max-w-[120px] truncate">
+                                      {item.label}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{item.label}</TooltipContent>
+                                </Tooltip>
+                                <span className="text-foreground ml-auto pl-2 font-medium">
+                                  {formatINR(item.amount)}
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          '—'
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-bold tabular-nums">
                         {formatINR(bill.total_amount)}
@@ -985,7 +1080,7 @@ function GenerateBillsForm(props: {
 
   const form = useForm({
     resolver: zodResolver(GenerateBillsSchema),
-    defaultValues: { period: defaultPeriod, billType: 'All' },
+    defaultValues: { period: defaultPeriod, billType: undefined },
   });
 
   const onSubmit = form.handleSubmit((values) => {
@@ -1061,10 +1156,10 @@ function GenerateBillsForm(props: {
                 <Select
                   items={BILL_TYPE_ITEMS}
                   onValueChange={field.onChange}
-                  defaultValue={field.value}
+                  value={field.value ?? ''}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select Bill Type" />
+                    <SelectValue placeholder="Select bill type…" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All">All Bills</SelectItem>
@@ -1110,7 +1205,12 @@ function GenerateBillsForm(props: {
           )}
         />
 
-        <Button type="submit" size="sm" className="self-start">
+        <Button
+          type="submit"
+          size="sm"
+          className="self-start"
+          disabled={!form.watch('billType')}
+        >
           Generate
         </Button>
       </form>

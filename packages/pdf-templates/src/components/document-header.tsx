@@ -40,8 +40,8 @@ export function DocumentHeader({ association }: Props) {
           // eslint-disable-next-line jsx-a11y/alt-text
           <Image style={styles.logo} src={association.logoUrl} />
         ) : (
-          <View style={{ marginRight: 12 }}>
-            <OorudaMark size={48} />
+          <View style={{ marginRight: 14 }}>
+            <OorudaMark size={96} />
           </View>
         )}
         <View style={styles.headerNameBlock}>
@@ -56,21 +56,17 @@ export function DocumentHeader({ association }: Props) {
       {(association.email ?? contactId ?? association.phone) ? (
         <View style={styles.headerContactRow}>
           <Text style={styles.headerContactText}>
-            {association.email ?? ''}
+            {association.email ? `Email: ${association.email}` : ''}
           </Text>
           <Text style={styles.headerContactText}>{contactId ?? ''}</Text>
           <Text style={styles.headerContactText}>
-            {association.phone ?? ''}
+            {association.phone ? `Phone No: ${association.phone}` : ''}
           </Text>
         </View>
       ) : null}
 
       {/* Single separator below contact row */}
-      <View style={styles.headerRuleRow}>
-        <View style={styles.headerRuleLine} />
-        <Text style={styles.headerRuleDot}>◆</Text>
-        <View style={styles.headerRuleLine} />
-      </View>
+      <View style={styles.headerRule} />
     </View>
   );
 }
