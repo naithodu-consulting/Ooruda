@@ -90,7 +90,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    backgroundColor: CREAM,
   },
   totalRow: {
     flexDirection: 'row',
@@ -98,7 +97,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     borderTopWidth: 1.25,
     borderTopColor: NAVY,
-    backgroundColor: CREAM,
     fontWeight: 'bold',
     fontSize: 10,
   },
@@ -240,7 +238,7 @@ export function ElectricityBillDocument({
             <View style={i % 2 === 0 ? s.tableRow : s.tableRowAlt} key={i}>
               <Text style={s.colSl}>{i + 1}</Text>
               <Text style={s.colMeter}>
-                {m.meterLabel.replace(/^SM\s*[-–]?\s*/i, 'Sub-meter ')}
+                Electricity Charges for {formatPeriodLabel(bill.period)}
               </Text>
               <Text style={s.colReading}>{m.previousReading}</Text>
               <Text style={s.colReading}>{m.currentReading}</Text>
@@ -267,7 +265,7 @@ export function ElectricityBillDocument({
           <View style={s.totalRow}>
             <Text style={s.colSl} />
             <Text style={[s.colMeter, { color: NAVY }]}>
-              Electricity Charges for {formatPeriodLabel(bill.period)}
+              Total Electricity Charges
             </Text>
             <Text style={s.colReading} />
             <Text style={s.colReading} />

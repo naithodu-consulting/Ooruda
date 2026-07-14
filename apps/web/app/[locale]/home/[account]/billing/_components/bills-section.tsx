@@ -144,6 +144,14 @@ export function BillsSection(props: {
     ((props.pendingElectricityBills?.length ?? 0) > 0 ? 1 : 0) +
     ((props.pendingCharges?.length ?? 0) > 0 ? 1 : 0);
 
+  // Arriving with a status/duration filter (e.g. from a dashboard tile link)
+  // means the caller wants the Generated Bills tab with that filter applied
+  // — defaulting to Draft Bills just because a draft happens to be pending
+  // would silently strand the requested filter on the wrong tab.
+  const hasIncomingFilter = !!(props.initialStatus || props.initialDuration);
+  const defaultTab =
+    hasIncomingFilter || draftCount === 0 ? 'generated' : 'draft';
+
   return (
     <Card className="border-0 shadow-none">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -183,7 +191,7 @@ export function BillsSection(props: {
       </CardHeader>
 
       <CardContent>
-        <Tabs defaultValue={draftCount > 0 ? 'draft' : 'generated'}>
+        <Tabs defaultValue={defaultTab}>
           <TabsList className="mb-4">
             <TabsTrigger value="draft" className="relative">
               Draft Bills
@@ -356,63 +364,73 @@ function DraftBillsTab(props: {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Select
-          value={typeFilter}
-          onValueChange={(v) => {
-            setTypeFilter(v as DraftTypeFilter);
-            setChargesPage(1);
-          }}
-        >
-          <SelectTrigger className="h-8 w-44 text-xs">
-            <SelectValue>
-              {typeFilter === 'all'
-                ? 'All Types'
-                : typeFilter === 'maintenance'
-                  ? 'Maintenance'
-                  : typeFilter === 'electricity'
-                    ? 'Electricity'
-                    : 'Other Charges'}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {props.maintenancePending && (
-              <SelectItem value="maintenance">Maintenance</SelectItem>
-            )}
-            {props.pendingElectricityBills.length > 0 && (
-              <SelectItem value="electricity">Electricity</SelectItem>
-            )}
-            {props.pendingCharges.length > 0 && (
-              <SelectItem value="other_charges">Other Charges</SelectItem>
-            )}
-          </SelectContent>
-        </Select>
-
-        {allPeriods.length > 1 && (
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+            Type
+          </span>
           <Select
-            value={periodFilter}
+            value={typeFilter}
             onValueChange={(v) => {
-              if (v) setPeriodFilter(v);
+              setTypeFilter(v as DraftTypeFilter);
               setChargesPage(1);
             }}
           >
-            <SelectTrigger className="h-8 w-36 text-xs">
+            <SelectTrigger className="bg-background h-9 w-[150px]">
               <SelectValue>
-                {periodFilter === 'all'
-                  ? 'All Periods'
-                  : formatPeriod(periodFilter)}
+                {typeFilter === 'all'
+                  ? 'All Types'
+                  : typeFilter === 'maintenance'
+                    ? 'Maintenance'
+                    : typeFilter === 'electricity'
+                      ? 'Electricity'
+                      : 'Other Charges'}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Periods</SelectItem>
-              {allPeriods.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {formatPeriod(p)}
-                </SelectItem>
-              ))}
+              <SelectItem value="all">All Types</SelectItem>
+              {props.maintenancePending && (
+                <SelectItem value="maintenance">Maintenance</SelectItem>
+              )}
+              {props.pendingElectricityBills.length > 0 && (
+                <SelectItem value="electricity">Electricity</SelectItem>
+              )}
+              {props.pendingCharges.length > 0 && (
+                <SelectItem value="other_charges">Other Charges</SelectItem>
+              )}
             </SelectContent>
           </Select>
+        </div>
+
+        {allPeriods.length > 1 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+              Period
+            </span>
+            <Select
+              value={periodFilter}
+              onValueChange={(v) => {
+                if (v) setPeriodFilter(v);
+                setChargesPage(1);
+              }}
+            >
+              <SelectTrigger className="bg-background h-9 w-[150px]">
+                <SelectValue>
+                  {periodFilter === 'all'
+                    ? 'All Periods'
+                    : formatPeriod(periodFilter)}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Periods</SelectItem>
+                {allPeriods.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {formatPeriod(p)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         )}
       </div>
 

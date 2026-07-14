@@ -163,6 +163,15 @@ export function PaymentsSection(props: {
       .filter((u) => u && !seen.has(u) && seen.add(u));
   }, [props.bills]);
 
+  const unitSelectItems = useMemo(
+    () =>
+      ({
+        all: 'All Units',
+        ...Object.fromEntries(unitOptions.map((u) => [u, u])),
+      }) as Record<string, string>,
+    [unitOptions],
+  );
+
   const isEmpty =
     props.bills.length === 0 &&
     statusVal === 'all' &&
@@ -270,7 +279,11 @@ export function PaymentsSection(props: {
               <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
                 Unit
               </span>
-              <Select value={unitVal} onValueChange={setFilter(setUnitVal)}>
+              <Select
+                items={unitSelectItems}
+                value={unitVal}
+                onValueChange={setFilter(setUnitVal)}
+              >
                 <SelectTrigger className="bg-background h-9 w-[120px]">
                   <SelectValue placeholder="Unit" />
                 </SelectTrigger>

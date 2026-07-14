@@ -74,9 +74,12 @@ export async function recordPaymentAction(
     return { success: false, error: error.message };
   }
 
-  // Persist reference_no if provided (RPC doesn't accept it, so update after).
+  // Persist reference_no if provided. The RPC doesn't accept it and uses
+  // SECURITY DEFINER, so RLS blocks a follow-up UPDATE via the regular client.
+  // Use the admin client (access already validated via requireBillingAccess).
   if (reference_no?.trim()) {
-    await client
+    const adminClient = getSupabaseServerAdminClient();
+    await adminClient
       .from('payments')
       .update({ reference_no: reference_no.trim() })
       .eq('id', paymentId as string);

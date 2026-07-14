@@ -1204,6 +1204,21 @@ Example: `PRM/26-27/MNT/000001`
 | `20260720000000_invalidate_bill_pdf_cache_again.sql` | Jul 20 | Re-invalidate cached bill/receipt PDFs after template changes |
 | `20260721000000_bill_line_items_area_rate.sql` | Jul 21 | Add `bill_line_items.area_sqft` / `rate_per_sqft` |
 | `20260710000001_payments_reference_no.sql` | Jul 13 | Add `payments.reference_no` for bookkeeping reference numbers |
+| `20260722000000_invalidate_receipt_pdf_cache.sql` | Jul 22 | Clear cached receipt PDF URLs so they regenerate with the reference column |
+| `20260722000001_invalidate_electricity_bill_pdf_cache.sql` | Jul 22 | Clear cached electricity bill PDF URLs so they regenerate with renamed line descriptions |
+
+---
+
+## Release v4.12 — PDF & Receipt Fixes (Jul 22, 2026)
+
+### Electricity Bill PDF
+- **Sub-meter and total rows** now render with a white background (previously inherited an unintended cream background)
+- **Line descriptions renamed**: the meter reading row now reads "Electricity Charges for &lt;Month Year&gt;" (instead of "Sub-meter X"), and the total row reads "Total Electricity Charges" (instead of "Electricity Charges for &lt;Month Year&gt;")
+- Invalidated all cached electricity bill PDFs so they regenerate with the new labels on next download
+
+### Receipt PDF — Reference Number
+- **Reference number now appears on receipts**: fixed a silent save failure where `reference_no` was blocked by RLS on the regular server client; the follow-up UPDATE now uses the admin client (access already validated by `requireBillingAccess`)
+- Invalidated all cached receipt PDFs so they regenerate with the reference column on next download
 
 ---
 
@@ -1230,4 +1245,4 @@ Example: `PRM/26-27/MNT/000001`
 - Electricity bill PDF: abbreviated column headers (Prev./Curr. Reading), wider reading columns, normalised meter labels to "Sub-meter X" prefix, period shown in total row
 - TypeToConfirmDialog: explicit red styling for the destructive action button
 
-*Last updated: 2026-07-13*
+*Last updated: 2026-07-22*
