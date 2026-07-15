@@ -412,6 +412,7 @@ export async function getOrGenerateBillPdf(
             address: association.address,
             logoUrl: association.accounts?.picture_url ?? null,
             gstin: association.gstin,
+            panNumber,
             registrationNumber: association.registration_number ?? null,
             authorisedSignatory: association.authorised_signatory,
             email: assocData.email ?? null,

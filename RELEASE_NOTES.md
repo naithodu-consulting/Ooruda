@@ -1288,6 +1288,11 @@ Example: `PRM/26-27/MNT/000001`
 - **Common Area bill line items**: The PDF generator was fetching sub-meters by `unit_id = bill.unit_id`, which found nothing for Common Area bills (CommonArea meters have a FK-placeholder `unit_id`). Now detects `unit.type = 'Common Area'` (added `type` to the units join) and queries by `meter_type = 'CommonArea'` instead, so the meter readings table renders correctly.
 - **Unit bills leaking Common Area row**: CommonArea sub-meters carry a FK-placeholder `unit_id` (the first unit, e.g. 101), so that unit's bill picked up the Common Area meter as an extra row. The regular-unit query now excludes `meter_type = 'CommonArea'`.
 - **Address "0" / "Ground Floor"**: Common Area units have `door_no = "0"` (FK placeholder). The address builder treated any truthy `doorNo` as a real value, rendering "Common Area, 0, Ground Floor". Now treats `doorNo = "0"` as absent, so the label renders as "Unit Common Area, Ground Floor" without the spurious zero.
+- **PAN missing from electricity bill header**: `panNumber` was not passed to `renderElectricityBillPdf`; added so PAN appears in the contact strip alongside email and phone.
+- **Title unified to INVOICE**: Electricity bill title changed from "Electricity Bill" to "Invoice" so both maintenance and electricity use the same `INVOICE` heading.
+- **Line item descriptions now bold**: Meter rows in the electricity table now render description text bold, matching maintenance bill style.
+- **Minimum Charge / Total row colors**: Removed `color: NAVY` overrides; all table rows now use consistent black text. Total Electricity Charges row is bold-weight to match the maintenance "Bill Amount (Payable)" visual weight.
+- **Paid / Outstanding section added**: Electricity bills now show a `Bill Amount (Payable)` / `Paid` / `Outstanding` summary block below the meter table, matching the maintenance bill layout.
 
 ### Migrations
 
