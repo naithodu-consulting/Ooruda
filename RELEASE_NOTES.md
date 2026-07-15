@@ -1206,6 +1206,8 @@ Example: `PRM/26-27/MNT/000001`
 | `20260710000001_payments_reference_no.sql` | Jul 13 | Add `payments.reference_no` for bookkeeping reference numbers |
 | `20260722000000_invalidate_receipt_pdf_cache.sql` | Jul 22 | Clear cached receipt PDF URLs so they regenerate with the reference column |
 | `20260722000001_invalidate_electricity_bill_pdf_cache.sql` | Jul 22 | Clear cached electricity bill PDF URLs so they regenerate with renamed line descriptions |
+| `20260723000000_cash_ledger.sql` | Jul 23 | New `cash_ledger` and `cash_ledger_payments` tables, `bills.advance_applied` column, balance RPCs |
+| `20260723000001_billing_advance_applied.sql` | Jul 23 | Updated `create_bill_with_items`, `sync_bill_payment_status`, `record_payment`, `recompute_overdue_bills` for advance_applied |
 
 ---
 
@@ -1245,4 +1247,47 @@ Example: `PRM/26-27/MNT/000001`
 - Electricity bill PDF: abbreviated column headers (Prev./Curr. Reading), wider reading columns, normalised meter labels to "Sub-meter X" prefix, period shown in total row
 - TypeToConfirmDialog: explicit red styling for the destructive action button
 
-*Last updated: 2026-07-22*
+---
+
+## Cash Ledger (2026-07-14)
+
+Per-unit credit/debit ledger for advance payments and standalone dues.
+
+### New Features
+
+- **Cash Ledger page** (`/cash-ledger`): per-unit running balance table with debit/credit columns and a live net balance chip. Visible to all roles (admin sees all units; owners/tenants see their own unit).
+- **Add Entry dialog**: admins and billing operators can add standalone dues (debit) or advance payments (credit) against any bill type.
+- **CSV Import** (3-step: upload → preview → submit): bulk import dues and advance payments from a spreadsheet. Download a pre-filled template from the dialog. Blank `paid_on` defaults to 2026-06-30.
+- **Advance auto-apply**: when a bill is generated, any positive cash-ledger balance for the matching unit + bill type is automatically applied. The bill's `advance_applied` column tracks this amount. Bill status is set to `Paid` (if advance ≥ total) or `Partial` (if partial) at generation time. A corresponding `advance_applied` debit entry is created in the ledger.
+- **Surplus carry-forward**: unused advance balance remains in the ledger and is automatically applied to the next bill of the same type.
+- **Cash Ledger Dues section** on the Payments page: shows all units with a negative ledger balance (outstanding dues). Admin/billing operators can record a payment (Cash/Bank Transfer/UPI/Cheque) which creates a `due_payment` credit entry and a receipt record.
+- **Bill PDF**: an "Advance Applied" row now appears between GST totals and the Paid row when `advance_applied > 0`. Outstanding is computed as `total − paid − advance_applied`.
+- **Navigation**: "Cash Ledger" added under the Operations group, visible to all roles.
+
+### Migrations
+
+| File | Description |
+|---|---|
+| `20260723000000_cash_ledger.sql` | New `cash_ledger` and `cash_ledger_payments` tables, `bills.advance_applied` column, `get_cash_ledger_balance` and `get_association_cash_ledger_balances` RPCs |
+| `20260723000001_billing_advance_applied.sql` | Updated `create_bill_with_items` (11-arg), `sync_bill_payment_status` trigger, `record_payment` RPC, `recompute_overdue_bills` to account for `advance_applied` |
+| `20260724000001_cash_ledger_atomicity.sql` | Moved `advance_applied` ledger debit inside `create_bill_with_items` for atomicity; new `record_due_payment` RPC for atomic due-payment recording; revoked immutable `UPDATE` grant on `cash_ledger` |
+| `20260724000002_cash_ledger_security_fixes.sql` | Added association-membership guards to `get_cash_ledger_balance` and `get_association_cash_ledger_balances` (SECURITY DEFINER cross-tenant leak); fixed `create_bill_with_items` to store the capped `advance_applied` value; moved receipt-number generation inside `record_due_payment` RPC |
+
+*Last updated: 2026-07-15*
+
+---
+
+## Billing & Payments UX — Unit Filter + Breakdown Column (2026-07-15)
+
+### Enhancements
+
+- **Unit filter** added to both the Billing page and Payments page. Appears as a dropdown after the Duration filter when the association has more than one unit. Filters bills and payment rows instantly (client-side, no network call).
+- **Stacked breakdown column** replaces the separate Maintenance and Electricity columns in the Billing page. Each bill row now shows non-zero line items stacked vertically with icons (⚡ electricity, 🔧 maintenance, 📄 other charges), making it easier to read at a glance without widening the table.
+
+### Migrations
+
+| File | Description |
+|---|---|
+| `20260724000000_drop_electricity_reconciliation.sql` | Drops the `electricity_reconciliation` table, which was scaffolded but never implemented or used in the application |
+
+*Last updated: 2026-07-15*

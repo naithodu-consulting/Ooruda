@@ -212,7 +212,7 @@ export async function getOrGenerateBillPdf(
     const { data: bill, error: billError } = await admin
       .from('bills')
       .select(
-        `id, association_id, unit_id, period, bill_no, bill_type, total_amount, gst_amount, paid_amount, status, due_date, generated_at, pdf_url, tenancy_id,
+        `id, association_id, unit_id, period, bill_no, bill_type, total_amount, gst_amount, paid_amount, advance_applied, status, due_date, generated_at, pdf_url, tenancy_id,
          units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin),
          bill_line_items(description, gst_applicable, amount, area_sqft, rate_per_sqft),
          associations(address, gstin, pan_number, registration_number, gst_enabled, gst_rate, authorised_signatory, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts(name, picture_url))`,
@@ -466,6 +466,7 @@ export async function getOrGenerateBillPdf(
             totalAmount: bill.total_amount,
             gstAmount: bill.gst_amount ?? null,
             paidAmount: bill.paid_amount,
+            advanceApplied: bill.advance_applied ?? 0,
             status: bill.status,
           },
           lineItems: lineItems.map((item) => ({

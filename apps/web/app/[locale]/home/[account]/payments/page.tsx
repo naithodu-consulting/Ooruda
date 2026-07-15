@@ -6,6 +6,10 @@ import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import {
+  type CashLedgerDueRow,
+  CashLedgerDuesSection,
+} from './_components/cash-ledger-dues-section';
+import {
   type BillPaymentRow,
   PaymentsSection,
 } from './_components/payments-section';
@@ -186,7 +190,32 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     query = query.eq('association_id', association.id);
   }
 
-  const { data: bills } = await query;
+  const [{ data: bills }, { data: rawDues }] = await Promise.all([
+    query,
+    // Cash ledger dues: negative balances for this association scope.
+    isUserRestricted
+      ? Promise.resolve({ data: [] })
+      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (client as any).rpc('get_association_cash_ledger_balances', {
+          p_association_id: association.id,
+        }),
+  ]);
+
+  const cashLedgerDues: CashLedgerDueRow[] = (
+    (rawDues ?? []) as {
+      unit_id: string;
+      unit_no: string;
+      bill_type: string;
+      balance: number;
+    }[]
+  )
+    .filter((r) => r.balance < 0)
+    .map((r) => ({
+      unit_id: r.unit_id,
+      unit_no: r.unit_no,
+      bill_type: r.bill_type,
+      balance: Number(r.balance),
+    }));
 
   const rows: BillPaymentRow[] = (bills ?? []).map((b) => ({
     id: b.id,
@@ -241,6 +270,14 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         }
         accountSlug={account}
       />
+
+      {!isUserRestricted && cashLedgerDues.length > 0 && (
+        <CashLedgerDuesSection
+          associationId={association.id}
+          dues={cashLedgerDues}
+          canManage={role === 'assoc_admin' || role === 'billing_operator'}
+        />
+      )}
     </PageBody>
   );
 }

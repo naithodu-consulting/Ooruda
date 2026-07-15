@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Settings,
   Users,
+  Wallet,
   Zap,
 } from 'lucide-react';
 
@@ -51,6 +52,11 @@ const getRoutes = (account: string) => [
         label: 'association.nav.payments',
         path: `${pathsConfig.app.accountHome.replace('[account]', account)}/payments`,
         Icon: <CreditCard className={iconClasses} />,
+      },
+      {
+        label: 'association.nav.cashLedger',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/cash-ledger`,
+        Icon: <Wallet className={iconClasses} />,
       },
     ],
   },
@@ -113,10 +119,19 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[] | '*'> = {
     'association.nav.billing',
     'association.nav.mescom',
     'association.nav.payments',
+    'association.nav.cashLedger',
     'association.nav.reports',
   ],
-  prop_owner: ['association.nav.dashboard', 'association.nav.payments'],
-  tenant: ['association.nav.dashboard', 'association.nav.payments'],
+  prop_owner: [
+    'association.nav.dashboard',
+    'association.nav.payments',
+    'association.nav.cashLedger',
+  ],
+  tenant: [
+    'association.nav.dashboard',
+    'association.nav.payments',
+    'association.nav.cashLedger',
+  ],
 };
 
 type SidebarConfig = ReturnType<typeof getTeamAccountSidebarConfig>;

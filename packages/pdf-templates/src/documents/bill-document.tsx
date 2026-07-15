@@ -47,6 +47,7 @@ export interface BillPdfData {
     totalAmount: number;
     gstAmount: number | null;
     paidAmount: number;
+    advanceApplied?: number | null;
     status: string;
   };
   lineItems: BillPdfLineItem[];
@@ -101,7 +102,11 @@ export function BillDocument({
   const halfRate = showGst ? association.gstRate! / 2 : 0;
   const cgst = Math.round((gstTotal / 2) * 100) / 100;
   const sgst = Math.round((gstTotal - cgst) * 100) / 100;
-  const outstanding = Math.max(0, bill.totalAmount - bill.paidAmount);
+  const advanceApplied = bill.advanceApplied ?? 0;
+  const outstanding = Math.max(
+    0,
+    bill.totalAmount - bill.paidAmount - advanceApplied,
+  );
 
   const addressLines = buildAddressLines(billTo, unit, association.address);
 
@@ -243,6 +248,14 @@ export function BillDocument({
             <Text>Bill Amount (Payable)</Text>
             <Text>{formatINR(bill.totalAmount)}</Text>
           </View>
+          {advanceApplied > 0 ? (
+            <View style={styles.summaryRow}>
+              <Text>Advance Applied</Text>
+              <Text style={{ color: '#16A34A' }}>
+                − {formatINR(advanceApplied)}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.summaryRow}>
             <Text>Paid</Text>
             <Text>{formatINR(bill.paidAmount)}</Text>

@@ -9,6 +9,7 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole } from '~/lib/rbac';
 
+import { getCashLedgerBalance } from '../../cash-ledger/_lib/cash-ledger-service';
 import { type GenerateBillsInput, GenerateBillsSchema } from './billing-schema';
 
 const BILLING_PATH = '/home/[account]/billing';
@@ -426,18 +427,36 @@ export async function generateBillsAction(
             ? 'other_charges'
             : 'maintenance';
 
-      const { error: rpcError } = await client.rpc('create_bill_with_items', {
-        p_association_id: associationId,
-        p_unit_id: unit.id,
-        p_period: period,
-        p_bill_no: billNo,
-        p_due_date: dueDate,
-        p_total_amount: totalAmount,
-        p_line_items: items,
-        p_bill_type: billCategory,
-        p_gst_amount: gstAmount,
-        p_tenancy_id: tenancyIdByUnit.get(unit.id) ?? null,
-      });
+      // Check cash ledger for any advance credit for this unit + bill type.
+      let advanceApplied = 0;
+      try {
+        const balance = await getCashLedgerBalance(
+          client,
+          unit.id,
+          billCategory,
+        );
+        if (balance > 0) {
+          advanceApplied = roundToTwoDecimals(Math.min(balance, totalAmount));
+        }
+      } catch {
+        // Non-fatal: proceed without advance if balance check fails.
+      }
+
+      const { error: rpcError } = await client
+        .rpc('create_bill_with_items', {
+          p_association_id: associationId,
+          p_unit_id: unit.id,
+          p_period: period,
+          p_bill_no: billNo,
+          p_due_date: dueDate,
+          p_total_amount: totalAmount,
+          p_line_items: items,
+          p_bill_type: billCategory,
+          p_gst_amount: gstAmount,
+          p_tenancy_id: tenancyIdByUnit.get(unit.id) ?? null,
+          p_advance_applied: advanceApplied,
+        })
+        .returns<string>();
 
       if (rpcError) {
         console.error(
@@ -452,6 +471,9 @@ export async function generateBillsAction(
         });
         return false;
       }
+
+      // The advance_applied ledger debit is written atomically inside
+      // create_bill_with_items — no separate call needed here.
 
       created += 1;
       return true;
