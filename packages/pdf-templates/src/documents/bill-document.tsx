@@ -48,6 +48,7 @@ export interface BillPdfData {
     gstAmount: number | null;
     paidAmount: number;
     status: string;
+    billType?: string | null;
   };
   lineItems: BillPdfLineItem[];
   billTo?: BillingEntityData | null;
@@ -196,7 +197,9 @@ export function BillDocument({
               key={i}
             >
               <Text style={[styles.colDescription, { fontWeight: 'bold' }]}>
-                {item.description} for {formatPeriodLabel(bill.period)}
+                {bill.billType === 'other_charges'
+                  ? item.description
+                  : `${item.description} for ${formatPeriodLabel(bill.period)}`}
               </Text>
               {hasAreaColumns ? (
                 <>
