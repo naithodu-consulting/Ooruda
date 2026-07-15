@@ -48,11 +48,12 @@ export default async function MescomPage({ params }: Props) {
 
   const { data: units } = await client
     .from('units')
-    .select('id, unit_no')
+    .select('id, unit_no, type')
     .eq('association_id', association.id)
     .order('unit_no');
 
   const unitRows = units ?? [];
+  const commonAreaUnit = unitRows.find((u) => u.type === 'Common Area');
 
   const unitIds = unitRows.map((u) => u.id);
 
@@ -66,15 +67,25 @@ export default async function MescomPage({ params }: Props) {
         .order('meter_label')
     : { data: [] };
 
-  const subMeterRows: SubMeterRow[] = (subMeters ?? []).map((m) => ({
-    id: m.id,
-    meter_label: m.meter_label,
-    meter_type: m.meter_type,
-    is_active: m.is_active,
-    unit_id: m.unit_id,
-    unit_no: (m.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
-    load_kva: m.load_kva ?? null,
-  }));
+  const subMeterRows: SubMeterRow[] = (subMeters ?? []).map((m) => {
+    // CommonArea sub-meters are stored with unit_id pointing to a placeholder
+    // unit (the first unit by unit_no). For display, redirect them to the
+    // actual Common Area unit's unit_no so they appear under the right label.
+    const displayUnitNo =
+      m.meter_type === 'CommonArea' && commonAreaUnit
+        ? commonAreaUnit.unit_no
+        : ((m.units as unknown as { unit_no: string } | null)?.unit_no ?? '—');
+
+    return {
+      id: m.id,
+      meter_label: m.meter_label,
+      meter_type: m.meter_type,
+      is_active: m.is_active,
+      unit_id: m.unit_id,
+      unit_no: displayUnitNo,
+      load_kva: m.load_kva ?? null,
+    };
+  });
 
   const activeSubMeters = subMeterRows.filter((m) => m.is_active);
   const activeSubMeterIds = activeSubMeters.map((m) => m.id);

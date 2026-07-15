@@ -74,8 +74,9 @@ export default async function BillingPage({ params, searchParams }: Props) {
       .maybeSingle(),
     client
       .from('pending_other_charges')
-      .select('id, unit_id, period, label, amount, split_mode')
+      .select('id, unit_id, period, label, amount, split_mode, due_date, billed')
       .eq('association_id', association.id)
+      .eq('billed', false)
       .order('created_at', { ascending: false }),
     client
       .from('mescom_bills')

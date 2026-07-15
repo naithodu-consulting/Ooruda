@@ -1206,6 +1206,7 @@ Example: `PRM/26-27/MNT/000001`
 | `20260710000001_payments_reference_no.sql` | Jul 13 | Add `payments.reference_no` for bookkeeping reference numbers |
 | `20260722000000_invalidate_receipt_pdf_cache.sql` | Jul 22 | Clear cached receipt PDF URLs so they regenerate with the reference column |
 | `20260722000001_invalidate_electricity_bill_pdf_cache.sql` | Jul 22 | Clear cached electricity bill PDF URLs so they regenerate with renamed line descriptions |
+| `20260715000003_pending_other_charges_due_date_billed.sql` | Jul 15 | Adds `due_date` (optional per-charge due date override) and `billed` (tracks whether a pending charge has been included in a generated bill) to `pending_other_charges` |
 
 ---
 
@@ -1245,4 +1246,52 @@ Example: `PRM/26-27/MNT/000001`
 - Electricity bill PDF: abbreviated column headers (Prev./Curr. Reading), wider reading columns, normalised meter labels to "Sub-meter X" prefix, period shown in total row
 - TypeToConfirmDialog: explicit red styling for the destructive action button
 
-*Last updated: 2026-07-22*
+*Last updated: 2026-07-15*
+
+---
+
+## Release v4.12 — Other Charges Multi-Bill, Common Area Electricity Fix & Mobile Responsive (Jul 15, 2026)
+
+### Billing — Other Charges
+
+- **Multiple Other Charges bills per period**: Removed the blanket "already billed" guard for Other Charges. The system now allows generating multiple OTH bills in the same month — each additional run picks up newly added (unbilled) pending charges.
+- **Per-charge Due Date**: Added an optional "Due Date" field to the Add Other Charges form. When set, charges with a specific due date are billed separately from the default-due-date batch, allowing e.g. "OTH A and B on July 5, OTH C on July 14" to generate as two distinct bills.
+- **Billed flag on pending charges**: Once pending charges are included in a generated bill they are marked `billed = true`. The staged charges list shows a "Billed" badge and hides the trash button for these rows. Unbilled (draft) pending charges remain deletable.
+- **Delete guard**: `removePendingOtherChargeAction` now explicitly blocks deletion of already-billed charges server-side.
+
+### Electricity — Common Area Bug Fix
+
+- **Root cause**: CommonArea sub-meters are stored with `unit_id` pointing to the first unit (FK placeholder). The billing action fetched `sub_meters` without `meter_type`, so CommonArea consumption was incorrectly bucketed into the placeholder unit's (e.g. Unit 101) bill, leaving the Common Area electricity bill at ₹0.
+- **Fix**: `sub_meters` is now fetched with `meter_type`. During the readings→unit mapping loop, any `meter_type = 'CommonArea'` reading is routed to the unit with `type = 'Common Area'` in the units table instead of the FK placeholder. Both the consumption amount and minimum charge are correctly attributed.
+
+### Mobile / Responsive
+
+- **Association name truncation**: The AssociationSwitcher in the topbar now caps the name at 140px with `truncate`, preventing long names from overflowing the topbar.
+- **Table overflow**: Added `overflow-x-auto` wrappers to all data tables across billing, payments, units, electricity, audit, notifications, and reports sections.
+- **Dashboard header**: The period/unit summary row now uses `flex-wrap` so the `DashboardDurationSelect` drops to a new line on narrow screens instead of overflowing.
+
+### Electricity — PDF Fixes
+
+- **Common Area bill line items**: The PDF generator was fetching sub-meters by `unit_id = bill.unit_id`, which found nothing for Common Area bills (CommonArea meters have a FK-placeholder `unit_id`). Now detects `unit.type = 'Common Area'` (added `type` to the units join) and queries by `meter_type = 'CommonArea'` instead, so the meter readings table renders correctly.
+- **Address "0" / "Ground Floor"**: Common Area units have `door_no = "0"` (FK placeholder). The address builder treated any truthy `doorNo` as a real value, rendering "Common Area, 0, Ground Floor". Now treats `doorNo = "0"` as absent, so the label renders as "Unit Common Area, Ground Floor" without the spurious zero.
+
+### Billing — Other Charges Draft/Re-generation Fixes
+
+- **Missing UPDATE RLS policy**: `pending_other_charges` had read/insert/delete policies but no UPDATE policy, so the `billed = true` update during bill generation silently affected 0 rows under RLS. Billed charges therefore kept re-appearing in the draft staging list. Added an UPDATE policy (+ grant) mirroring the delete policy.
+- **Can't re-generate Other Charges in the same month**: Ad-hoc (default-due-date) pending charges were merged into the base recurring `otherItems`, which is guarded by `!hasOther` — so once any OTH bill existed for a unit, newly-added charges could never be billed. Ad-hoc charges now bill as their own OTH bill even when a prior OTH bill exists for the period.
+- **Skip-guard blocking ad-hoc charges**: The "unit already fully billed" early-skip bailed before pending charges were considered; it now stays open when the unit has staged (unbilled) pending charges.
+- **Electricity-only run false-marking**: Marking pending charges as `billed` is now gated on Other Charges actually being part of the run, so an Electricity-only generation no longer wrongly marks ad-hoc charges as billed.
+- **Draft display filter**: The billing page now filters the draft staging list to `billed = false`, so generated charges appear only under Generated Bills.
+
+### Electricity — PDF Fixes
+
+- **Common Area bill line items**: The PDF generator was fetching sub-meters by `unit_id = bill.unit_id`, which found nothing for Common Area bills (CommonArea meters have a FK-placeholder `unit_id`). Now detects `unit.type = 'Common Area'` (added `type` to the units join) and queries by `meter_type = 'CommonArea'` instead, so the meter readings table renders correctly.
+- **Unit bills leaking Common Area row**: CommonArea sub-meters carry a FK-placeholder `unit_id` (the first unit, e.g. 101), so that unit's bill picked up the Common Area meter as an extra row. The regular-unit query now excludes `meter_type = 'CommonArea'`.
+- **Address "0" / "Ground Floor"**: Common Area units have `door_no = "0"` (FK placeholder). The address builder treated any truthy `doorNo` as a real value, rendering "Common Area, 0, Ground Floor". Now treats `doorNo = "0"` as absent, so the label renders as "Unit Common Area, Ground Floor" without the spurious zero.
+
+### Migrations
+
+| Migration | Description |
+|-----------|-------------|
+| `20260715000003_pending_other_charges_due_date_billed.sql` | Adds `due_date date` and `billed boolean default false` columns to `pending_other_charges` |
+| `20260715000004_pending_other_charges_update_policy.sql` | Adds UPDATE RLS policy + grant on `pending_other_charges` so bill generation can mark charges as `billed` |

@@ -1318,7 +1318,9 @@ export type Database = {
         Row: {
           amount: number
           association_id: string
+          billed: boolean
           created_at: string
+          due_date: string | null
           id: string
           label: string
           period: string
@@ -1328,7 +1330,9 @@ export type Database = {
         Insert: {
           amount: number
           association_id: string
+          billed?: boolean
           created_at?: string
+          due_date?: string | null
           id?: string
           label: string
           period: string
@@ -1338,7 +1342,9 @@ export type Database = {
         Update: {
           amount?: number
           association_id?: string
+          billed?: boolean
           created_at?: string
+          due_date?: string | null
           id?: string
           label?: string
           period?: string

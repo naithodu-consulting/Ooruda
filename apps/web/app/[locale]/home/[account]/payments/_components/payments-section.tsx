@@ -337,7 +337,7 @@ export function PaymentsSection(props: {
             No bills match the selected filters.
           </p>
         ) : (
-          <div className="w-full">
+          <div className="w-full overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

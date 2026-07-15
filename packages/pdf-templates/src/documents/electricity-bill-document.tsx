@@ -133,8 +133,9 @@ function buildAddressLines(
     return [billTo.companyAddress];
   }
   const lines: string[] = [];
-  if (unit.doorNo) {
-    lines.push(`${unit.unitNo}, ${unit.doorNo},`);
+  const doorNo = unit.doorNo && unit.doorNo !== '0' ? unit.doorNo : null;
+  if (doorNo) {
+    lines.push(`${unit.unitNo}, ${doorNo},`);
   } else {
     lines.push(`Unit ${unit.unitNo},`);
   }

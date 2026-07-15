@@ -617,7 +617,7 @@ function DraftSection(props: {
           </span>
         )}
       </div>
-      {props.children}
+      <div className="overflow-x-auto">{props.children}</div>
     </div>
   );
 }
@@ -861,7 +861,7 @@ function GeneratedBillsTab(props: {
         </p>
       ) : (
         <>
-          <div className="w-full">
+          <div className="w-full overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

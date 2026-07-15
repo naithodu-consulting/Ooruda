@@ -723,7 +723,7 @@ export async function AssociationDashboard({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="-mt-2 flex items-center justify-between">
+      <div className="-mt-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground text-sm">
           {`${overview.periodDisplay} · ${overview.totalUnits} units · ${overview.occupiedUnits} occupied`}
         </p>

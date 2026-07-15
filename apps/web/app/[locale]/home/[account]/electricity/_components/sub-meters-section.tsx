@@ -111,7 +111,7 @@ export function SubMetersSection(props: {
             No sub-meters yet. Add one to start recording readings.
           </p>
         ) : (
-          <div className="w-full">
+          <div className="w-full overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
