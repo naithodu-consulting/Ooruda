@@ -190,6 +190,7 @@ export function AuditLogCard(props: {
           </p>
         ) : (
           <>
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="border-b">
@@ -232,6 +233,7 @@ export function AuditLogCard(props: {
                 ))}
               </TableBody>
             </Table>
+            </div>
 
             {/* Pagination */}
             <div className="border-t px-4 py-3">

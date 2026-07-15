@@ -133,8 +133,9 @@ function buildAddressLines(
     return [billTo.companyAddress];
   }
   const lines: string[] = [];
-  if (unit.doorNo) {
-    lines.push(`${unit.unitNo}, ${unit.doorNo},`);
+  const doorNo = unit.doorNo && unit.doorNo !== '0' ? unit.doorNo : null;
+  if (doorNo) {
+    lines.push(`${unit.unitNo}, ${doorNo},`);
   } else {
     lines.push(`Unit ${unit.unitNo},`);
   }
@@ -173,7 +174,7 @@ export function ElectricityBillDocument({
 
         {/* Title */}
         <View style={sharedStyles.docTitleBlock}>
-          <Text style={sharedStyles.docTitle}>Electricity Bill</Text>
+          <Text style={sharedStyles.docTitle}>Invoice</Text>
         </View>
 
         {/* Metadata: row-paired 2-col grid */}
@@ -237,7 +238,7 @@ export function ElectricityBillDocument({
           {meters.map((m, i) => (
             <View style={i % 2 === 0 ? s.tableRow : s.tableRowAlt} key={i}>
               <Text style={s.colSl}>{i + 1}</Text>
-              <Text style={s.colMeter}>
+              <Text style={[s.colMeter, { fontWeight: 'bold' }]}>
                 Electricity Charges for {formatPeriodLabel(bill.period)}
               </Text>
               <Text style={s.colReading}>{m.previousReading}</Text>
@@ -251,28 +252,45 @@ export function ElectricityBillDocument({
           {minimumCharge > 0 ? (
             <View style={s.minChargeRow}>
               <Text style={s.colSl}>{meters.length + 1}</Text>
-              <Text style={[s.colMeter, { color: NAVY }]}>Minimum Charge</Text>
+              <Text style={[s.colMeter, { fontWeight: 'bold' }]}>Minimum Charge</Text>
               <Text style={s.colReading} />
               <Text style={s.colReading} />
               <Text style={s.colConsumed} />
               <Text style={s.colRate} />
-              <Text style={[s.colAmount, { color: NAVY }]}>
-                {formatINR(minimumCharge)}
-              </Text>
+              <Text style={s.colAmount}>{formatINR(minimumCharge)}</Text>
             </View>
           ) : null}
 
           <View style={s.totalRow}>
             <Text style={s.colSl} />
-            <Text style={[s.colMeter, { color: NAVY }]}>
+            <Text style={[s.colMeter, { fontWeight: 'bold' }]}>
               Total Electricity Charges
             </Text>
             <Text style={s.colReading} />
             <Text style={s.colReading} />
             <Text style={s.colConsumed} />
             <Text style={s.colRate} />
-            <Text style={[s.colAmount, { color: NAVY }]}>
+            <Text style={[s.colAmount, { fontWeight: 'bold' }]}>
               {formatINR(bill.totalAmount)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Paid / Outstanding summary — mirrors maintenance bill layout */}
+        <View style={sharedStyles.summaryBlock}>
+          <View style={sharedStyles.summaryDivider} />
+          <View style={sharedStyles.summaryRowTotal}>
+            <Text>Bill Amount (Payable)</Text>
+            <Text>{formatINR(bill.totalAmount)}</Text>
+          </View>
+          <View style={sharedStyles.summaryRow}>
+            <Text>Paid</Text>
+            <Text>{formatINR(bill.paidAmount)}</Text>
+          </View>
+          <View style={sharedStyles.summaryRow}>
+            <Text>Outstanding</Text>
+            <Text>
+              {formatINR(Math.max(0, bill.totalAmount - bill.paidAmount))}
             </Text>
           </View>
         </View>

@@ -169,9 +169,10 @@ export async function generateBillsAction(
     otherChargesCT
       ? client
           .from('pending_other_charges')
-          .select('id, unit_id, label, amount, split_mode')
+          .select('id, unit_id, label, amount, split_mode, due_date')
           .eq('association_id', associationId)
           .eq('period', period)
+          .eq('billed', false)
       : Promise.resolve({
           data: [] as {
             id: string;
@@ -179,6 +180,7 @@ export async function generateBillsAction(
             label: string;
             amount: number;
             split_mode: string | null;
+            due_date: string | null;
           }[],
         }),
     hasElectricityChargeType
@@ -200,13 +202,17 @@ export async function generateBillsAction(
   if (hasElectricityChargeType && mescomBill && mescomBill.invoice_amount > 0) {
     const { data: subMeters } = await client
       .from('sub_meters')
-      .select('id, unit_id')
+      .select('id, unit_id, meter_type')
       .in('unit_id', unitIds);
 
     const subMeterIds = (subMeters ?? []).map((m) => m.id);
-    const unitIdBySubMeter = new Map(
-      (subMeters ?? []).map((m) => [m.id, m.unit_id]),
+    const subMeterMap = new Map(
+      (subMeters ?? []).map((m) => [m.id, m]),
     );
+    // CommonArea sub-meters are stored with unit_id pointing to the first unit
+    // (FK placeholder). During billing we redirect their consumption to whichever
+    // unit has type = 'Common Area' so the amounts land in the right bill.
+    const commonAreaUnit = unitRows.find((u) => u.type === 'Common Area');
 
     if (subMeterIds.length > 0) {
       const { data: readings } = await client
@@ -217,13 +223,16 @@ export async function generateBillsAction(
 
       let totalSubMeterUnits = 0;
       for (const r of readings ?? []) {
-        const unitId = unitIdBySubMeter.get(r.sub_meter_id);
-        if (unitId) {
-          consumedByUnit[unitId] =
-            (consumedByUnit[unitId] ?? 0) + (r.consumed_units ?? 0);
-          minimumChargeByUnit[unitId] =
-            (minimumChargeByUnit[unitId] ?? 0) + (r.minimum_charge ?? 0);
-        }
+        const sm = subMeterMap.get(r.sub_meter_id);
+        if (!sm) continue;
+        const targetUnitId =
+          sm.meter_type === 'CommonArea' && commonAreaUnit
+            ? commonAreaUnit.id
+            : sm.unit_id;
+        consumedByUnit[targetUnitId] =
+          (consumedByUnit[targetUnitId] ?? 0) + (r.consumed_units ?? 0);
+        minimumChargeByUnit[targetUnitId] =
+          (minimumChargeByUnit[targetUnitId] ?? 0) + (r.minimum_charge ?? 0);
         totalSubMeterUnits += r.consumed_units ?? 0;
       }
 
@@ -268,13 +277,22 @@ export async function generateBillsAction(
       (b: string) => b.includes('-OTHR-') || b.includes('/OTH/'),
     );
 
+    // Does this unit have any staged (unbilled) pending charges? Ad-hoc
+    // charges are always billable, even if the unit already has an OTH bill,
+    // so their presence must prevent the "already fully billed" skip below.
+    const hasPendingForUnit =
+      shouldGenOther &&
+      pendingRows.some(
+        (pc) => pc.unit_id === null || pc.unit_id === unit.id,
+      );
+
     if (unit.type === 'Common Area') {
       if (hasElec) {
         skipped++;
         continue;
       }
     } else {
-      if (hasElec && hasMaint && hasOther) {
+      if (hasElec && hasMaint && hasOther && !hasPendingForUnit) {
         skipped++;
         continue;
       }
@@ -349,7 +367,9 @@ export async function generateBillsAction(
       }
     }
 
-    // Append staged other charges to Other bill
+    // Build per-due-date groups of pending charges for this unit.
+    // null key = use the default otherDueDate (merged with base otherItems).
+    const pendingByDueDate = new Map<string | null, LineItem[]>();
     if (otherChargesCT) {
       for (const pc of pendingRows) {
         if (pc.unit_id !== null && pc.unit_id !== unit.id) continue;
@@ -357,7 +377,7 @@ export async function generateBillsAction(
         let pcAmount: number;
         if (pc.unit_id === null) {
           if (pc.split_mode === 'per_sqft') {
-            if (unit.area_sqft == null) continue; // can't split without area
+            if (unit.area_sqft == null) continue;
             pcAmount = roundToTwoDecimals(pc.amount * unit.area_sqft);
           } else {
             pcAmount = roundToTwoDecimals(pc.amount);
@@ -366,15 +386,23 @@ export async function generateBillsAction(
           pcAmount = roundToTwoDecimals(pc.amount);
         }
 
-        otherItems.push({
+        const key = pc.due_date ?? null;
+        const group = pendingByDueDate.get(key) ?? [];
+        group.push({
           charge_type_id: otherChargesCT.id,
           description: pc.label,
           payer: otherChargesCT.default_payer ?? 'Owner',
           gst_applicable: otherChargesCT.gst_applicable ?? false,
           amount: pcAmount,
         });
+        pendingByDueDate.set(key, group);
       }
     }
+
+    // Null-date pending charges use the default `otherDueDate`. They are kept
+    // separate from the base recurring `otherItems` so that ad-hoc charges
+    // added after the first OTH bill can still be billed (see generation below).
+    const nullDatePending = pendingByDueDate.get(null) ?? [];
 
     // Helper to generate bill
     const generateSpecificBill = async (
@@ -516,16 +544,51 @@ export async function generateBillsAction(
             maintDueDate,
           ),
         });
-      if (!hasOther && shouldGenOther)
-        billsToGenerate.push({
-          type: 'other charges',
-          promise: generateSpecificBill(
-            'Other Charges',
-            'OTH',
-            otherItems,
-            otherDueDate,
-          ),
-        });
+      if (shouldGenOther) {
+        if (!hasOther) {
+          // First OTH bill for this unit/period: bill base recurring charges
+          // together with any default-due-date (null) pending charges.
+          const firstBillItems = [...otherItems, ...nullDatePending];
+          if (firstBillItems.length > 0)
+            billsToGenerate.push({
+              type: 'other charges',
+              promise: generateSpecificBill(
+                'Other Charges',
+                'OTH',
+                firstBillItems,
+                otherDueDate,
+              ),
+            });
+        } else if (nullDatePending.length > 0) {
+          // An OTH bill already exists, so the base recurring charges are
+          // already billed. Bill only the newly-added default-due-date pending
+          // charges as a separate OTH bill (ad-hoc charges are always billable).
+          billsToGenerate.push({
+            type: 'other charges',
+            promise: generateSpecificBill(
+              'Other Charges',
+              'OTH',
+              nullDatePending,
+              otherDueDate,
+            ),
+          });
+        }
+        // Specific-due-date pending charge groups always generate a new bill,
+        // regardless of whether a prior OTH bill already exists for the period.
+        for (const [dueDate, items] of pendingByDueDate) {
+          if (dueDate === null) continue; // handled above
+          if (items.length === 0) continue;
+          billsToGenerate.push({
+            type: 'other charges',
+            promise: generateSpecificBill(
+              'Other Charges',
+              'OTH',
+              items,
+              dueDate,
+            ),
+          });
+        }
+      }
     }
 
     const results = await Promise.all(billsToGenerate.map((b) => b.promise));
@@ -538,6 +601,17 @@ export async function generateBillsAction(
         error: `Failed to generate ${failedTypes.join(', ')} bill${failedTypes.length > 1 ? 's' : ''}`,
       };
     }
+  }
+
+  // Mark unbilled pending charges as billed now that bills are generated.
+  // Only do this when Other Charges were actually part of this run — otherwise
+  // an Electricity-only run would wrongly mark ad-hoc charges as billed.
+  if (shouldGenOther && created > 0 && pendingRows.length > 0) {
+    const pendingIds = pendingRows.map((r) => r.id);
+    await client
+      .from('pending_other_charges')
+      .update({ billed: true })
+      .in('id', pendingIds);
   }
 
   if (created > 0) {
@@ -565,11 +639,19 @@ export interface PendingOtherCharge {
   label: string;
   amount: number;
   split_mode: string | null;
+  due_date: string | null;
+  billed: boolean;
 }
 
 export async function addOtherChargeToUnitAction(
   associationId: string,
-  input: { unit_id: string; period: string; label: string; amount: number },
+  input: {
+    unit_id: string;
+    period: string;
+    label: string;
+    amount: number;
+    due_date?: string | null;
+  },
 ): Promise<ActionResult> {
   const roleError = await requireBillingAccess(associationId);
   if (roleError) return { success: false, error: roleError };
@@ -599,6 +681,7 @@ export async function addOtherChargeToUnitAction(
     label: input.label.trim(),
     amount: input.amount,
     split_mode: null,
+    due_date: input.due_date ?? null,
   });
 
   if (error) return { success: false, error: error.message };
@@ -613,6 +696,7 @@ export async function bulkAddOtherChargeAction(
     label: string;
     amount: number;
     split_mode: 'flat' | 'per_sqft';
+    due_date?: string | null;
   },
 ): Promise<ActionResult> {
   const roleError = await requireBillingAccess(associationId);
@@ -631,6 +715,7 @@ export async function bulkAddOtherChargeAction(
     label: input.label.trim(),
     amount: input.amount,
     split_mode: input.split_mode,
+    due_date: input.due_date ?? null,
   });
 
   if (error) return { success: false, error: error.message };
@@ -646,11 +731,27 @@ export async function removePendingOtherChargeAction(
   if (roleError) return { success: false, error: roleError };
 
   const client = getSupabaseServerClient();
+
+  const { data: charge } = await client
+    .from('pending_other_charges')
+    .select('billed')
+    .eq('id', chargeId)
+    .eq('association_id', associationId)
+    .single();
+
+  if (charge?.billed) {
+    return {
+      success: false,
+      error: 'This charge has already been billed and cannot be removed.',
+    };
+  }
+
   const { error } = await client
     .from('pending_other_charges')
     .delete()
     .eq('id', chargeId)
-    .eq('association_id', associationId);
+    .eq('association_id', associationId)
+    .eq('billed', false);
 
   if (error) return { success: false, error: error.message };
   revalidatePath(BILLING_PATH, 'page');

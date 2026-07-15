@@ -213,7 +213,7 @@ export async function getOrGenerateBillPdf(
       .from('bills')
       .select(
         `id, association_id, unit_id, period, bill_no, bill_type, total_amount, gst_amount, paid_amount, advance_applied, status, due_date, generated_at, pdf_url, tenancy_id,
-         units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin),
+         units(unit_no, door_no, floor, type, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin),
          bill_line_items(description, gst_applicable, amount, area_sqft, rate_per_sqft),
          associations(address, gstin, pan_number, registration_number, gst_enabled, gst_rate, authorised_signatory, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts(name, picture_url))`,
       )
@@ -279,6 +279,7 @@ export async function getOrGenerateBillPdf(
       owner_company_name: string | null;
       owner_company_address: string | null;
       owner_company_gstin: string | null;
+      type: string | null;
     };
     const unitData = bill.units as unknown as ExtendedUnit;
 
@@ -327,12 +328,27 @@ export async function getOrGenerateBillPdf(
         );
       }
 
-      const { data: subMeters } = await admin
-        .from('sub_meters')
-        .select('id, meter_label, load_kva')
-        .eq('unit_id', bill.unit_id)
-        .eq('is_active', true)
-        .order('meter_label');
+      // CommonArea sub-meters are stored with a placeholder unit_id (the first
+      // unit by unit_no) due to the NOT NULL FK constraint. For a Common Area
+      // bill, query by meter_type + units join instead of unit_id.
+      const isCommonAreaBill = unitData.type === 'Common Area';
+      const { data: subMeters } = isCommonAreaBill
+        ? await admin
+            .from('sub_meters')
+            .select('id, meter_label, load_kva, units!inner(association_id)')
+            .eq('meter_type', 'CommonArea')
+            .eq('is_active', true)
+            .eq('units.association_id', bill.association_id)
+            .order('meter_label')
+        : await admin
+            .from('sub_meters')
+            .select('id, meter_label, load_kva')
+            .eq('unit_id', bill.unit_id)
+            // Exclude CommonArea meters: they carry a FK-placeholder unit_id
+            // (the first unit), so they'd otherwise leak into that unit's bill.
+            .neq('meter_type', 'CommonArea')
+            .eq('is_active', true)
+            .order('meter_label');
 
       const subMeterIds = (subMeters ?? []).map((m) => m.id);
 
@@ -396,6 +412,7 @@ export async function getOrGenerateBillPdf(
             address: association.address,
             logoUrl: association.accounts?.picture_url ?? null,
             gstin: association.gstin,
+            panNumber,
             registrationNumber: association.registration_number ?? null,
             authorisedSignatory: association.authorised_signatory,
             email: assocData.email ?? null,

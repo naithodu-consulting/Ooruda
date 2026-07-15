@@ -62,7 +62,7 @@ export function CollectionSummaryCard(props: { rows: CollectionSummaryRow[] }) {
             No bills generated yet.
           </p>
         ) : (
-          <div className="rounded-xl border">
+          <div className="overflow-x-auto rounded-xl border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -118,7 +118,7 @@ export function OutstandingDuesCard(props: { rows: OutstandingDueRow[] }) {
             Nothing outstanding right now.
           </p>
         ) : (
-          <div className="rounded-xl border">
+          <div className="overflow-x-auto rounded-xl border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -179,7 +179,7 @@ export function ElectricityUsageCard(props: { rows: ElectricityUsageRow[] }) {
             No Electricity bills uploaded yet.
           </p>
         ) : (
-          <div className="rounded-xl border">
+          <div className="overflow-x-auto rounded-xl border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -231,7 +231,7 @@ export function MyDuesCard(props: { bills: OutstandingDueRow[] }) {
             You don't have any bills yet.
           </p>
         ) : (
-          <div className="rounded-xl border">
+          <div className="overflow-x-auto rounded-xl border">
             <Table>
               <TableHeader>
                 <TableRow>

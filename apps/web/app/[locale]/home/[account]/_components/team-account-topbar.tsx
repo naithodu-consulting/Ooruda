@@ -169,7 +169,7 @@ function AssociationSwitcher(props: {
             <div className="flex h-5 w-5 items-center justify-center rounded bg-[#f59e0b] text-[9px] font-black text-slate-950">
               {initials}
             </div>
-            <span>{currentLabel}</span>
+            <span className="max-w-[140px] truncate">{currentLabel}</span>
             <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
           </Button>
         }

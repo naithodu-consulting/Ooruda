@@ -1206,6 +1206,7 @@ Example: `PRM/26-27/MNT/000001`
 | `20260710000001_payments_reference_no.sql` | Jul 13 | Add `payments.reference_no` for bookkeeping reference numbers |
 | `20260722000000_invalidate_receipt_pdf_cache.sql` | Jul 22 | Clear cached receipt PDF URLs so they regenerate with the reference column |
 | `20260722000001_invalidate_electricity_bill_pdf_cache.sql` | Jul 22 | Clear cached electricity bill PDF URLs so they regenerate with renamed line descriptions |
+| `20260715000003_pending_other_charges_due_date_billed.sql` | Jul 15 | Adds `due_date` (optional per-charge due date override) and `billed` (tracks whether a pending charge has been included in a generated bill) to `pending_other_charges` |
 | `20260723000000_cash_ledger.sql` | Jul 23 | New `cash_ledger` and `cash_ledger_payments` tables, `bills.advance_applied` column, balance RPCs |
 | `20260723000001_billing_advance_applied.sql` | Jul 23 | Updated `create_bill_with_items`, `sync_bill_payment_status`, `record_payment`, `recompute_overdue_bills` for advance_applied |
 
@@ -1290,4 +1291,39 @@ Per-unit credit/debit ledger for advance payments and standalone dues.
 |---|---|
 | `20260724000000_drop_electricity_reconciliation.sql` | Drops the `electricity_reconciliation` table, which was scaffolded but never implemented or used in the application |
 
-*Last updated: 2026-07-15*
+---
+
+## Release v4.12 — Other Charges Multi-Bill, Common Area Electricity Fix & Mobile Responsive (Jul 15, 2026)
+
+### Billing — Other Charges
+
+- **Multiple Other Charges bills per period**: Removed the blanket "already billed" guard for Other Charges. The system now allows generating multiple OTH bills in the same month — each additional run picks up newly added (unbilled) pending charges.
+- **Per-charge Due Date**: Added an optional "Due Date" field to the Add Other Charges form. When set, charges with a specific due date are billed separately from the default-due-date batch, allowing e.g. "OTH A and B on July 5, OTH C on July 14" to generate as two distinct bills.
+- **Billed flag on pending charges**: Once pending charges are included in a generated bill they are marked `billed = true`. The staged charges list shows a "Billed" badge and hides the trash button for these rows. Unbilled (draft) pending charges remain deletable.
+- **Delete guard**: `removePendingOtherChargeAction` now explicitly blocks deletion of already-billed charges server-side.
+- **Missing UPDATE RLS policy**: `pending_other_charges` had read/insert/delete policies but no UPDATE policy, so the `billed = true` update during bill generation silently affected 0 rows under RLS. Added an UPDATE policy (+ grant) mirroring the delete policy.
+- **Can't re-generate Other Charges in the same month**: Ad-hoc charges now bill as their own OTH bill even when a prior OTH bill exists for the period.
+- **Draft display filter**: The billing page now filters the draft staging list to `billed = false`, so generated charges appear only under Generated Bills.
+
+### Electricity — Common Area Bug Fix & PDF Fixes
+
+- **Common Area billing**: CommonArea sub-meters now correctly route consumption to the Common Area unit (not the FK-placeholder unit). Both billing generation and PDF generation detect `meter_type = 'CommonArea'` and `unit.type = 'Common Area'`.
+- **Unit bills leaking Common Area row**: The PDF generator now excludes `meter_type = 'CommonArea'` from regular unit sub-meter queries.
+- **Address "0"**: Common Area units with `door_no = "0"` no longer render "Common Area, 0, Ground Floor" — the zero is treated as absent.
+- **PAN missing from electricity bill**: `panNumber` is now passed to `renderElectricityBillPdf`.
+- **Title unified to INVOICE**: Electricity bill title changed from "Electricity Bill" to "Invoice".
+- **Line item descriptions now bold**: Meter rows match maintenance bill style.
+- **Paid / Outstanding section added**: Electricity bills now show Bill Amount (Payable) / Paid / Outstanding below the meter table.
+
+### Mobile / Responsive
+
+- **Association name truncation**: Caps at 140px with `truncate` in the topbar.
+- **Table overflow**: `overflow-x-auto` added to all data tables across billing, payments, units, electricity, audit, notifications, and reports.
+- **Dashboard header**: Uses `flex-wrap` so the duration select drops to a new line on narrow screens.
+
+### Migrations
+
+| Migration | Description |
+|-----------|-------------|
+| `20260715000003_pending_other_charges_due_date_billed.sql` | Adds `due_date date` and `billed boolean default false` columns to `pending_other_charges` |
+| `20260715000004_pending_other_charges_update_policy.sql` | Adds UPDATE RLS policy + grant on `pending_other_charges` so bill generation can mark charges as `billed` |

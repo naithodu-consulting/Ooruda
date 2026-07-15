@@ -122,7 +122,7 @@ export function BillsSection(props: {
             No Electricity bills uploaded yet.
           </p>
         ) : (
-          <div className="w-full">
+          <div className="w-full overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

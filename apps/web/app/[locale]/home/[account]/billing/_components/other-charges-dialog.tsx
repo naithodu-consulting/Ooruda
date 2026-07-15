@@ -10,6 +10,7 @@ import { useWatch } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import {
   Dialog,
@@ -56,6 +57,7 @@ const ChargeSchema = z
     label: z.string().min(1, 'Label is required'),
     amount: z.coerce.number().positive('Amount must be positive'),
     split_mode: z.enum(['flat', 'per_sqft']).optional(),
+    due_date: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.scope === 'unit' && !data.unit_id) {
@@ -75,6 +77,8 @@ interface UnitOption {
 interface PendingChargeWithUnit extends PendingOtherCharge {
   unit_no?: string | null;
   period: string;
+  due_date: string | null;
+  billed: boolean;
 }
 
 interface Props {
@@ -182,6 +186,7 @@ function AddChargeForm(props: {
           period: values.period,
           label: values.label,
           amount: values.amount,
+          due_date: values.due_date || null,
         });
       } else {
         result = await bulkAddOtherChargeAction(props.associationId, {
@@ -189,6 +194,7 @@ function AddChargeForm(props: {
           label: values.label,
           amount: values.amount,
           split_mode: values.split_mode ?? 'flat',
+          due_date: values.due_date || null,
         });
       }
 
@@ -380,6 +386,29 @@ function AddChargeForm(props: {
           />
         </div>
 
+        <FormField
+          name="due_date"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>
+                Due Date{' '}
+                <span className="text-muted-foreground font-normal">
+                  (optional — overrides default)
+                </span>
+              </FormLabel>
+              <FormControl>
+                <Input
+                  type="date"
+                  className="h-9 text-sm"
+                  {...field}
+                  value={field.value ?? ''}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
         <Button
           type="submit"
           size="sm"
@@ -452,33 +481,45 @@ function PendingChargesList(props: {
               className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
             >
               <div className="flex min-w-0 flex-col">
-                <span className="font-medium">{c.label}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium">{c.label}</span>
+                  {c.billed && (
+                    <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                      Billed
+                    </Badge>
+                  )}
+                </div>
                 <span className="text-muted-foreground text-xs">
                   {c.unit_id
                     ? (c.unit_no ?? 'Unit')
                     : c.split_mode === 'per_sqft'
                       ? 'All units · ₹/sq.ft'
                       : 'All units · flat'}
+                  {c.due_date
+                    ? ` · Due ${new Date(`${c.due_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
+                    : ''}
                 </span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-semibold tabular-nums">
                   {formatINR(c.amount)}
                 </span>
-                <button
-                  type="button"
-                  data-test={`remove-pending-charge-${c.id}`}
-                  onClick={() => handleRemove(c.id)}
-                  disabled={removingId === c.id}
-                  className="text-muted-foreground hover:text-destructive transition-colors"
-                  aria-label="Remove"
-                >
-                  {removingId === c.id ? (
-                    <Spinner className="h-3.5 w-3.5" />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" />
-                  )}
-                </button>
+                {!c.billed && (
+                  <button
+                    type="button"
+                    data-test={`remove-pending-charge-${c.id}`}
+                    onClick={() => handleRemove(c.id)}
+                    disabled={removingId === c.id}
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                    aria-label="Remove"
+                  >
+                    {removingId === c.id ? (
+                      <Spinner className="h-3.5 w-3.5" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           ))}

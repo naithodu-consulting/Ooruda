@@ -59,7 +59,7 @@ export function NotificationsLogCard(props: { rows: NotificationLogRow[] }) {
             No notifications sent yet.
           </p>
         ) : (
-          <div className="rounded-xl border">
+          <div className="overflow-x-auto rounded-xl border">
             <Table>
               <TableHeader>
                 <TableRow>
