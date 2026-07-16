@@ -2,6 +2,7 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
+import { loadUnitLedgerBalances } from '~/lib/cash-ledger-aggregation';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
@@ -39,7 +40,7 @@ function receiptNoOf(payment: RawPayment): string | null {
 }
 
 const BILL_WITH_PAYMENTS_SELECT =
-  'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, units(unit_no), payments(id, amount, mode, reference_no, paid_by_role, paid_at, receipts(receipt_no))';
+  'id, period, bill_no, bill_type, total_amount, paid_amount, advance_applied, status, due_date, units(unit_no), payments(id, amount, mode, reference_no, paid_by_role, paid_at, receipts(receipt_no))';
 
 export default async function PaymentsPage({ params, searchParams }: Props) {
   const [{ account }, { duration, status }] = await Promise.all([
@@ -190,32 +191,70 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     query = query.eq('association_id', association.id);
   }
 
-  const [{ data: bills }, { data: rawDues }] = await Promise.all([
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const uc = (c: unknown) => c as any;
+
+  const allUnitIds = [...ownedUnitIds, ...rentedUnitIds];
+
+  // For owners/tenants use the shared aggregation util (per-unit, no cross-unit
+  // netting). For admins/operators use the association-wide RPC which covers all
+  // units and includes the negative-balance filter already.
+  const [{ data: bills }, rawDues] = await Promise.all([
     query,
-    // Cash ledger dues: negative balances for this association scope.
     isUserRestricted
-      ? Promise.resolve({ data: [] })
-      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (client as any).rpc('get_association_cash_ledger_balances', {
-          p_association_id: association.id,
-        }),
+      ? loadUnitLedgerBalances(
+          association.id,
+          allUnitIds.length > 0
+            ? await client
+                .from('units')
+                .select('id, unit_no')
+                .in('id', allUnitIds)
+                .then(
+                  ({ data }) =>
+                    (data ?? []) as { id: string; unit_no: string }[],
+                )
+            : [],
+        ).then((balances) =>
+          balances.flatMap((b) =>
+            b.dues.map((d) => ({
+              unit_id: b.unit_id,
+              unit_no: b.unit_no,
+              bill_type: d.bill_type,
+              balance: -d.amount,
+            })),
+          ),
+        )
+      : uc(client)
+          .rpc('get_association_cash_ledger_balances', {
+            p_association_id: association.id,
+          })
+          .then(
+            ({
+              data,
+            }: {
+              data:
+                | {
+                    unit_id: string;
+                    unit_no: string;
+                    bill_type: string;
+                    balance: number;
+                  }[]
+                | null;
+            }) =>
+              (data ?? [])
+                .filter((r) => r.balance < 0)
+                .map((r) => ({ ...r, balance: Number(r.balance) })),
+          ),
   ]);
 
-  const cashLedgerDues: CashLedgerDueRow[] = (
-    (rawDues ?? []) as {
-      unit_id: string;
-      unit_no: string;
-      bill_type: string;
-      balance: number;
-    }[]
-  )
-    .filter((r) => r.balance < 0)
-    .map((r) => ({
-      unit_id: r.unit_id,
-      unit_no: r.unit_no,
-      bill_type: r.bill_type,
-      balance: Number(r.balance),
-    }));
+  const cashLedgerDues: CashLedgerDueRow[] = Array.isArray(rawDues)
+    ? (rawDues as {
+        unit_id: string;
+        unit_no: string;
+        bill_type: string;
+        balance: number;
+      }[])
+    : [];
 
   const rows: BillPaymentRow[] = (bills ?? []).map((b) => ({
     id: b.id,
@@ -225,6 +264,9 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     unit_no: (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
     total_amount: Number(b.total_amount),
     paid_amount: Number(b.paid_amount),
+    advance_applied: Number(
+      (b as unknown as { advance_applied?: number }).advance_applied ?? 0,
+    ),
     status: b.status,
     due_date: b.due_date,
     payments: ((b.payments as unknown as RawPayment[] | null) ?? []).map(
@@ -261,22 +303,32 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         isSuperAdmin={!!isSuperAdmin}
         deletionCounts={deletionCounts}
         title={isUserRestricted ? 'Your payments' : 'Payments'}
+        hideUnitColumn={
+          isUserRestricted && [...ownedUnitIds, ...rentedUnitIds].length <= 1
+        }
         initialDuration={duration}
         initialStatus={status}
         description={
           isUserRestricted
-            ? 'Every payment recorded against your bill(s).'
+            ? 'Every payment recorded against your bills.'
             : 'Record payments against bills and track receipts.'
         }
         accountSlug={account}
       />
 
-      {!isUserRestricted && cashLedgerDues.length > 0 && (
-        <CashLedgerDuesSection
-          associationId={association.id}
-          dues={cashLedgerDues}
-          canManage={role === 'assoc_admin' || role === 'billing_operator'}
-        />
+      {cashLedgerDues.length > 0 && (
+        <div className="mt-6">
+          <CashLedgerDuesSection
+            associationId={association.id}
+            dues={cashLedgerDues}
+            canManage={
+              !isUserRestricted &&
+              (role === 'assoc_admin' || role === 'billing_operator')
+            }
+            isOwnerView={isUserRestricted}
+            unitCount={[...ownedUnitIds, ...rentedUnitIds].length}
+          />
+        </div>
       )}
     </PageBody>
   );

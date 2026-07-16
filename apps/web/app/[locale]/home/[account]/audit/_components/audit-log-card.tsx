@@ -191,48 +191,48 @@ export function AuditLogCard(props: {
         ) : (
           <>
             <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-b">
-                  <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                    Event
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                    User
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                    Role
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                    Details
-                  </TableHead>
-                  <TableHead className="text-muted-foreground text-right text-xs font-semibold tracking-wider uppercase">
-                    Date
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.id} className="border-b last:border-0">
-                    <TableCell className="py-3.5 text-sm font-medium">
-                      {actionLabel(row.action)}
-                    </TableCell>
-                    <TableCell className="py-3.5 text-sm">
-                      {row.actor}
-                    </TableCell>
-                    <TableCell className="py-3.5">
-                      <RoleBadge roleLabel={row.actorRoleLabel} />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground py-3.5 text-sm">
-                      {truncateSummary(row.summary)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground py-3.5 text-right text-sm">
-                      {formatTimestampDMY(row.created_at)}
-                    </TableCell>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b">
+                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                      Event
+                    </TableHead>
+                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                      User
+                    </TableHead>
+                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                      Role
+                    </TableHead>
+                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                      Details
+                    </TableHead>
+                    <TableHead className="text-muted-foreground text-right text-xs font-semibold tracking-wider uppercase">
+                      Date
+                    </TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row) => (
+                    <TableRow key={row.id} className="border-b last:border-0">
+                      <TableCell className="py-3.5 text-sm font-medium">
+                        {actionLabel(row.action)}
+                      </TableCell>
+                      <TableCell className="py-3.5 text-sm">
+                        {row.actor}
+                      </TableCell>
+                      <TableCell className="py-3.5">
+                        <RoleBadge roleLabel={row.actorRoleLabel} />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground py-3.5 text-sm">
+                        {truncateSummary(row.summary)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground py-3.5 text-right text-sm">
+                        {formatTimestampDMY(row.created_at)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
 
             {/* Pagination */}

@@ -122,16 +122,8 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[] | '*'> = {
     'association.nav.cashLedger',
     'association.nav.reports',
   ],
-  prop_owner: [
-    'association.nav.dashboard',
-    'association.nav.payments',
-    'association.nav.cashLedger',
-  ],
-  tenant: [
-    'association.nav.dashboard',
-    'association.nav.payments',
-    'association.nav.cashLedger',
-  ],
+  prop_owner: ['association.nav.dashboard', 'association.nav.payments'],
+  tenant: ['association.nav.dashboard', 'association.nav.payments'],
 };
 
 type SidebarConfig = ReturnType<typeof getTeamAccountSidebarConfig>;

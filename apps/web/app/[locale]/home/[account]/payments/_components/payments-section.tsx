@@ -53,6 +53,7 @@ export interface BillPaymentRow {
   unit_no: string;
   total_amount: number;
   paid_amount: number;
+  advance_applied: number;
   status: string;
   due_date: string;
   payments: PaymentRow[];
@@ -72,6 +73,7 @@ export function PaymentsSection(props: {
   accountSlug?: string;
   initialDuration?: string;
   initialStatus?: string;
+  hideUnitColumn?: boolean;
 }) {
   const [statusVal, setStatusVal] = useState(props.initialStatus ?? 'all');
   const [typeVal, setTypeVal] = useState('all');
@@ -133,12 +135,16 @@ export function PaymentsSection(props: {
   // Derived: summary metrics
   const metrics = useMemo(() => {
     const totalBilled = filtered.reduce((s, b) => s + b.total_amount, 0);
-    const totalCollected = filtered.reduce((s, b) => s + b.paid_amount, 0);
+    // Collected = cash payments + advance credits applied to bills
+    const totalCollected = filtered.reduce(
+      (s, b) => s + b.paid_amount + b.advance_applied,
+      0,
+    );
     const paymentCount = filtered.reduce((s, b) => s + b.payments.length, 0);
     return {
       totalBilled,
       totalCollected,
-      totalOutstanding: totalBilled - totalCollected,
+      totalOutstanding: Math.max(0, totalBilled - totalCollected),
       paymentCount,
     };
   }, [filtered]);
@@ -301,31 +307,34 @@ export function PaymentsSection(props: {
 
           {/* Live metrics strip */}
           {filtered.length > 0 && (
-            <div className="text-muted-foreground ml-auto flex flex-wrap items-center gap-4 text-sm">
-              <span>
-                <span className="text-foreground font-semibold">
-                  {filtered.length}
-                </span>{' '}
-                bills
-              </span>
-              <span>
-                <span className="text-foreground font-semibold">
-                  {formatINR(metrics.totalCollected)}
-                </span>{' '}
-                collected
-              </span>
-              <span>
-                <span className="text-foreground font-semibold">
-                  {formatINR(metrics.totalOutstanding)}
-                </span>{' '}
-                outstanding
-              </span>
-              <span>
-                <span className="text-foreground font-semibold">
-                  {metrics.paymentCount}
-                </span>{' '}
-                payments
-              </span>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {[
+                { label: 'Bills', value: String(filtered.length) },
+                {
+                  label: 'Collected',
+                  value: formatINR(Math.round(metrics.totalCollected)),
+                },
+                {
+                  label: 'Outstanding',
+                  value: formatINR(Math.round(metrics.totalOutstanding)),
+                  highlight: metrics.totalOutstanding > 0,
+                },
+                { label: 'Payments', value: String(metrics.paymentCount) },
+              ].map(({ label, value, highlight }) => (
+                <div
+                  key={label}
+                  className="bg-muted/60 flex flex-col items-center rounded-lg px-3 py-1.5 text-center"
+                >
+                  <span
+                    className={`text-sm font-bold tabular-nums ${highlight ? 'text-destructive' : 'text-foreground'}`}
+                  >
+                    {value}
+                  </span>
+                  <span className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+                    {label}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -342,7 +351,7 @@ export function PaymentsSection(props: {
               <TableHeader>
                 <TableRow>
                   <TableHead>Period</TableHead>
-                  <TableHead>Unit</TableHead>
+                  {!props.hideUnitColumn && <TableHead>Unit</TableHead>}
                   <TableHead>Bill No.</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead className="text-right">Outstanding</TableHead>
@@ -354,16 +363,21 @@ export function PaymentsSection(props: {
               <TableBody>
                 {paginated.map((bill) => {
                   const status = displayBillStatus(bill);
-                  const outstanding = bill.total_amount - bill.paid_amount;
+                  const outstanding = Math.max(
+                    0,
+                    bill.total_amount - bill.paid_amount - bill.advance_applied,
+                  );
 
                   return (
                     <TableRow key={bill.id}>
                       <TableCell className="text-muted-foreground font-medium">
                         {formatPeriod(bill.period)}
                       </TableCell>
-                      <TableCell className="font-semibold">
-                        {bill.unit_no}
-                      </TableCell>
+                      {!props.hideUnitColumn && (
+                        <TableCell className="font-semibold">
+                          {bill.unit_no}
+                        </TableCell>
+                      )}
                       <TableCell className="text-muted-foreground">
                         {bill.bill_no}
                       </TableCell>

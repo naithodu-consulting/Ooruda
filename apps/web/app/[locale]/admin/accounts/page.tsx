@@ -114,7 +114,9 @@ async function AccountsPage(props: AdminAccountsPageProps) {
 
       <ServerDataLoader
         table={'accounts'}
-        client={client as unknown as Parameters<typeof ServerDataLoader>[0]['client']}
+        client={
+          client as unknown as Parameters<typeof ServerDataLoader>[0]['client']
+        }
         page={page}
         where={(queryBuilder) => {
           const { account_type: type, query } = searchParams;

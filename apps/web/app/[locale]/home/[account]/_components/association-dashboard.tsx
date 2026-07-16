@@ -22,7 +22,9 @@ import { DownloadPdfButton } from '~/components/download-pdf-button';
 import { getDurationItems } from '~/lib/bill-filter-items';
 import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
+import { billTypeLabel } from '~/lib/bill-type-labels';
 import { daysBetweenYmd, todayInBillingZone } from '~/lib/billing-dates';
+import { loadUnitLedgerBalances } from '~/lib/cash-ledger-aggregation';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 import { type PropOpsRole, hasMinimumRole } from '~/lib/rbac';
@@ -320,11 +322,14 @@ async function loadMyBillSummary(
     payments = (paymentsData as unknown as PaymentWithBillAndReceipt[]) ?? [];
   }
 
+  const ledgerBalances = await loadUnitLedgerBalances(associationId, units);
+
   return {
     units,
     bills,
     payments,
     assocName,
+    ledgerBalances,
   };
 }
 
@@ -371,7 +376,7 @@ export async function AssociationDashboard({
       );
     }
 
-    const { units, bills, payments } = summary;
+    const { units, bills, payments, ledgerBalances } = summary;
 
     return (
       <div className="flex flex-col gap-8">
@@ -461,7 +466,7 @@ export async function AssociationDashboard({
             >
               {/* Unit Header */}
               <div className="flex flex-col">
-                <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+                <h2 className="text-foreground text-lg font-bold tracking-tight">
                   Unit {unit.unit_no}
                 </h2>
               </div>
@@ -558,23 +563,107 @@ export async function AssociationDashboard({
                 <div className="flex flex-wrap gap-3">
                   <Link
                     href={`/home/${account}/payments?unit=${unit.unit_no}`}
-                    className="inline-flex items-center justify-center rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-orange-700 active:bg-orange-800"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-bold shadow-sm transition-colors"
                   >
                     Pay all
                   </Link>
                   <Link
                     href={`/home/${account}/payments?unit=${unit.unit_no}`}
-                    className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                    className="border-border bg-card text-foreground hover:bg-muted inline-flex items-center justify-center rounded-xl border px-5 py-2.5 text-sm font-bold transition-colors"
                   >
                     Pay by bill
                   </Link>
                 </div>
               )}
 
+              {/* Unit ledger balance — inline, specific to this unit */}
+              {(() => {
+                const bal = ledgerBalances.find((b) => b.unit_id === unit.id);
+                if (!bal || (bal.totalDue === 0 && bal.totalCredit === 0))
+                  return null;
+                return (
+                  <div className="border-border overflow-hidden rounded-xl border">
+                    {bal.totalDue > 0 && (
+                      <div className="bg-destructive/5 border-border border-l-destructive border-b border-l-4 p-4 last:border-b-0">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-destructive/70 text-xs font-semibold tracking-wide uppercase">
+                              Pending dues
+                            </p>
+                            <p className="text-destructive mt-1 text-2xl font-bold tabular-nums">
+                              {formatINR(bal.totalDue)}
+                            </p>
+                            <p className="text-destructive/50 mt-0.5 text-xs">
+                              Separate from your monthly bills
+                            </p>
+                          </div>
+                          <Link
+                            href={`/home/${account}/payments`}
+                            className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors"
+                          >
+                            Pay now
+                          </Link>
+                        </div>
+                        {bal.dues.length > 1 && (
+                          <div className="border-destructive/10 mt-3 flex flex-col gap-1.5 border-t pt-3">
+                            {bal.dues.map((d) => (
+                              <div
+                                key={d.bill_type}
+                                className="flex items-center justify-between text-xs"
+                              >
+                                <span className="text-destructive/60">
+                                  {billTypeLabel(d.bill_type)}
+                                </span>
+                                <span className="text-destructive font-medium tabular-nums">
+                                  {formatINR(d.amount)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {bal.totalCredit > 0 && (
+                      <div
+                        className="bg-accent border-primary border-l-4 p-4"
+                        style={{ color: 'var(--sidebar-foreground)' }}
+                      >
+                        <p className="text-xs font-semibold tracking-wide uppercase opacity-70">
+                          Advance credit
+                        </p>
+                        <p className="mt-1 text-2xl font-bold tabular-nums">
+                          {formatINR(bal.totalCredit)}
+                        </p>
+                        <p className="mt-0.5 text-xs opacity-60">
+                          Auto-applied to your next bill
+                        </p>
+                        {bal.credits.length > 1 && (
+                          <div className="border-primary/20 mt-3 flex flex-col gap-1.5 border-t pt-3">
+                            {bal.credits.map((c) => (
+                              <div
+                                key={c.bill_type}
+                                className="flex items-center justify-between text-xs"
+                              >
+                                <span className="opacity-70">
+                                  {billTypeLabel(c.bill_type)}
+                                </span>
+                                <span className="font-medium tabular-nums">
+                                  {formatINR(c.amount)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Grid for History & Payments */}
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 {/* Bill History */}
-                <Card className="border-slate-100 shadow-sm dark:border-slate-800">
+                <Card className="border-border shadow-sm">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm font-bold">
@@ -583,7 +672,7 @@ export async function AssociationDashboard({
                       {unitBills.length > PREVIEW_COUNT && (
                         <Link
                           href={`/home/${account}/payments`}
-                          className="rounded-full border border-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200"
+                          className="border-border text-muted-foreground hover:text-foreground rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors"
                         >
                           View all
                         </Link>
@@ -601,13 +690,13 @@ export async function AssociationDashboard({
                         return (
                           <div
                             key={b.id}
-                            className="flex items-center justify-between border-b border-slate-50 pb-3 last:border-0 last:pb-0 dark:border-slate-900"
+                            className="border-border/40 flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
                           >
                             <div>
-                              <span className="block text-sm font-semibold text-slate-800 dark:text-slate-200">
+                              <span className="text-foreground block text-sm font-semibold">
                                 {periodLabel(b.period)}
                               </span>
-                              <span className="block text-xs text-slate-400">
+                              <span className="text-muted-foreground block text-xs">
                                 {b.bill_no}
                               </span>
                             </div>
@@ -634,7 +723,7 @@ export async function AssociationDashboard({
                 </Card>
 
                 {/* My Payments */}
-                <Card className="border-slate-100 shadow-sm dark:border-slate-800">
+                <Card className="border-border shadow-sm">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm font-bold">
@@ -643,7 +732,7 @@ export async function AssociationDashboard({
                       {unitPayments.length > PREVIEW_COUNT && (
                         <Link
                           href={`/home/${account}/payments`}
-                          className="rounded-full border border-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200"
+                          className="border-border text-muted-foreground hover:text-foreground rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors"
                         >
                           View all
                         </Link>
@@ -663,14 +752,14 @@ export async function AssociationDashboard({
                         return (
                           <div
                             key={p.id}
-                            className="flex items-center justify-between border-b border-slate-50 pb-3 last:border-0 last:pb-0 dark:border-slate-900"
+                            className="border-border/40 flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
                           >
                             <div>
-                              <span className="block text-sm font-semibold text-slate-800 dark:text-slate-200">
+                              <span className="text-foreground block text-sm font-semibold">
                                 {receiptNo} &middot;{' '}
                                 {periodLabel(p.bills?.period || '')}
                               </span>
-                              <span className="block text-xs text-slate-400">
+                              <span className="text-muted-foreground block text-xs">
                                 {p.mode} &middot;{' '}
                                 {new Date(p.paid_at).toLocaleDateString(
                                   'en-IN',
@@ -683,7 +772,7 @@ export async function AssociationDashboard({
                               </span>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                              <span className="text-foreground text-sm font-bold tabular-nums">
                                 {formatINR(p.amount)}
                               </span>
                               <DownloadPdfButton

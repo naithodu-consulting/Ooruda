@@ -252,7 +252,9 @@ export function ElectricityBillDocument({
           {minimumCharge > 0 ? (
             <View style={s.minChargeRow}>
               <Text style={s.colSl}>{meters.length + 1}</Text>
-              <Text style={[s.colMeter, { fontWeight: 'bold' }]}>Minimum Charge</Text>
+              <Text style={[s.colMeter, { fontWeight: 'bold' }]}>
+                Minimum Charge
+              </Text>
               <Text style={s.colReading} />
               <Text style={s.colReading} />
               <Text style={s.colConsumed} />

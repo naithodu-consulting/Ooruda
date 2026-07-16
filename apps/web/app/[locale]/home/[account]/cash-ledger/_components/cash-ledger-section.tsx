@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CheckCircle2, Plus, Upload } from 'lucide-react';
 
@@ -68,24 +68,25 @@ interface Props {
   units: { id: string; unit_no: string }[];
   canManage: boolean;
   canDelete: boolean;
-  isRestricted: boolean;
+  initialEntries?: CashLedgerEntryRow[];
 }
 
 export function CashLedgerSection({
   associationId,
   units,
   canManage,
-  isRestricted,
+  initialEntries,
 }: Props) {
-  // Restricted users (owner/tenant) see only their own units — don't default to 'all'.
-  const [selectedUnitId, setSelectedUnitId] = useState<string>(
-    isRestricted ? (units[0]?.id ?? 'all') : 'all',
-  );
+  const [selectedUnitId, setSelectedUnitId] = useState<string>('all');
   const [selectedBillType, setSelectedBillType] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [entries, setEntries] = useState<CashLedgerEntryRow[]>([]);
+  const [entries, setEntries] = useState<CashLedgerEntryRow[]>(
+    initialEntries ?? [],
+  );
   const [loading, setLoading] = useState(false);
+  // Skip the first effect run when initialEntries were pre-fetched server-side.
+  const isFirstRender = useRef(!!initialEntries);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -110,6 +111,11 @@ export function CashLedgerSection({
   }, [associationId, selectedUnitId, selectedBillType, dateFrom, dateTo]);
 
   useEffect(() => {
+    // Skip the very first run when server-prefetched data is already in state.
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     void fetchEntries();
   }, [fetchEntries]);
 
@@ -167,32 +173,30 @@ export function CashLedgerSection({
     <div className="space-y-4">
       {/* ── Toolbar ── */}
       <div className="bg-muted/40 flex flex-wrap items-end gap-x-4 gap-y-3 rounded-xl border px-4 py-3">
-        {!isRestricted && (
-          <FilterField label="Unit">
-            <Select
-              value={selectedUnitId}
-              onValueChange={(v) => setSelectedUnitId(v ?? 'all')}
-            >
-              <SelectTrigger className="h-9 w-36 text-sm">
-                <span className="truncate">
-                  {isAllUnits
-                    ? 'All Units'
-                    : selectedUnit
-                      ? `Unit ${selectedUnit.unit_no}`
-                      : 'Select unit'}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Units</SelectItem>
-                {units.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    Unit {u.unit_no}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
-        )}
+        <FilterField label="Unit">
+          <Select
+            value={selectedUnitId}
+            onValueChange={(v) => setSelectedUnitId(v ?? 'all')}
+          >
+            <SelectTrigger className="h-9 w-36 text-sm">
+              <span className="truncate">
+                {isAllUnits
+                  ? 'All Units'
+                  : selectedUnit
+                    ? `Unit ${selectedUnit.unit_no}`
+                    : 'Select unit'}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Units</SelectItem>
+              {units.map((u) => (
+                <SelectItem key={u.id} value={u.id}>
+                  Unit {u.unit_no}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
 
         <FilterField label="Bill Type">
           <Select
@@ -269,13 +273,12 @@ export function CashLedgerSection({
       </div>
 
       {/* ── Summary strip ── */}
-      {!loading && (
-        isAllUnits ? (
+      {!loading &&
+        (isAllUnits ? (
           <AllUnitsSummary summary={allUnitsSummary} />
         ) : (
           <SingleUnitBalance balance={netBalance ?? 0} />
-        )
-      )}
+        ))}
 
       {/* ── Ledger table ── */}
       <Card className="overflow-hidden">
@@ -290,8 +293,7 @@ export function CashLedgerSection({
             </CardTitle>
             {!loading && entries.length > 0 && (
               <span className="text-muted-foreground text-xs tabular-nums">
-                {entries.length}{' '}
-                {entries.length === 1 ? 'entry' : 'entries'}
+                {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
               </span>
             )}
           </div>
@@ -306,7 +308,12 @@ export function CashLedgerSection({
                       Unit
                     </TableHead>
                   )}
-                  <TableHead className={cn('w-32 text-xs font-semibold tracking-wide uppercase', !isAllUnits && 'pl-5')}>
+                  <TableHead
+                    className={cn(
+                      'w-32 text-xs font-semibold tracking-wide uppercase',
+                      !isAllUnits && 'pl-5',
+                    )}
+                  >
                     Date
                   </TableHead>
                   <TableHead className="w-36 text-xs font-semibold tracking-wide uppercase">
@@ -321,6 +328,9 @@ export function CashLedgerSection({
                   <TableHead className="text-xs font-semibold tracking-wide uppercase">
                     Paid By
                   </TableHead>
+                  <TableHead className="max-w-48 text-xs font-semibold tracking-wide uppercase">
+                    Notes
+                  </TableHead>
                   {!isAllUnits && (
                     <TableHead className="w-32 pr-5 text-right text-xs font-semibold tracking-wide uppercase">
                       Balance
@@ -332,7 +342,7 @@ export function CashLedgerSection({
                 {loading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="text-muted-foreground py-16 text-center text-sm"
                     >
                       Loading…
@@ -340,10 +350,7 @@ export function CashLedgerSection({
                   </TableRow>
                 ) : runningEntries.length === 0 ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      className="py-16 text-center"
-                    >
+                    <TableCell colSpan={7} className="py-16 text-center">
                       <p className="text-muted-foreground text-sm">
                         No entries match the selected filters.
                       </p>
@@ -372,20 +379,19 @@ export function CashLedgerSection({
                         <EntryTypeBadge type={e.entry_type} />
                       </TableCell>
                       <TableCell className="text-sm">
-                        {BILL_TYPE_OPTIONS.find(
-                          (o) => o.value === e.bill_type,
-                        )?.label ?? e.bill_type}
+                        {BILL_TYPE_OPTIONS.find((o) => o.value === e.bill_type)
+                          ?.label ?? e.bill_type}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm tabular-nums">
-                        <AmountCell
-                          amount={e.amount}
-                          direction={e.direction}
-                        />
+                        <AmountCell amount={e.amount} direction={e.direction} />
                       </TableCell>
-                      <TableCell className="text-muted-foreground max-w-44 truncate text-sm">
-                        {e.paid_by_name || e.notes || (
-                          <span className="opacity-40">—</span>
+                      <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
+                        {e.paid_by_name || (
+                          <span className="opacity-30">—</span>
                         )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground max-w-48 truncate text-sm">
+                        {e.notes || <span className="opacity-30">—</span>}
                       </TableCell>
                       {!isAllUnits && (
                         <TableCell className="pr-5 text-right font-mono text-sm tabular-nums">
@@ -408,9 +414,7 @@ export function CashLedgerSection({
             onOpenChange={setAddOpen}
             associationId={associationId}
             units={units}
-            defaultUnitId={
-              isAllUnits ? (units[0]?.id ?? '') : selectedUnitId
-            }
+            defaultUnitId={isAllUnits ? (units[0]?.id ?? '') : selectedUnitId}
             onSuccess={fetchEntries}
           />
           <ImportCashLedgerDialog

@@ -1356,3 +1356,40 @@ Per-unit credit/debit ledger for advance payments and standalone dues.
 - Descriptions no longer append " for [Month Year]" — plain charge name (e.g. "Sinking Fund") shown as-is. Port of main branch fix to cash-ledger-feature branch.
 
 _Last updated: 2026-07-16_
+
+---
+
+## Cash Ledger — UX Overhaul, Data Fixes & Code Quality (2026-07-16)
+
+### Dashboard — Per-Unit Balance Cards
+
+- **Cross-unit aggregation bug fixed**: Advance credit on Unit A no longer cancelled dues on Unit B. Balances are now computed per `(unit_id, bill_type)` independently.
+- **Inline per-unit display**: Balance cards render inside each unit's section — dues and credit are shown against the correct unit, never aggregated across units.
+- **"Pay now" button**: Styled with brand primary (`bg-primary text-primary-foreground`) instead of hardcoded orange. Links to the Payments page.
+- **Color compliance**: All hardcoded colors (`text-emerald-600`, `bg-orange-600`, `border-slate-*`) replaced with semantic Tailwind tokens and CSS variables (`var(--sidebar-foreground)` for brand-gold text tone).
+
+### Cash Ledger Page
+
+- **Server-side prefetch**: Initial entries are fetched in parallel with units on the server. Table renders immediately without a client-side waterfall on load (`useRef` skip pattern for first `useEffect`).
+- **Owners/tenants redirected**: `prop_owner` and `tenant` roles are now redirected to the Payments page (their balance is visible there); the Cash Ledger is an admin/operator tool.
+- **Split "Paid By" / "Notes" columns**: The combined "Description/Paid By" column is now two separate columns — "Paid By" and "Notes" — eliminating confusion where notes text appeared under "Paid By" for Due entries.
+- **Nav cleanup**: Cash Ledger removed from `prop_owner` and `tenant` nav allowlist.
+
+### Payments Page — Cash Ledger Dues Section
+
+- **Dues visible for all roles**: Owners/tenants now see their outstanding Cash Ledger dues in the Payments page via per-unit aggregation (no cross-unit netting).
+- **`advance_applied` factored into outstanding**: Bills that had advance auto-applied were incorrectly showing ₹X outstanding alongside "Paid" status. Outstanding now correctly computed as `total_amount − paid_amount − advance_applied` across the query SELECT, type interface, metric totals, and per-row calculation.
+- **Adaptive title**: Section shows "Pending dues" for owners/tenants, "Cash ledger dues" for admins.
+- **Unit column hidden** for single-unit owners/tenants.
+- **Table padding & typography**: Consistent `py-3 pl-4/pr-4` cell padding; outstanding amounts rendered `font-bold tabular-nums text-destructive`.
+- **Action label**: Button reads "Record payment" (was "Pay").
+
+### Code Quality & Deduplication
+
+- **`apps/web/lib/bill-type-labels.ts`** (new): Shared `BILL_TYPE_LABELS` map and `billTypeLabel()` helper — extracted from two files where it was duplicated.
+- **`apps/web/lib/cash-ledger-aggregation.ts`** (new): Shared `loadUnitLedgerBalances()` — per-unit credit/due aggregation extracted from two files where the algorithm was duplicated. Exports `UnitCashLedgerBalance` and `CashLedgerLineBalance` interfaces.
+- Removed dead `AccountBalanceCard` component from `association-dashboard.tsx`.
+- Removed `isRestricted` prop from `CashLedgerSection` (concept no longer needed after redirect).
+- Removed `Badge` import from `cash-ledger-dues-section.tsx` (replaced with inline `<span>`).
+
+_Last updated: 2026-07-16_

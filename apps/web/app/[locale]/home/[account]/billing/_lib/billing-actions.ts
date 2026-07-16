@@ -206,9 +206,7 @@ export async function generateBillsAction(
       .in('unit_id', unitIds);
 
     const subMeterIds = (subMeters ?? []).map((m) => m.id);
-    const subMeterMap = new Map(
-      (subMeters ?? []).map((m) => [m.id, m]),
-    );
+    const subMeterMap = new Map((subMeters ?? []).map((m) => [m.id, m]));
     // CommonArea sub-meters are stored with unit_id pointing to the first unit
     // (FK placeholder). During billing we redirect their consumption to whichever
     // unit has type = 'Common Area' so the amounts land in the right bill.
@@ -282,9 +280,7 @@ export async function generateBillsAction(
     // so their presence must prevent the "already fully billed" skip below.
     const hasPendingForUnit =
       shouldGenOther &&
-      pendingRows.some(
-        (pc) => pc.unit_id === null || pc.unit_id === unit.id,
-      );
+      pendingRows.some((pc) => pc.unit_id === null || pc.unit_id === unit.id);
 
     if (unit.type === 'Common Area') {
       if (hasElec) {

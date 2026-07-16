@@ -4,7 +4,6 @@ import { useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import { Badge } from '@kit/ui/badge';
 import {
   Card,
   CardContent,
@@ -21,6 +20,7 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
+import { billTypeLabel } from '~/lib/bill-type-labels';
 import { formatINR } from '~/lib/format-inr';
 
 import { PayDueDialog } from './pay-due-dialog';
@@ -36,28 +36,38 @@ interface Props {
   associationId: string;
   dues: CashLedgerDueRow[];
   canManage: boolean;
+  isOwnerView?: boolean;
+  unitCount?: number;
 }
 
 export function CashLedgerDuesSection({
   associationId,
   dues,
   canManage,
+  isOwnerView = false,
+  unitCount = 1,
 }: Props) {
   const router = useRouter();
   const [payTarget, setPayTarget] = useState<CashLedgerDueRow | null>(null);
 
   if (dues.length === 0) return null;
 
+  const showUnitColumn = !isOwnerView || (unitCount ?? 1) > 1;
+
   return (
     <>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            Cash Ledger Dues
-            <Badge variant="destructive">{dues.length}</Badge>
+            {isOwnerView ? 'Pending dues' : 'Cash ledger dues'}
+            <span className="bg-muted text-muted-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold">
+              {dues.length}
+            </span>
           </CardTitle>
           <CardDescription>
-            Standalone dues not tied to a generated bill.
+            {isOwnerView
+              ? 'Amounts not linked to a monthly bill.'
+              : 'Standalone dues not tied to a generated bill.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -65,31 +75,39 @@ export function CashLedgerDuesSection({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Unit</TableHead>
-                  <TableHead>Bill Type</TableHead>
-                  <TableHead className="text-right">Outstanding</TableHead>
+                  {showUnitColumn && (
+                    <TableHead className="pl-4">Unit</TableHead>
+                  )}
+                  <TableHead className={showUnitColumn ? '' : 'pl-4'}>
+                    Bill type
+                  </TableHead>
+                  <TableHead className="pr-4 text-right">Outstanding</TableHead>
                   {canManage && <TableHead />}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {dues.map((due) => (
                   <TableRow key={`${due.unit_id}-${due.bill_type}`}>
-                    <TableCell className="font-medium">
-                      Unit {due.unit_no}
+                    {showUnitColumn && (
+                      <TableCell className="py-3 pl-4 font-medium">
+                        Unit {due.unit_no}
+                      </TableCell>
+                    )}
+                    <TableCell
+                      className={`py-3 ${showUnitColumn ? '' : 'pl-4'}`}
+                    >
+                      {billTypeLabel(due.bill_type)}
                     </TableCell>
-                    <TableCell className="capitalize">
-                      {due.bill_type}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-red-600 dark:text-red-400">
+                    <TableCell className="text-destructive py-3 pr-4 text-right font-bold tabular-nums">
                       {formatINR(Math.abs(due.balance))}
                     </TableCell>
                     {canManage && (
-                      <TableCell className="text-right">
+                      <TableCell className="py-3 text-right">
                         <button
                           className="text-primary text-sm font-medium hover:underline"
                           onClick={() => setPayTarget(due)}
                         >
-                          Pay
+                          Record payment
                         </button>
                       </TableCell>
                     )}

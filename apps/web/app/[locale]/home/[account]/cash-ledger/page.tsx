@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
@@ -6,6 +8,7 @@ import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import { CashLedgerSection } from './_components/cash-ledger-section';
+import { getCashLedgerEntriesAction } from './_lib/cash-ledger-actions';
 
 interface Props {
   params: Promise<{ account: string }>;
@@ -15,12 +18,18 @@ export const metadata = { title: 'Cash Ledger' };
 
 export default async function CashLedgerPage({ params }: Props) {
   const { account } = await params;
-  const { accountId, role, userId } = await requireRole(account, [
+  const { accountId, role } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
     'prop_owner',
     'tenant',
   ]);
+
+  // Owners and tenants see their balance on the dashboard and Payments page.
+  // The Cash Ledger is an admin/operator tool — redirect them away.
+  if (role === 'prop_owner' || role === 'tenant') {
+    redirect(`/home/${account}/payments`);
+  }
 
   const client = getSupabaseServerClient();
 
@@ -34,46 +43,22 @@ export default async function CashLedgerPage({ params }: Props) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  const isRestricted = role === 'prop_owner' || role === 'tenant';
   const canManage = role === 'assoc_admin' || role === 'billing_operator';
   const canDelete = role === 'assoc_admin';
 
-  // Admin/billing_operator: all units. Owner/tenant: own unit only.
-  let unitIds: string[] | null = null;
-
-  if (isRestricted) {
-    if (role === 'prop_owner') {
-      const { data: ownedUnits } = await client
-        .from('units')
-        .select('id')
-        .eq('association_id', association.id)
-        .eq('owner_id', userId);
-      unitIds = (ownedUnits ?? []).map((u) => u.id);
-    } else {
-      const { data: tenancies } = await client
-        .from('tenancies')
-        .select('unit_id, units!inner(association_id)')
-        .eq('tenant_id', userId)
-        .eq('units.association_id', association.id);
-      unitIds = (tenancies ?? []).map((t) => t.unit_id);
-    }
-  }
-
-  // Fetch units for the unit selector (all for admin, scoped for owner/tenant).
-  let unitsQuery = client
-    .from('units')
-    .select('id, unit_no')
-    .eq('association_id', association.id)
-    .order('unit_no');
-
-  const filteredUnitsQuery =
-    isRestricted && unitIds && unitIds.length > 0
-      ? unitsQuery.in('id', unitIds)
-      : unitsQuery;
-
-  const { data: allUnits } = await filteredUnitsQuery;
+  const [{ data: allUnits }, initialResult] = await Promise.all([
+    client
+      .from('units')
+      .select('id, unit_no')
+      .eq('association_id', association.id)
+      .order('unit_no'),
+    // Prefetch default view (all units, all types, no date filter) so the
+    // table renders immediately without a client-side waterfall on load.
+    getCashLedgerEntriesAction(association.id, 'all', 'all'),
+  ]);
 
   const units = (allUnits ?? []) as { id: string; unit_no: string }[];
+  const initialEntries = initialResult.entries ?? [];
 
   return (
     <PageBody>
@@ -88,7 +73,7 @@ export default async function CashLedgerPage({ params }: Props) {
         units={units}
         canManage={canManage}
         canDelete={canDelete}
-        isRestricted={isRestricted}
+        initialEntries={initialEntries}
       />
     </PageBody>
   );

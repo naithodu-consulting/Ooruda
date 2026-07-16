@@ -258,16 +258,20 @@ export async function recordDuePaymentAction(
 
   // Single RPC call — both cash_ledger_payments insert and cash_ledger credit
   // entry are written atomically; receipt number is generated inside the RPC.
-  const { data: paymentId, error } = await uc(client).rpc('record_due_payment', {
-    p_association_id: associationId,
-    p_unit_id: input.unit_id,
-    p_bill_type: input.bill_type,
-    p_amount: input.amount,
-    p_mode: input.mode,
-    p_reference_no: input.reference_no?.trim() || null,
-  });
+  const { data: paymentId, error } = await uc(client).rpc(
+    'record_due_payment',
+    {
+      p_association_id: associationId,
+      p_unit_id: input.unit_id,
+      p_bill_type: input.bill_type,
+      p_amount: input.amount,
+      p_mode: input.mode,
+      p_reference_no: input.reference_no?.trim() || null,
+    },
+  );
 
-  if (error) return { success: false, error: (error as { message: string }).message };
+  if (error)
+    return { success: false, error: (error as { message: string }).message };
 
   await logAuditEvent({
     associationId,
