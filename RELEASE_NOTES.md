@@ -1416,3 +1416,37 @@ _Last updated: 2026-07-16_
 - Removed `Badge` import from `cash-ledger-dues-section.tsx` (replaced with inline `<span>`).
 
 _Last updated: 2026-07-16_
+
+---
+
+## Razorpay Payments + Cash Ledger Integration (2026-07-16)
+
+### Razorpay — Association Gateway Config UI
+
+- **`PaymentGatewayCard`** (new): Association admins can configure their own Razorpay credentials (Key ID, Key Secret, Webhook Secret, active toggle) from the Association Settings page. Key Secret is write-only — never fetched to the client.
+- **`upsertPaymentGatewayAction`**: Server action using `getSupabaseServerAdminClient` (bypasses RLS) to insert or update `association_payment_gateways`. Key Secret is only required on first-time insert; updates leave the secret unchanged if the field is left blank.
+- **Settings page fix**: All 7 previously-missing fields (`email`, `phone`, `bank_account_name`, `bank_account_number`, `bank_name`, `bank_ifsc`, `bank_branch`) restored to the `AssociationForm` prop after a merge conflict accidentally dropped them.
+
+### Razorpay — Async Webhook Safety Net
+
+- **`POST /api/billing/razorpay/webhook`**: Handles `payment.captured` events. Verifies HMAC-SHA256 signature via the association's `webhook_secret`. Reads `bill_ids`, `association_id`, `paid_by_role` from order `notes`. Calls `record_payment()` via service role (no user session). Fully idempotent — `payments_razorpay_bill_uniq` index prevents duplicate recording if `/verify` already fired.
+- **`create-order/route.ts` updated**: Embeds `notes: { bill_ids, association_id, paid_by_role }` in every Razorpay order so the webhook can identify bills without a separate DB lookup.
+- **Migration `20260709200000_record_payment_webhook_bypass.sql`**: Makes `recorded_by` nullable on `record_payment()` and grants EXECUTE to `service_role` so the webhook route can record payments without an authenticated session.
+
+### Payments Page — Overdue Bills
+
+- **Overdue filter**: `Overdue` status added to the bill filter in `payments-section.tsx` so overdue bills appear when the Overdue tab is selected.
+- **Pay All includes Overdue**: The "Pay All" button now covers `Unpaid | Partial | Overdue` bills (was `Unpaid | Partial` only).
+- **Units page badge**: `.eq('status', 'Unpaid')` widened to `.in('status', ['Unpaid', 'Partial', 'Overdue'])` so the unpaid-bills badge on the Units page counts overdue bills too.
+
+### Cash Ledger — Import Date Fix
+
+- **`FALLBACK_DATE` was hardcoded** to `'2026-06-30'` in both `cash-ledger-actions.ts` and `import-cash-ledger-dialog.tsx`. Import rows without a `paid_on` date were silently backdated to June 30. Fixed to `new Date().toISOString().slice(0, 10)` (today's date at import time).
+
+### Migrations
+
+| Migration | Description |
+|-----------|-------------|
+| `20260709200000_record_payment_webhook_bypass.sql` | Makes `recorded_by` nullable; grants `record_payment()` EXECUTE to `service_role` for webhook use |
+
+_Last updated: 2026-07-16_

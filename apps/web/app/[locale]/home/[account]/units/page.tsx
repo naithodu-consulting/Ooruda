@@ -109,7 +109,7 @@ export default async function UnitsPage({ params }: Props) {
         .from('bills')
         .select('unit_id, status, due_date')
         .in('unit_id', unitIds)
-        .eq('status', 'Unpaid')
+        .in('status', ['Unpaid', 'Partial', 'Overdue'])
     : { data: [] };
 
   const overdueUnitIds = new Set(

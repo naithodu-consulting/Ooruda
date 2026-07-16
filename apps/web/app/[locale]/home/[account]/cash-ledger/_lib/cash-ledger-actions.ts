@@ -119,7 +119,7 @@ export interface CashLedgerImportResult {
   error?: string;
 }
 
-const FALLBACK_DATE = '2026-06-30';
+const FALLBACK_DATE = new Date().toISOString().slice(0, 10);
 
 export async function bulkImportCashLedgerAction(
   associationId: string,

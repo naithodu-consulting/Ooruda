@@ -50,7 +50,7 @@ type ParsedRow = {
   _error?: string;
 };
 
-const FALLBACK_DATE = '2026-06-30';
+const FALLBACK_DATE = new Date().toISOString().slice(0, 10);
 
 function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
   return raw.map((r, i) => {

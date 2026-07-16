@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import * as z from 'zod';
 
+import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { getAssociationRole } from '~/lib/rbac';
@@ -295,5 +296,103 @@ export async function toggleChargeTypeAction(
 
   revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
 
+  return { success: true };
+}
+
+// ─── Payment Gateway ──────────────────────────────────────────────────────────
+
+const GatewaySchema = z.object({
+  key_id: z.string().min(1, 'Key ID is required').max(255),
+  key_secret: z.string().max(255).optional(),
+  webhook_secret: z.string().max(255).optional(),
+  is_active: z.boolean().default(true),
+});
+
+export type UpsertGatewayState = { success?: boolean; error?: string } | null;
+
+export async function upsertPaymentGatewayAction(
+  associationId: string,
+  _prevState: UpsertGatewayState,
+  formData: FormData,
+): Promise<UpsertGatewayState> {
+  const role = await getAssociationRole(associationId);
+  if (role !== 'assoc_admin') {
+    return {
+      success: false,
+      error: 'Only association admins can configure the payment gateway.',
+    };
+  }
+
+  const trim = (v: FormDataEntryValue | null) =>
+    typeof v === 'string' ? v.trim() || undefined : undefined;
+
+  const parsed = GatewaySchema.safeParse({
+    key_id: formData.get('key_id'),
+    key_secret: trim(formData.get('key_secret')),
+    webhook_secret: trim(formData.get('webhook_secret')),
+    is_active: formData.get('is_active') === 'true',
+  });
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Invalid input.',
+    };
+  }
+
+  const admin = getSupabaseServerAdminClient();
+
+  const { data: existing, error: lookupError } = await admin
+    .from('association_payment_gateways')
+    .select('id')
+    .eq('association_id', associationId)
+    .maybeSingle();
+
+  if (lookupError) {
+    return { success: false, error: 'Could not check existing configuration.' };
+  }
+
+  if (existing) {
+    const updatePayload: {
+      key_id: string;
+      is_active: boolean;
+      key_secret?: string;
+      webhook_secret?: string;
+    } = {
+      key_id: parsed.data.key_id,
+      is_active: parsed.data.is_active,
+    };
+    if (parsed.data.key_secret)
+      updatePayload.key_secret = parsed.data.key_secret;
+    if (parsed.data.webhook_secret !== undefined)
+      updatePayload.webhook_secret = parsed.data.webhook_secret;
+
+    const { error } = await admin
+      .from('association_payment_gateways')
+      .update(updatePayload)
+      .eq('association_id', associationId);
+
+    if (error) return { success: false, error: error.message };
+  } else {
+    if (!parsed.data.key_secret) {
+      return {
+        success: false,
+        error: 'Key Secret is required to set up the gateway.',
+      };
+    }
+
+    const { error } = await admin.from('association_payment_gateways').insert({
+      association_id: associationId,
+      provider: 'razorpay',
+      key_id: parsed.data.key_id,
+      key_secret: parsed.data.key_secret,
+      webhook_secret: parsed.data.webhook_secret,
+      is_active: parsed.data.is_active,
+    });
+
+    if (error) return { success: false, error: error.message };
+  }
+
+  revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
   return { success: true };
 }
