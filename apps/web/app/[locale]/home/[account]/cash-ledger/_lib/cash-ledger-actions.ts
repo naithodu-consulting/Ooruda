@@ -53,7 +53,7 @@ export async function addCashLedgerEntryAction(
     return { success: false, error: 'Bill type is required.' };
   if (!input.amount || input.amount <= 0)
     return { success: false, error: 'Amount must be greater than zero.' };
-  if (!input.paid_by_name?.trim())
+  if (input.entry_type === 'advance_payment' && !input.paid_by_name?.trim())
     return { success: false, error: 'Paid by name is required.' };
 
   const client = getSupabaseServerClient();
@@ -281,12 +281,14 @@ export async function recordDuePaymentAction(
   return { success: true, paymentId: paymentId as string };
 }
 
-// ── Fetch ledger entries for a unit ─────────────────────────
+// ── Fetch ledger entries for a unit (or all units) ──────────
 
 export async function getCashLedgerEntriesAction(
   associationId: string,
-  unitId: string,
+  unitId: string, // 'all' = no unit filter
   billType?: string,
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<{
   success: boolean;
   entries?: CashLedgerEntryRow[];
@@ -301,15 +303,26 @@ export async function getCashLedgerEntriesAction(
   let query = (uc(client) as any)
     .from('cash_ledger')
     .select(
-      'id, entry_type, bill_type, amount, direction, entry_date, paid_by_name, notes, created_at, reference_bill_id',
+      'id, unit_id, entry_type, bill_type, amount, direction, entry_date, paid_by_name, notes, created_at, reference_bill_id',
     )
     .eq('association_id', associationId)
-    .eq('unit_id', unitId)
     .order('entry_date', { ascending: true })
     .order('created_at', { ascending: true });
 
+  if (unitId && unitId !== 'all') {
+    query = query.eq('unit_id', unitId);
+  }
+
   if (billType && billType !== 'all') {
     query = query.eq('bill_type', billType);
+  }
+
+  if (dateFrom) {
+    query = query.gte('entry_date', dateFrom);
+  }
+
+  if (dateTo) {
+    query = query.lte('entry_date', dateTo);
   }
 
   const { data, error } = await query;
@@ -390,6 +403,7 @@ export async function getUnitMembersAction(
 
 export interface CashLedgerEntryRow {
   id: string;
+  unit_id: string;
   entry_type: string;
   bill_type: string;
   amount: number;

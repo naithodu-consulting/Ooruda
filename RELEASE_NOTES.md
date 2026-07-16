@@ -1327,3 +1327,32 @@ Per-unit credit/debit ledger for advance payments and standalone dues.
 |-----------|-------------|
 | `20260715000003_pending_other_charges_due_date_billed.sql` | Adds `due_date date` and `billed boolean default false` columns to `pending_other_charges` |
 | `20260715000004_pending_other_charges_update_policy.sql` | Adds UPDATE RLS policy + grant on `pending_other_charges` so bill generation can mark charges as `billed` |
+
+---
+
+## Cash Ledger UX & Form Improvements (2026-07-16)
+
+### Cash Ledger Page
+
+- **Default "All Units"**: Cash Ledger opens showing all transactions across all units (admins); restricted users (owner/tenant) default to their own unit.
+- **Date range filter**: "From" and "To" date pickers added; "Clear" button appears when active.
+- **Labelled filter toolbar**: All filters (Unit, Bill Type, From, To) have consistent uppercase labels; toolbar is contained in a muted surface for visual separation.
+- **Restructured table columns**: Merged Debit + Credit into a single color-coded **Amount** column. Replaced Description with **Paid By**. Column order: Unit (All mode only) · Date · Type · Bill Type · Amount · Paid By · Balance (single-unit only).
+- **Context-aware balance summary**: "All Units" mode shows focused cards — "Units in Advance (N) ₹X CR" and "Units with Dues (N) ₹Y DR" — zero-value cards are hidden; both-zero state shows a "All settled" indicator. Single-unit mode shows a single Advance/Outstanding/Settled chip.
+- **Running balance retained** in single-unit view as the rightmost column.
+- **UX polish**: row hover states, consistent column padding, dead-code colSpan ternary removed, count badge hidden on single-unit summary card.
+
+### Add Cash Ledger Entry Dialog
+
+- **Paid By and Payer Name hidden for Due entries** — these fields only apply to Advance Payments.
+- **Contextual date label**: "Due Date" for Due entries; "Paid On" for Advance Payments.
+- **Contextual submit button**: "Record Due" or "Record Payment".
+- **Contextual dialog description and notes placeholder** change based on entry type.
+- **Form resets on dialog close** (cancel or submit) — prevents stale state on reopen.
+- **Amount field** starts empty instead of pre-filling 0.
+
+### Other Charges PDF
+
+- Descriptions no longer append " for [Month Year]" — plain charge name (e.g. "Sinking Fund") shown as-is. Port of main branch fix to cash-ledger-feature branch.
+
+_Last updated: 2026-07-16_

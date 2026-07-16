@@ -46,11 +46,6 @@ const BILL_TYPES = [
   { value: 'other_charges', label: 'Other Charges' },
 ];
 
-const ENTRY_TYPE_LABELS: Record<string, string> = {
-  due: 'Due',
-  advance_payment: 'Advance Payment',
-};
-
 const Schema = z
   .object({
     unit_id: z.string().min(1, 'Unit is required'),
@@ -63,7 +58,11 @@ const Schema = z
     notes: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.paid_by_type === 'other' && !data.paid_by_custom_name?.trim()) {
+    if (
+      data.entry_type === 'advance_payment' &&
+      data.paid_by_type === 'other' &&
+      !data.paid_by_custom_name?.trim()
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Name is required when selecting Other',
@@ -99,7 +98,7 @@ export function AddCashLedgerEntryDialog({
       unit_id: defaultUnitId ?? '',
       entry_type: 'due' as const,
       bill_type: 'maintenance',
-      amount: 0,
+      amount: undefined as unknown as number,
       paid_by_type: 'owner' as const,
       paid_by_custom_name: '',
       entry_date: new Date().toISOString().slice(0, 10),
@@ -107,8 +106,27 @@ export function AddCashLedgerEntryDialog({
     },
   });
 
+  // Reset form to clean state whenever dialog is closed.
+  useEffect(() => {
+    if (!open) {
+      form.reset({
+        unit_id: defaultUnitId ?? '',
+        entry_type: 'due',
+        bill_type: 'maintenance',
+        amount: undefined as unknown as number,
+        paid_by_type: 'owner',
+        paid_by_custom_name: '',
+        entry_date: new Date().toISOString().slice(0, 10),
+        notes: '',
+      });
+    }
+  }, [open, defaultUnitId, form]);
+
   const selectedUnitId = useWatch({ control: form.control, name: 'unit_id' });
+  const entryType = useWatch({ control: form.control, name: 'entry_type' });
   const paidByType = useWatch({ control: form.control, name: 'paid_by_type' });
+
+  const isDue = entryType === 'due';
 
   // Reload owner/tenant whenever the selected unit changes.
   useEffect(() => {
@@ -121,7 +139,6 @@ export function AddCashLedgerEntryDialog({
       .then((res) => {
         const list = res.members ?? [];
         setMembers(list);
-        // Auto-correct paid_by_type if the current selection is no longer valid.
         const hasOwner = list.some((m) => m.role === 'owner');
         const hasTenant = list.some((m) => m.role === 'tenant');
         const current = form.getValues('paid_by_type');
@@ -150,14 +167,16 @@ export function AddCashLedgerEntryDialog({
       let paid_by_user_id: string | null = null;
       let paid_by_name = '';
 
-      if (values.paid_by_type === 'owner') {
-        paid_by_user_id = ownerMember?.userId ?? null;
-        paid_by_name = ownerMember?.name ?? 'Owner';
-      } else if (values.paid_by_type === 'tenant') {
-        paid_by_user_id = tenantMember?.userId ?? null;
-        paid_by_name = tenantMember?.name ?? 'Tenant';
-      } else {
-        paid_by_name = values.paid_by_custom_name?.trim() ?? '';
+      if (!isDue) {
+        if (values.paid_by_type === 'owner') {
+          paid_by_user_id = ownerMember?.userId ?? null;
+          paid_by_name = ownerMember?.name ?? 'Owner';
+        } else if (values.paid_by_type === 'tenant') {
+          paid_by_user_id = tenantMember?.userId ?? null;
+          paid_by_name = tenantMember?.name ?? 'Tenant';
+        } else {
+          paid_by_name = values.paid_by_custom_name?.trim() ?? '';
+        }
       }
 
       const result = await addCashLedgerEntryAction(associationId, {
@@ -172,8 +191,17 @@ export function AddCashLedgerEntryDialog({
       });
 
       if (result.success) {
-        toast.success('Entry added successfully');
-        form.reset();
+        toast.success(isDue ? 'Due recorded' : 'Advance payment recorded');
+        form.reset({
+          unit_id: defaultUnitId ?? '',
+          entry_type: 'due',
+          bill_type: 'maintenance',
+          amount: undefined as unknown as number,
+          paid_by_type: 'owner',
+          paid_by_custom_name: '',
+          entry_date: new Date().toISOString().slice(0, 10),
+          notes: '',
+        });
         onOpenChange(false);
         onSuccess();
       } else {
@@ -188,7 +216,9 @@ export function AddCashLedgerEntryDialog({
         <DialogHeader>
           <DialogTitle>Add Cash Ledger Entry</DialogTitle>
           <DialogDescription>
-            Add a standalone due or an advance payment for a unit.
+            {isDue
+              ? 'Record an amount owed by a unit — no payment has been made yet.'
+              : 'Log a payment received in advance before a bill is generated.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -238,7 +268,7 @@ export function AddCashLedgerEntryDialog({
                     <FormControl>
                       <SelectTrigger>
                         <span className="truncate">
-                          {ENTRY_TYPE_LABELS[field.value] ?? field.value}
+                          {field.value === 'due' ? 'Due' : 'Advance Payment'}
                         </span>
                       </SelectTrigger>
                     </FormControl>
@@ -308,70 +338,77 @@ export function AddCashLedgerEntryDialog({
               )}
             />
 
-            {/* Paid By */}
-            <FormField
-              control={form.control}
-              name="paid_by_type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Paid By</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger disabled={membersLoading}>
-                        <span className="truncate">
-                          {membersLoading
-                            ? 'Loading…'
-                            : paidByLabel(field.value)}
-                        </span>
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {ownerMember && (
-                        <SelectItem value="owner">
-                          {paidByLabel('owner')}
-                        </SelectItem>
-                      )}
-                      {tenantMember && (
-                        <SelectItem value="tenant">
-                          {paidByLabel('tenant')}
-                        </SelectItem>
-                      )}
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Paid By — only for advance payments */}
+            {!isDue && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="paid_by_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Paid By</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger disabled={membersLoading}>
+                            <span className="truncate">
+                              {membersLoading
+                                ? 'Loading…'
+                                : paidByLabel(field.value)}
+                            </span>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {ownerMember && (
+                            <SelectItem value="owner">
+                              {paidByLabel('owner')}
+                            </SelectItem>
+                          )}
+                          {tenantMember && (
+                            <SelectItem value="tenant">
+                              {paidByLabel('tenant')}
+                            </SelectItem>
+                          )}
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            {/* Custom name — only when Other is selected */}
-            {paidByType === 'other' && (
-              <FormField
-                control={form.control}
-                name="paid_by_custom_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Enter payer name"
-                        {...field}
-                        value={field.value ?? ''}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                {/* Custom name — only when Other */}
+                {paidByType === 'other' && (
+                  <FormField
+                    control={form.control}
+                    name="paid_by_custom_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payer Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Enter payer name"
+                            {...field}
+                            value={field.value ?? ''}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 )}
-              />
+              </>
             )}
 
-            {/* Date */}
+            {/* Date — label changes by type */}
             <FormField
               control={form.control}
               name="entry_date"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Date</FormLabel>
+                  <FormLabel>{isDue ? 'Due Date' : 'Paid On'}</FormLabel>
                   <FormControl>
                     <Input type="date" {...field} />
                   </FormControl>
@@ -388,7 +425,16 @@ export function AddCashLedgerEntryDialog({
                 <FormItem>
                   <FormLabel>Notes (optional)</FormLabel>
                   <FormControl>
-                    <Textarea rows={2} {...field} value={field.value ?? ''} />
+                    <Textarea
+                      rows={2}
+                      placeholder={
+                        isDue
+                          ? 'e.g. Q1 arrears, per AGM decision…'
+                          : 'e.g. Cheque #4521, UPI ref XXXXXX…'
+                      }
+                      {...field}
+                      value={field.value ?? ''}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -397,7 +443,7 @@ export function AddCashLedgerEntryDialog({
 
             <Button type="submit" disabled={isPending}>
               {isPending && <Spinner className="mr-2" />}
-              Add Entry
+              {isDue ? 'Record Due' : 'Record Payment'}
             </Button>
           </form>
         </Form>
