@@ -6,6 +6,7 @@ import {
   CreditCard,
   FileText,
   LayoutDashboard,
+  ScrollText,
   Settings,
   Users,
   Wallet,
@@ -57,6 +58,11 @@ const getRoutes = (account: string) => [
         label: 'association.nav.cashLedger',
         path: `${pathsConfig.app.accountHome.replace('[account]', account)}/cash-ledger`,
         Icon: <Wallet className={iconClasses} />,
+      },
+      {
+        label: 'association.nav.statement',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/statement`,
+        Icon: <ScrollText className={iconClasses} />,
       },
     ],
   },
@@ -122,8 +128,8 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[] | '*'> = {
     'association.nav.cashLedger',
     'association.nav.reports',
   ],
-  prop_owner: ['association.nav.dashboard', 'association.nav.payments'],
-  tenant: ['association.nav.dashboard', 'association.nav.payments'],
+  prop_owner: ['association.nav.dashboard', 'association.nav.payments', 'association.nav.statement'],
+  tenant: ['association.nav.dashboard', 'association.nav.payments', 'association.nav.statement'],
 };
 
 type SidebarConfig = ReturnType<typeof getTeamAccountSidebarConfig>;

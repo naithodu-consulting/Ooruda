@@ -1492,4 +1492,32 @@ _Last updated: 2026-07-16_
 - **Payments page — Dues section**: The "Pending dues" section now shows both outstanding and paid dues together. When any paid history exists, the section title becomes "Dues" and the description updates to "Dues raised by the association and your payment history." New **Status** column (Outstanding badge in red / Paid badge in green) and **Paid on** column (date of payment). Section renders even when all dues are cleared, so payment history is never hidden.
 - **Owner Dashboard — My payments widget**: Cash ledger due payments now appear alongside bill receipt payments. Shown as **"Due · {Bill Type}"** with mode and date, clearly distinct from receipt-based entries (no receipt download button). "View all" link threshold correctly counts due payments. Owners can now confirm their due payment immediately from the dashboard without navigating away.
 
+### Statement Page (Owner/Tenant)
+
+New dedicated page at `/statement` for prop owners and tenants — a cash ledger passbook showing all financial activity on their unit(s).
+
+**Features:**
+- **Per-unit tabs** for owners with multiple units (e.g. Unit 404 / Unit A1) — isolated balances, no cross-unit mixing
+- **Summary cards**: Closing balance (neutral "All settled" when ₹0, green = credit, red = due), Total credits, Total debits — updates live with filters
+- **Bank passbook table**: Date · Description · Debit · Credit · Balance columns; newest first; running balance on every row; consistent `text-sm` font across all columns
+- **Opening balance row**: When filtering by FY, shown only when non-zero — shows balance carried forward from prior periods
+- **FY filter**: Defaults to current financial year; all historical FYs in dropdown; displays "FY 2026-27" not raw key
+- **Bill type filter**: Maintenance / Electricity / Water / etc.; displays human-readable labels
+- **Human-readable descriptions** from `entry_type`: "Maintenance due raised", "Advance deposited — Maintenance", "Due payment for Maintenance"
+- **Payment mode sub-line**: For due_payment entries, shows "Paid via Razorpay" (Razorpay ref stripped from display; full ref still stored in `cash_ledger_payments`)
+- **Card title**: "Ledger activity" with transaction count in description; no redundant unit name in card header
+- **Navigation**: "Statement" nav item added for prop_owner and tenant roles only (admins use the full Cash Ledger page)
+
+### Owner/Tenant Dashboard — Instant Unit Filter
+
+- **Unit pill filter** added to the Owner Dashboard and Tenant Dashboard: "All units" + one pill per unit. Default is "All units" showing all units stacked with unit headers and dividers.
+- **Instant switching** — unit filtering is now entirely client-side. All data is fetched once on server load; pill clicks trigger a local `useState` update with zero network round-trips. Eliminates the 300–800ms server re-render that occurred with the previous URL-param approach.
+- **Architecture**: Per-unit rendering logic extracted from the server component into a new `OwnerUnitsView` client component (`owner-units-view.tsx`). Server component now purely fetches and passes serialised data as props.
+
+### Migrations
+
+| File | Description |
+|---|---|
+| `20260717110000_clean_razorpay_notes.sql` | Updates `record_due_payment_webhook` to store `'Paid via Razorpay'` in `cash_ledger.notes` instead of the raw payment ID (ID already stored in `cash_ledger_payments.razorpay_payment_id`) |
+
 _Last updated: 2026-07-17_
