@@ -38,6 +38,7 @@ import {
 } from '~/lib/bill-filter-items';
 import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
+import { billTypeLabel } from '~/lib/bill-type-labels';
 import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
@@ -191,6 +192,14 @@ export function PaymentsSection(props: {
   const handleUnitTab = (unit: string) => {
     setUnitTab(unit);
     setPage(1);
+    // Sync the URL so deep-linking and back-button reflect the selected unit.
+    const params = new URLSearchParams(searchParams.toString());
+    if (unit === ALL_UNITS) {
+      params.delete('unit');
+    } else {
+      params.set('unit', unit);
+    }
+    router.replace(`?${params.toString()}`, { scroll: false });
   };
 
   // Pending bills for "Pay All" — scoped to selected unit only (never cross-unit)
@@ -363,11 +372,11 @@ export function PaymentsSection(props: {
               {[
                 { label: 'Bills', value: String(filtered.length) },
                 {
-                  label: 'Collected',
+                  label: props.canPay ? 'Paid' : 'Collected',
                   value: formatINR(Math.round(metrics.totalCollected)),
                 },
                 {
-                  label: 'Outstanding',
+                  label: props.canPay ? 'Bills due' : 'Outstanding',
                   value: formatINR(Math.round(metrics.totalOutstanding)),
                   highlight: metrics.totalOutstanding > 0,
                 },
@@ -404,6 +413,7 @@ export function PaymentsSection(props: {
                 <TableRow>
                   <TableHead>Period</TableHead>
                   {!props.hideUnitColumn && <TableHead>Unit</TableHead>}
+                  <TableHead>Type</TableHead>
                   <TableHead>Bill No.</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead className="text-right">Outstanding</TableHead>
@@ -421,8 +431,14 @@ export function PaymentsSection(props: {
                     bill.total_amount - bill.paid_amount - bill.advance_applied,
                   );
 
+                  const isOverdue = status === 'Overdue';
                   return (
-                    <TableRow key={bill.id}>
+                    <TableRow
+                      key={bill.id}
+                      className={
+                        isOverdue ? 'bg-red-50/60 dark:bg-red-950/20' : ''
+                      }
+                    >
                       <TableCell className="text-muted-foreground font-medium">
                         {formatPeriod(bill.period)}
                       </TableCell>
@@ -432,6 +448,12 @@ export function PaymentsSection(props: {
                         </TableCell>
                       )}
                       <TableCell className="text-muted-foreground">
+                        {billTypeLabel(bill.bill_type)}
+                      </TableCell>
+                      <TableCell
+                        className="text-muted-foreground max-w-[180px] truncate"
+                        title={bill.bill_no}
+                      >
                         {bill.bill_no}
                       </TableCell>
                       <TableCell className="text-right font-bold tabular-nums">
@@ -443,7 +465,7 @@ export function PaymentsSection(props: {
                             {formatINR(outstanding)}
                           </span>
                         ) : (
-                          <span className="text-green-600">0</span>
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -499,7 +521,7 @@ export function PaymentsSection(props: {
                               },
                             ]}
                             paidByRole={props.paidByRole}
-                            variant="outline"
+                            variant="default"
                             onSuccess={onPaymentSuccess}
                           />
                         ) : null}

@@ -9,6 +9,7 @@ import { requireRole } from '~/lib/rbac';
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import {
   type CashLedgerDueRow,
+  type PaidDueRow,
   CashLedgerDuesSection,
 } from './_components/cash-ledger-dues-section';
 import {
@@ -213,7 +214,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
   // For owners/tenants use the shared aggregation util (per-unit, no cross-unit
   // netting). For admins/operators use the association-wide RPC which covers all
   // units and includes the negative-balance filter already.
-  const [{ data: bills }, rawDues] = await Promise.all([
+  const [{ data: bills }, rawDues, rawPaidDues] = await Promise.all([
     query,
     isUserRestricted
       ? loadUnitLedgerBalances(
@@ -259,6 +260,31 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
                 .filter((r) => r.balance < 0)
                 .map((r) => ({ ...r, balance: Number(r.balance) })),
           ),
+    // Paid due payments for owners/tenants (cash ledger payments for their units).
+    isUserRestricted && allUnitIds.length > 0
+      ? uc(client)
+          .from('cash_ledger_payments')
+          .select('unit_id, bill_type, amount, paid_at, mode, units(unit_no)')
+          .in('unit_id', allUnitIds)
+          .eq('association_id', association.id)
+          .order('paid_at', { ascending: false })
+          .then(
+            ({
+              data,
+            }: {
+              data:
+                | {
+                    unit_id: string;
+                    bill_type: string;
+                    amount: number;
+                    paid_at: string;
+                    mode: string;
+                    units: { unit_no: string } | null;
+                  }[]
+                | null;
+            }) => data ?? [],
+          )
+      : Promise.resolve([]),
   ]);
 
   const cashLedgerDues: CashLedgerDueRow[] = Array.isArray(rawDues)
@@ -269,6 +295,24 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         balance: number;
       }[])
     : [];
+
+  const cashLedgerPaidDues: PaidDueRow[] = (
+    rawPaidDues as {
+      unit_id: string;
+      bill_type: string;
+      amount: number;
+      paid_at: string;
+      mode: string;
+      units: { unit_no: string } | null;
+    }[]
+  ).map((p) => ({
+    unit_id: p.unit_id,
+    unit_no: p.units?.unit_no ?? '?',
+    bill_type: p.bill_type,
+    amount: Number(p.amount),
+    paid_at: p.paid_at,
+    mode: p.mode,
+  }));
 
   const rows: BillPaymentRow[] = (bills ?? []).map((b) => ({
     id: b.id,
@@ -302,7 +346,11 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         account={account}
         title={<Trans i18nKey="association.nav.payments" />}
         description={
-          rows.length === 0 ? 'No bills yet' : `${rows.length} bills`
+          isUserRestricted
+            ? 'Bills and payment history for your unit(s).'
+            : rows.length === 0
+              ? 'No bills yet'
+              : `${rows.length} bills`
         }
       />
 
@@ -328,7 +376,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         hideUnitColumn={
           isUserRestricted && [...ownedUnitIds, ...rentedUnitIds].length <= 1
         }
-        initialDuration={duration}
+        initialDuration={duration ?? (isUserRestricted ? 'this_fy' : undefined)}
         initialStatus={status}
         description={
           isUserRestricted
@@ -338,15 +386,17 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         accountSlug={account}
       />
 
-      {cashLedgerDues.length > 0 && (
+      {(cashLedgerDues.length > 0 || cashLedgerPaidDues.length > 0) && (
         <div className="mt-6">
           <CashLedgerDuesSection
             associationId={association.id}
             dues={cashLedgerDues}
+            paidDues={isUserRestricted ? cashLedgerPaidDues : undefined}
             canManage={
               !isUserRestricted &&
               (role === 'assoc_admin' || role === 'billing_operator')
             }
+            canPay={isUserRestricted && gatewayActive}
             isOwnerView={isUserRestricted}
             unitCount={[...ownedUnitIds, ...rentedUnitIds].length}
           />

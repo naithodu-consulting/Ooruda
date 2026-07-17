@@ -52,9 +52,14 @@ export function BillPaymentsDialog(props: {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button size="sm" variant="outline">
+          <Button
+            size="sm"
+            variant="ghost"
+            title="View payment history for this bill"
+          >
             <Eye className="h-4 w-4" />
-            View payments ({props.payments.length})
+            {props.payments.length}{' '}
+            {props.payments.length === 1 ? 'payment' : 'payments'}
           </Button>
         }
       />

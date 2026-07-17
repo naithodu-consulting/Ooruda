@@ -1450,3 +1450,46 @@ _Last updated: 2026-07-16_
 | `20260709200000_record_payment_webhook_bypass.sql` | Makes `recorded_by` nullable; grants `record_payment()` EXECUTE to `service_role` for webhook use |
 
 _Last updated: 2026-07-16_
+
+---
+
+## Payments Page UX Overhaul + Razorpay Due Payments (2026-07-17)
+
+### Payments Page — Owner/Tenant View
+
+- **Header subtitle**: Changed to "Bills and payment history for your unit(s)." for owner/tenant view.
+- **Duration default**: Owners/tenants now default to "FY 2026-27" (this_fy) instead of "All Time" — avoids large data loads and scopes the metric cards meaningfully.
+- **Metric cards**: "Collected" renamed to "Paid" and "Outstanding" renamed to "Bills due" for the owner view — language matches the resident's perspective.
+- **"Type" column**: New column showing bill type (Electricity, Maintenance, Other Charges) in the bills table.
+- **Outstanding column**: Paid rows now show "—" instead of "₹0" to reduce noise.
+- **Overdue row highlight**: Overdue bill rows get a subtle red/amber background tint.
+- **Pay button**: Changed from outline to filled primary style for stronger affordance.
+- **Payment history button**: Shows `👁 1 payment` / `👁 2 payments` ghost button with eye icon; hides when no payments exist.
+- **Bill No. column**: Truncated with ellipsis and `title` tooltip for long bill numbers.
+- **URL sync**: Clicking a unit tab (Unit 404, Unit A1) now syncs the `?unit=` query param so the view is deep-linkable and survives browser back/forward.
+
+### Pending Dues — Owner Pay Now Button
+
+- **`RazorpayDueCheckoutButton`** (new component): Prop owners can now pay cash-ledger dues directly online via Razorpay, same as bill payments.
+- **`POST /api/billing/razorpay/create-order-due`** (new route): Creates a Razorpay order for a ledger due (unit + bill_type + amount). Validates caller owns/rents the unit. Embeds `is_due: 'true'`, `unit_id`, `bill_type` in order notes for the webhook.
+- **`POST /api/billing/razorpay/verify-due`** (new route): Synchronous post-payment verification — same HMAC signature check as `/verify`, validates unit ownership, calls `record_due_payment_webhook()` via admin client to immediately record the payment and credit the cash ledger. The async webhook remains as a safety net for network failures.
+- **Webhook extended**: `POST /api/billing/razorpay/webhook` now handles `is_due` orders as a fallback by calling `record_due_payment_webhook()`; idempotent via `razorpay_payment_id` unique index.
+- **`CashLedgerDuesSection`**: Added `canPay` prop; renders the Pay button for owner/tenant when gateway is active.
+- **Pending dues description**: Changed to "Other dues raised by the association." (was too technical for owner view).
+
+### Code Quality
+
+- **Pre-existing TypeScript errors fixed**: `razorpay-checkout.tsx` had a `declare global { interface Window }` augmentation that conflicted with TypeScript's ambient module merging, causing TS2717 + TS2339 errors (hidden by Turborepo cache). Replaced with a local `RazorpayConstructor` type alias and `(window as any)` cast — identical runtime behaviour, no more type errors.
+
+### Migrations
+
+| Migration | Description |
+|-----------|-------------|
+| `20260717100000_razorpay_due_payment.sql` | Adds `razorpay_payment_id` to `cash_ledger_payments`, extends mode check to include 'Razorpay', grants service_role INSERT on ledger tables, adds `record_due_payment_webhook()` function |
+
+### Paid Dues Visibility
+
+- **Payments page — Dues section**: The "Pending dues" section now shows both outstanding and paid dues together. When any paid history exists, the section title becomes "Dues" and the description updates to "Dues raised by the association and your payment history." New **Status** column (Outstanding badge in red / Paid badge in green) and **Paid on** column (date of payment). Section renders even when all dues are cleared, so payment history is never hidden.
+- **Owner Dashboard — My payments widget**: Cash ledger due payments now appear alongside bill receipt payments. Shown as **"Due · {Bill Type}"** with mode and date, clearly distinct from receipt-based entries (no receipt download button). "View all" link threshold correctly counts due payments. Owners can now confirm their due payment immediately from the dashboard without navigating away.
+
+_Last updated: 2026-07-17_

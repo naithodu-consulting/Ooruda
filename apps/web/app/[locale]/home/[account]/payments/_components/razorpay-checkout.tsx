@@ -7,13 +7,13 @@ import { CreditCard, IndianRupee, Loader2 } from 'lucide-react';
 import { Button } from '@kit/ui/button';
 import { toast } from '@kit/ui/sonner';
 
-declare global {
-  interface Window {
-    Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
-  }
+interface RazorpayResponse {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
 }
 
-interface RazorpayOptions {
+type RazorpayConstructor = new (options: {
   key: string;
   amount: number;
   currency: string;
@@ -24,19 +24,11 @@ interface RazorpayOptions {
   theme?: { color?: string };
   modal?: { ondismiss?: () => void };
   handler: (response: RazorpayResponse) => void;
-}
-
-interface RazorpayResponse {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
-}
-
-interface RazorpayInstance {
+}) => {
   open(): void;
   close(): void;
   on(event: string, handler: () => void): void;
-}
+};
 
 export interface BillToPayRow {
   id: string;
@@ -118,7 +110,10 @@ export function RazorpayCheckoutButton({
           ? `Payment for bill ${bills[0]!.billNo}`
           : `Payment for ${bills.length} bills`;
 
-      const rzp = new window.Razorpay({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const RazorpayConstructor = (window as any)
+        .Razorpay as RazorpayConstructor;
+      const rzp = new RazorpayConstructor({
         key: orderData.keyId,
         amount: orderData.amount!,
         currency: 'INR',

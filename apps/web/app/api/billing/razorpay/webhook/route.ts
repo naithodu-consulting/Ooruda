@@ -16,6 +16,9 @@ interface RazorpayWebhookPayload {
           bill_ids?: string;
           association_id?: string;
           paid_by_role?: string;
+          is_due?: string;
+          unit_id?: string;
+          bill_type?: string;
         };
       };
     };
@@ -70,8 +73,11 @@ export async function POST(req: NextRequest) {
   const associationId = notes.association_id;
   const billIds = notes.bill_ids?.split(',').filter(Boolean) ?? [];
   const paidByRole = notes.paid_by_role ?? 'Owner';
+  const isDue = notes.is_due === 'true';
+  const dueUnitId = notes.unit_id;
+  const dueBillType = notes.bill_type;
 
-  if (!associationId || billIds.length === 0) {
+  if (!associationId || (billIds.length === 0 && !isDue)) {
     // Order was not created by Ooruda (missing notes) — ignore.
     return new Response('OK', { status: 200 });
   }
@@ -113,7 +119,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
-  // Fetch bills to get outstanding amounts.
+  // Cash-ledger due payment — no bill IDs involved.
+  if (isDue) {
+    if (!dueUnitId || !dueBillType) {
+      return NextResponse.json(
+        { error: 'Missing unit_id or bill_type in due payment notes' },
+        { status: 400 },
+      );
+    }
+
+    const amountRupees = paymentEntity.amount / 100;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin as any).rpc('record_due_payment_webhook', {
+      p_association_id: associationId,
+      p_unit_id: dueUnitId,
+      p_bill_type: dueBillType,
+      p_amount: amountRupees,
+      p_razorpay_payment_id: razorpayPaymentId,
+    });
+
+    if (error) {
+      if (error.code === '23505') return new Response('OK', { status: 200 }); // idempotent
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return new Response('OK', { status: 200 });
+  }
+
+  // Standard bill payment flow.
   const { data: bills } = await admin
     .from('bills')
     .select('id, total_amount, paid_amount')

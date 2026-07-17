@@ -213,6 +213,15 @@ interface PaymentWithBillAndReceipt {
   receipts: { receipt_no: string } | null;
 }
 
+interface DuePaymentRow {
+  id: string;
+  unit_id: string;
+  bill_type: string;
+  amount: number;
+  mode: string;
+  paid_at: string;
+}
+
 async function loadMyBillSummary(
   accountId: string,
   associationId: string,
@@ -322,12 +331,25 @@ async function loadMyBillSummary(
     payments = (paymentsData as unknown as PaymentWithBillAndReceipt[]) ?? [];
   }
 
-  const ledgerBalances = await loadUnitLedgerBalances(associationId, units);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [ledgerBalances, duePaymentsResult] = await Promise.all([
+    loadUnitLedgerBalances(associationId, units),
+    (client as any)
+      .from('cash_ledger_payments')
+      .select('id, unit_id, bill_type, amount, mode, paid_at')
+      .in('unit_id', unitIds)
+      .eq('association_id', associationId)
+      .order('paid_at', { ascending: false }),
+  ]);
+
+  const duePayments: DuePaymentRow[] =
+    (duePaymentsResult.data as DuePaymentRow[] | null) ?? [];
 
   return {
     units,
     bills,
     payments,
+    duePayments,
     assocName,
     ledgerBalances,
   };
@@ -376,7 +398,7 @@ export async function AssociationDashboard({
       );
     }
 
-    const { units, bills, payments, ledgerBalances } = summary;
+    const { units, bills, payments, duePayments, ledgerBalances } = summary;
 
     return (
       <div className="flex flex-col gap-8">
@@ -393,6 +415,10 @@ export async function AssociationDashboard({
           const unitPayments = payments.filter((p) =>
             unitBills.some((b) => b.id === p.bill_id),
           );
+          const unitDuePayments = duePayments.filter(
+            (dp) => dp.unit_id === unit.id,
+          );
+          const totalPaymentCount = unitPayments.length + unitDuePayments.length;
 
           const PREVIEW_COUNT = 4;
 
@@ -729,7 +755,7 @@ export async function AssociationDashboard({
                       <CardTitle className="text-sm font-bold">
                         My payments
                       </CardTitle>
-                      {unitPayments.length > PREVIEW_COUNT && (
+                      {totalPaymentCount > PREVIEW_COUNT && (
                         <Link
                           href={`/home/${account}/payments`}
                           className="border-border text-muted-foreground hover:text-foreground rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors"
@@ -740,52 +766,82 @@ export async function AssociationDashboard({
                     </div>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
-                    {unitPayments.length === 0 ? (
+                    {totalPaymentCount === 0 ? (
                       <p className="text-muted-foreground py-4 text-center text-xs">
                         No payments recorded yet.
                       </p>
                     ) : (
-                      previewPayments.map((p) => {
-                        const receiptNo =
-                          p.receipts?.receipt_no ||
-                          `RCP-${p.id.slice(0, 4).toUpperCase()}`;
-                        return (
-                          <div
-                            key={p.id}
-                            className="border-border/40 flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
-                          >
-                            <div>
-                              <span className="text-foreground block text-sm font-semibold">
-                                {receiptNo} &middot;{' '}
-                                {periodLabel(p.bills?.period || '')}
-                              </span>
-                              <span className="text-muted-foreground block text-xs">
-                                {p.mode} &middot;{' '}
-                                {new Date(p.paid_at).toLocaleDateString(
-                                  'en-IN',
-                                  {
-                                    day: 'numeric',
-                                    month: 'short',
-                                    year: 'numeric',
-                                  },
-                                )}
-                              </span>
+                      <>
+                        {previewPayments.map((p) => {
+                          const receiptNo =
+                            p.receipts?.receipt_no ||
+                            `RCP-${p.id.slice(0, 4).toUpperCase()}`;
+                          return (
+                            <div
+                              key={p.id}
+                              className="border-border/40 flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
+                            >
+                              <div>
+                                <span className="text-foreground block text-sm font-semibold">
+                                  {receiptNo} &middot;{' '}
+                                  {periodLabel(p.bills?.period || '')}
+                                </span>
+                                <span className="text-muted-foreground block text-xs">
+                                  {p.mode} &middot;{' '}
+                                  {new Date(p.paid_at).toLocaleDateString(
+                                    'en-IN',
+                                    {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric',
+                                    },
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-foreground text-sm font-bold tabular-nums">
+                                  {formatINR(p.amount)}
+                                </span>
+                                <DownloadPdfButton
+                                  href={`/api/billing/receipts/${p.id}/pdf`}
+                                  label="Download receipt PDF"
+                                  dataTest={`download-receipt-${p.id}`}
+                                  variant="ghost"
+                                  iconSize="icon-xs"
+                                />
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3">
+                          );
+                        })}
+                        {unitDuePayments
+                          .slice(0, Math.max(0, PREVIEW_COUNT - previewPayments.length))
+                          .map((dp) => (
+                            <div
+                              key={dp.id}
+                              className="border-border/40 flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
+                            >
+                              <div>
+                                <span className="text-foreground block text-sm font-semibold">
+                                  Due · {billTypeLabel(dp.bill_type)}
+                                </span>
+                                <span className="text-muted-foreground block text-xs">
+                                  {dp.mode} &middot;{' '}
+                                  {new Date(dp.paid_at).toLocaleDateString(
+                                    'en-IN',
+                                    {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric',
+                                    },
+                                  )}
+                                </span>
+                              </div>
                               <span className="text-foreground text-sm font-bold tabular-nums">
-                                {formatINR(p.amount)}
+                                {formatINR(dp.amount)}
                               </span>
-                              <DownloadPdfButton
-                                href={`/api/billing/receipts/${p.id}/pdf`}
-                                label="Download receipt PDF"
-                                dataTest={`download-receipt-${p.id}`}
-                                variant="ghost"
-                                iconSize="icon-xs"
-                              />
                             </div>
-                          </div>
-                        );
-                      })
+                          ))}
+                      </>
                     )}
                   </CardContent>
                 </Card>

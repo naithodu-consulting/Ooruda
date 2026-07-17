@@ -382,7 +382,7 @@ export function CashLedgerSection({
                         {BILL_TYPE_OPTIONS.find((o) => o.value === e.bill_type)
                           ?.label ?? e.bill_type}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm tabular-nums">
+                      <TableCell className="text-right text-sm font-semibold tabular-nums">
                         <AmountCell amount={e.amount} direction={e.direction} />
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
@@ -394,7 +394,7 @@ export function CashLedgerSection({
                         {e.notes || <span className="opacity-30">—</span>}
                       </TableCell>
                       {!isAllUnits && (
-                        <TableCell className="pr-5 text-right font-mono text-sm tabular-nums">
+                        <TableCell className="pr-5 text-right text-sm font-semibold tabular-nums">
                           <BalanceCell value={e.runningBalance} />
                         </TableCell>
                       )}
@@ -536,7 +536,7 @@ function SummaryCard({
       </span>
       <span
         className={cn(
-          'mt-1 font-mono text-xl font-bold tracking-tight tabular-nums',
+          'mt-1 text-xl font-bold tracking-tight tabular-nums',
           isCredit
             ? 'text-green-700 dark:text-green-300'
             : 'text-red-700 dark:text-red-300',
