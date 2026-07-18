@@ -1749,4 +1749,25 @@ Advances were only ever applied to a bill **at generation time** (inside `create
 |---|---|
 | `20260716100000_cash_ledger_bootstrap.sql` | Bootstrap: creates `cash_ledger` + `cash_ledger_payments` with `IF NOT EXISTS` to fix `db reset` replay order |
 
+---
+
+## UX & Performance Fixes (2026-07-18)
+
+### Add Unit — Performance
+- `logAuditEvent` is now fire-and-forget (`void`) in `createUnitAction`. Audit logging no longer blocks the server action response, cutting perceived latency by one full DB round-trip.
+
+### Cash Ledger — Paid By Race Condition
+- Fixed a stale-fetch race condition in the "Add Cash Ledger Entry" dialog. Rapid unit switching could cause an older in-flight fetch to overwrite the result from a newer one, hiding the owner in the "Paid By" dropdown. An `ignore` flag with effect cleanup now discards stale responses.
+- The Owner and Tenant `SelectItem` options now remain rendered while members are loading (when `paid_by_type` already matches that role), preventing Radix from losing the selected value during the loading state.
+
+### Cash Ledger — Import Dialog Layout
+- Import preview table widened (`max-w-2xl` → `max-w-3xl`) and given `min-w-max` so all 7 columns render at their natural width.
+- Added `overflow-x-auto` to the table wrapper so content scrolls horizontally instead of clipping.
+
+### Navigation — Statement Hidden from Assoc Admin
+- "Statement" nav item removed from the `assoc_admin` sidebar; it is now exclusive to `prop_owner` and `tenant` roles.
+
+### Dashboard — Advance Credit / Pending Dues Type Visibility
+- Advance Credit and Pending Dues cards now always show the per-type breakdown, even when there is only a single bill type. Previously, a single-type advance (e.g. ₹3,000 for "Other Charges") showed no type label — owners had no context for what the credit applied to.
+
 _Last updated: 2026-07-18_

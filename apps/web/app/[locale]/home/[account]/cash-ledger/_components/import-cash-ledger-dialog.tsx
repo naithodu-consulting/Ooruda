@@ -237,7 +237,7 @@ export function ImportCashLedgerDialog({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Import Cash Ledger Entries</DialogTitle>
           <DialogDescription>
@@ -287,8 +287,8 @@ export function ImportCashLedgerDialog({
               </Alert>
             )}
 
-            <div className="max-h-72 overflow-y-auto">
-              <Table>
+            <div className="max-h-72 overflow-x-auto overflow-y-auto rounded border">
+              <Table className="min-w-max">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Row</TableHead>

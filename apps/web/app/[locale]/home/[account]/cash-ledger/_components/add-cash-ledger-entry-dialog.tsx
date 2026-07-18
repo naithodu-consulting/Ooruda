@@ -129,14 +129,17 @@ export function AddCashLedgerEntryDialog({
   const isDue = entryType === 'due';
 
   // Reload owner/tenant whenever the selected unit changes.
+  // The `ignore` flag prevents a stale fetch from overwriting a newer one.
   useEffect(() => {
     if (!selectedUnitId) {
       setMembers([]);
       return;
     }
+    let ignore = false;
     setMembersLoading(true);
     getUnitMembersAction(associationId, selectedUnitId)
       .then((res) => {
+        if (ignore) return;
         const list = res.members ?? [];
         setMembers(list);
         const hasOwner = list.some((m) => m.role === 'owner');
@@ -148,7 +151,12 @@ export function AddCashLedgerEntryDialog({
           form.setValue('paid_by_type', hasOwner ? 'owner' : 'other');
         }
       })
-      .finally(() => setMembersLoading(false));
+      .finally(() => {
+        if (!ignore) setMembersLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
   }, [selectedUnitId, associationId, form]);
 
   const ownerMember = members.find((m) => m.role === 'owner');
@@ -361,12 +369,12 @@ export function AddCashLedgerEntryDialog({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {ownerMember && (
+                          {(ownerMember ?? paidByType === 'owner') && (
                             <SelectItem value="owner">
                               {paidByLabel('owner')}
                             </SelectItem>
                           )}
-                          {tenantMember && (
+                          {(tenantMember ?? paidByType === 'tenant') && (
                             <SelectItem value="tenant">
                               {paidByLabel('tenant')}
                             </SelectItem>

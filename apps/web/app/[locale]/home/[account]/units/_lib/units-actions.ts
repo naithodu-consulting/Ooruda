@@ -85,7 +85,7 @@ export async function createUnitAction(
     return { success: false, error: error.message };
   }
 
-  await logAuditEvent({
+  void logAuditEvent({
     associationId,
     action: 'unit.created',
     entityType: 'unit',

@@ -257,7 +257,7 @@ export function RazorpayCheckoutButton({
     label ??
     (bills.length === 1
       ? `Pay ₹${totalOutstanding.toLocaleString('en-IN')}`
-      : `Pay All — ₹${totalOutstanding.toLocaleString('en-IN')}`);
+      : `Pay All - ₹${totalOutstanding.toLocaleString('en-IN')}`);
 
   return (
     <Button

@@ -118,7 +118,19 @@ export function getTeamAccountSidebarConfig(account: string) {
 // assoc_admin sees everything. The platform super admin uses /admin, not this
 // team-workspace nav, so it isn't listed here.
 const ROLE_NAV_ALLOWLIST: Record<string, readonly string[] | '*'> = {
-  assoc_admin: '*',
+  assoc_admin: [
+    'association.nav.dashboard',
+    'association.nav.units',
+    'association.nav.billing',
+    'association.nav.mescom',
+    'association.nav.payments',
+    'association.nav.cashLedger',
+    'association.nav.reports',
+    'association.nav.notifications',
+    'association.nav.audit',
+    'association.nav.members',
+    'association.nav.settings',
+  ],
   billing_operator: [
     'association.nav.dashboard',
     'association.nav.units',

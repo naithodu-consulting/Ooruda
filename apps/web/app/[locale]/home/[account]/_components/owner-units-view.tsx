@@ -316,7 +316,7 @@ export function OwnerUnitsView({
                         Pay now
                       </Link>
                     </div>
-                    {bal.dues.length > 1 && (
+                    {bal.dues.length >= 1 && (
                       <div className="border-destructive/10 mt-3 flex flex-col gap-1.5 border-t pt-3">
                         {bal.dues.map((d) => (
                           <div
@@ -349,7 +349,7 @@ export function OwnerUnitsView({
                     <p className="mt-0.5 text-xs opacity-60">
                       Automatically applied to your bills of the same type
                     </p>
-                    {bal.credits.length > 1 && (
+                    {bal.credits.length >= 1 && (
                       <div className="border-primary/20 mt-3 flex flex-col gap-1.5 border-t pt-3">
                         {bal.credits.map((c) => (
                           <div
