@@ -485,6 +485,7 @@ export async function getOrGenerateBillPdf(
             paidAmount: bill.paid_amount,
             advanceApplied: bill.advance_applied ?? 0,
             status: bill.status,
+            billType: bill.bill_type,
           },
           lineItems: lineItems.map((item) => ({
             description: item.description,

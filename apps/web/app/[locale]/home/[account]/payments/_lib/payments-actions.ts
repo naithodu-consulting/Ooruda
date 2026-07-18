@@ -62,6 +62,9 @@ export async function recordPaymentAction(
     p_amount: amount,
     p_mode: mode,
     p_paid_by_role: paid_by_role,
+    p_razorpay_payment_id: null,
+    p_razorpay_order_id: null,
+    p_payment_batch_id: null,
   });
 
   if (error) {
