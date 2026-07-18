@@ -12,6 +12,8 @@ import { createMiddlewareClient } from '@kit/supabase/middleware-client';
 import pathsConfig from '~/config/paths.config';
 
 const NEXT_ACTION_HEADER = 'next-action';
+const ACCESS_COOKIE = 'ooruda_access'; // must match COOKIE_NAME in access-action.ts
+const ACCESS_PATH = '/access';
 
 // Seeded dev users are provisioned phone-only and are exempt from the
 // mandatory-email gate (they also receive synthetic <phone>@ooruda.test emails
@@ -128,6 +130,21 @@ async function getPatterns() {
       handler: adminMiddleware,
     },
     {
+      // PIN gate: /auth/* and /home/* require the access cookie.
+      // Visitors without it are sent to /access?next=<destination>.
+      pattern: new URLPattern({ pathname: '/(auth|home)/*?' }),
+      handler: async (req: NextRequest, res: NextResponse) => {
+        const hasAccess = req.cookies.get(ACCESS_COOKIE)?.value === '1';
+
+        if (!hasAccess) {
+          const normalizedPath = getNormalizedPathname(req.nextUrl.pathname);
+          const accessUrl = new URL(ACCESS_PATH, req.nextUrl.origin);
+          accessUrl.searchParams.set('next', normalizedPath);
+          return NextResponse.redirect(accessUrl.href);
+        }
+      },
+    },
+    {
       pattern: new URLPattern({ pathname: '/auth/*?' }),
       handler: async (req: NextRequest, res: NextResponse) => {
         const { data } = await getUser(req, res);
@@ -161,22 +178,20 @@ async function getPatterns() {
       },
     },
     {
-      // Redirect the root to sign-in (unauthenticated) or home (authenticated).
-      // Avoids the double-hop caused by the marketing page Server Component redirect.
+      // Root: authenticated users go to /home; unauthenticated users see
+      // the landing page (no redirect — let the marketing page render).
       pattern: new URLPattern({ pathname: '/' }),
       handler: async (req: NextRequest, res: NextResponse) => {
         const { data } = await getUser(req, res);
-        const origin = req.nextUrl.origin;
 
-        if (!data?.claims) {
+        if (data?.claims) {
           return NextResponse.redirect(
-            new URL(pathsConfig.auth.signIn, origin).href,
+            new URL(pathsConfig.app.home, req.nextUrl.origin).href,
           );
         }
 
-        return NextResponse.redirect(
-          new URL(pathsConfig.app.home, origin).href,
-        );
+        // unauthenticated — let the landing page render
+        return;
       },
     },
     {

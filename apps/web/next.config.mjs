@@ -92,6 +92,12 @@ function getImagesConfig() {
     });
   }
 
+  // Unsplash is used for the landing page building background — needed in all envs
+  remotePatterns.push({
+    protocol: 'https',
+    hostname: 'images.unsplash.com',
+  });
+
   if (IS_PRODUCTION) {
     return {
       remotePatterns,
@@ -107,6 +113,10 @@ function getImagesConfig() {
       {
         protocol: 'http',
         hostname: 'localhost',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
       },
     ],
   );
