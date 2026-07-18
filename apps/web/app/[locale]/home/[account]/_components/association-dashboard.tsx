@@ -1,41 +1,27 @@
-import Link from 'next/link';
-
-import {
-  AlertTriangle,
-  Banknote,
-  Building2,
-  Clock,
-  DoorOpen,
-  Receipt,
-  Zap,
-} from 'lucide-react';
+import { Building2, DoorOpen } from 'lucide-react';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { Alert, AlertDescription } from '@kit/ui/alert';
-import { alertExtras } from '@kit/ui/alert-extras';
-import { Badge } from '@kit/ui/badge';
-import { badgeExtras } from '@kit/ui/badge-extras';
-import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
-import { MetricCard } from '@kit/ui/metric-card';
+import { Card, CardContent } from '@kit/ui/card';
 
 import { getDurationItems } from '~/lib/bill-filter-items';
 import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { displayBillStatus } from '~/lib/bill-status';
 import { daysBetweenYmd, todayInBillingZone } from '~/lib/billing-dates';
 import { loadUnitLedgerBalances } from '~/lib/cash-ledger-aggregation';
-import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 import { type PropOpsRole, hasMinimumRole } from '~/lib/rbac';
 
-import { DashboardDurationSelect } from './dashboard-duration-select';
+import {
+  AdminOverviewPanel,
+  type OverviewMetrics,
+  type StaticOverviewData,
+} from './admin-overview-panel';
 import { OwnerUnitsView } from './owner-units-view';
 
 function currentPeriod(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
-
-const periodLabel = formatPeriod;
 
 function overviewPeriodDisplay(
   duration: string,
@@ -45,7 +31,7 @@ function overviewPeriodDisplay(
   const items = getDurationItems();
   if (duration === 'this_fy') return items.this_fy;
   if (duration === 'prev_fy') return items.prev_fy;
-  if (periods.length === 1) return periodLabel(periods[0]!);
+  if (periods.length === 1) return formatPeriod(periods[0]!);
   const sorted = [...periods].sort();
   const startDate = new Date(sorted[0]! + '-01');
   const endDate = new Date(sorted[sorted.length - 1]! + '-01');
@@ -56,59 +42,66 @@ function overviewPeriodDisplay(
   return `${startDate.toLocaleString('en-IN', { month: 'short', year: 'numeric' })}–${endDate.toLocaleString('en-IN', { month: 'short', year: 'numeric' })}`;
 }
 
-function AgeingBar(props: {
-  label: string;
-  amount: number;
-  maxAmount: number;
-  colorClassName: string;
-  textClassName: string;
-}) {
-  const width =
-    props.maxAmount > 0
-      ? `${Math.max(4, (props.amount / props.maxAmount) * 100)}%`
-      : '0%';
-
-  return (
-    <div>
-      <div className="text-muted-foreground mb-1.5 flex items-center justify-between text-xs font-semibold">
-        <span>{props.label}</span>
-      </div>
-      <div className="bg-muted h-1.5 overflow-hidden rounded-full">
-        <div
-          className={`h-full rounded-full ${props.colorClassName}`}
-          style={{ width }}
-        />
-      </div>
-      <p className={`mt-1 text-sm font-semibold ${props.textClassName}`}>
-        {formatINR(props.amount)}
-      </p>
-    </div>
-  );
-}
-
-async function loadAssociationOverview(
-  associationId: string,
-  associationStatus: string,
+/** Compute bill metrics for a single duration from raw bill rows. */
+function computeBillMetrics(
   duration: string,
-) {
-  const client = getSupabaseServerClient();
-  const currentMonth = currentPeriod();
+  bills: {
+    total_amount: number;
+    paid_amount: number;
+    status: string;
+    due_date: string;
+  }[],
+  today: string,
+): OverviewMetrics {
   const periods = getPeriodsForDuration(duration);
+  const billed = bills.reduce((sum, b) => sum + b.total_amount, 0);
+  const collected = bills.reduce((sum, b) => sum + b.paid_amount, 0);
+  const outstanding = billed - collected;
 
-  let billsQuery = client
-    .from('bills')
-    .select('total_amount, paid_amount, status, due_date')
-    .eq('association_id', associationId);
-  if (periods) {
-    billsQuery = billsQuery.in('period', periods);
+  const overdueBills = bills.filter((b) => displayBillStatus(b) === 'Overdue');
+  const overdueCount = overdueBills.length;
+  const overdueAmount = overdueBills.reduce(
+    (sum, b) => sum + (b.total_amount - b.paid_amount),
+    0,
+  );
+
+  const ageing = { d0to7: 0, d8to30: 0, d30plus: 0 };
+  for (const bill of bills) {
+    const outstandingAmount = bill.total_amount - bill.paid_amount;
+    if (outstandingAmount <= 0) continue;
+    const daysOverdue = daysBetweenYmd(bill.due_date, today);
+    if (daysOverdue <= 0) continue;
+    if (daysOverdue <= 7) ageing.d0to7 += outstandingAmount;
+    else if (daysOverdue <= 30) ageing.d8to30 += outstandingAmount;
+    else ageing.d30plus += outstandingAmount;
   }
 
+  return {
+    periodDisplay: overviewPeriodDisplay(duration, periods),
+    billsGenerated: bills.length,
+    billed,
+    collected,
+    outstanding,
+    overdueCount,
+    overdueAmount,
+    ageing,
+  };
+}
+
+async function loadAdminOverview(associationId: string) {
+  const client = getSupabaseServerClient();
+  const currentMonth = currentPeriod();
+  const today = todayInBillingZone();
+
+  const allDurations = Object.keys(getDurationItems());
+
+  // Fetch static data + bills for every duration in one parallel batch.
   const [
     { count: totalUnits },
     { count: occupiedUnits },
-    { data: bills },
     { data: mescomBill },
     { data: recentActivity },
+    ...billResults
   ] = await Promise.all([
     client
       .from('units')
@@ -121,7 +114,6 @@ async function loadAssociationOverview(
       .eq('association_id', associationId)
       .neq('type', 'Common Area')
       .in('status', ['Self Occupied', 'Rented']),
-    billsQuery,
     client
       .from('mescom_bills')
       .select('id')
@@ -132,61 +124,44 @@ async function loadAssociationOverview(
       .from('audit_logs')
       .select('action, summary, created_at')
       .eq('association_id', associationId)
+      .not('action', 'ilike', '%failed%')
+      .not('action', 'ilike', '%error%')
+      .not('summary', 'ilike', 'Failed%')
       .order('created_at', { ascending: false })
       .limit(5),
+    // One bills query per duration (7 queries, all in parallel).
+    ...allDurations.map((dur) => {
+      let q = client
+        .from('bills')
+        .select('total_amount, paid_amount, status, due_date')
+        .eq('association_id', associationId);
+      const periods = getPeriodsForDuration(dur);
+      if (periods) q = q.in('period', periods);
+      return q;
+    }),
   ]);
 
-  const billed = (bills ?? []).reduce((sum, b) => sum + b.total_amount, 0);
-  const collected = (bills ?? []).reduce((sum, b) => sum + b.paid_amount, 0);
-  const outstanding = billed - collected;
-  const overdueBills = (bills ?? []).filter(
-    (b) => displayBillStatus(b) === 'Overdue',
-  );
-  const overdueCount = overdueBills.length;
-  const overdueAmount = overdueBills.reduce(
-    (sum, b) => sum + (b.total_amount - b.paid_amount),
-    0,
-  );
-
-  const ageing = { d0to7: 0, d8to30: 0, d30plus: 0 };
-  const today = todayInBillingZone();
-
-  for (const bill of bills ?? []) {
-    const outstandingAmount = bill.total_amount - bill.paid_amount;
-
-    if (outstandingAmount <= 0) {
-      continue;
-    }
-
-    const daysOverdue = daysBetweenYmd(bill.due_date, today);
-
-    if (daysOverdue <= 0) {
-      continue;
-    } else if (daysOverdue <= 7) {
-      ageing.d0to7 += outstandingAmount;
-    } else if (daysOverdue <= 30) {
-      ageing.d8to30 += outstandingAmount;
-    } else {
-      ageing.d30plus += outstandingAmount;
-    }
-  }
-
-  return {
-    status: associationStatus,
-    currentMonth,
-    periodDisplay: overviewPeriodDisplay(duration, periods),
+  const staticData: StaticOverviewData = {
     totalUnits: totalUnits ?? 0,
     occupiedUnits: occupiedUnits ?? 0,
-    billsGenerated: bills?.length ?? 0,
-    billed,
-    collected,
-    outstanding,
-    overdueCount,
-    overdueAmount,
-    ageing,
     mescomBillUploaded: Boolean(mescomBill),
-    recentActivity: recentActivity ?? [],
+    currentMonth,
+    recentActivity: (recentActivity ??
+      []) as StaticOverviewData['recentActivity'],
   };
+
+  const metricsByDuration: Record<string, OverviewMetrics> = {};
+  allDurations.forEach((dur, i) => {
+    const bills = (billResults[i]?.data ?? []) as {
+      total_amount: number;
+      paid_amount: number;
+      status: string;
+      due_date: string;
+    }[];
+    metricsByDuration[dur] = computeBillMetrics(dur, bills, today);
+  });
+
+  return { staticData, metricsByDuration };
 }
 
 interface BillWithLineItems {
@@ -358,7 +333,7 @@ export async function AssociationDashboard({
   account,
   accountId,
   associationId,
-  associationStatus,
+  associationStatus: _associationStatus,
   assocName,
   userId,
   role,
@@ -413,276 +388,30 @@ export async function AssociationDashboard({
     );
   }
 
-
-  const overview = await loadAssociationOverview(
-    associationId,
-    associationStatus,
-    duration,
-  );
   const canManage = hasMinimumRole(role, 'billing_operator');
+  const { staticData, metricsByDuration } =
+    await loadAdminOverview(associationId);
 
-  const ageingMax = Math.max(
-    overview.ageing.d0to7,
-    overview.ageing.d8to30,
-    overview.ageing.d30plus,
-  );
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="-mt-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-muted-foreground text-sm">
-          {`${overview.periodDisplay} · ${overview.totalUnits} units · ${overview.occupiedUnits} occupied`}
-        </p>
-        <DashboardDurationSelect value={duration} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-3.5 min-[480px]:grid-cols-2 lg:grid-cols-4">
-        <Link
-          href={`/home/${account}/billing?duration=${duration}`}
-          className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-blue-300 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none dark:hover:ring-blue-700"
-        >
-          <MetricCard
-            icon={Receipt}
-            variant="blue"
-            label="Billed"
-            value={formatINR(overview.billed)}
-            sublabel={`${overview.billsGenerated} bills generated`}
-            className="h-full"
-          />
-        </Link>
-        <Link
-          href={`/home/${account}/payments?duration=${duration}&status=collected`}
-          className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-green-300 focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:outline-none dark:hover:ring-green-700"
-        >
-          <MetricCard
-            icon={Banknote}
-            variant="green"
-            label="Collected"
-            value={formatINR(overview.collected)}
-            sublabel={
-              overview.billed > 0
-                ? `${Math.round((overview.collected / overview.billed) * 100)}% collection rate`
-                : 'No bills yet'
-            }
-            className="h-full"
-          />
-        </Link>
-        <Link
-          href={`/home/${account}/billing?duration=${duration}&status=unpaid`}
-          className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-amber-300 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none dark:hover:ring-amber-700"
-        >
-          <MetricCard
-            icon={Clock}
-            variant="amber"
-            label="Outstanding"
-            value={formatINR(overview.outstanding)}
-            sublabel="Pending collection"
-            className="h-full"
-          />
-        </Link>
-        <Link
-          href={`/home/${account}/billing?duration=${duration}&status=overdue`}
-          className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-red-300 focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:outline-none dark:hover:ring-red-700"
-        >
-          <MetricCard
-            icon={AlertTriangle}
-            variant="red"
-            label="Overdue"
-            value={formatINR(overview.overdueAmount)}
-            sublabel={`${overview.overdueCount} units`}
-            className="h-full"
-          />
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="text-sm">Collection progress</CardTitle>
-            <Badge className={badgeExtras.success}>
-              {overview.periodDisplay}
-            </Badge>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-2 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Total billed</span>
-                <span className="font-semibold">
-                  {formatINR(overview.billed)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Collected</span>
-                <span className="font-semibold text-emerald-600">
-                  {formatINR(overview.collected)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Outstanding</span>
-                <span className="font-semibold text-amber-600">
-                  {formatINR(overview.outstanding)}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-amber-100">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600"
-                style={{
-                  width:
-                    overview.billed > 0
-                      ? `${Math.min(100, (overview.collected / overview.billed) * 100)}%`
-                      : '0%',
-                }}
-              />
-            </div>
-            <p className="mt-1.5 text-right text-xs font-semibold text-amber-600">
-              {overview.billed > 0
-                ? `${Math.round((overview.collected / overview.billed) * 100)}% collected`
-                : 'No bills yet'}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Ageing analysis</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <AgeingBar
-              label="0–7 days"
-              amount={overview.ageing.d0to7}
-              maxAmount={ageingMax}
-              colorClassName="bg-blue-500"
-              textClassName="text-blue-600"
-            />
-            <AgeingBar
-              label="8–30 days"
-              amount={overview.ageing.d8to30}
-              maxAmount={ageingMax}
-              colorClassName="bg-amber-500"
-              textClassName="text-amber-600"
-            />
-            <AgeingBar
-              label=">30 days overdue"
-              amount={overview.ageing.d30plus}
-              maxAmount={ageingMax}
-              colorClassName="bg-red-500"
-              textClassName="text-red-600"
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      {overview.overdueCount > 0 || !overview.mescomBillUploaded ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Pending actions</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {overview.overdueCount > 0 ? (
-              <Alert className={alertExtras.warning}>
-                <AlertTriangle />
-                <AlertDescription>
-                  <strong>{overview.overdueCount} units</strong> overdue —{' '}
-                  <Link
-                    href={`/home/${account}/notifications`}
-                    className="font-semibold underline"
-                  >
-                    send bulk reminder →
-                  </Link>
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
-            {!overview.mescomBillUploaded ? (
-              <Alert className={alertExtras.info}>
-                <Zap />
-                <AlertDescription>
-                  Electricity bill for {periodLabel(overview.currentMonth)}{' '}
-                  hasn&apos;t been added yet.{' '}
-                  <Link
-                    href={`/home/${account}/electricity`}
-                    className="font-semibold underline"
-                  >
-                    Add Bill →
-                  </Link>
-                </AlertDescription>
-              </Alert>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
+  if (canManage && staticData.totalUnits === 0) {
+    return (
       <Card>
-        <CardHeader className="flex flex-col gap-2 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="text-sm">Recent activity</CardTitle>
-          <Link
-            href={`/home/${account}/audit`}
-            className="text-sm font-semibold text-orange-600 hover:text-orange-700 hover:underline"
-          >
-            View all &rarr;
-          </Link>
-        </CardHeader>
-        <CardContent>
-          {overview.recentActivity.length === 0 ? (
-            <p className="text-muted-foreground py-8 text-center text-sm">
-              Nothing has happened here yet.
-            </p>
-          ) : (
-            <div className="flex flex-col">
-              {overview.recentActivity.map((entry, i) => {
-                const isGreen =
-                  entry.action.includes('payment') ||
-                  entry.action.includes('unit.created');
-                const isBlue = entry.action.includes('bill');
-                const badgeBg = isGreen
-                  ? 'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400'
-                  : isBlue
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
-                    : 'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400';
-                const dotBg = isGreen
-                  ? 'bg-green-500'
-                  : isBlue
-                    ? 'bg-blue-500'
-                    : 'bg-slate-400';
-
-                return (
-                  <div
-                    key={i}
-                    className="border-border flex min-w-0 flex-col gap-2 border-b py-4 first:pt-0 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <span className="min-w-0 text-sm font-medium break-words">
-                      {entry.summary ?? entry.action}
-                    </span>
-                    <div
-                      className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${badgeBg}`}
-                    >
-                      <div className={`h-1.5 w-1.5 rounded-full ${dotBg}`} />
-                      {new Date(entry.created_at).toLocaleDateString('en-IN', {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
+          <Building2 className="text-muted-foreground h-10 w-10" />
+          <p className="text-muted-foreground max-w-sm text-sm">
+            No units yet. Once you add your shops and offices, their billing and
+            occupancy will show up here.
+          </p>
         </CardContent>
       </Card>
+    );
+  }
 
-      {canManage && overview.totalUnits === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
-            <Building2 className="text-muted-foreground h-10 w-10" />
-            <p className="text-muted-foreground max-w-sm text-sm">
-              No units yet. Once you add your shops and offices, their billing
-              and occupancy will show up here.
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
-    </div>
+  return (
+    <AdminOverviewPanel
+      account={account}
+      initialDuration={duration}
+      metricsByDuration={metricsByDuration}
+      staticData={staticData}
+    />
   );
 }

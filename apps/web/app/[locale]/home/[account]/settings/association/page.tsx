@@ -86,7 +86,7 @@ export default async function AssociationSettingsPage({ params }: Props) {
     // Admin client required — association_payment_gateways has no authenticated policies.
     admin
       .from('association_payment_gateways')
-      .select('key_id, is_active, key_secret, webhook_secret')
+      .select('key_id, is_active, key_secret, webhook_secret, created_at')
       .eq('association_id', association.id)
       .maybeSingle(),
   ]);
@@ -97,6 +97,7 @@ export default async function AssociationSettingsPage({ params }: Props) {
         is_active: gatewayRow.is_active,
         has_secret: !!gatewayRow.key_secret,
         has_webhook_secret: !!gatewayRow.webhook_secret,
+        created_at: gatewayRow.created_at,
       }
     : null;
 

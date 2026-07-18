@@ -41,6 +41,7 @@ export function BillPaymentsDialog(props: {
   billNo: string;
   associationId: string;
   payments: PaymentRow[];
+  hidePayerColumn?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -82,7 +83,7 @@ export function BillPaymentsDialog(props: {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Mode</TableHead>
-                <TableHead>Paid by</TableHead>
+                {!props.hidePayerColumn && <TableHead>Paid by</TableHead>}
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Receipt</TableHead>
               </TableRow>
@@ -103,7 +104,9 @@ export function BillPaymentsDialog(props: {
                       ) : null}
                     </div>
                   </TableCell>
-                  <TableCell>{payment.paid_by_role}</TableCell>
+                  {!props.hidePayerColumn && (
+                    <TableCell>{payment.paid_by_role}</TableCell>
+                  )}
                   <TableCell className="text-right tabular-nums">
                     {formatINR(payment.amount)}
                   </TableCell>

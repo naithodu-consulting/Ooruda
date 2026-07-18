@@ -216,7 +216,12 @@ export function PaymentsSection(props: {
       .map((b) => ({
         id: b.id,
         billNo: b.bill_no,
-        outstanding: b.total_amount - b.paid_amount,
+        // Must subtract advance_applied too — otherwise "Pay All" re-charges the
+        // portion already covered by an applied advance.
+        outstanding: Math.max(
+          0,
+          b.total_amount - b.paid_amount - b.advance_applied,
+        ),
       }))
       .filter((b) => b.outstanding > 0);
   }, [props.bills, unitTab]);
@@ -465,7 +470,7 @@ export function PaymentsSection(props: {
                             {formatINR(outstanding)}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">₹0</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -497,6 +502,7 @@ export function PaymentsSection(props: {
                           billNo={bill.bill_no}
                           associationId={props.associationId}
                           payments={bill.payments}
+                          hidePayerColumn={props.canPay}
                         />
                       </TableCell>
                       <TableCell className="w-[1%] text-right whitespace-nowrap">

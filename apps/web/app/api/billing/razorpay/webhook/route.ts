@@ -4,24 +4,31 @@ import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client'
 
 import crypto from 'crypto';
 
+interface PaymentEntity {
+  id: string;
+  order_id: string;
+  amount: number;
+  notes: {
+    bill_ids?: string;
+    association_id?: string;
+    paid_by_role?: string;
+    is_due?: string;
+    unit_id?: string;
+    bill_type?: string;
+  };
+}
+
+interface RefundEntity {
+  id: string;
+  payment_id: string;
+  amount: number;
+}
+
 interface RazorpayWebhookPayload {
   event: string;
   payload: {
-    payment: {
-      entity: {
-        id: string;
-        order_id: string;
-        amount: number; // total in paise
-        notes: {
-          bill_ids?: string;
-          association_id?: string;
-          paid_by_role?: string;
-          is_due?: string;
-          unit_id?: string;
-          bill_type?: string;
-        };
-      };
-    };
+    payment?: { entity: PaymentEntity };
+    refund?: { entity: RefundEntity };
   };
 }
 
@@ -32,17 +39,19 @@ interface RazorpayWebhookPayload {
  * where the synchronous /verify call never reaches the server (browser closed,
  * network drop, etc.). Razorpay retries on non-2xx responses.
  *
- * Only processes: payment.captured
+ * Handled events:
+ *   payment.captured — record the payment against the bill / cash-ledger due
+ *   refund.processed — mark the payment as reversed; bill reverts to unpaid
+ *
  * All other events are acknowledged (200) and ignored.
  *
  * Signature verification uses the association's webhook_secret.
- * If not configured, the webhook is rejected (402) to prevent spoofing.
+ * If not configured, the webhook is rejected (422) to prevent spoofing.
  *
  * Idempotent: the payments_razorpay_bill_uniq index prevents double-recording
  * if both /verify and the webhook fire for the same payment.
  */
 export async function POST(req: NextRequest) {
-  // Read raw body first — needed for HMAC signature verification.
   const rawBody = await req.text();
   const signature = req.headers.get('x-razorpay-signature');
 
@@ -53,7 +62,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Parse payload to extract association context from notes.
   let payload: RazorpayWebhookPayload;
   try {
     payload = JSON.parse(rawBody) as RazorpayWebhookPayload;
@@ -61,12 +69,94 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  // Acknowledge and ignore events we don't handle.
-  if (payload.event !== 'payment.captured') {
+  const { event } = payload;
+
+  if (event !== 'payment.captured' && event !== 'refund.processed') {
     return new Response('OK', { status: 200 });
   }
 
-  const paymentEntity = payload.payload.payment.entity;
+  const admin = getSupabaseServerAdminClient();
+
+  // ── refund.processed ──────────────────────────────────────────────────────
+  if (event === 'refund.processed') {
+    const refundEntity = payload.payload.refund?.entity;
+    if (!refundEntity?.payment_id) {
+      return NextResponse.json(
+        { error: 'Missing refund payment_id in payload' },
+        { status: 400 },
+      );
+    }
+
+    const razorpayPaymentId = refundEntity.payment_id;
+
+    // Look up the association via the original payment record so we can
+    // verify the webhook signature before mutating anything.
+    const { data: existingPayment } = await admin
+      .from('payments')
+      .select('association_id')
+      .eq('razorpay_payment_id', razorpayPaymentId)
+      .maybeSingle();
+
+    // Also check cash_ledger_payments if not found in standard payments.
+    let associationId: string | null = existingPayment?.association_id ?? null;
+    if (!associationId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: clp } = await (admin as any)
+        .from('cash_ledger_payments')
+        .select('association_id')
+        .eq('razorpay_payment_id', razorpayPaymentId)
+        .maybeSingle();
+      associationId = clp?.association_id ?? null;
+    }
+
+    if (!associationId) {
+      // Payment not from Ooruda — ignore silently.
+      return new Response('OK', { status: 200 });
+    }
+
+    const { data: gateway } = await admin
+      .from('association_payment_gateways')
+      .select('webhook_secret, is_active')
+      .eq('association_id', associationId)
+      .maybeSingle();
+
+    if (!gateway?.webhook_secret) {
+      return NextResponse.json(
+        { error: 'Webhook secret not configured' },
+        { status: 422 },
+      );
+    }
+
+    const expectedSig = crypto
+      .createHmac('sha256', gateway.webhook_secret)
+      .update(rawBody)
+      .digest('hex');
+
+    if (expectedSig !== signature) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin as any).rpc('record_payment_reversal', {
+      p_razorpay_payment_id: razorpayPaymentId,
+    });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return new Response('OK', { status: 200 });
+  }
+
+  // ── payment.captured ──────────────────────────────────────────────────────
+  const paymentEntity = payload.payload.payment?.entity;
+  if (!paymentEntity) {
+    return NextResponse.json(
+      { error: 'Missing payment entity in payload' },
+      { status: 400 },
+    );
+  }
+
   const razorpayPaymentId = paymentEntity.id;
   const razorpayOrderId = paymentEntity.order_id;
   const notes = paymentEntity.notes ?? {};
@@ -78,13 +168,9 @@ export async function POST(req: NextRequest) {
   const dueBillType = notes.bill_type;
 
   if (!associationId || (billIds.length === 0 && !isDue)) {
-    // Order was not created by Ooruda (missing notes) — ignore.
     return new Response('OK', { status: 200 });
   }
 
-  const admin = getSupabaseServerAdminClient();
-
-  // Fetch gateway to get the webhook_secret for signature verification.
   const { data: gateway } = await admin
     .from('association_payment_gateways')
     .select('webhook_secret, is_active')
@@ -95,13 +181,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Gateway not found' }, { status: 404 });
   }
 
-  // Gateway was deactivated after the order was created — acknowledge and stop.
-  // Return 200 so Razorpay does not retry; the deactivation is intentional.
   if (!gateway.is_active) {
     return new Response('OK', { status: 200 });
   }
 
-  // Reject if webhook_secret is not configured — we cannot verify authenticity.
   if (!gateway.webhook_secret) {
     return NextResponse.json(
       { error: 'Webhook secret not configured for this association' },
@@ -109,7 +192,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Verify HMAC-SHA256 signature over the raw request body.
   const expectedSig = crypto
     .createHmac('sha256', gateway.webhook_secret)
     .update(rawBody)
@@ -119,7 +201,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
-  // Cash-ledger due payment — no bill IDs involved.
   if (isDue) {
     if (!dueUnitId || !dueBillType) {
       return NextResponse.json(
@@ -140,14 +221,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (error) {
-      if (error.code === '23505') return new Response('OK', { status: 200 }); // idempotent
+      if (error.code === '23505') return new Response('OK', { status: 200 });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return new Response('OK', { status: 200 });
   }
 
-  // Standard bill payment flow.
   const { data: bills } = await admin
     .from('bills')
     .select('id, total_amount, paid_amount')
@@ -162,7 +242,7 @@ export async function POST(req: NextRequest) {
 
   for (const bill of bills) {
     const outstanding = Number(bill.total_amount) - Number(bill.paid_amount);
-    if (outstanding <= 0) continue; // already paid (verify beat the webhook)
+    if (outstanding <= 0) continue;
 
     const { error } = await admin.rpc('record_payment', {
       p_bill_id: bill.id,
@@ -176,9 +256,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (error) {
-      // Duplicate: /verify already recorded this payment — skip silently.
       if (error.code === '23505') continue;
-      // Any other DB error: return 500 so Razorpay retries.
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
   }

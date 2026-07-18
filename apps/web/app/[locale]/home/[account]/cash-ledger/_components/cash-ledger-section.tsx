@@ -69,6 +69,8 @@ interface Props {
   canManage: boolean;
   canDelete: boolean;
   initialEntries?: CashLedgerEntryRow[];
+  defaultDateFrom?: string;
+  defaultDateTo?: string;
 }
 
 export function CashLedgerSection({
@@ -76,17 +78,29 @@ export function CashLedgerSection({
   units,
   canManage,
   initialEntries,
+  defaultDateFrom = '',
+  defaultDateTo = '',
 }: Props) {
   const [selectedUnitId, setSelectedUnitId] = useState<string>('all');
   const [selectedBillType, setSelectedBillType] = useState('all');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(defaultDateFrom);
+  const [dateTo, setDateTo] = useState(defaultDateTo);
   const [entries, setEntries] = useState<CashLedgerEntryRow[]>(
     initialEntries ?? [],
   );
   const [loading, setLoading] = useState(false);
-  // Skip the first effect run when initialEntries were pre-fetched server-side.
-  const isFirstRender = useRef(!!initialEntries);
+  // Stable record of what the server already fetched — never mutated so it
+  // stays valid across React StrictMode's double-effect invocations.
+  const serverFiltersRef = useRef(
+    initialEntries
+      ? {
+          unitId: 'all',
+          billType: 'all',
+          dateFrom: defaultDateFrom,
+          dateTo: defaultDateTo,
+        }
+      : null,
+  );
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -111,13 +125,21 @@ export function CashLedgerSection({
   }, [associationId, selectedUnitId, selectedBillType, dateFrom, dateTo]);
 
   useEffect(() => {
-    // Skip the very first run when server-prefetched data is already in state.
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
+    // If the server already fetched data for the current filter state, skip.
+    // Using a stable ref (never mutated) makes this safe under StrictMode's
+    // double-effect invocation — the second run sees the same ref and also skips.
+    const sf = serverFiltersRef.current;
+    if (
+      sf &&
+      sf.unitId === selectedUnitId &&
+      sf.billType === selectedBillType &&
+      sf.dateFrom === dateFrom &&
+      sf.dateTo === dateTo
+    ) {
       return;
     }
     void fetchEntries();
-  }, [fetchEntries]);
+  }, [fetchEntries, selectedUnitId, selectedBillType, dateFrom, dateTo]);
 
   const isAllUnits = selectedUnitId === 'all';
 

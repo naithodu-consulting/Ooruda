@@ -8,13 +8,23 @@ import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import { CashLedgerSection } from './_components/cash-ledger-section';
-import { getCashLedgerEntriesAction } from './_lib/cash-ledger-actions';
+import type { CashLedgerEntryRow } from './_lib/cash-ledger-actions';
 
 interface Props {
   params: Promise<{ account: string }>;
 }
 
 export const metadata = { title: 'Cash Ledger' };
+
+function currentFYDates(): { from: string; to: string } {
+  const now = new Date();
+  const fyStartYear =
+    now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return {
+    from: `${fyStartYear}-04-01`,
+    to: `${fyStartYear + 1}-03-31`,
+  };
+}
 
 export default async function CashLedgerPage({ params }: Props) {
   const { account } = await params;
@@ -46,19 +56,33 @@ export default async function CashLedgerPage({ params }: Props) {
   const canManage = role === 'assoc_admin' || role === 'billing_operator';
   const canDelete = role === 'assoc_admin';
 
-  const [{ data: allUnits }, initialResult] = await Promise.all([
+  const { from: defaultDateFrom, to: defaultDateTo } = currentFYDates();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const uc = (c: unknown) => c as any;
+
+  const [{ data: allUnits }, { data: initialData }] = await Promise.all([
     client
       .from('units')
       .select('id, unit_no')
       .eq('association_id', association.id)
       .order('unit_no'),
-    // Prefetch default view (all units, all types, no date filter) so the
-    // table renders immediately without a client-side waterfall on load.
-    getCashLedgerEntriesAction(association.id, 'all', 'all'),
+    // Direct query — requireRole already authenticated; no extra auth re-check.
+    // Scoped to current FY so the initial load is fast.
+    uc(client)
+      .from('cash_ledger')
+      .select(
+        'id, unit_id, entry_type, bill_type, amount, direction, entry_date, paid_by_name, notes, created_at, reference_bill_id',
+      )
+      .eq('association_id', association.id)
+      .gte('entry_date', defaultDateFrom)
+      .lte('entry_date', defaultDateTo)
+      .order('entry_date', { ascending: true })
+      .order('created_at', { ascending: true }),
   ]);
 
   const units = (allUnits ?? []) as { id: string; unit_no: string }[];
-  const initialEntries = initialResult.entries ?? [];
+  const initialEntries = (initialData ?? []) as CashLedgerEntryRow[];
 
   return (
     <PageBody>
@@ -74,6 +98,8 @@ export default async function CashLedgerPage({ params }: Props) {
         canManage={canManage}
         canDelete={canDelete}
         initialEntries={initialEntries}
+        defaultDateFrom={defaultDateFrom}
+        defaultDateTo={defaultDateTo}
       />
     </PageBody>
   );

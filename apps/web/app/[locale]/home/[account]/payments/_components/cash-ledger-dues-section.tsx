@@ -77,7 +77,11 @@ export function CashLedgerDuesSection({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            {isOwnerView ? (hasPaid ? 'Dues' : 'Pending dues') : 'Cash ledger dues'}
+            {isOwnerView
+              ? hasPaid
+                ? 'Dues'
+                : 'Pending dues'
+              : 'Cash ledger dues'}
             <span className="bg-muted text-muted-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold">
               {totalCount}
             </span>
@@ -115,7 +119,9 @@ export function CashLedgerDuesSection({
                         Unit {due.unit_no}
                       </TableCell>
                     )}
-                    <TableCell className={`py-3 ${showUnitColumn ? '' : 'pl-4'}`}>
+                    <TableCell
+                      className={`py-3 ${showUnitColumn ? '' : 'pl-4'}`}
+                    >
                       {billTypeLabel(due.bill_type)}
                     </TableCell>
                     <TableCell className="text-destructive py-3 text-right font-bold tabular-nums">
@@ -158,13 +164,18 @@ export function CashLedgerDuesSection({
                   </TableRow>
                 ))}
                 {paidDues.map((pd, i) => (
-                  <TableRow key={`paid-${pd.unit_id}-${pd.bill_type}-${i}`} className="opacity-75">
+                  <TableRow
+                    key={`paid-${pd.unit_id}-${pd.bill_type}-${i}`}
+                    className="opacity-75"
+                  >
                     {showUnitColumn && (
                       <TableCell className="py-3 pl-4 font-medium">
                         Unit {pd.unit_no}
                       </TableCell>
                     )}
-                    <TableCell className={`py-3 ${showUnitColumn ? '' : 'pl-4'}`}>
+                    <TableCell
+                      className={`py-3 ${showUnitColumn ? '' : 'pl-4'}`}
+                    >
                       {billTypeLabel(pd.bill_type)}
                     </TableCell>
                     <TableCell className="py-3 text-right font-semibold tabular-nums">
@@ -172,7 +183,10 @@ export function CashLedgerDuesSection({
                     </TableCell>
                     {isOwnerView && (
                       <TableCell className="py-3">
-                        <Badge variant="secondary" className="border-green-200 bg-green-50 text-xs text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300">
+                        <Badge
+                          variant="secondary"
+                          className="border-green-200 bg-green-50 text-xs text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300"
+                        >
                           Paid
                         </Badge>
                       </TableCell>
@@ -186,9 +200,7 @@ export function CashLedgerDuesSection({
                         })}
                       </TableCell>
                     )}
-                    {(canManage || canPay) && (
-                      <TableCell className="py-3" />
-                    )}
+                    {(canManage || canPay) && <TableCell className="py-3" />}
                   </TableRow>
                 ))}
               </TableBody>

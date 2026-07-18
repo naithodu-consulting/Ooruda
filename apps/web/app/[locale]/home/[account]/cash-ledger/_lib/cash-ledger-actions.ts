@@ -89,6 +89,17 @@ export async function addCashLedgerEntryAction(
     return { success: false, error: (err as Error).message };
   }
 
+  // A new advance deposit should immediately offset any outstanding bills of the
+  // same bill-type (oldest-first). Best-effort — a failure here must not undo the
+  // advance that was already recorded above.
+  if (input.entry_type === 'advance_payment') {
+    await uc(client).rpc('apply_available_advance', {
+      p_association_id: associationId,
+      p_unit_id: input.unit_id,
+      p_bill_type: input.bill_type,
+    });
+  }
+
   await logAuditEvent({
     associationId,
     action: `cash_ledger.${input.entry_type}.created`,
@@ -215,6 +226,29 @@ export async function bulkImportCashLedgerAction(
     const { error } = await uc(client).from('cash_ledger').insert(toInsert);
     if (error) {
       return { success: false, imported: 0, skipped, error: error.message };
+    }
+
+    // Apply each imported advance against outstanding bills of the same
+    // unit + bill-type (oldest-first). De-duplicate the (unit, bill_type)
+    // pairs so we call the RPC once per affected bucket, not per row.
+    const advanceBuckets = new Map<
+      string,
+      { unitId: string; billType: string }
+    >();
+    for (const row of toInsert) {
+      if (row.entry_type === 'advance_payment') {
+        advanceBuckets.set(`${row.unit_id}:${row.bill_type}`, {
+          unitId: row.unit_id,
+          billType: row.bill_type,
+        });
+      }
+    }
+    for (const { unitId, billType } of advanceBuckets.values()) {
+      await uc(client).rpc('apply_available_advance', {
+        p_association_id: associationId,
+        p_unit_id: unitId,
+        p_bill_type: billType,
+      });
     }
   }
 

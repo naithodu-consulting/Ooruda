@@ -5,25 +5,6 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import crypto from 'crypto';
 
-/**
- * POST /api/billing/razorpay/verify-due
- *
- * Synchronous verification step for cash-ledger due payments.
- * Called immediately from the Razorpay checkout handler (same as /verify for bills).
- *
- * 1. Verifies HMAC-SHA256 signature.
- * 2. Validates caller owns/rents the unit.
- * 3. Calls record_due_payment_webhook() via admin client to record the payment
- *    and credit the cash ledger.
- *
- * The async webhook is the safety net for cases where this call doesn't reach
- * the server. The unique index on razorpay_payment_id prevents double-recording.
- *
- * Body: {
- *   razorpayOrderId, razorpayPaymentId, razorpaySignature,
- *   associationId, unitId, billType, amount
- * }
- */
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as {
     razorpayOrderId: string;
@@ -61,55 +42,61 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Verify caller is authenticated and is a prop_owner / tenant.
   const client = getSupabaseServerClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) {
+  const admin = getSupabaseServerAdminClient();
+
+  // Authenticate first — no elevated (admin/RLS-bypassing) work until the
+  // caller is a confirmed session. Association lookup uses the RLS client.
+  const [
+    {
+      data: { user },
+    },
+    { data: assoc },
+  ] = await Promise.all([
+    client.auth.getUser(),
+    client
+      .from('associations')
+      .select('account_id')
+      .eq('id', associationId)
+      .single(),
+  ]);
+
+  if (!user)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
-  const { data: assoc } = await client
-    .from('associations')
-    .select('account_id')
-    .eq('id', associationId)
-    .single();
-
-  const { data: membership } = await client
-    .from('accounts_memberships')
-    .select('account_role')
-    .eq('user_id', user.id)
-    .eq('account_id', assoc?.account_id ?? '')
-    .maybeSingle();
+  // Membership + unit ownership (both owner and tenant).
+  const [{ data: membership }, [{ data: ownerUnit }, { data: tenancy }]] =
+    await Promise.all([
+      client
+        .from('accounts_memberships')
+        .select('account_role')
+        .eq('user_id', user.id)
+        .eq('account_id', assoc?.account_id ?? '')
+        .maybeSingle(),
+      Promise.all([
+        client
+          .from('units')
+          .select('id')
+          .eq('id', unitId)
+          .eq('association_id', associationId)
+          .eq('owner_id', user.id)
+          .maybeSingle(),
+        client
+          .from('tenancies')
+          .select('id')
+          .eq('tenant_id', user.id)
+          .eq('unit_id', unitId)
+          .eq('status', 'active')
+          .maybeSingle(),
+      ]),
+    ]);
 
   const role = membership?.account_role;
   if (role !== 'prop_owner' && role !== 'tenant') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  // Confirm the caller owns/rents the unit being paid.
-  let unitAllowed = false;
-  if (role === 'prop_owner') {
-    const { data: unit } = await client
-      .from('units')
-      .select('id')
-      .eq('id', unitId)
-      .eq('association_id', associationId)
-      .eq('owner_id', user.id)
-      .maybeSingle();
-    unitAllowed = !!unit;
-  } else {
-    const { data: tenancy } = await client
-      .from('tenancies')
-      .select('id')
-      .eq('tenant_id', user.id)
-      .eq('unit_id', unitId)
-      .eq('status', 'active')
-      .maybeSingle();
-    unitAllowed = !!tenancy;
-  }
-
+  const unitAllowed = role === 'prop_owner' ? !!ownerUnit : !!tenancy;
   if (!unitAllowed) {
     return NextResponse.json(
       { error: 'Unit not accessible for this account.' },
@@ -117,22 +104,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Fetch gateway credentials.
-  const admin = getSupabaseServerAdminClient();
+  // Gateway secret — fetched only now that the request is fully authorized.
   const { data: gateway } = await admin
     .from('association_payment_gateways')
     .select('key_secret, is_active')
     .eq('association_id', associationId)
     .maybeSingle();
 
-  if (!gateway || !gateway.is_active) {
+  if (!gateway?.is_active) {
     return NextResponse.json(
       { error: 'Online payments are not enabled for this association.' },
       { status: 422 },
     );
   }
 
-  // Verify HMAC-SHA256 signature: key_secret over "orderId|paymentId".
+  // Verify HMAC-SHA256 signature — proves the request corresponds to an order
+  // we actually created; forged requests are rejected here.
   const expectedSignature = crypto
     .createHmac('sha256', gateway.key_secret)
     .update(`${razorpayOrderId}|${razorpayPaymentId}`)
@@ -145,7 +132,41 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Record the due payment and credit the cash ledger (admin client = service_role).
+  // Idempotency pre-check: if this Razorpay payment was already recorded (e.g.
+  // the client's 6s fallback fired a retry), return gracefully BEFORE the amount
+  // guard — by now the balance already reflects this payment and would trip it.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existingPayment } = await (admin as any)
+    .from('cash_ledger_payments')
+    .select('id')
+    .eq('razorpay_payment_id', razorpayPaymentId)
+    .maybeSingle();
+
+  if (existingPayment) {
+    return NextResponse.json({ paymentId: null, alreadyRecorded: true });
+  }
+
+  // Validate the amount against the actual outstanding due (server-authoritative).
+  // The HMAC signature does NOT cover the amount, so a caller could pair a valid
+  // low-value order signature with an inflated amount — this guard blocks that.
+  const { data: balance, error: balanceError } = await client.rpc(
+    'get_cash_ledger_balance',
+    { p_unit_id: unitId, p_bill_type: billType },
+  );
+  if (balanceError) {
+    return NextResponse.json(
+      { error: 'Unable to verify outstanding due. Please try again.' },
+      { status: 500 },
+    );
+  }
+  const outstanding = -Number(balance ?? 0); // negative balance = amount owed
+  if (amount > outstanding + 0.01) {
+    return NextResponse.json(
+      { error: 'Amount exceeds the outstanding due.' },
+      { status: 400 },
+    );
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: paymentId, error } = await (admin as any).rpc(
     'record_due_payment_webhook',
@@ -159,7 +180,6 @@ export async function POST(req: NextRequest) {
   );
 
   if (error) {
-    // Already recorded (webhook beat us) — treat as success.
     if (error.code === '23505') {
       return NextResponse.json({ paymentId: null, alreadyRecorded: true });
     }

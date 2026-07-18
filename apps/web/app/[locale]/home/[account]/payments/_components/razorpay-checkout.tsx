@@ -20,14 +20,11 @@ type RazorpayConstructor = new (options: {
   order_id: string;
   name?: string;
   description?: string;
-  prefill?: { name?: string; email?: string; contact?: string };
   theme?: { color?: string };
   modal?: { ondismiss?: () => void };
   handler: (response: RazorpayResponse) => void;
 }) => {
   open(): void;
-  close(): void;
-  on(event: string, handler: () => void): void;
 };
 
 export interface BillToPayRow {
@@ -46,6 +43,12 @@ interface Props {
   onSuccess?: () => void;
 }
 
+interface PrefetchedOrder {
+  orderId: string;
+  keyId: string;
+  amount: number;
+}
+
 export function RazorpayCheckoutButton({
   associationId,
   bills,
@@ -55,52 +58,101 @@ export function RazorpayCheckoutButton({
   size = 'sm',
   onSuccess,
 }: Props) {
-  const [step, setStep] = useState<
-    'idle' | 'creating' | 'checkout' | 'verifying'
-  >('idle');
-  const scriptLoaded = useRef(false);
-
-  useEffect(() => {
-    if (scriptLoaded.current) return;
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.async = true;
-    script.onload = () => {
-      scriptLoaded.current = true;
-    };
-    document.head.appendChild(script);
-    return () => {
-      /* keep script across remounts */
-    };
-  }, []);
+  const [step, setStep] = useState<'idle' | 'opening' | 'checkout'>('idle');
+  const prefetchedOrder = useRef<PrefetchedOrder | null>(null);
+  const prefetchInFlight = useRef(false);
 
   const totalOutstanding = bills.reduce((s, b) => s + b.outstanding, 0);
 
+  // Stable key representing the current bill set — changes when props change.
+  const billKey = bills.map((b) => b.id).join(',');
+
+  useEffect(() => {
+    if (totalOutstanding <= 0) return;
+
+    // Inject Razorpay script once — skip if already present.
+    if (
+      !document.querySelector(
+        'script[src="https://checkout.razorpay.com/v1/checkout.js"]',
+      )
+    ) {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+
+    async function prefetchOrder() {
+      if (prefetchInFlight.current || prefetchedOrder.current) return;
+      prefetchInFlight.current = true;
+      try {
+        const res = await fetch('/api/billing/razorpay/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            billIds: bills.map((b) => b.id),
+            associationId,
+          }),
+        });
+        const data = (await res.json()) as {
+          orderId?: string;
+          keyId?: string;
+          amount?: number;
+        };
+        if (res.ok && data.orderId && data.keyId) {
+          prefetchedOrder.current = {
+            orderId: data.orderId,
+            keyId: data.keyId,
+            amount: data.amount!,
+          };
+        }
+      } finally {
+        prefetchInFlight.current = false;
+      }
+    }
+
+    void prefetchOrder();
+
+    return () => {
+      // Invalidate pre-fetched order when bills or amount change so a
+      // re-render with different props doesn't open the wrong Razorpay order.
+      prefetchedOrder.current = null;
+      prefetchInFlight.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billKey, associationId, totalOutstanding]);
+
   const handlePay = useCallback(async () => {
     if (step !== 'idle') return;
-    setStep('creating');
+    setStep('opening');
 
     try {
-      const orderRes = await fetch('/api/billing/razorpay/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          billIds: bills.map((b) => b.id),
-          associationId,
-        }),
-      });
-
-      const orderData = (await orderRes.json()) as {
-        orderId?: string;
-        keyId?: string;
-        amount?: number;
-        error?: string;
-      };
-
-      if (!orderRes.ok || !orderData.orderId || !orderData.keyId) {
-        toast.error(orderData.error ?? 'Could not create payment order.');
-        setStep('idle');
-        return;
+      let order = prefetchedOrder.current;
+      if (!order) {
+        const res = await fetch('/api/billing/razorpay/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            billIds: bills.map((b) => b.id),
+            associationId,
+          }),
+        });
+        const data = (await res.json()) as {
+          orderId?: string;
+          keyId?: string;
+          amount?: number;
+          error?: string;
+        };
+        if (!res.ok || !data.orderId || !data.keyId) {
+          toast.error(data.error ?? 'Could not create payment order.');
+          setStep('idle');
+          return;
+        }
+        order = {
+          orderId: data.orderId,
+          keyId: data.keyId,
+          amount: data.amount!,
+        };
       }
 
       setStep('checkout');
@@ -114,59 +166,83 @@ export function RazorpayCheckoutButton({
       const RazorpayConstructor = (window as any)
         .Razorpay as RazorpayConstructor;
       const rzp = new RazorpayConstructor({
-        key: orderData.keyId,
-        amount: orderData.amount!,
+        key: order.keyId,
+        amount: order.amount,
         currency: 'INR',
-        order_id: orderData.orderId,
+        order_id: order.orderId,
         name: 'Association Billing',
         description,
         theme: { color: '#d97706' },
         modal: {
           ondismiss: () => {
+            prefetchedOrder.current = null;
             setStep('idle');
           },
         },
-        handler: async (response) => {
-          setStep('verifying');
-          try {
-            const verifyRes = await fetch('/api/billing/razorpay/verify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                razorpayOrderId: response.razorpay_order_id,
-                razorpayPaymentId: response.razorpay_payment_id,
-                razorpaySignature: response.razorpay_signature,
-                billIds: bills.map((b) => b.id),
-                associationId,
-                paidByRole,
-              }),
+        handler: (response) => {
+          // 1. Free the button immediately — user can navigate away.
+          prefetchedOrder.current = null;
+          setStep('idle');
+
+          // 2. Non-blocking confirming toast — visible while verify runs in background.
+          const toastId = toast.loading('Confirming payment…', {
+            description: `₹${totalOutstanding.toLocaleString('en-IN')} received by Razorpay`,
+          });
+
+          // 3. Fallback: if verify takes >6s, refresh UI anyway and update toast.
+          //    Webhook is the safety net for the actual DB write.
+          const fallbackTimer = setTimeout(() => {
+            toast.success('Payment received', {
+              id: toastId,
+              description: 'Your bills will be updated shortly.',
             });
+            onSuccess?.();
+          }, 6000);
 
-            const verifyData = (await verifyRes.json()) as {
-              paymentIds?: string[];
-              error?: string;
-            };
-
-            if (!verifyRes.ok || !verifyData.paymentIds?.length) {
-              toast.error(
-                verifyData.error ??
-                  'Payment recorded by Razorpay but verification failed. Please contact the association.',
-              );
-            } else {
-              toast.success(
-                `Payment successful — ₹${totalOutstanding.toLocaleString('en-IN')} paid`,
-                {
+          // 4. Verify in the background — updates DB; resolves the toast in place.
+          fetch('/api/billing/razorpay/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+              billIds: bills.map((b) => b.id),
+              associationId,
+              paidByRole,
+            }),
+          })
+            .then((r) => r.json())
+            .then((data: { paymentIds?: string[]; error?: string }) => {
+              clearTimeout(fallbackTimer);
+              if (data.paymentIds?.length) {
+                toast.success('Payment confirmed', {
+                  id: toastId,
                   description:
                     bills.length > 1
-                      ? `${verifyData.paymentIds.length} bill(s) settled.`
+                      ? `${data.paymentIds.length} bill(s) settled.`
                       : 'Your receipt will be generated shortly.',
-                },
-              );
+                });
+              } else {
+                toast.warning('Payment received — confirmation delayed', {
+                  id: toastId,
+                  description:
+                    "Contact the association if it doesn't reflect within 24h.",
+                  duration: Infinity,
+                });
+              }
               onSuccess?.();
-            }
-          } finally {
-            setStep('idle');
-          }
+            })
+            .catch(() => {
+              clearTimeout(fallbackTimer);
+              toast.warning('Payment received — confirmation delayed', {
+                id: toastId,
+                description:
+                  "Contact the association if it doesn't reflect within 24h.",
+                duration: Infinity,
+              });
+              onSuccess?.();
+            });
         },
       });
 
@@ -176,8 +252,6 @@ export function RazorpayCheckoutButton({
       setStep('idle');
     }
   }, [associationId, bills, paidByRole, step, totalOutstanding, onSuccess]);
-
-  const busy = step !== 'idle';
 
   const buttonLabel =
     label ??
@@ -190,20 +264,17 @@ export function RazorpayCheckoutButton({
       variant={variant}
       size={size}
       onClick={handlePay}
-      disabled={busy || totalOutstanding <= 0}
+      disabled={step !== 'idle' || totalOutstanding <= 0}
       className="gap-1.5"
     >
-      {busy ? (
+      {step !== 'idle' ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
       ) : bills.length > 1 ? (
         <IndianRupee className="h-3.5 w-3.5" />
       ) : (
         <CreditCard className="h-3.5 w-3.5" />
       )}
-      {step === 'creating' && 'Preparing…'}
-      {step === 'checkout' && 'Opening…'}
-      {step === 'verifying' && 'Verifying…'}
-      {step === 'idle' && buttonLabel}
+      {step !== 'idle' ? 'Opening…' : buttonLabel}
     </Button>
   );
 }

@@ -5,22 +5,6 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import crypto from 'crypto';
 
-/**
- * POST /api/billing/razorpay/verify
- *
- * 1. Verifies the Razorpay payment signature using the association's key_secret.
- * 2. Calls record_payment() for each bill in billIds.
- * 3. Returns { paymentIds: string[] }.
- *
- * Body: {
- *   razorpayOrderId: string,
- *   razorpayPaymentId: string,
- *   razorpaySignature: string,
- *   billIds: string[],
- *   associationId: string,
- *   paidByRole: 'Owner' | 'Tenant',
- * }
- */
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as {
     razorpayOrderId: string;
@@ -55,76 +39,85 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Verify caller is a member of this association.
   const client = getSupabaseServerClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { data: assoc } = await client
-    .from('associations')
-    .select('account_id')
-    .eq('id', associationId)
-    .single();
-
-  const { data: membership } = await client
-    .from('accounts_memberships')
-    .select('account_role')
-    .eq('user_id', user.id)
-    .eq('account_id', assoc?.account_id ?? '')
-    .maybeSingle();
-
-  if (!membership) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-  }
-
-  // Restrict to prop_owner / tenant — admins use the manual record-payment flow.
-  const role = membership.account_role;
-  if (role !== 'prop_owner' && role !== 'tenant') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-  }
-
-  // Resolve the caller's unit IDs to scope bill verification.
-  let allowedUnitIds: string[] = [];
-  if (role === 'prop_owner') {
-    const { data: units } = await client
-      .from('units')
-      .select('id')
-      .eq('association_id', associationId)
-      .eq('owner_id', user.id);
-    allowedUnitIds = (units ?? []).map((u) => u.id);
-  } else {
-    const { data: tenancies } = await client
-      .from('tenancies')
-      .select('unit_id')
-      .eq('tenant_id', user.id)
-      .eq('status', 'active');
-    allowedUnitIds = (tenancies ?? []).map((t) => t.unit_id);
-  }
-
-  if (allowedUnitIds.length === 0) {
-    return NextResponse.json({ error: 'No units assigned.' }, { status: 403 });
-  }
-
-  // Fetch gateway credentials.
   const admin = getSupabaseServerAdminClient();
-  const { data: gateway } = await admin
-    .from('association_payment_gateways')
-    .select('key_secret, is_active')
-    .eq('association_id', associationId)
-    .maybeSingle();
 
-  if (!gateway || !gateway.is_active) {
+  // Parallel: user auth + gateway + association.
+  const [
+    {
+      data: { user },
+    },
+    { data: gateway },
+    { data: assoc },
+  ] = await Promise.all([
+    client.auth.getUser(),
+    admin
+      .from('association_payment_gateways')
+      .select('key_secret, is_active')
+      .eq('association_id', associationId)
+      .maybeSingle(),
+    client
+      .from('associations')
+      .select('account_id')
+      .eq('id', associationId)
+      .single(),
+  ]);
+
+  if (!user)
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!gateway?.is_active) {
     return NextResponse.json(
       { error: 'Online payments are not enabled for this association.' },
       { status: 422 },
     );
   }
 
-  // Verify HMAC-SHA256 signature: key_secret over "orderId|paymentId".
+  // Parallel: membership + unit/tenancy scoping.
+  // The scope query uses the body-supplied paidByRole for routing — this is
+  // safe because we cross-check it against the verified membership role below.
+  const [{ data: membership }, { data: scopeRows }] = await Promise.all([
+    client
+      .from('accounts_memberships')
+      .select('account_role')
+      .eq('user_id', user.id)
+      .eq('account_id', assoc?.account_id ?? '')
+      .maybeSingle(),
+    paidByRole === 'Owner'
+      ? client
+          .from('units')
+          .select('id')
+          .eq('association_id', associationId)
+          .eq('owner_id', user.id)
+      : client
+          .from('tenancies')
+          .select('unit_id')
+          .eq('tenant_id', user.id)
+          .eq('status', 'active'),
+  ]);
+
+  if (!membership)
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+
+  const role = membership.account_role;
+  if (role !== 'prop_owner' && role !== 'tenant') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  // Derive canonical label from verified membership — reject if body was tampered.
+  // This prevents a prop_owner from sending paidByRole:'Tenant' to mislabel the payment.
+  const canonicalPaidByRole = role === 'prop_owner' ? 'Owner' : 'Tenant';
+  if (paidByRole !== canonicalPaidByRole) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  const allowedUnitIds = (scopeRows ?? []).map((r) =>
+    'id' in r ? r.id : (r as { unit_id: string }).unit_id,
+  );
+  if (allowedUnitIds.length === 0) {
+    return NextResponse.json({ error: 'No units assigned.' }, { status: 403 });
+  }
+
+  // Verify HMAC-SHA256 signature.
   const expectedSignature = crypto
     .createHmac('sha256', gateway.key_secret)
     .update(`${razorpayOrderId}|${razorpayPaymentId}`)
@@ -137,7 +130,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Fetch bills scoped to the caller's units — enforces unit ownership.
+  // Fetch bills scoped to the caller's units.
   const { data: bills } = await client
     .from('bills')
     .select('id, total_amount, paid_amount')
@@ -149,32 +142,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Bills not found.' }, { status: 404 });
   }
 
-  // Group UUID for this batch (links multiple payments if Pay All).
   const paymentBatchId = billIds.length > 1 ? crypto.randomUUID() : null;
 
-  // Record a payment for each bill (calls the updated record_payment RPC).
+  // Record payments in parallel.
+  const results = await Promise.all(
+    bills
+      .filter((b) => Number(b.total_amount) - Number(b.paid_amount) > 0)
+      .map((bill) =>
+        client.rpc('record_payment', {
+          p_bill_id: bill.id,
+          p_association_id: associationId,
+          p_amount: Number(bill.total_amount) - Number(bill.paid_amount),
+          p_mode: 'Razorpay',
+          p_paid_by_role: canonicalPaidByRole,
+          p_razorpay_payment_id: razorpayPaymentId,
+          p_razorpay_order_id: razorpayOrderId,
+          p_payment_batch_id: paymentBatchId,
+        }),
+      ),
+  );
+
   const paymentIds: string[] = [];
-  for (const bill of bills) {
-    const outstanding = Number(bill.total_amount) - Number(bill.paid_amount);
-    if (outstanding <= 0) continue;
-
-    const { data: paymentId, error } = await client.rpc('record_payment', {
-      p_bill_id: bill.id,
-      p_association_id: associationId,
-      p_amount: outstanding,
-      p_mode: 'Razorpay',
-      p_paid_by_role: paidByRole,
-      p_razorpay_payment_id: razorpayPaymentId,
-      p_razorpay_order_id: razorpayOrderId,
-      p_payment_batch_id: paymentBatchId,
-    });
-
+  for (const { data: paymentId, error } of results) {
     if (error) {
-      // If one bill already paid (duplicate submission), skip it rather than failing all.
-      if (error.code === '23505') continue;
+      if (error.code === '23505') continue; // duplicate — skip
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-
     if (paymentId) paymentIds.push(paymentId as string);
   }
 

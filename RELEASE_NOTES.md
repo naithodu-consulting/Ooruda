@@ -1520,4 +1520,215 @@ New dedicated page at `/statement` for prop owners and tenants — a cash ledger
 |---|---|
 | `20260717110000_clean_razorpay_notes.sql` | Updates `record_due_payment_webhook` to store `'Paid via Razorpay'` in `cash_ledger.notes` instead of the raw payment ID (ID already stored in `cash_ledger_payments.razorpay_payment_id`) |
 
-_Last updated: 2026-07-17_
+### Admin Dashboard — Instant Duration Filter
+
+- **Duration switching is now instant** — all 7 duration periods (Current Month, Last Month, 3 Months, 6 Months, This FY, Last FY, All Time) are prefetched in parallel at page load. Switching between periods requires zero network round-trips.
+- **Architecture**: New `AdminOverviewPanel` client component (`admin-overview-panel.tsx`) accepts `metricsByDuration: Record<string, OverviewMetrics>` and manages active duration with `useState`. Server component fetches static data (units, mescom, audit log) + 7 parallel bill queries in a single `Promise.all`, then passes the complete result to the client component. The inline admin render JSX and the `DashboardDurationSelect` URL-navigation approach have been removed from the server component.
+- **No regression**: URL param `?d=` is still accepted for deep-linking; the client component uses it as `initialDuration`.
+
+### Razorpay Payment Flow — Performance & UX Overhaul
+
+**"Preparing..." eliminated (eager order pre-creation):**
+Both `RazorpayCheckoutButton` and `RazorpayDueCheckoutButton` now pre-create the Razorpay order on component mount in the background. By the time the user clicks Pay, the order is already ready — the Razorpay modal opens in under 200ms with no visible "Preparing..." state.
+
+**"Verifying..." eliminated (optimistic UI):**
+After the user completes payment in the Razorpay modal, the button resets and a success toast appears immediately. The `/verify` (or `/verify-due`) API call runs in the background fire-and-forget. The async webhook is the safety net. Users no longer wait 6–8 seconds staring at a spinner.
+
+**API route parallelization:**
+All 4 Razorpay API routes (`create-order`, `create-order-due`, `verify`, `verify-due`) were refactored to fire DB queries in parallel using `Promise.all`. Sequential round-trips reduced from 5–6 to 2 batches. `record_payment` RPC calls for multi-bill Pay All are now also parallel.
+
+**Admin dashboard — recent activity errors filtered:**
+The recent activity widget now excludes audit log entries whose action or summary indicate errors (`%failed%`, `%error%`, `Failed%`). Failed Razorpay webhook recording attempts no longer pollute the feed.
+
+### Statement Page — UX Improvements
+
+- **Charge names instead of "Other Charges"**: Bill line item descriptions are now fetched alongside bills. For `other_charges` bill type, the actual charge name(s) (e.g. "Water Charges, Parking Fee") are surfaced in the description column, replacing the generic "Other Charges" label. GST/tax line items are excluded from the name.
+- **Payment subtext clarified**: For bill payments, the subtext now shows `TPC/26-27/OTH/000069 · Paid via Razorpay` — bill number and mode together. For cash ledger due payments, shows `Paid via Razorpay · Applied to outstanding balance`.
+- **Page description fixed**: "chronological order" changed to "Most recent transactions first."
+- **Pay CTA on closing balance**: When balance is negative (amount due), a red "Pay now →" link appears inline, navigating directly to the Payments page.
+- **Dynamic credits sub-label**: Shows "Payments received", "Advance deposits", or "Advances & payments" based on what credit types are actually present in the filtered view.
+- **Date group headers**: Shaded header rows group same-date transactions — reduces visual noise and makes scanning faster.
+
+_Last updated: 2026-07-18_
+
+---
+
+## Payment Gateway Security — Write-Once Credentials (2026-07-17)
+
+### Security hardening: Razorpay gateway config is now write-once
+
+The association payment gateway panel has been redesigned to eliminate an in-place credential edit attack surface. Previously, an association admin (or an attacker who compromised an admin account) could silently swap the Razorpay Key ID to redirect all payments to a different Razorpay account without re-entering the secret.
+
+**What changed:**
+
+- **Create-only form** — the gateway setup form is shown only when no gateway exists. All three fields (Key ID, Key Secret, Webhook Secret) are required at creation time; there is no partial-save path.
+- **Read-only configured view** — once saved, credentials are displayed as masked values only (`rzp_live_••••••••XXXX` for Key ID, bullet placeholders for secrets). No field is editable.
+- **Pause/resume toggle** — admins can still enable or disable online payments inline without touching credentials. This is the only in-place mutation allowed.
+- **Delete to rotate** — to change credentials, the admin must explicitly delete the gateway (with a confirmation dialog) and then re-create it. This makes credential rotation a deliberate, auditable act.
+- **Security notice on create form** — a contextual warning on the create form tells the admin that credentials cannot be viewed or edited after saving.
+
+This pattern mirrors industry-standard API key UX (GitHub tokens, Stripe keys, AWS access keys).
+
+_Last updated: 2026-07-18_
+
+---
+
+## Payment Gateway — Removed from Super Admin Panel (2026-07-18)
+
+### Product decision: association admin is the sole owner of payment credentials
+
+The super admin panel previously had full write access to Razorpay credentials (create, toggle, delete) for any association. This created split ownership, audit ambiguity, and a platform liability — the platform operator could silently write credentials tied to an association's bank account.
+
+**What changed:**
+
+- **Super admin panel** — payment gateway section **removed entirely**. The super admin has no business viewing or acting on association-level payment credentials.
+- **Association admin** — sole owner of their gateway (create / toggle / delete from Settings → Association → Payment Gateway).
+- **Super admin server actions** — `adminCreatePaymentGatewayAction`, `adminTogglePaymentGatewayAction`, and `adminDeletePaymentGatewayAction` removed. The gateway query is removed from the admin account page data fetch.
+- **`AdminPaymentGatewayCard` component** — deleted.
+
+**Why:** A read-only status card in the admin panel gives the operator nothing actionable — if a customer needs help, support directs them to their own settings. The section added noise without signal. Removing it keeps the admin panel focused on platform-level concerns only.
+
+_Last updated: 2026-07-18_
+
+---
+
+## Statement Page — Rebuilt from Bills + Payments (2026-07-18)
+
+### Root cause fixed: Razorpay payments were invisible on the Statement page
+
+The Statement page previously read exclusively from the `cash_ledger` table. Only the due-payment webhook (`record_due_payment_webhook`) wrote to that table — regular Razorpay payments recorded via `record_payment()` wrote to the `payments` table only. As a result, any payment made through the Razorpay checkout (including "Pay All") was absent from the Statement even though it showed correctly on the Payments page.
+
+**What changed:**
+
+- **Statement data source** — rebuilt from `bills` (debit entries) + `payments` (credit entries) as authoritative sources. `cash_ledger` is still queried but only for advance deposits and advance-applied entries, which have no equivalent in the bills/payments tables.
+- **All payment paths now appear** — Cash, UPI, Razorpay, webhook — any payment recorded against a bill shows on the Statement automatically, regardless of how it was captured.
+- **Richer entry descriptions** — dues show the bill number as a sub-line; payments show the payment mode ("Paid via Razorpay", "Paid via Cash", etc.).
+- **Copy cleanup** — "Ledger activity" renamed to "Transaction history"; "No ledger activity for this period" → "No transactions for this period."
+- **No DB migration required** — purely a query and presentation change.
+
+_Last updated: 2026-07-18_
+
+---
+
+## Cash Ledger — Performance Fix (2026-07-18)
+
+### Root causes
+
+The Cash Ledger page was slow to load because:
+
+1. **Full-table initial fetch** — the server prefetch queried all entries for the association with no date filter, returning potentially thousands of rows before the page could render.
+2. **Extra auth round-trip on every filter change** — `getCashLedgerEntriesAction` called `getAssociationRole()` (a DB query) before the data query on every client-side filter change.
+3. **Missing DB index** — the `cash_ledger` table had no index on `(association_id, entry_date)`, causing Postgres to scan the full table.
+
+### What changed
+
+- **Default to current financial year** — the initial page load now scopes the prefetch to the current FY (Apr 1 – Mar 31). The filter toolbar pre-populates with these dates so the client state matches the server-rendered data. Users can clear the dates to view all-time history.
+- **Direct Supabase query on page load** — replaced the `getCashLedgerEntriesAction` call in the page server component with an inline query. Authentication is already proven by `requireRole`; calling the Server Action re-ran `getAssociationRole` (an unnecessary DB round-trip).
+- **New DB index** (`20260717192130_cash_ledger_perf_index.sql`) — composite index on `cash_ledger(association_id, entry_date DESC, created_at DESC)` so all filtered queries use an index scan instead of a seq scan.
+
+**Net effect:** Initial page load is noticeably faster (fewer rows fetched + index scan); filter changes are also faster (auth re-check eliminated).
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260717192130_cash_ledger_perf_index.sql` | Composite index on `cash_ledger(association_id, entry_date DESC, created_at DESC)` |
+
+_Last updated: 2026-07-18_
+
+---
+
+## Statement Page — UX Overhaul (2026-07-18)
+
+A comprehensive UX pass on the Statement page (`/statement`) addressing visual hierarchy, information density, and usability.
+
+### Visual hierarchy
+
+- **Closing balance card** is now full-width on mobile (`col-span-2`) and uses a colored left border (red when amount is due, green when credit available) to immediately draw the eye.
+- Balance number bumped to `text-3xl` (vs. `text-2xl` on the other two cards); "Amount due / Credit available" label now matches the balance color for immediate clarity.
+- Total Credits and Total Debits sit side-by-side below the closing balance on mobile — secondary info after the headline number.
+
+### Pay CTA
+
+- "Pay now" button changed from **red (destructive)** to **amber** — a call-to-action, not an alarm.
+
+### Transaction table
+
+- **Removed the empty DATE column** — date group headers already show the date; the redundant column and header are gone. Table is now 4 columns (Description, Debit, Credit, Balance).
+- **Transaction type badges** added to each row: color-coded chips (`Due` red, `Payment` green, `Advance` blue, `Applied` purple, `Reversal` orange) for instant visual scanning without reading text.
+- **Bill number subtext** made lighter (`text-muted-foreground/60`, `text-[11px]`) — visible when needed, invisible at a glance.
+- **Period totals footer row** added at the bottom of the table: Debit total, Credit total, and closing balance in a muted summary row.
+
+### Filters
+
+- **URL-synced filters** — FY, bill_type, and unit selection are reflected in the URL via `window.history.replaceState` (no server re-render). Bookmarking a filtered view preserves the selection; the server passes initial values via `searchParams` props.
+- **FY dropdown with transaction counts** — non-current FYs show ` · N` count to hint at older history volume.
+- **"Other Charges" filter shows actual charge names** — the filter option for `other_charges` now shows real line-item descriptions (e.g. "Water Charges, Parking Fee") matching what users see in the table.
+- Card header description now shows the active period label (e.g. `FY 2026-27 · 14 transactions`).
+
+### Copy fix
+
+- Total Debits sub-label changed from "Dues & applied advances" → **"Bills raised this period"**.
+
+---
+
+## Razorpay Payment Reversals / Refunds (2026-07-18)
+
+### Problem
+
+When a Razorpay payment was reversed or refunded (e.g. a test charge reversal from the Razorpay dashboard), the UI showed no indication — the bill remained marked as Paid, the cash-ledger due stayed settled, and the statement showed no reversal entry.
+
+### What changed
+
+**Database (`20260718000001_payment_reversal.sql`)**
+
+- `payments.status` column added (`active` | `reversed`, default `active`)
+- `payments.reversed_at` column added (timestamp, nullable)
+- `cash_ledger_payments.status` and `cash_ledger_payments.reversed_at` added with the same semantics
+- `sync_bill_payment_status` trigger updated to only sum `active` payments — reversing a payment now automatically reverts the bill to Unpaid / Partial
+- New `record_payment_reversal(p_razorpay_payment_id)` function (security definer, granted to `service_role`) that marks matching rows as reversed and, for cash-ledger due payments, inserts a reversal debit entry in `cash_ledger`
+- `UPDATE` privilege on `payments` and `cash_ledger_payments` granted to `service_role` for the webhook
+
+**Webhook (`/api/billing/razorpay/webhook`)**
+
+- Now handles `refund.processed` events in addition to `payment.captured`
+- On refund: looks up the original payment's `association_id` (from `payments` or `cash_ledger_payments`), verifies the webhook signature, then calls `record_payment_reversal()`
+- Idempotent: re-processing the same refund event is safe (rows already reversed are skipped)
+
+**Statement page**
+
+- Reversed payments appear with a strikethrough description and a red **Reversed** badge
+- A matching "Payment reversed" debit row is emitted on the reversal date so the running balance correctly reflects the refund
+- Reversal debit rows show with description "X payment reversed" and subtext "Refunded by Razorpay"
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260718000001_payment_reversal.sql` | Adds `status`/`reversed_at` to `payments` + `cash_ledger_payments`; updates trigger; adds `record_payment_reversal()` |
+
+_Last updated: 2026-07-18_
+
+---
+
+## Advance Credit — Retroactive Application & Payment Correctness (2026-07-18)
+
+### Root cause fixed: advances stranded while bills stayed overdue
+
+Advances were only ever applied to a bill **at generation time** (inside `create_bill_with_items`). An advance deposited *after* a bill was generated sat idle as credit while that bill stayed Unpaid/Overdue. Real symptom: a unit holding a ₹10,000 advance was still shown ₹7,000 overdue and prompted to "Pay All", because nothing re-applied the later advance to the already-generated bills.
+
+**What changed:**
+
+- **Retroactive advance application** — new `apply_available_advance()` (guarded, admin/billing-operator only) + internal worker `_apply_advance_internal()` apply a unit's available advance to its outstanding bills of the **same bill-type, oldest-first**, writing the same `advance_applied` ledger debit + bill status update as the generation-time path. Called whenever an advance is deposited (manual **Add Entry** and **CSV import**).
+- **Scoped backfill (verification-first)** — the migration's backfill is deliberately limited to the `sandbox-residency-test` association so it could be verified safely on the shared remote DB before touching real data. Verified on Unit 111: the ₹10,000 Other-Charges advance was applied to bills `OTH/000008` (₹5,000) and `OTH/000009` (₹500) → both **Paid**, ₹4,500 credit remaining; the ₹1,500 Maintenance bill correctly stays due. The full all-association backfill will follow in a separate migration.
+- **Net-first overdue** — because applied advances flow into `bills.advance_applied`, the existing `recompute_overdue_bills()` (which already excludes advance-covered bills) no longer flags a bill as Overdue when advance credit covers it.
+- **"Pay All" double-charge bug fixed** — the payable-bills computation subtracted only `paid_amount`, ignoring `advance_applied`; it now subtracts both, so advance-covered amounts are never re-charged.
+- **Copy fix** — advance-credit hint changed from "Auto-applied to your next bill" to "Automatically applied to your bills of the same type" to reflect the actual (now retroactive, bill-type-scoped) behavior.
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260718050936_apply_advance_to_outstanding_bills.sql` | Adds `_apply_advance_internal()` + guarded `apply_available_advance()`; backfills existing advances against outstanding bills (oldest-first, per bill-type) |
+
+_Last updated: 2026-07-18_
