@@ -1730,5 +1730,23 @@ Advances were only ever applied to a bill **at generation time** (inside `create
 | Migration | Description |
 |---|---|
 | `20260718050936_apply_advance_to_outstanding_bills.sql` | Adds `_apply_advance_internal()` + guarded `apply_available_advance()`; backfills existing advances against outstanding bills (oldest-first, per bill-type) |
+| `20260718052826_backfill_advance_all_associations.sql` | Full all-association advance backfill (idempotent — zero-balance assocs are no-ops) |
+
+---
+
+## Migration Ordering Fix (2026-07-18)
+
+**Problem:** `20260723000000_cash_ledger.sql` has a later timestamp than several migrations that `ALTER` or reference `cash_ledger`/`cash_ledger_payments` (e.g. `20260717100000`, `20260717110000`, `20260718000001`). On a fresh `supabase db reset`, migrations replay in filename order, so those ALTER statements fail because the tables don't exist yet. Remote was unaffected (migrations were applied in historical order, not replayed from scratch).
+
+**Fix:**
+- New bootstrap migration `20260716100000_cash_ledger_bootstrap.sql` creates both tables with `CREATE TABLE IF NOT EXISTS` at a timestamp before all dependent migrations.
+- `20260723000000_cash_ledger.sql` updated to use `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` so it becomes a safe no-op when the bootstrap has already run (fresh reset), while remaining the canonical source of policies and functions.
+- When pushed to remote, only the bootstrap migration runs (as a no-op `IF NOT EXISTS`) — the remote DB and its migration history are not disrupted.
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260716100000_cash_ledger_bootstrap.sql` | Bootstrap: creates `cash_ledger` + `cash_ledger_payments` with `IF NOT EXISTS` to fix `db reset` replay order |
 
 _Last updated: 2026-07-18_

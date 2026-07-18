@@ -7,7 +7,7 @@
 -- =============================================================
 
 -- ── 1. cash_ledger ──────────────────────────────────────────
-create table public.cash_ledger (
+create table if not exists public.cash_ledger (
   id                uuid primary key default gen_random_uuid(),
   association_id    uuid not null references public.associations(id) on delete cascade,
   unit_id           uuid not null references public.units(id) on delete cascade,
@@ -29,8 +29,8 @@ create table public.cash_ledger (
   created_at        timestamptz not null default now()
 );
 
-create index cash_ledger_unit_type on public.cash_ledger (unit_id, bill_type);
-create index cash_ledger_association on public.cash_ledger (association_id);
+create index if not exists cash_ledger_unit_type   on public.cash_ledger (unit_id, bill_type);
+create index if not exists cash_ledger_association  on public.cash_ledger (association_id);
 
 alter table public.cash_ledger enable row level security;
 
@@ -54,7 +54,7 @@ create policy "cash_ledger_delete" on public.cash_ledger
 -- ── 2. cash_ledger_payments ──────────────────────────────────
 -- Records cash/UPI/etc. payments made against a negative ledger
 -- balance (standalone dues). Separate from bill payments.
-create table public.cash_ledger_payments (
+create table if not exists public.cash_ledger_payments (
   id              uuid primary key default gen_random_uuid(),
   association_id  uuid not null references public.associations(id) on delete cascade,
   unit_id         uuid not null references public.units(id) on delete cascade,
@@ -70,8 +70,8 @@ create table public.cash_ledger_payments (
   created_at      timestamptz not null default now()
 );
 
-create index clp_association on public.cash_ledger_payments (association_id);
-create index clp_unit_type   on public.cash_ledger_payments (unit_id, bill_type);
+create index if not exists clp_association on public.cash_ledger_payments (association_id);
+create index if not exists clp_unit_type   on public.cash_ledger_payments (unit_id, bill_type);
 
 alter table public.cash_ledger_payments enable row level security;
 
