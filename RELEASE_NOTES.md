@@ -1739,3 +1739,28 @@ Migrated the ooruda.com landing page from Hostinger Website Builder into the Nex
 _No new migrations in this release._
 
 _Last updated: 2026-07-18_
+
+---
+
+## Landing Page — Visual Parity & Middleware Performance (Jul 19, 2026)
+
+### Fixes & Improvements
+
+- **Missing property photo panel**: "Something Big" section updated to 2-column layout (text left, dark Pexels property photo right) matching ooruda.com. Stacks vertically on mobile.
+- **"Something Big" heading**: Changed from dark to amber (`#FCD469`) to match ooruda.com brand color.
+- **Hero building image**: Moved left (25% from edge, up from 38%) so the building overlaps the headline text, creating the immersive editorial feel from ooruda.com.
+- **Early Access section**: Rebuilt as centered single-column layout matching ooruda.com — amber "EARLY ACCESS" label, large "Secure your spot" heading, description, form, and contact email all centered. Yellow side-card removed.
+- **"Request Early Access" button**: Changed from full-width to compact centered button matching ooruda.com.
+- **Sign in button**: Made more prominent with amber tint border and background (`bg-[#FCD469]/20 border-[#FCD469]`) consistent with the landing page color scheme.
+- **Footer**: Rebuilt as centered layout matching ooruda.com — amber divider line, centered "Ooruda" wordmark and tagline, HOME link, copyright, and "OORUDA PRIVATE BETA" amber label.
+
+### Performance
+
+- **Middleware — `getPatterns()` memoization**: URLPattern instances were recreated on every request (including the urlpattern-polyfill dynamic import). Memoized at module scope so they are built once on cold start.
+- **Middleware — root `/` Supabase call eliminated for unauthenticated visitors**: The root `/` handler previously called `supabase.auth.getClaims()` on every landing page request. Now skips the network call when no Supabase session cookie exists (the common case for unauthenticated visitors), reducing middleware latency significantly.
+
+### Migrations Changelog
+
+_No new migrations in this release._
+
+_Last updated: 2026-07-19_

@@ -113,10 +113,19 @@ async function adminMiddleware(request: NextRequest, response: NextResponse) {
   return response;
 }
 
+// Memoised at module scope — URLPattern instances are created once, not per-request.
+let cachedPatterns: Awaited<ReturnType<typeof buildPatterns>> | null = null;
+
+async function getPatterns() {
+  if (cachedPatterns) return cachedPatterns;
+  cachedPatterns = await buildPatterns();
+  return cachedPatterns;
+}
+
 /**
  * Define URL patterns and their corresponding handlers.
  */
-async function getPatterns() {
+async function buildPatterns() {
   let URLPattern = globalThis.URLPattern;
 
   if (!URLPattern) {
@@ -180,8 +189,16 @@ async function getPatterns() {
     {
       // Root: authenticated users go to /home; unauthenticated users see
       // the landing page (no redirect — let the marketing page render).
+      // Skip the Supabase round-trip when there is no auth session cookie,
+      // which is the common case for unauthenticated landing-page visitors.
       pattern: new URLPattern({ pathname: '/' }),
       handler: async (req: NextRequest, res: NextResponse) => {
+        const hasSessionCookie = req.cookies
+          .getAll()
+          .some((c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'));
+
+        if (!hasSessionCookie) return; // no session — let the landing page render
+
         const { data } = await getUser(req, res);
 
         if (data?.claims) {
@@ -190,7 +207,6 @@ async function getPatterns() {
           );
         }
 
-        // unauthenticated — let the landing page render
         return;
       },
     },

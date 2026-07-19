@@ -30,7 +30,7 @@ export default function LandingPage() {
 
         <Link
           href="/access"
-          className="rounded-lg border border-[#1d1e20]/20 px-4 py-1.5 text-[13px] font-medium text-[#1d1e20] transition-colors hover:bg-black/5"
+          className="rounded-lg border border-[#FCD469] bg-[#FCD469]/30 px-4 py-1.5 text-[13px] font-medium text-[#1d1e20] transition-colors hover:bg-[#FCD469]/50"
         >
           Sign in
         </Link>
@@ -51,8 +51,8 @@ export default function LandingPage() {
           className="pointer-events-none absolute"
           style={{
             top: 0,
-            left: '38%',
-            width: '62%',
+            left: '25%',
+            width: '75%',
             height: '100%',
             objectFit: 'cover',
             objectPosition: 'center top',
@@ -94,88 +94,97 @@ export default function LandingPage() {
             automate your entire property ecosystem.
           </p>
 
-          <Link
-            href="/access"
+          <a
+            href="#waitlist"
             className="mt-10 inline-block rounded-lg px-6 py-3.5 text-[16px] font-medium text-black transition-opacity hover:opacity-90"
             style={{ background: '#FCD469', borderRadius: '8px' }}
           >
             Request Access
-          </Link>
+          </a>
         </div>
       </section>
 
       {/* ── "Something Big" section ── */}
       <section className="border-t border-[#f0f0f0] px-8 py-16 sm:px-14" style={{ backgroundColor: '#ffffff' }}>
-        <h2 className="max-w-2xl text-[32px] font-bold leading-[1.2] text-[#1d1e20]">
-          Something Big is Built for Your Properties.
-        </h2>
-        <p className="mt-5 max-w-xl text-[16px] leading-[1.7] text-[#4a4a4a]">
-          We are launching soon with a hyper-focus on Commercial Property
-          Management, bringing you smarter tools to handle the essentials
-          without the headache. Stay Tuned.
-        </p>
+        <div className="flex flex-col gap-10 lg:flex-row lg:items-center lg:gap-16">
+          {/* Text */}
+          <div className="min-w-0 flex-1">
+            <h2 className="max-w-2xl text-[32px] font-bold leading-[1.2] text-[#FCD469]">
+              Something Big is Built for Your Properties.
+            </h2>
+            <p className="mt-5 max-w-xl text-[16px] leading-[1.7] text-[#4a4a4a]">
+              We are launching soon with a hyper-focus on Commercial Property
+              Management, bringing you smarter tools to handle the essentials
+              without the headache. Stay Tuned.
+            </p>
+          </div>
+
+          {/* Dark property photo */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="https://images.pexels.com/photos/27920274/pexels-photo-27920274.jpeg?auto=compress&cs=tinysrgb&w=800"
+            alt="Property management essentials — house models, key, calculator"
+            className="w-full shrink-0 rounded-2xl object-cover shadow-xl lg:w-[480px]"
+            style={{ aspectRatio: '16/9' }}
+          />
+        </div>
       </section>
 
-      {/* ── Early access form + side panel ── */}
-      <section className="px-8 py-16 sm:px-14" style={{ backgroundColor: '#ffffff' }}>
-        <div className="flex flex-col gap-12 lg:flex-row lg:gap-16">
-          {/* Form */}
-          <div className="min-w-0 flex-1">
-            <EarlyAccessForm />
-          </div>
-
-          {/* Yellow side card */}
-          <div
-            className="flex shrink-0 flex-col justify-center rounded-2xl p-8 lg:w-72"
-            style={{ background: '#FCD469' }}
-          >
-            <span className="text-[11px] font-semibold tracking-[0.15em] text-[#5a4a10] uppercase">
-              Early Access
-            </span>
-            <h3 className="mt-3 text-[22px] font-bold text-[#1d1e20]">
-              Secure your spot
-            </h3>
-            <p className="mt-3 text-[14px] leading-[1.6] text-[#1d1e20]/80">
-              Join our exclusive early-access list to get a first look, beta
-              testing invites, and special founding-member pricing.
-            </p>
-            <p className="mt-6 text-[13px] text-[#1d1e20]/60">
-              OR drop us a line at:{' '}
-              <a
-                href="mailto:hello@ooruda.com"
-                className="font-medium text-[#1d1e20] underline underline-offset-2"
-              >
-                hello@ooruda.com
-              </a>
-            </p>
-          </div>
+      {/* ── Early access form ── */}
+      <section id="waitlist" className="px-8 py-16 sm:px-14" style={{ backgroundColor: '#ffffff' }}>
+        <div className="mx-auto max-w-xl text-center">
+          <span className="text-[13px] font-semibold tracking-[0.15em] text-[#FCD469] uppercase">
+            Early Access
+          </span>
+          <h3 className="mt-3 text-[36px] font-bold leading-[1.2] text-[#1d1e20]">
+            Secure your spot
+          </h3>
+          <p className="mt-4 text-[16px] leading-[1.7] text-[#4a4a4a]">
+            Join our exclusive early-access list to get a first look, beta
+            testing invites, and special founding-member pricing.
+          </p>
+        </div>
+        <div className="mx-auto mt-10 max-w-xl">
+          <EarlyAccessForm />
+          <p className="mt-6 text-center text-[14px] text-[#1d1e20]/60">
+            OR drop us a line at:{' '}
+            <a
+              href="mailto:hello@ooruda.com"
+              className="font-medium text-[#1d1e20] underline underline-offset-2"
+            >
+              hello@ooruda.com
+            </a>
+          </p>
         </div>
       </section>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-[#eee] px-8 py-10 sm:px-14" style={{ backgroundColor: '#ffffff' }}>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <OorudaMark size={20} className="text-[#FCD469]" />
-              <span className="text-[16px] font-bold lowercase text-[#1d1e20]">
-                ooruda
-              </span>
-            </div>
-            <p className="mt-1 text-[13px] text-[#1d1e20]/50">
-              Future of Property Management, Simplified
+      <footer className="border-t border-[#eee] px-8 py-12 sm:px-14" style={{ backgroundColor: '#ffffff' }}>
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="flex flex-col items-center gap-1">
+            <div className="mx-auto mb-1 h-px w-12 bg-[#FCD469]" />
+            <span className="text-[22px] font-bold text-[#1d1e20]">
+              Ooruda
+            </span>
+            <p className="text-[14px] font-medium text-[#1d1e20]">
+              <strong>Future</strong> of Property Management,{' '}
+              <strong>Simplified</strong>
             </p>
           </div>
 
-          <div className="flex items-center gap-6 text-[13px] text-[#1d1e20]/60">
-            <Link href="/" className="hover:text-[#1d1e20]">
-              Home
-            </Link>
-            <span>&copy; {new Date().getFullYear()} Ooruda</span>
-            <span className="rounded bg-[#FCD469]/30 px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase text-[#7a5c10]">
-              Private Beta
-            </span>
-          </div>
+          <Link href="/" className="text-[13px] font-semibold tracking-widest text-[#1d1e20]/60 uppercase hover:text-[#1d1e20]">
+            Home
+          </Link>
+
+          <div className="h-px w-full bg-[#eee]" />
+
+          <span className="text-[13px] text-[#1d1e20]/50">
+            &copy; {new Date().getFullYear()} Ooruda
+          </span>
+
+          <span className="text-[11px] font-semibold tracking-[0.2em] text-[#FCD469] uppercase">
+            Ooruda Private Beta
+          </span>
         </div>
       </footer>
     </div>
@@ -233,7 +242,7 @@ function EarlyAccessForm() {
 
       <button
         type="submit"
-        className="mt-1 w-full rounded-lg py-3.5 text-center text-[15px] font-medium text-black transition-opacity hover:opacity-90"
+        className="mt-1 block rounded-lg px-10 py-3.5 text-center text-[15px] font-medium text-black transition-opacity hover:opacity-90 mx-auto"
         style={{ background: '#FCD469' }}
       >
         Request Early Access
