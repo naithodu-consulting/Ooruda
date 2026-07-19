@@ -200,7 +200,7 @@ export function CashLedgerSection({
             value={selectedUnitId}
             onValueChange={(v) => setSelectedUnitId(v ?? 'all')}
           >
-            <SelectTrigger className="h-9 w-36 text-sm">
+            <SelectTrigger className="h-9 w-full text-sm sm:w-36">
               <span className="truncate">
                 {isAllUnits
                   ? 'All Units'
@@ -225,7 +225,7 @@ export function CashLedgerSection({
             value={selectedBillType}
             onValueChange={(v) => setSelectedBillType(v ?? 'all')}
           >
-            <SelectTrigger className="h-9 w-40 text-sm">
+            <SelectTrigger className="h-9 w-full text-sm sm:w-40">
               <span className="truncate">
                 {BILL_TYPE_OPTIONS.find((o) => o.value === selectedBillType)
                   ?.label ?? 'All Types'}
@@ -241,8 +241,8 @@ export function CashLedgerSection({
           </Select>
         </FilterField>
 
-        {/* Date range */}
-        <div className="flex items-end gap-2">
+        {/* Date range — wraps on narrow screens */}
+        <div className="flex flex-wrap items-end gap-2">
           <FilterField label="From">
             <Input
               type="date"
@@ -263,7 +263,7 @@ export function CashLedgerSection({
             <Button
               variant="ghost"
               size="sm"
-              className="h-9 px-2 text-xs"
+              className="h-9 self-end px-2 text-xs"
               onClick={() => {
                 setDateFrom('');
                 setDateTo('');
@@ -274,19 +274,23 @@ export function CashLedgerSection({
           )}
         </div>
 
-        {/* Actions pushed to the right */}
+        {/* Actions — full-width row on mobile */}
         {canManage && (
-          <div className="ml-auto flex shrink-0 gap-2">
+          <div className="flex w-full shrink-0 gap-2 sm:ml-auto sm:w-auto">
             <Button
               variant="outline"
               size="sm"
-              className="h-9"
+              className="h-9 flex-1 sm:flex-none"
               onClick={() => setImportOpen(true)}
             >
               <Upload className="mr-1.5 h-3.5 w-3.5" />
               Import CSV
             </Button>
-            <Button size="sm" className="h-9" onClick={() => setAddOpen(true)}>
+            <Button
+              size="sm"
+              className="h-9 flex-1 sm:flex-none"
+              onClick={() => setAddOpen(true)}
+            >
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               Add Entry
             </Button>
@@ -322,7 +326,7 @@ export function CashLedgerSection({
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="min-w-max">
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/30">
                   {isAllUnits && (

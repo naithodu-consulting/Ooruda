@@ -72,9 +72,9 @@ export function TeamAccountTopbar(props: {
     <div className="bg-background sticky top-0 z-40 flex h-14 flex-shrink-0 items-center justify-between border-b px-4">
       <div className="flex min-w-0 items-center gap-4">
         <Button
-          variant="ghost"
+          variant="outline"
           size="icon-sm"
-          className="shrink-0 lg:hidden"
+          className="shrink-0 border-border bg-background lg:hidden"
           onClick={toggleSidebar}
         >
           <Menu className="h-5 w-5" />

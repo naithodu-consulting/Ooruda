@@ -1771,3 +1771,20 @@ Advances were only ever applied to a bill **at generation time** (inside `create
 - Advance Credit and Pending Dues cards now always show the per-type breakdown, even when there is only a single bill type. Previously, a single-type advance (e.g. ₹3,000 for "Other Charges") showed no type label — owners had no context for what the credit applied to.
 
 _Last updated: 2026-07-18_
+
+---
+
+## Mobile Responsiveness — Cash Ledger & Navigation (2026-07-19)
+
+### Sidebar — Hamburger Now Visible on Mobile
+- Changed the mobile sidebar toggle from `variant="ghost"` (invisible at rest on white/cream topbar) to `variant="outline"` with an explicit border, making it clearly identifiable as a tappable button.
+
+### Cash Ledger — Filter Bar Mobile Layout
+- Unit and Bill Type selects now use `w-full` on mobile, snapping to fixed widths on `sm+`.
+- Date range wrapper changed to `flex-wrap` so FROM / TO inputs break to a new line on narrow screens instead of pushing the Clear button off-screen.
+- Import CSV and Add Entry buttons now stretch to fill the full row width on mobile (`flex-1`) and revert to auto-width on larger screens.
+
+### Cash Ledger — Table Horizontal Scroll on Mobile
+- Added `min-w-max` to the ledger table so it expands to its natural content width. Previously `w-full` constrained the table to the container and the `overflow-x-auto` wrapper had nothing to scroll, causing columns to be cut off.
+
+_Last updated: 2026-07-19_
