@@ -290,8 +290,8 @@ test.describe('Team Account Management', () => {
     }).toPass();
   });
 
-  test('delete team account flow', async ({ page }) => {
-    await expect(page.getByText('Team Account')).toBeVisible();
+  test('delete association flow', async ({ page }) => {
+    await expect(page.getByText('Association')).toBeVisible();
 
     await page.getByTestId('admin-delete-account-button').click();
 

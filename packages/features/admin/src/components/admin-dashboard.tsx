@@ -36,10 +36,10 @@ export async function AdminDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Team Accounts</CardTitle>
+          <CardTitle>Associations</CardTitle>
 
           <CardDescription>
-            The number of team accounts that have been created.
+            The number of associations that have been created.
           </CardDescription>
         </CardHeader>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -109,7 +109,7 @@ function AccountsTableFilters(props: {
   const form = useForm({
     resolver: zodResolver(FiltersSchema),
     defaultValues: {
-      type: props.filters?.type ?? 'all',
+      type: props.filters?.type ?? 'team',
       kind: props.filters?.kind ?? 'all',
       query: props.filters?.query ?? '',
     },
@@ -119,6 +119,19 @@ function AccountsTableFilters(props: {
 
   const router = useRouter();
   const pathName = usePathname();
+  const [isPending, startNavTransition] = useTransition();
+
+  // Prefetch all tab combinations on mount so switching feels instant.
+  // router is intentionally omitted from deps — its identity is stable but
+  // changes each render in strict mode, which would cause an infinite loop.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    for (const type of ['team', 'personal', 'all'] as const) {
+      router.prefetch(
+        `${pathName}?${new URLSearchParams({ account_type: type, kind: props.filters.kind ?? 'all', query: props.filters.query ?? '' }).toString()}`,
+      );
+    }
+  }, [pathName, props.filters.kind, props.filters.query]);
 
   const navigate = (overrides: Partial<z.output<typeof FiltersSchema>>) => {
     const values = form.getValues() as z.output<typeof FiltersSchema>;
@@ -128,7 +141,9 @@ function AccountsTableFilters(props: {
       kind: merged.kind ?? 'all',
       query: merged.query ?? '',
     });
-    router.push(`${pathName}?${params.toString()}`);
+    startNavTransition(() => {
+      router.push(`${pathName}?${params.toString()}`);
+    });
   };
 
   const type = useWatch({ control: form.control, name: 'type' });
@@ -145,9 +160,9 @@ function AccountsTableFilters(props: {
             }}
           >
             <TabsList>
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="team">Associations</TabsTrigger>
-              <TabsTrigger value="personal">Users</TabsTrigger>
+              <TabsTrigger value="all" disabled={isPending && type !== 'all'}>All</TabsTrigger>
+              <TabsTrigger value="team" disabled={isPending && type !== 'team'}>Associations</TabsTrigger>
+              <TabsTrigger value="personal" disabled={isPending && type !== 'personal'}>Users</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -171,6 +186,12 @@ function AccountsTableFilters(props: {
             <button type="submit" hidden />
           </div>
         </div>
+
+        {isPending && (
+          <div className={'mt-2 h-0.5 w-full overflow-hidden rounded-full bg-muted'}>
+            <div className={'animate-progress-bar h-full bg-primary'} />
+          </div>
+        )}
       </form>
     </Form>
   );
@@ -384,7 +405,7 @@ function ActionsCell({
                 variant="destructive"
                 onClick={() => setActiveDialog('delete-account')}
               >
-                Delete Team Account
+                Delete Association
               </DropdownMenuItem>
             )}
           </DropdownMenuGroup>
