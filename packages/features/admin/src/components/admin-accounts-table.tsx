@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -121,17 +121,18 @@ function AccountsTableFilters(props: {
   const pathName = usePathname();
   const [isPending, startNavTransition] = useTransition();
 
-  // Prefetch all tab combinations on mount so switching feels instant.
-  // router is intentionally omitted from deps — its identity is stable but
-  // changes each render in strict mode, which would cause an infinite loop.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
+  const prefetchTabs = useCallback(() => {
     for (const type of ['team', 'personal', 'all'] as const) {
       router.prefetch(
         `${pathName}?${new URLSearchParams({ account_type: type, kind: props.filters.kind ?? 'all', query: props.filters.query ?? '' }).toString()}`,
       );
     }
-  }, [pathName, props.filters.kind, props.filters.query]);
+  }, [router, pathName, props.filters.kind, props.filters.query]);
+
+  // Prefetch all tab combinations whenever filters change so switching feels instant.
+  useEffect(() => {
+    prefetchTabs();
+  }, [prefetchTabs]);
 
   const navigate = (overrides: Partial<z.output<typeof FiltersSchema>>) => {
     const values = form.getValues() as z.output<typeof FiltersSchema>;

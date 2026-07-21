@@ -1844,5 +1844,123 @@ A new `sinking_fund` bill type (`SNK/` prefix) has been introduced. It behaves l
 |---|---|
 | `20260721000001_sinking_fund.sql` | Adds `sinking_fund` charge type to `seed_builtin_charge_types()`, backfills all existing associations, creates `pending_sinking_fund_charges` table with full RLS |
 | `20260721000002_fix_sinking_fund_rls.sql` | Replaces incorrect RLS policies (wrong UUID comparison) with correct `association_role()` pattern — matches `pending_other_charges` policies |
+| `20260721000003_reports_collection_summary.sql` | Adds `get_collection_summary(association_id, from_period, to_period)` DB function for efficient aggregated reporting without full table scans |
+| `20260721000004_fix_collection_summary_types.sql` | Recreates `get_collection_summary` with explicit `::text` casts on `bills.period` (varchar(7)) and `bills.bill_type` (varchar(20)) to fix "structure of query does not match function result type" error caused by plan-cache staleness after subsequent migrations altered the bills table |
+
+### Sinking Fund — Critical Bug Fixes
+
+- **Separate `sinkingCreated` counter** — previously the mark-as-billed guard used the same `created` counter as maintenance bills; if any maintenance bills were generated (setting `created > 0`) but no SNK bills were generated (e.g. `hasSinking` caused a skip), staged sinking fund charges would be incorrectly marked as billed with no corresponding bill. Fixed by introducing a separate `sinkingCreated` counter.
+- **Period format validation** — `addSinkingFundChargeToUnitAction` and `bulkAddSinkingFundChargeAction` now validate that the `period` field matches `YYYY-MM` format before processing.
+
+---
+
+## Reports Screen — Polish & Bug Fixes (2026-07-21)
+
+### Performance — Zero Server Round-Trips on Filter/Tab Change
+
+- **Root cause of filter lag identified**: `router.push()` for filter changes triggered a full Next.js RSC re-render — `page.tsx` re-executed on the server (`requireRole` + association lookup = 2 remote DB calls) before the client could begin fetching data.
+- **Fix: `window.history.replaceState` + React state**: All filter state (`preset`, `from`, `to`, `activeTab`) now lives in `useState` inside `ReportsClientPage`. Filter and tab changes call `setState` + `window.history.replaceState()` — URL stays in sync for bookmarking/refresh without triggering any Next.js navigation. Zero server round-trips.
+- **Tab changes also fixed**: `ReportsTabs` now receives `activeTab` + `onTabChange` as props. No `router.push` for tab switching.
+- **Abort-controller pattern**: Stale in-flight requests are cancelled when a new filter is applied, preventing race conditions.
+- **Loading skeleton**: Pulsing KPI + chart skeleton shown during data fetch.
+- **Pre-existing lint fixes**: Removed unused `FormDescription` import in `phone-otp-sign-in-container.tsx`; refactored `admin-accounts-table.tsx` prefetch effect to use `useCallback` with correct deps.
+
+### Collection Tab — Data Model Fix
+
+- **Root cause fixed**: The Collection tab previously queried `bills.period` for the date range — so "This FY" (Apr 2026–Mar 2027) returned empty if no bills were raised in that period, even though payments had been received against old bills.
+- **Now payment-date-based by default**: Collection tab defaults to "Payments Received" view — data grouped by `paid_at` month (actual cash received in the selected period), matching what the dashboard shows.
+- **"Bills Raised" toggle**: Secondary toggle still lets admins see bills issued in the period and their collection rate.
+- **Empty state** correctly distinguishes "no payments in period" from "no bills raised in period".
+
+### Export UI Redesign
+
+- Replaced the broken wrapping menu with a clean icon + two-line layout per option.
+- Green `FileSpreadsheet` icon for CSV, blue `FileText` icon for PDF.
+- Section label ("Download report") and separator added for clarity.
+- `min-w-[220px]` on dropdown ensures it never collapses.
+- Export button shows abbreviated label on mobile (`sm:hidden`/`sm:inline`).
+
+### Custom Date Range — Full Day Precision
+
+- Replaced `<input type="month">` (month/year only) with `<input type="date">` — admins can now pick exact dates like "10 May 2026 – 20 Jun 2026".
+- `from`/`to` are now full `YYYY-MM-DD` dates throughout the system (previously `YYYY-MM`).
+- DB queries adapt automatically: period-based tables (`bills.period`, `mescom_bills.period`) receive `YYYY-MM` via `date.slice(0,7)`; payments receive exact dates for full precision.
+- `<input max>` / `<input min>` constraints prevent selecting an invalid range in the picker itself.
+- Live preview below each input shows formatted date ("10 May 2026") for confirmation.
+- "Range: X – Y" summary shown before applying so admins can confirm the selection.
+- Custom button label after applying shows the exact human-readable range (e.g., "10 May – 20 Jun 2026").
+- Popover re-syncs to current range whenever reopened.
+- `resolvePreset()` now returns `YYYY-MM-DD` dates (e.g., `last_fy` → `2025-04-01` to `2026-03-31`).
+
+### Responsiveness
+
+- Tab bar (`Collection | Outstanding | Payments | Electricity`) is now `overflow-x-auto` + `w-max` on mobile — all 4 tabs are horizontally scrollable without wrapping.
+- Tab row and Export button stack vertically on mobile (`flex-col sm:flex-row`).
+- Default preset changed to "Last 6 months" (was "This FY") so the screen almost always shows data on first load.
+
+### All Time Filter
+
+- Added **All Time** as a new preset (appears first in the pill row) — queries return every record with no date bounds.
+- **All Time is now the default** when the Reports screen is opened fresh (no URL params).
+- When All Time is active, period/date filters are omitted from all four DB queries (bills, payments, mescom_bills, `get_collection_summary`) so no records are excluded.
+- URL is kept clean: `from`/`to` params are removed when switching to All Time; only `preset=all_time` is stored.
+- Opening the Custom Range popover while on All Time pre-fills dates to last 6 months as a sensible starting point.
+- Hydration-safe: `from`/`to` URL params are optional — absence is handled gracefully on SSR.
+
+---
+
+## Reports Screen Redesign (2026-07-21)
+
+Complete overhaul of the Reports screen for admins — replaced the old table-heavy layout with a chart-first, visually rich analytics dashboard.
+
+### Overview
+
+- **4 tabbed views**: Collection Overview · Outstanding Dues · Payments · Electricity
+- **Date range picker**: Preset buttons (This FY, Last FY, 6m, 3m) + custom month/year range popover; state driven by URL `searchParams` so tab switches preserve the selected range
+- **Dual export**: "Export" dropdown → Download CSV (current tab) or Download PDF (full report)
+- **Property owner view** unchanged — still shows personal dues only
+
+### Collection Overview Tab
+
+- 4 KPI tiles: Total Billed, Total Collected, Outstanding, Collection Rate %
+- Grouped bar chart: Billed vs Collected per month, colour-coded by bill type
+- Donut pie: Bill-type breakdown, clickable to filter the bar chart
+- Line chart: Collection rate % trend with 100% reference dashed line
+
+### Outstanding Dues Tab
+
+- 3 KPI tiles: Total Outstanding, Overdue Bills count, Oldest Unpaid date
+- Horizontal bar chart: Ageing buckets (Current / 1–7d / 8–30d / 30d+)
+- Horizontal bar chart: Top-10 defaulters by unit (highest outstanding)
+- Expandable table: All outstanding bills with unit/bill-number search, paginated 25/page
+
+### Payments Tab
+
+- 4 KPI tiles: Total Collected, Transaction count, Avg Payment, Top Mode
+- Area chart: Payment timeline with gradient fill (weekly if range > 60 days, else daily)
+- Donut pie: Payment mode mix (UPI / Cash / NEFT / etc.)
+- Stacked bar chart: Payments by bill type per month (only shown if 2+ bill types present)
+- Paginated payment log table
+
+### Electricity Tab
+
+- 3 KPI tiles: Total Cost, Total Block Units, Avg Rate / kWh
+- Composed chart: Bar for invoice amount + Line for block units on dual Y-axes
+- Period selector dropdown for per-unit consumption view
+- Detail table: MESCOM bill data per period
+
+### PDF Report Export
+
+Full management-level PDF via `@react-pdf/renderer`:
+- Association header (logo, name, address, GSTIN)
+- 4 sections: Collection Summary table, Outstanding Dues table, Payments Received table, Electricity Summary table
+- KPI boxes per section, alternating-row tables
+- Fixed footer: "Generated on [date] by [user]" + "Page X of Y"
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260721000003_reports_collection_summary.sql` | `get_collection_summary()` function for aggregated collection data |
 
 _Last updated: 2026-07-21_

@@ -17,7 +17,6 @@ import { Button } from '@kit/ui/button';
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -273,7 +272,7 @@ export function PhoneOtpSignInContainer() {
 
           <Button
             type="submit"
-            className="w-full border border-[#FCD469] !bg-[#FCD469] !text-[#1a1a1a] font-semibold shadow-none hover:!bg-[#f0c740]"
+            className="w-full border border-[#FCD469] !bg-[#FCD469] font-semibold !text-[#1a1a1a] shadow-none hover:!bg-[#f0c740]"
             disabled={signInMutation.isPending}
             data-test="phone-send-otp-button"
           >
@@ -347,7 +346,7 @@ export function PhoneOtpSignInContainer() {
 
           <Button
             type="submit"
-            className="w-full border border-[#FCD469] !bg-[#FCD469] !text-[#1a1a1a] font-semibold shadow-none hover:!bg-[#f0c740]"
+            className="w-full border border-[#FCD469] !bg-[#FCD469] font-semibold !text-[#1a1a1a] shadow-none hover:!bg-[#f0c740]"
             disabled={signInMutation.isPending}
             data-test="email-send-otp-button"
           >
@@ -460,7 +459,7 @@ export function PhoneOtpSignInContainer() {
                     </InputOTPGroup>
                   </InputOTP>
                 </FormControl>
-<FormMessage />
+                <FormMessage />
               </FormItem>
             )}
           />

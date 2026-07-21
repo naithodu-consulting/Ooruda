@@ -19,8 +19,7 @@ export function CtaButton(
         fontWeight: '700',
         color: '#1d1e20',
         textDecoration: 'none',
-        fontFamily:
-          "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       }}
     >
       {props.children}

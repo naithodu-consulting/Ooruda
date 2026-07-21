@@ -11,7 +11,9 @@ export default function SignInPage() {
   return (
     <div className="flex flex-col gap-y-6">
       <div className="flex flex-col gap-y-1">
-        <h2 className="text-[20px] font-black tracking-tight text-[#1a1a1a]">Sign in</h2>
+        <h2 className="text-[20px] font-black tracking-tight text-[#1a1a1a]">
+          Sign in
+        </h2>
       </div>
 
       <PhoneOtpSignInContainer />

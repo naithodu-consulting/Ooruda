@@ -31,11 +31,18 @@ function AuthLayout({ children }: React.PropsWithChildren) {
           style={{
             background: '#ffffff',
             border: '1.5px solid #C8A820',
-            boxShadow: '0 8px 32px rgba(180,130,0,0.18), 0 2px 8px rgba(0,0,0,0.08)',
+            boxShadow:
+              '0 8px 32px rgba(180,130,0,0.18), 0 2px 8px rgba(0,0,0,0.08)',
           }}
         >
           {/* Amber accent strip */}
-          <div className="h-[5px] w-full" style={{ background: 'linear-gradient(90deg, #E8A800 0%, #FCD469 60%, #E8A800 100%)' }} />
+          <div
+            className="h-[5px] w-full"
+            style={{
+              background:
+                'linear-gradient(90deg, #E8A800 0%, #FCD469 60%, #E8A800 100%)',
+            }}
+          />
 
           <div className="px-6 py-7 sm:px-8">{children}</div>
         </div>

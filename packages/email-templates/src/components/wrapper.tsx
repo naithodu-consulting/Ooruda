@@ -10,8 +10,7 @@ export function EmailWrapper(
       style={{
         backgroundColor: '#f5f5f0',
         margin: 'auto',
-        fontFamily:
-          "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         color: '#1d1e20',
         width: '100%',
       }}

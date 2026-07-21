@@ -12,6 +12,10 @@ import {
   ReceiptDocument,
   type ReceiptPdfData,
 } from './documents/receipt-document';
+import {
+  ReportDocument,
+  type ReportPdfData,
+} from './documents/report-document';
 
 export type {
   BillPdfData,
@@ -24,6 +28,12 @@ export type {
 } from './documents/electricity-bill-document';
 export type { ReceiptPdfData } from './documents/receipt-document';
 export type { AssociationBranding } from './components/document-header';
+export type { ReportPdfData } from './documents/report-document';
+
+export async function renderReportPdf(data: ReportPdfData): Promise<Buffer> {
+  registerPdfFonts();
+  return renderToBuffer(<ReportDocument data={data} />);
+}
 
 export async function renderBillPdf(data: BillPdfData): Promise<Buffer> {
   registerPdfFonts();
