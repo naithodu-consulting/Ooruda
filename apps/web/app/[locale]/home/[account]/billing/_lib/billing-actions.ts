@@ -280,7 +280,20 @@ export async function generateBillsAction(
   const shouldGenOther = billType === 'All' || billType === 'Other Charges';
   const shouldGenSinking = billType === 'All' || billType === 'Sinking Fund';
 
-  for (const unit of unitRows) {
+  // Process units in concurrent batches so bill-type RPCs (allocate_bill_no,
+  // create_bill_with_items) run in parallel across units rather than serially.
+  // Each bill type hits a separate sequence counter so there is no DB-level
+  // contention between types; different units with the same type do serialize
+  // on that counter, but the I/O overlap from batching still cuts wall-clock
+  // time substantially (e.g. 100 units × 3 types: ~13 batches vs 300 serial).
+  const UNIT_BATCH_SIZE = 8;
+  let firstBatchError: string | null = null;
+
+  for (let batchStart = 0; batchStart < unitRows.length; batchStart += UNIT_BATCH_SIZE) {
+    if (firstBatchError) break;
+    const batch = unitRows.slice(batchStart, batchStart + UNIT_BATCH_SIZE);
+
+    const batchErrors = await Promise.all(batch.map(async (unit) => {
     const existing = existingByUnit.get(unit.id) || [];
     const hasElec = existing.some(
       (b: string) => b.includes('-ELEC-') || b.includes('/ELT/'),
@@ -308,7 +321,7 @@ export async function generateBillsAction(
     if (unit.type === 'Common Area') {
       if (hasElec) {
         skipped++;
-        continue;
+        return null; // already billed, skip this unit
       }
     } else {
       if (
@@ -320,7 +333,7 @@ export async function generateBillsAction(
         !hasPendingSinkingForUnit
       ) {
         skipped++;
-        continue;
+        return null; // already fully billed, skip this unit
       }
     }
 
@@ -677,22 +690,27 @@ export async function generateBillsAction(
       }
     }
 
-    const results = await Promise.all(billsToGenerate.map((b) => b.promise));
-    const failedTypes = billsToGenerate
-      .filter((_, i) => !results[i])
-      .map((b) => b.type);
-    if (failedTypes.length > 0) {
-      return {
-        success: false,
-        error: `Failed to generate ${failedTypes.join(', ')} bill${failedTypes.length > 1 ? 's' : ''}`,
-      };
-    }
+      const results = await Promise.all(billsToGenerate.map((b) => b.promise));
+      const failedTypes = billsToGenerate
+        .filter((_, i) => !results[i])
+        .map((b) => b.type);
+      if (failedTypes.length > 0) {
+        return `Failed to generate ${failedTypes.join(', ')} bill${failedTypes.length > 1 ? 's' : ''}`;
+      }
 
-    // Track how many SNK bills were generated in this run (separate from `created`
-    // which spans all types — needed to gate the mark-billed step accurately).
-    if (billsToGenerate.some((b) => b.type === 'sinking fund')) {
-      sinkingCreated += 1;
-    }
+      // Track how many SNK bills were generated in this run (separate from `created`
+      // which spans all types — needed to gate the mark-billed step accurately).
+      if (billsToGenerate.some((b) => b.type === 'sinking fund')) {
+        sinkingCreated += 1;
+      }
+      return null; // success for this unit
+    })); // end batch.map
+
+    firstBatchError = batchErrors.find((e) => e !== null) ?? null;
+  } // end batch loop
+
+  if (firstBatchError) {
+    return { success: false, error: firstBatchError };
   }
 
   // Mark unbilled pending charges as billed now that bills are generated.

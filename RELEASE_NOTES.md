@@ -1909,6 +1909,28 @@ A new `sinking_fund` bill type (`SNK/` prefix) has been introduced. It behaves l
 
 ---
 
+## Performance — Bill Generation, PDF Downloads & CSV Imports (2026-07-21)
+
+### Bill Generation
+- **Unit loop parallelised**: The `generateBills` action now processes units in concurrent batches of 8 instead of serially. For a 100-unit association, this reduces bill-generation wall-clock time by ~60–70% (e.g. 3 bill types × 100 units went from 300 sequential RPCs to ~13 batches of parallel calls). Bill-type RPCs within each unit were already parallel; units are now parallel too.
+
+### PDF Downloads (Bills & Receipts — all types)
+- **Background storage write**: After rendering, the storage upload + DB update + audit log are now fired in the background (`void` async IIFE). The rendered bytes are returned to the browser immediately, saving 300–400ms on every first-render (cache miss). Cache hits (signed URL redirect) are unaffected.
+- **Storage + audit parallelised**: The `bills.update` and `logAuditEvent` writes after upload now run concurrently instead of sequentially.
+- **Electricity bill DB parallelised**: The three sequential DB calls (mescom bill → sub-meters → billing entity) are now issued in a single `Promise.all`. Only the meter-readings fetch (which needs the mescom bill ID) remains sequential. Saves 2 round-trips per electricity PDF.
+- **Non-electricity bills**: `resolveBillingEntity` now resolves in the else branch only (not wasted on electricity bills). Same for receipts.
+- Font registration was already guarded with a `registered` flag; no redundant work.
+
+### CSV/XLSX Imports
+- **Units import**: Replaced the O(n) row-by-row fallback on unique-key conflict with a single pre-flight query that identifies existing unit numbers. Only truly new units are bulk-inserted; conflicts are reported directly without serial DB calls.
+- **Meter readings import**: Three independent pre-flight queries (units, mescom bills, generated-bill count) are now fetched in a single `Promise.all`. Sub-meters and last-readings fetches follow sequentially (they depend on the units result), cutting total round-trips from 5 sequential to 3 sequential steps.
+- **Cash ledger import**: The `apply_available_advance` RPC calls (one per unique unit + bill-type bucket) now run concurrently via `Promise.all` instead of serially. An import touching 10 unit/bill-type combos previously made 10 sequential RPCs; now they fire in one parallel wave.
+- **Bulk invite members (Units → Invite Members)**: Rewrote `bulkInviteMembersAction` from a fully serial loop to a three-phase parallel pipeline. Previously: 100 rows × ~800ms per `createUser` Auth call = **~80 seconds**. Now:
+  - **Phase 1** — Synchronous validation (phone normalisation, association lookup, role check) with no DB calls. Invalid rows are collected instantly.
+  - **Phase 2** — Unique new-user creation in **parallel batches of 8**. Phones are deduplicated so two rows sharing a phone (e.g. RENTED unit owner + tenant) only fire one `createUser` call. 100 new users now takes ~13 batches × ~800ms = **~10 seconds** (8× faster).
+  - **Phase 3** — All `accounts_memberships` inserts fire concurrently in a single `Promise.all` wave.
+  - Unit-level updates (status, owner, tenancy) and audit logs were already parallelised; unchanged.
+
 ## Reports Screen Redesign (2026-07-21)
 
 Complete overhaul of the Reports screen for admins — replaced the old table-heavy layout with a chart-first, visually rich analytics dashboard.

@@ -298,11 +298,35 @@ export async function bulkImportMeterReadingsAction(
 
   const client = getSupabaseServerClient();
 
-  // Fetch all units for this association
-  const { data: units } = await client
-    .from('units')
-    .select('id')
-    .eq('association_id', associationId);
+  // Fetch units, mescom bills, and generated-bill count in parallel — none
+  // of these depend on each other.
+  const [{ data: units }, { data: bills }, { count: generatedBillCount }] =
+    await Promise.all([
+      client.from('units').select('id').eq('association_id', associationId),
+      client
+        .from('mescom_bills')
+        .select('id, period')
+        .eq('association_id', associationId),
+      client
+        .from('bills')
+        .select('id', { count: 'exact', head: true })
+        .eq('association_id', associationId)
+        .eq('period', firstPeriod)
+        .eq('bill_type', 'electricity'),
+    ]);
+
+  if ((generatedBillCount ?? 0) > 0) {
+    return {
+      success: false,
+      imported: 0,
+      skipped: [],
+      error: `Electricity bills have already been generated for ${firstPeriod}. Readings cannot be changed after billing.`,
+    };
+  }
+
+  const billByPeriod = new Map<string, string>(
+    (bills ?? []).map((b) => [b.period, b.id]),
+  );
 
   const unitIds = (units ?? []).map((u) => u.id);
 
@@ -329,16 +353,6 @@ export async function bulkImportMeterReadingsAction(
       smByLabel.set(key, sm);
     }
   }
-
-  // Fetch all bills for this association (period → bill lookup)
-  const { data: bills } = await client
-    .from('mescom_bills')
-    .select('id, period')
-    .eq('association_id', associationId);
-
-  const billByPeriod = new Map<string, string>(
-    (bills ?? []).map((b) => [b.period, b.id]),
-  );
 
   // Fetch last known reading per sub_meter (to carry forward previous_reading,
   // minimum_charge, and load_kva when the CSV leaves those fields blank).
@@ -374,25 +388,6 @@ export async function bulkImportMeterReadingsAction(
       minimum_charge: r.minimum_charge,
       load_kva: r.load_kva,
     });
-  }
-
-  // Block import if unit bills have already been generated for this period —
-  // overwriting readings after billing would silently alter historical unit rates.
-  // Check unconditionally: unit bills can exist even if the MESCOM bill was later deleted.
-  const { count: generatedBillCount } = await client
-    .from('bills')
-    .select('id', { count: 'exact', head: true })
-    .eq('association_id', associationId)
-    .eq('period', firstPeriod)
-    .eq('bill_type', 'electricity');
-
-  if ((generatedBillCount ?? 0) > 0) {
-    return {
-      success: false,
-      imported: 0,
-      skipped: [],
-      error: `Electricity bills have already been generated for ${firstPeriod}. Readings cannot be changed after billing.`,
-    };
   }
 
   const targetBillId = billByPeriod.get(firstPeriod);

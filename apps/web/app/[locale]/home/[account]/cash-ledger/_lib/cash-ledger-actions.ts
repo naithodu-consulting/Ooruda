@@ -243,12 +243,19 @@ export async function bulkImportCashLedgerAction(
         });
       }
     }
-    for (const { unitId, billType } of advanceBuckets.values()) {
-      await uc(client).rpc('apply_available_advance', {
-        p_association_id: associationId,
-        p_unit_id: unitId,
-        p_bill_type: billType,
-      });
+    const advanceItems = Array.from(advanceBuckets.values());
+    const ADVANCE_BATCH_SIZE = 12;
+    for (let i = 0; i < advanceItems.length; i += ADVANCE_BATCH_SIZE) {
+      const batch = advanceItems.slice(i, i + ADVANCE_BATCH_SIZE);
+      await Promise.all(
+        batch.map(({ unitId, billType }) =>
+          uc(client).rpc('apply_available_advance', {
+            p_association_id: associationId,
+            p_unit_id: unitId,
+            p_bill_type: billType,
+          }),
+        ),
+      );
     }
   }
 

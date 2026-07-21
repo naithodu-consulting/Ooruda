@@ -520,55 +520,41 @@ export async function bulkImportUnitsAction(
     return { success: true, imported: 0, skipped };
   }
 
+  // Pre-check for existing unit_nos in a single query instead of falling back
+  // to serial row-by-row inserts on conflict (which is O(n) round-trips).
+  const { data: existing } = await client
+    .from('units')
+    .select('unit_no')
+    .eq('association_id', associationId)
+    .in(
+      'unit_no',
+      toInsert.map((r) => r.unit_no),
+    );
+
+  const existingNos = new Set((existing ?? []).map((u) => u.unit_no));
+  const actualInserts = toInsert.filter((r) => !existingNos.has(r.unit_no));
+
+  for (const r of toInsert) {
+    if (existingNos.has(r.unit_no)) {
+      const originalIdx = rows.findIndex((orig) => orig.unit_no === r.unit_no);
+      skipped.push({
+        row: originalIdx + 1,
+        unit_no: r.unit_no,
+        reason: `Unit "${r.unit_no}" already exists`,
+      });
+    }
+  }
+
+  if (actualInserts.length === 0) {
+    return { success: true, imported: 0, skipped };
+  }
+
   const { data: inserted, error } = await client
     .from('units')
-    .insert(toInsert)
+    .insert(actualInserts)
     .select('id, unit_no');
 
   if (error) {
-    // Unique (association_id, unit_no) conflict — fall back to row-by-row to
-    // surface which unit_no duplicates so skipped list is accurate.
-    if (error.code === '23505') {
-      const rowByRow: typeof toInsert = [];
-      const rowByRowSkipped: BulkImportSkipped[] = [...skipped];
-
-      for (let i = 0; i < toInsert.length; i++) {
-        const r = toInsert[i]!;
-        const { error: rowErr } = await client.from('units').insert(r);
-
-        if (rowErr) {
-          const originalIdx = rows.findIndex(
-            (orig) => orig.unit_no === r.unit_no,
-          );
-          rowByRowSkipped.push({
-            row: originalIdx + 1,
-            unit_no: r.unit_no,
-            reason:
-              rowErr.code === '23505'
-                ? `Unit "${r.unit_no}" already exists`
-                : rowErr.message,
-          });
-        } else {
-          rowByRow.push(r);
-        }
-      }
-
-      const imported = rowByRow.length;
-
-      if (imported > 0) {
-        await logAuditEvent({
-          associationId,
-          action: 'unit.bulk_imported',
-          entityType: 'unit',
-          entityId: associationId,
-          summary: `Bulk imported ${imported} unit(s) via CSV`,
-        });
-        revalidatePath(UNITS_PATH, 'page');
-      }
-
-      return { success: true, imported, skipped: rowByRowSkipped };
-    }
-
     return { success: false, imported: 0, skipped, error: error.message };
   }
 

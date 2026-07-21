@@ -283,18 +283,6 @@ export async function getOrGenerateBillPdf(
     };
     const unitData = bill.units as unknown as ExtendedUnit;
 
-    const billTo = await resolveBillingEntity(
-      {
-        bill_to: unitData.bill_to ?? 'auto',
-        owner_id: unitData.owner_id,
-        owner_is_company: unitData.owner_is_company ?? false,
-        owner_company_name: unitData.owner_company_name ?? null,
-        owner_company_address: unitData.owner_company_address ?? null,
-        owner_company_gstin: unitData.owner_company_gstin ?? null,
-      },
-      bill.tenancy_id,
-    );
-
     type ExtendedAssoc = typeof association & {
       pan_number: string | null;
       email: string | null;
@@ -311,14 +299,53 @@ export async function getOrGenerateBillPdf(
     let bytes: Buffer;
 
     if (bill.bill_type === 'electricity') {
-      // Fetch mescom_bill, sub_meters, and meter_readings to build the
-      // per-meter breakdown for the electricity bill PDF.
-      const { data: mescomBill } = await admin
-        .from('mescom_bills')
-        .select('id, invoice_amount, period_start, period_end')
-        .eq('association_id', bill.association_id)
-        .eq('period', bill.period)
-        .maybeSingle();
+      // CommonArea sub-meters are stored with a placeholder unit_id (the first
+      // unit by unit_no) due to the NOT NULL FK constraint. For a Common Area
+      // bill, query by meter_type + units join instead of unit_id.
+      const isCommonAreaBill = unitData.type === 'Common Area';
+
+      // Fetch mescom_bill, sub_meters, and billing entity in parallel — none
+      // of these depend on each other.
+      const [
+        { data: mescomBill },
+        { data: subMeters },
+        billTo,
+      ] = await Promise.all([
+        admin
+          .from('mescom_bills')
+          .select('id, invoice_amount, period_start, period_end')
+          .eq('association_id', bill.association_id)
+          .eq('period', bill.period)
+          .maybeSingle(),
+        isCommonAreaBill
+          ? admin
+              .from('sub_meters')
+              .select('id, meter_label, load_kva, units!inner(association_id)')
+              .eq('meter_type', 'CommonArea')
+              .eq('is_active', true)
+              .eq('units.association_id', bill.association_id)
+              .order('meter_label')
+          : admin
+              .from('sub_meters')
+              .select('id, meter_label, load_kva')
+              .eq('unit_id', bill.unit_id)
+              // Exclude CommonArea meters: they carry a FK-placeholder unit_id
+              // (the first unit), so they'd otherwise leak into that unit's bill.
+              .neq('meter_type', 'CommonArea')
+              .eq('is_active', true)
+              .order('meter_label'),
+        resolveBillingEntity(
+          {
+            bill_to: unitData.bill_to ?? 'auto',
+            owner_id: unitData.owner_id,
+            owner_is_company: unitData.owner_is_company ?? false,
+            owner_company_name: unitData.owner_company_name ?? null,
+            owner_company_address: unitData.owner_company_address ?? null,
+            owner_company_gstin: unitData.owner_company_gstin ?? null,
+          },
+          bill.tenancy_id,
+        ),
+      ]);
 
       if (!mescomBill) {
         const logger = await getLogger();
@@ -327,28 +354,6 @@ export async function getOrGenerateBillPdf(
           'generateElectricityBillPdf: no mescom bill found; rates will be zero',
         );
       }
-
-      // CommonArea sub-meters are stored with a placeholder unit_id (the first
-      // unit by unit_no) due to the NOT NULL FK constraint. For a Common Area
-      // bill, query by meter_type + units join instead of unit_id.
-      const isCommonAreaBill = unitData.type === 'Common Area';
-      const { data: subMeters } = isCommonAreaBill
-        ? await admin
-            .from('sub_meters')
-            .select('id, meter_label, load_kva, units!inner(association_id)')
-            .eq('meter_type', 'CommonArea')
-            .eq('is_active', true)
-            .eq('units.association_id', bill.association_id)
-            .order('meter_label')
-        : await admin
-            .from('sub_meters')
-            .select('id, meter_label, load_kva')
-            .eq('unit_id', bill.unit_id)
-            // Exclude CommonArea meters: they carry a FK-placeholder unit_id
-            // (the first unit), so they'd otherwise leak into that unit's bill.
-            .neq('meter_type', 'CommonArea')
-            .eq('is_active', true)
-            .order('meter_label');
 
       const subMeterIds = (subMeters ?? []).map((m) => m.id);
 
@@ -450,6 +455,17 @@ export async function getOrGenerateBillPdf(
         throw error;
       }
     } else {
+      const billTo = await resolveBillingEntity(
+        {
+          bill_to: unitData.bill_to ?? 'auto',
+          owner_id: unitData.owner_id,
+          owner_is_company: unitData.owner_is_company ?? false,
+          owner_company_name: unitData.owner_company_name ?? null,
+          owner_company_address: unitData.owner_company_address ?? null,
+          owner_company_gstin: unitData.owner_company_gstin ?? null,
+        },
+        bill.tenancy_id,
+      );
       try {
         bytes = await renderBillPdf({
           association: {
@@ -503,6 +519,9 @@ export async function getOrGenerateBillPdf(
 
     const storagePath = `bills/${bill.association_id}/${bill.id}.pdf`;
 
+    // Upload must be awaited: bills.pdf_url must be written before the next
+    // request arrives so cache hits can return a signed URL instead of
+    // re-rendering. Background void would lose the write on serverless.
     const { error: uploadError } = await admin.storage
       .from(BUCKET)
       .upload(storagePath, bytes, {
@@ -516,21 +535,23 @@ export async function getOrGenerateBillPdf(
         'Failed to cache generated bill PDF in storage',
       );
     } else {
-      await admin
-        .from('bills')
-        .update({
-          pdf_url: storagePath,
-          pdf_generated_at: new Date().toISOString(),
-        })
-        .eq('id', billId);
-
-      await logAuditEvent({
-        associationId: bill.association_id,
-        action: 'bill.pdf_generated',
-        entityType: 'bill',
-        entityId: billId,
-        summary: `Generated PDF for bill ${bill.bill_no}`,
-      });
+      // bills.update and audit can run concurrently — saves ~100ms vs sequential.
+      await Promise.all([
+        admin
+          .from('bills')
+          .update({
+            pdf_url: storagePath,
+            pdf_generated_at: new Date().toISOString(),
+          })
+          .eq('id', billId),
+        logAuditEvent({
+          associationId: bill.association_id,
+          action: 'bill.pdf_generated',
+          entityType: 'bill',
+          entityId: billId,
+          summary: `Generated PDF for bill ${bill.bill_no}`,
+        }),
+      ]);
     }
 
     return { bytes, filename };
@@ -715,6 +736,8 @@ export async function getOrGenerateReceiptPdf(
 
     const storagePath = `receipts/${payment.association_id}/${payment.id}.pdf`;
 
+    // Upload must be awaited so receipts.pdf_url is written before the next
+    // request; bills.update + audit run concurrently to save ~100ms.
     const { error: uploadError } = await admin.storage
       .from(BUCKET)
       .upload(storagePath, bytes, {
@@ -728,18 +751,19 @@ export async function getOrGenerateReceiptPdf(
         'Failed to cache generated receipt PDF in storage',
       );
     } else {
-      await admin
-        .from('receipts')
-        .update({ pdf_url: storagePath })
-        .eq('id', receipt.id);
-
-      await logAuditEvent({
-        associationId: payment.association_id,
-        action: 'receipt.pdf_generated',
-        entityType: 'receipt',
-        entityId: receipt.id,
-        summary: `Generated PDF for receipt ${receipt.receipt_no}`,
-      });
+      await Promise.all([
+        admin
+          .from('receipts')
+          .update({ pdf_url: storagePath })
+          .eq('id', receipt.id),
+        logAuditEvent({
+          associationId: payment.association_id,
+          action: 'receipt.pdf_generated',
+          entityType: 'receipt',
+          entityId: receipt.id,
+          summary: `Generated PDF for receipt ${receipt.receipt_no}`,
+        }),
+      ]);
     }
 
     return { bytes, filename };
