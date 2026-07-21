@@ -3,6 +3,7 @@ export const BILL_TYPE_LABELS: Record<string, string> = {
   electricity: 'Electricity',
   water: 'Water',
   other_charges: 'Other Charges',
+  sinking_fund: 'Sinking Fund',
 };
 
 export function billTypeLabel(key: string): string {

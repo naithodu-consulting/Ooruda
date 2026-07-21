@@ -1,13 +1,10 @@
 import {
   Body,
-  Column,
   Head,
   Hr,
   Html,
-  Img,
   Link,
   Preview,
-  Row,
   Section,
   Tailwind,
   Text,
@@ -42,32 +39,25 @@ export async function renderInviteEmail(props: Props) {
     namespace,
   });
 
-  const previewText = `Join ${props.invitedUserEmail} on ${props.productName}`;
-  const subject = t(`subject`);
+  const previewText = t('previewText', { teamName: props.teamName });
+  const subject = t('subject', { teamName: props.teamName });
 
-  const heading = t(`heading`, {
+  const heading = t('heading', {
     teamName: props.teamName,
-    productName: props.productName,
   });
 
-  const hello = t(`hello`, {
+  const hello = t('hello', {
     invitedUserEmail: props.invitedUserEmail,
   });
 
-  // `mainText` is rendered via `dangerouslySetInnerHTML`, so user-controlled
-  // values must be HTML-escaped before interpolation. The other fields below
-  // render through JSX (auto-escaped) and must NOT be escaped here to avoid
-  // double-escaping.
-  const mainText = t(`mainText`, {
-    inviter: escapeHtml(props.inviter),
+  const mainText = t('mainText', {
+    inviter: escapeHtml(props.inviter ?? 'Someone'),
     teamName: escapeHtml(props.teamName),
     productName: escapeHtml(props.productName),
     strong: (chunks: string) => `<strong>${chunks}</strong>`,
   });
 
-  const joinTeam = t(`joinTeam`, {
-    teamName: props.teamName,
-  });
+  const joinTeam = t('joinTeam', { teamName: props.teamName });
 
   const html = await render(
     <Html>
@@ -85,45 +75,64 @@ export async function renderInviteEmail(props: Props) {
             </EmailHeader>
 
             <EmailContent>
-              <Text className="text-[16px] leading-[24px] text-[#242424]">
+              <Text
+                style={{
+                  fontSize: '15px',
+                  lineHeight: '24px',
+                  color: '#4a4a4a',
+                  margin: '0 0 16px',
+                }}
+              >
                 {hello}
               </Text>
 
               <Text
-                className="text-[16px] leading-[24px] text-[#242424]"
+                style={{
+                  fontSize: '15px',
+                  lineHeight: '24px',
+                  color: '#4a4a4a',
+                  margin: '0 0 28px',
+                }}
                 dangerouslySetInnerHTML={{ __html: mainText }}
               />
 
-              {props.teamLogo && (
-                <Section>
-                  <Row>
-                    <Column align="center">
-                      <Img
-                        className="rounded-full"
-                        src={props.teamLogo}
-                        width="64"
-                        height="64"
-                      />
-                    </Column>
-                  </Row>
-                </Section>
-              )}
-
-              <Section className="mt-[32px] mb-[32px] text-center">
+              <Section style={{ margin: '0 0 24px' }}>
                 <CtaButton href={props.link}>{joinTeam}</CtaButton>
               </Section>
 
-              <Text className="text-[16px] leading-[24px] text-[#242424]">
-                {t(`copyPasteLink`)}{' '}
-                <Link href={props.link} className="text-blue-600 no-underline">
-                  {props.link}
-                </Link>
+              <Hr style={{ borderColor: '#e5e5e0', margin: '0 0 16px' }} />
+
+              <Text
+                style={{
+                  fontSize: '13px',
+                  lineHeight: '20px',
+                  color: '#9a9a8a',
+                  margin: '0 0 8px',
+                }}
+              >
+                {t('copyPasteLink')}
               </Text>
 
-              <Hr className="mx-0 my-[26px] w-full border border-solid border-[#eaeaea]" />
+              <Link
+                href={props.link}
+                style={{
+                  fontSize: '13px',
+                  color: '#5a4a10',
+                  wordBreak: 'break-all' as const,
+                }}
+              >
+                {props.link}
+              </Link>
 
-              <Text className="text-[12px] leading-[24px] text-[#666666]">
-                {t(`invitationIntendedFor`, {
+              <Text
+                style={{
+                  fontSize: '12px',
+                  lineHeight: '18px',
+                  color: '#b5b5a5',
+                  margin: '16px 0 0',
+                }}
+              >
+                {t('invitationIntendedFor', {
                   invitedUserEmail: props.invitedUserEmail,
                 })}
               </Text>

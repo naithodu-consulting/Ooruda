@@ -1,6 +1,12 @@
 import Link from 'next/link';
 
-import { BadgeX, Ban, ExternalLink, ShieldPlus, VenetianMask } from 'lucide-react';
+import {
+  BadgeX,
+  Ban,
+  ExternalLink,
+  ShieldPlus,
+  VenetianMask,
+} from 'lucide-react';
 
 import { normalizePhoneNumber } from '@kit/shared/utils';
 import { Tables } from '@kit/supabase/database';

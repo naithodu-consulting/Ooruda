@@ -50,7 +50,9 @@ export default async function BillingPage({ params, searchParams }: Props) {
     billsResult,
     unitsResult,
     otherChargesCTResult,
+    sinkingFundCTResult,
     pendingChargesResult,
+    pendingSinkingChargesResult,
     mescomBillsResult,
   ] = await Promise.all([
     client
@@ -73,7 +75,22 @@ export default async function BillingPage({ params, searchParams }: Props) {
       .eq('key', 'other_charges')
       .maybeSingle(),
     client
+      .from('charge_types')
+      .select('is_active')
+      .eq('association_id', association.id)
+      .eq('key', 'sinking_fund')
+      .maybeSingle(),
+    client
       .from('pending_other_charges')
+      .select(
+        'id, unit_id, period, label, amount, split_mode, due_date, billed',
+      )
+      .eq('association_id', association.id)
+      .eq('billed', false)
+      .order('created_at', { ascending: false }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (client as any)
+      .from('pending_sinking_fund_charges')
       .select(
         'id, unit_id, period, label, amount, split_mode, due_date, billed',
       )
@@ -125,8 +142,25 @@ export default async function BillingPage({ params, searchParams }: Props) {
   const unitNoById = new Map(unitRows.map((u) => [u.id, u.unit_no]));
 
   const isOtherChargesActive = otherChargesCTResult.data?.is_active ?? false;
+  const isSinkingFundActive = sinkingFundCTResult.data?.is_active ?? false;
 
   const pendingCharges = (pendingChargesResult.data ?? []).map((pc) => ({
+    ...pc,
+    unit_no: pc.unit_id ? (unitNoById.get(pc.unit_id) ?? null) : null,
+  }));
+
+  const pendingSinkingCharges = (
+    (pendingSinkingChargesResult.data as Array<{
+      id: string;
+      unit_id: string | null;
+      period: string;
+      label: string;
+      amount: number;
+      split_mode: string | null;
+      due_date: string | null;
+      billed: boolean;
+    }>) ?? []
+  ).map((pc) => ({
     ...pc,
     unit_no: pc.unit_id ? (unitNoById.get(pc.unit_id) ?? null) : null,
   }));
@@ -209,6 +243,8 @@ export default async function BillingPage({ params, searchParams }: Props) {
         pendingCharges={pendingCharges}
         periodOptions={periodOptions}
         isOtherChargesActive={isOtherChargesActive}
+        isSinkingFundActive={isSinkingFundActive}
+        pendingSinkingCharges={pendingSinkingCharges}
         accountSlug={account}
         initialDuration={duration}
         initialStatus={status}

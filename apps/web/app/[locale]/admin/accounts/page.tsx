@@ -123,7 +123,10 @@ async function AccountsPage(props: AdminAccountsPageProps) {
           const effectiveType = type ?? 'team';
 
           if (effectiveType !== 'all') {
-            queryBuilder.eq('is_personal_account', effectiveType === 'personal');
+            queryBuilder.eq(
+              'is_personal_account',
+              effectiveType === 'personal',
+            );
           }
 
           if (safeKind !== 'all') {

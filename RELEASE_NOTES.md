@@ -1787,4 +1787,62 @@ _Last updated: 2026-07-18_
 ### Cash Ledger — Table Horizontal Scroll on Mobile
 - Added `min-w-max` to the ledger table so it expands to its natural content width. Previously `w-full` constrained the table to the container and the `overflow-x-auto` wrapper had nothing to scroll, causing columns to be cut off.
 
-_Last updated: 2026-07-19_
+_Last updated: 2026-07-21_
+
+---
+
+## Email Templates — Ooruda Brand Redesign (Jul 21, 2026)
+
+### Changes
+
+- **Shared components** (`wrapper`, `header`, `content`, `footer`, `heading`, `cta-button`, `body-style`): Full redesign with Ooruda brand — amber `#FCD469` header bar with "ooruda" wordmark + "Property Management" tagline, white content card, amber CTA button, minimal footer with copyright and `hello@ooruda.com`
+- **OTP email**: New layout with amber code box (large monospace OTP, amber background), Ooruda-branded subject ("Your Ooruda sign-in code"), clear expiry note, and security disclaimer
+- **Invite email**: Updated subject, heading, copy, and CTA ("Accept Invitation") with Ooruda branding; plain-text link fallback preserved
+- **Account delete email**: Updated all copy to Ooruda voice and tone
+- **All locale files** (`otp-email.json`, `invite-email.json`, `account-delete-email.json`): Rewrote copy — action-first subjects, friendly tone, Ooruda-specific wording
+
+### Migrations Changelog
+
+_No new migrations in this release._
+
+_Last updated: 2026-07-21_
+
+---
+
+## v1.2 — Super Admin Polish, Units UX & Sinking Fund (2026-07-21)
+
+### Super Admin Panel — Association-Centric Language
+
+- **Accounts page defaults to Associations tab** — previously defaulted to "All"; now opens on the Associations tab directly.
+- **Tab switching performance** — `useTransition` keeps current content visible during navigation; `router.prefetch` on mount pre-warms RSC payloads for all three tabs. Active tab stays enabled while sibling tabs are disabled during the transition. A progress bar appears below the filter row while switching.
+- **Terminology cleanup** — "Team Members" → "Members", "Team Accounts" → "Associations", "Delete Team Account" → "Delete Association" throughout the super admin UI.
+- **Subscriptions removed** — `SubscriptionsTable` and all subscription references removed from the super admin panel (not applicable to Ooruda).
+- **Open Workspace button** — promoted to primary button with an `ExternalLink` icon; label shortened to "Open Workspace".
+- **Test badge on Associations** — associations marked `is_test = true` now display an amber "Test" badge in the admin table (previously only personal accounts had test badges).
+
+### Units Page
+
+- **Status column moved** — Status badge now appears immediately after Area (before Owner), improving scannability.
+- **Filter chips simplified** — removed the non-functional "Ground Floor" and "Overdue" filter chips; active filter set is now: All · Occupied · Self Occupied · Rented · Vacant.
+
+### Sinking Fund — New Bill Type
+
+A new `sinking_fund` bill type (`SNK/` prefix) has been introduced. It behaves like Other Charges — ad-hoc, admin-staged, no frequency schedule — allowing associations to collect sinking fund contributions on any cadence (monthly, quarterly, annual) with the description field for period context (e.g. "Q1 Apr–Jun 2026").
+
+**Where it appears:**
+- **Cash Ledger** — Bill Type dropdown includes "Sinking Fund" for both Due and Advance Payment entries.
+- **Billing** — "Sinking Fund" button in the header opens a staging dialog (mirrors Other Charges dialog). Staged charges appear in the Draft Bills tab under a dedicated Sinking Fund section. "Generate Bills" dialog and Bill Type filter both include Sinking Fund.
+- **Payments** — Bill Type filter includes Sinking Fund.
+- **Bills filter** — Generated Bills type filter includes Sinking Fund.
+- **Receipts / Statements** — `bill_type_labels` and `bill_filter_items` updated; Sinking Fund appears wherever bill type is shown.
+
+**Generation logic** — `billing-actions.ts` fetches `pending_sinking_fund_charges` for the period, builds SNK line items per unit, generates `SNK/` bills, then marks all staged charges as billed. Due date is sourced from the staged charge's `due_date` field (falls back to the Other Charges due date).
+
+### Migration
+
+| Migration | Description |
+|---|---|
+| `20260721000001_sinking_fund.sql` | Adds `sinking_fund` charge type to `seed_builtin_charge_types()`, backfills all existing associations, creates `pending_sinking_fund_charges` table with full RLS |
+| `20260721000002_fix_sinking_fund_rls.sql` | Replaces incorrect RLS policies (wrong UUID comparison) with correct `association_role()` pattern — matches `pending_other_charges` policies |
+
+_Last updated: 2026-07-21_

@@ -40,6 +40,7 @@ const BILL_TYPE_OPTIONS = [
   { value: 'electricity', label: 'Electricity' },
   { value: 'water', label: 'Water' },
   { value: 'other_charges', label: 'Other Charges' },
+  { value: 'sinking_fund', label: 'Sinking Fund' },
 ];
 
 const ENTRY_TYPE_LABELS: Record<string, string> = {

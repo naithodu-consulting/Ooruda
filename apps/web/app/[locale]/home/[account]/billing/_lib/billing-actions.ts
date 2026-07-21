@@ -159,13 +159,26 @@ export async function generateBillsAction(
   const otherChargesCT = activeChargeTypes.find(
     (c) => c.key === 'other_charges',
   );
+  const sinkingFundCT = activeChargeTypes.find((c) => c.key === 'sinking_fund');
   const hasElectricityChargeType = activeChargeTypes.some(
     (c) => c.calc_method === 'electricity',
   );
 
-  // Fetch pending other charges and the MESCOM bill in parallel — both are
-  // independent of each other and only need chargeTypes (resolved above).
-  const [{ data: pendingCharges }, { data: mescomBill }] = await Promise.all([
+  type PendingRow = {
+    id: string;
+    unit_id: string | null;
+    label: string;
+    amount: number;
+    split_mode: string | null;
+    due_date: string | null;
+  };
+
+  // Fetch pending other/sinking charges and the MESCOM bill in parallel.
+  const [
+    { data: pendingCharges },
+    { data: pendingSinkingCharges },
+    { data: mescomBill },
+  ] = await Promise.all([
     otherChargesCT
       ? client
           .from('pending_other_charges')
@@ -173,16 +186,17 @@ export async function generateBillsAction(
           .eq('association_id', associationId)
           .eq('period', period)
           .eq('billed', false)
-      : Promise.resolve({
-          data: [] as {
-            id: string;
-            unit_id: string | null;
-            label: string;
-            amount: number;
-            split_mode: string | null;
-            due_date: string | null;
-          }[],
-        }),
+      : Promise.resolve({ data: [] as PendingRow[] }),
+    // pending_sinking_fund_charges is not yet in generated types — cast to any.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sinkingFundCT
+      ? (client as any)
+          .from('pending_sinking_fund_charges')
+          .select('id, unit_id, label, amount, split_mode, due_date')
+          .eq('association_id', associationId)
+          .eq('period', period)
+          .eq('billed', false)
+      : Promise.resolve({ data: [] as PendingRow[] }),
     hasElectricityChargeType
       ? client
           .from('mescom_bills')
@@ -194,6 +208,7 @@ export async function generateBillsAction(
   ]);
 
   const pendingRows = pendingCharges ?? [];
+  const pendingSinkingRows = (pendingSinkingCharges ?? []) as PendingRow[];
 
   let blockRate: number | null = null;
   const consumedByUnit: Record<string, number> = {};
@@ -256,12 +271,14 @@ export async function generateBillsAction(
 
   let created = 0;
   let skipped = 0;
+  let sinkingCreated = 0;
 
   const roundToTwoDecimals = (val: number) => Math.round(val * 100) / 100;
 
   const shouldGenElec = billType === 'All' || billType === 'Electricity';
   const shouldGenMaint = billType === 'All' || billType === 'Maintenance';
   const shouldGenOther = billType === 'All' || billType === 'Other Charges';
+  const shouldGenSinking = billType === 'All' || billType === 'Sinking Fund';
 
   for (const unit of unitRows) {
     const existing = existingByUnit.get(unit.id) || [];
@@ -274,13 +291,19 @@ export async function generateBillsAction(
     const hasOther = existing.some(
       (b: string) => b.includes('-OTHR-') || b.includes('/OTH/'),
     );
+    const hasSinking = existing.some((b: string) => b.includes('/SNK/'));
 
     // Does this unit have any staged (unbilled) pending charges? Ad-hoc
-    // charges are always billable, even if the unit already has an OTH bill,
+    // charges are always billable, even if the unit already has an OTH/SNK bill,
     // so their presence must prevent the "already fully billed" skip below.
     const hasPendingForUnit =
       shouldGenOther &&
       pendingRows.some((pc) => pc.unit_id === null || pc.unit_id === unit.id);
+    const hasPendingSinkingForUnit =
+      shouldGenSinking &&
+      pendingSinkingRows.some(
+        (pc) => pc.unit_id === null || pc.unit_id === unit.id,
+      );
 
     if (unit.type === 'Common Area') {
       if (hasElec) {
@@ -288,7 +311,14 @@ export async function generateBillsAction(
         continue;
       }
     } else {
-      if (hasElec && hasMaint && hasOther && !hasPendingForUnit) {
+      if (
+        hasElec &&
+        hasMaint &&
+        hasOther &&
+        hasSinking &&
+        !hasPendingForUnit &&
+        !hasPendingSinkingForUnit
+      ) {
         skipped++;
         continue;
       }
@@ -307,6 +337,7 @@ export async function generateBillsAction(
     const elecItems: LineItem[] = [];
     const maintItems: LineItem[] = [];
     const otherItems: LineItem[] = [];
+    const sinkingItems: LineItem[] = [];
 
     // Map charge types to correct bill type
     for (const chargeType of activeChargeTypes) {
@@ -356,8 +387,12 @@ export async function generateBillsAction(
 
         if (chargeType.key === 'maintenance') {
           maintItems.push(item);
+        } else if (chargeType.key === 'sinking_fund') {
+          // sinking_fund is ad-hoc (no rate set); items come from
+          // pending_sinking_fund_charges below, not from the charge type rate.
+          // Skip here to avoid double-counting.
         } else if (chargeType.key !== 'other_charges') {
-          // e.g. water, penalties, or custom types map to Other Charges bill
+          // e.g. water or custom types map to Other Charges bill
           otherItems.push(item);
         }
       }
@@ -399,6 +434,33 @@ export async function generateBillsAction(
     // separate from the base recurring `otherItems` so that ad-hoc charges
     // added after the first OTH bill can still be billed (see generation below).
     const nullDatePending = pendingByDueDate.get(null) ?? [];
+
+    // Build sinking fund line items from pending_sinking_fund_charges.
+    if (sinkingFundCT) {
+      for (const pc of pendingSinkingRows) {
+        if (pc.unit_id !== null && pc.unit_id !== unit.id) continue;
+
+        let pcAmount: number;
+        if (pc.unit_id === null) {
+          if (pc.split_mode === 'per_sqft') {
+            if (unit.area_sqft == null) continue;
+            pcAmount = roundToTwoDecimals(pc.amount * unit.area_sqft);
+          } else {
+            pcAmount = roundToTwoDecimals(pc.amount);
+          }
+        } else {
+          pcAmount = roundToTwoDecimals(pc.amount);
+        }
+
+        sinkingItems.push({
+          charge_type_id: sinkingFundCT.id,
+          description: pc.label,
+          payer: sinkingFundCT.default_payer ?? 'Owner',
+          gst_applicable: sinkingFundCT.gst_applicable ?? false,
+          amount: pcAmount,
+        });
+      }
+    }
 
     // Helper to generate bill
     const generateSpecificBill = async (
@@ -449,7 +511,9 @@ export async function generateBillsAction(
           ? 'electricity'
           : typePrefix === 'OTH'
             ? 'other_charges'
-            : 'maintenance';
+            : typePrefix === 'SNK'
+              ? 'sinking_fund'
+              : 'maintenance';
 
       // Check cash ledger for any advance credit for this unit + bill type.
       let advanceApplied = 0;
@@ -585,6 +649,32 @@ export async function generateBillsAction(
           });
         }
       }
+
+      // Sinking Fund — ad-hoc. Each distinct collection generates a new SNK bill.
+      // If an SNK bill already exists for this period, skip silently — the admin
+      // should void the existing bill before re-collecting for the same period.
+      if (shouldGenSinking && sinkingItems.length > 0) {
+        if (!hasSinking) {
+          const snkDueDate =
+            pendingSinkingRows.find(
+              (pc) => pc.unit_id === unit.id && pc.due_date,
+            )?.due_date ??
+            pendingSinkingRows.find((pc) => pc.unit_id === null && pc.due_date)
+              ?.due_date ??
+            otherDueDate;
+          billsToGenerate.push({
+            type: 'sinking fund',
+            promise: generateSpecificBill(
+              'Sinking Fund',
+              'SNK',
+              sinkingItems,
+              snkDueDate,
+            ),
+          });
+        }
+        // hasSinking=true: bill already exists for this period; staged charges
+        // remain unbilled so the admin can act intentionally (void + re-generate).
+      }
     }
 
     const results = await Promise.all(billsToGenerate.map((b) => b.promise));
@@ -597,17 +687,30 @@ export async function generateBillsAction(
         error: `Failed to generate ${failedTypes.join(', ')} bill${failedTypes.length > 1 ? 's' : ''}`,
       };
     }
+
+    // Track how many SNK bills were generated in this run (separate from `created`
+    // which spans all types — needed to gate the mark-billed step accurately).
+    if (billsToGenerate.some((b) => b.type === 'sinking fund')) {
+      sinkingCreated += 1;
+    }
   }
 
   // Mark unbilled pending charges as billed now that bills are generated.
-  // Only do this when Other Charges were actually part of this run — otherwise
-  // an Electricity-only run would wrongly mark ad-hoc charges as billed.
+  // Only do this when the relevant type was actually part of this run.
   if (shouldGenOther && created > 0 && pendingRows.length > 0) {
     const pendingIds = pendingRows.map((r) => r.id);
     await client
       .from('pending_other_charges')
       .update({ billed: true })
       .in('id', pendingIds);
+  }
+  if (shouldGenSinking && sinkingCreated > 0 && pendingSinkingRows.length > 0) {
+    const sinkingIds = pendingSinkingRows.map((r) => r.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (client as any)
+      .from('pending_sinking_fund_charges')
+      .update({ billed: true })
+      .in('id', sinkingIds);
   }
 
   if (created > 0) {
@@ -842,6 +945,144 @@ export async function bulkImportOtherChargesAction(
 
   revalidatePath(BILLING_PATH, 'page');
   return { success: true, imported: toInsert.length, skipped };
+}
+
+// ── Sinking Fund CRUD ────────────────────────────────────────────────────────
+
+export interface PendingSinkingFundCharge {
+  id: string;
+  unit_id: string | null;
+  label: string;
+  amount: number;
+  split_mode: string | null;
+  due_date: string | null;
+  billed: boolean;
+}
+
+export async function addSinkingFundChargeToUnitAction(
+  associationId: string,
+  input: {
+    unit_id: string;
+    period: string;
+    label: string;
+    amount: number;
+    due_date?: string | null;
+  },
+): Promise<ActionResult> {
+  const roleError = await requireBillingAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  if (!/^\d{4}-\d{2}$/.test(input.period))
+    return { success: false, error: 'Invalid period format.' };
+  if (!input.label.trim())
+    return { success: false, error: 'Label is required.' };
+  if (input.amount <= 0)
+    return { success: false, error: 'Amount must be positive.' };
+
+  const client = getSupabaseServerClient();
+
+  const { data: unit, error: unitError } = await client
+    .from('units')
+    .select('id')
+    .eq('id', input.unit_id)
+    .eq('association_id', associationId)
+    .single();
+
+  if (unitError || !unit)
+    return { success: false, error: 'Unit not found in this association.' };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (client as any)
+    .from('pending_sinking_fund_charges')
+    .insert({
+      association_id: associationId,
+      unit_id: input.unit_id,
+      period: input.period,
+      label: input.label.trim(),
+      amount: input.amount,
+      split_mode: null,
+      due_date: input.due_date ?? null,
+    });
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(BILLING_PATH, 'page');
+  return { success: true };
+}
+
+export async function bulkAddSinkingFundChargeAction(
+  associationId: string,
+  input: {
+    period: string;
+    label: string;
+    amount: number;
+    split_mode: 'flat' | 'per_sqft';
+    due_date?: string | null;
+  },
+): Promise<ActionResult> {
+  const roleError = await requireBillingAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  if (!/^\d{4}-\d{2}$/.test(input.period))
+    return { success: false, error: 'Invalid period format.' };
+  if (!input.label.trim())
+    return { success: false, error: 'Label is required.' };
+  if (input.amount <= 0)
+    return { success: false, error: 'Amount must be positive.' };
+
+  const client = getSupabaseServerClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (client as any)
+    .from('pending_sinking_fund_charges')
+    .insert({
+      association_id: associationId,
+      unit_id: null,
+      period: input.period,
+      label: input.label.trim(),
+      amount: input.amount,
+      split_mode: input.split_mode,
+      due_date: input.due_date ?? null,
+    });
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(BILLING_PATH, 'page');
+  return { success: true };
+}
+
+export async function removePendingSinkingFundChargeAction(
+  associationId: string,
+  chargeId: string,
+): Promise<ActionResult> {
+  const roleError = await requireBillingAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  const client = getSupabaseServerClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: charge } = await (client as any)
+    .from('pending_sinking_fund_charges')
+    .select('billed')
+    .eq('id', chargeId)
+    .eq('association_id', associationId)
+    .single();
+
+  if (charge?.billed) {
+    return {
+      success: false,
+      error: 'This charge has already been billed and cannot be removed.',
+    };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (client as any)
+    .from('pending_sinking_fund_charges')
+    .delete()
+    .eq('id', chargeId)
+    .eq('association_id', associationId)
+    .eq('billed', false);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(BILLING_PATH, 'page');
+  return { success: true };
 }
 
 const BILLING_DOCUMENTS_BUCKET = 'billing-documents';

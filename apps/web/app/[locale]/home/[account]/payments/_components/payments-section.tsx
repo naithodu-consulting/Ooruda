@@ -343,6 +343,7 @@ export function PaymentsSection(props: {
                 <SelectItem value="electricity">Electricity</SelectItem>
                 <SelectItem value="maintenance">Maintenance</SelectItem>
                 <SelectItem value="other_charges">Other Charges</SelectItem>
+                <SelectItem value="sinking_fund">Sinking Fund</SelectItem>
               </SelectContent>
             </Select>
           </div>

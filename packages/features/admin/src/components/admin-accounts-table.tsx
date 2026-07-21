@@ -160,9 +160,18 @@ function AccountsTableFilters(props: {
             }}
           >
             <TabsList>
-              <TabsTrigger value="all" disabled={isPending && type !== 'all'}>All</TabsTrigger>
-              <TabsTrigger value="team" disabled={isPending && type !== 'team'}>Associations</TabsTrigger>
-              <TabsTrigger value="personal" disabled={isPending && type !== 'personal'}>Users</TabsTrigger>
+              <TabsTrigger value="all" disabled={isPending && type !== 'all'}>
+                All
+              </TabsTrigger>
+              <TabsTrigger value="team" disabled={isPending && type !== 'team'}>
+                Associations
+              </TabsTrigger>
+              <TabsTrigger
+                value="personal"
+                disabled={isPending && type !== 'personal'}
+              >
+                Users
+              </TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -188,8 +197,12 @@ function AccountsTableFilters(props: {
         </div>
 
         {isPending && (
-          <div className={'mt-2 h-0.5 w-full overflow-hidden rounded-full bg-muted'}>
-            <div className={'animate-progress-bar h-full bg-primary'} />
+          <div
+            className={
+              'bg-muted mt-2 h-0.5 w-full overflow-hidden rounded-full'
+            }
+          >
+            <div className={'animate-progress-bar bg-primary h-full'} />
           </div>
         )}
       </form>

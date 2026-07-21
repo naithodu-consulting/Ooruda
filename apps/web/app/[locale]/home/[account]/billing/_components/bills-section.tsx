@@ -8,10 +8,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   ChevronLeft,
   ChevronRight,
+  PiggyBank,
   Plus,
-  Zap,
-  Wrench,
   Receipt,
+  Wrench,
+  Zap,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
@@ -73,6 +74,7 @@ import {
   deleteAllBillsAction,
   generateBillsAction,
   type PendingOtherCharge,
+  type PendingSinkingFundCharge,
 } from '../_lib/billing-actions';
 import { GenerateBillsSchema } from '../_lib/billing-schema';
 import {
@@ -80,12 +82,14 @@ import {
   type BillLineItemRow,
 } from './bill-line-items-dialog';
 import { OtherChargesDialog } from './other-charges-dialog';
+import { SinkingFundDialog } from './sinking-fund-dialog';
 
 const BILL_TYPE_ITEMS = {
   All: 'All Bills',
   Maintenance: 'Maintenance',
   Electricity: 'Electricity',
   'Other Charges': 'Other Charges',
+  'Sinking Fund': 'Sinking Fund',
 };
 
 const PAGE_SIZE = 25;
@@ -117,6 +121,11 @@ interface PendingChargeWithUnit extends PendingOtherCharge {
   period: string;
 }
 
+interface PendingSinkingChargeWithUnit extends PendingSinkingFundCharge {
+  unit_no?: string | null;
+  period: string;
+}
+
 export function BillsSection(props: {
   associationId: string;
   bills: BillRow[];
@@ -132,6 +141,8 @@ export function BillsSection(props: {
   pendingCharges?: PendingChargeWithUnit[];
   periodOptions?: string[];
   isOtherChargesActive: boolean;
+  isSinkingFundActive?: boolean;
+  pendingSinkingCharges?: PendingSinkingChargeWithUnit[];
   accountSlug?: string;
   initialDuration?: string;
   initialStatus?: string;
@@ -142,7 +153,8 @@ export function BillsSection(props: {
   const draftCount =
     (props.maintenancePending ? 1 : 0) +
     ((props.pendingElectricityBills?.length ?? 0) > 0 ? 1 : 0) +
-    ((props.pendingCharges?.length ?? 0) > 0 ? 1 : 0);
+    ((props.pendingCharges?.length ?? 0) > 0 ? 1 : 0) +
+    ((props.pendingSinkingCharges?.length ?? 0) > 0 ? 1 : 0);
 
   // Arriving with a status/duration filter (e.g. from a dashboard tile link)
   // means the caller wants the Generated Bills tab with that filter applied
@@ -167,6 +179,16 @@ export function BillsSection(props: {
                     associationId={props.associationId}
                     units={props.units}
                     pendingCharges={props.pendingCharges ?? []}
+                    periods={props.periodOptions}
+                  />
+                )}
+              {props.isSinkingFundActive &&
+                props.units &&
+                props.periodOptions && (
+                  <SinkingFundDialog
+                    associationId={props.associationId}
+                    units={props.units}
+                    pendingCharges={props.pendingSinkingCharges ?? []}
                     periods={props.periodOptions}
                   />
                 )}
@@ -218,6 +240,7 @@ export function BillsSection(props: {
               currentPeriod={props.currentPeriod ?? ''}
               pendingElectricityBills={props.pendingElectricityBills ?? []}
               pendingCharges={props.pendingCharges ?? []}
+              pendingSinkingCharges={props.pendingSinkingCharges ?? []}
               canManage={props.canManage}
             />
           </TabsContent>
@@ -240,7 +263,12 @@ export function BillsSection(props: {
 
 const DRAFT_PAGE_SIZE = 20;
 
-type DraftTypeFilter = 'all' | 'maintenance' | 'electricity' | 'other_charges';
+type DraftTypeFilter =
+  | 'all'
+  | 'maintenance'
+  | 'electricity'
+  | 'other_charges'
+  | 'sinking_fund';
 
 function DraftBillsTab(props: {
   associationId: string;
@@ -251,6 +279,7 @@ function DraftBillsTab(props: {
     unit_no?: string | null;
     period: string;
   })[];
+  pendingSinkingCharges: PendingSinkingChargeWithUnit[];
   canManage: boolean;
 }) {
   const [typeFilter, setTypeFilter] = useState<DraftTypeFilter>('all');
@@ -260,7 +289,8 @@ function DraftBillsTab(props: {
   const hasAnything =
     props.maintenancePending ||
     props.pendingElectricityBills.length > 0 ||
-    props.pendingCharges.length > 0;
+    props.pendingCharges.length > 0 ||
+    props.pendingSinkingCharges.length > 0;
 
   if (!hasAnything) {
     return (
@@ -278,11 +308,16 @@ function DraftBillsTab(props: {
     (s, pc) => s + pc.amount,
     0,
   );
+  const sinkingFundTotal = props.pendingSinkingCharges.reduce(
+    (s, pc) => s + pc.amount,
+    0,
+  );
 
   const totalSections =
     (props.maintenancePending ? 1 : 0) +
     (props.pendingElectricityBills.length > 0 ? 1 : 0) +
-    (props.pendingCharges.length > 0 ? 1 : 0);
+    (props.pendingCharges.length > 0 ? 1 : 0) +
+    (props.pendingSinkingCharges.length > 0 ? 1 : 0);
 
   // Collect all unique periods across pending items for the period filter
   const allPeriods = Array.from(
@@ -290,6 +325,7 @@ function DraftBillsTab(props: {
       ...(props.maintenancePending ? [props.currentPeriod] : []),
       ...props.pendingElectricityBills.map((mb) => mb.period),
       ...props.pendingCharges.map((pc) => pc.period),
+      ...props.pendingSinkingCharges.map((pc) => pc.period),
     ]),
   ).sort((a, b) => b.localeCompare(a));
 
@@ -311,6 +347,12 @@ function DraftBillsTab(props: {
       (periodFilter === 'all' || periodFilter === pc.period),
   );
 
+  const filteredSinking = props.pendingSinkingCharges.filter(
+    (pc) =>
+      (typeFilter === 'all' || typeFilter === 'sinking_fund') &&
+      (periodFilter === 'all' || periodFilter === pc.period),
+  );
+
   // Pagination for other charges
   const totalChargesPages = Math.ceil(filteredCharges.length / DRAFT_PAGE_SIZE);
   const pagedCharges = filteredCharges.slice(
@@ -325,7 +367,8 @@ function DraftBillsTab(props: {
   const hasFilteredResults =
     showMaintenance ||
     filteredElectricity.length > 0 ||
-    filteredCharges.length > 0;
+    filteredCharges.length > 0 ||
+    filteredSinking.length > 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -361,6 +404,14 @@ function DraftBillsTab(props: {
             </span>
           </span>
         )}
+        {sinkingFundTotal > 0 && (
+          <span>
+            <span className="text-muted-foreground">Sinking Fund</span>{' '}
+            <span className="text-foreground font-semibold">
+              {formatINR(sinkingFundTotal)}
+            </span>
+          </span>
+        )}
       </div>
 
       {/* Filters */}
@@ -384,7 +435,9 @@ function DraftBillsTab(props: {
                     ? 'Maintenance'
                     : typeFilter === 'electricity'
                       ? 'Electricity'
-                      : 'Other Charges'}
+                      : typeFilter === 'sinking_fund'
+                        ? 'Sinking Fund'
+                        : 'Other Charges'}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -397,6 +450,9 @@ function DraftBillsTab(props: {
               )}
               {props.pendingCharges.length > 0 && (
                 <SelectItem value="other_charges">Other Charges</SelectItem>
+              )}
+              {props.pendingSinkingCharges.length > 0 && (
+                <SelectItem value="sinking_fund">Sinking Fund</SelectItem>
               )}
             </SelectContent>
           </Select>
@@ -507,6 +563,58 @@ function DraftBillsTab(props: {
                     </TableCell>
                   </TableRow>
                 ))}
+              </TableBody>
+            </Table>
+          </DraftSection>
+        )}
+
+        {/* Pending Sinking Fund */}
+        {filteredSinking.length > 0 && (
+          <DraftSection
+            icon={<PiggyBank className="h-4 w-4" />}
+            title="Sinking Fund"
+            badge={`${filteredSinking.length} charge${filteredSinking.length !== 1 ? 's' : ''}`}
+            total={filteredSinking.reduce((s, pc) => s + pc.amount, 0)}
+          >
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Period</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredSinking.map((pc) => (
+                  <TableRow key={pc.id}>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {formatPeriod(pc.period)}
+                    </TableCell>
+                    <TableCell className="font-medium">{pc.label}</TableCell>
+                    <TableCell className="text-sm">
+                      {pc.unit_no ?? (
+                        <span className="text-muted-foreground">
+                          All units
+                          {pc.split_mode === 'per_sqft' ? ' (per sqft)' : ''}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {formatINR(pc.amount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="bg-muted/40 font-semibold">
+                  <TableCell colSpan={3} className="text-sm">
+                    Total
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatINR(
+                      filteredSinking.reduce((s, pc) => s + pc.amount, 0),
+                    )}
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </DraftSection>
@@ -773,6 +881,7 @@ function GeneratedBillsTab(props: {
               <SelectItem value="electricity">Electricity</SelectItem>
               <SelectItem value="maintenance">Maintenance</SelectItem>
               <SelectItem value="other_charges">Other Charges</SelectItem>
+              <SelectItem value="sinking_fund">Sinking Fund</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1184,6 +1293,7 @@ function GenerateBillsForm(props: {
                     <SelectItem value="Maintenance">Maintenance</SelectItem>
                     <SelectItem value="Electricity">Electricity</SelectItem>
                     <SelectItem value="Other Charges">Other Charges</SelectItem>
+                    <SelectItem value="Sinking Fund">Sinking Fund</SelectItem>
                   </SelectContent>
                 </Select>
               </FormControl>

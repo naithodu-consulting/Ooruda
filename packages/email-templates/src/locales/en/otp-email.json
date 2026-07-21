@@ -1,7 +1,8 @@
 {
-  "subject": "One-time password for {productName}",
-  "heading": "One-time password for {productName}",
-  "otpText": "Your one-time password is: {otp}",
-  "footerText": "Please enter the one-time password in the app to continue.",
-  "mainText": "You're receiving this email because you need to verify your identity using a one-time password."
+  "subject": "Your Ooruda sign-in code",
+  "previewText": "Your one-time sign-in code for Ooruda",
+  "heading": "Sign in to Ooruda",
+  "mainText": "Use the code below to sign in to your Ooruda account. Enter it in the app to continue.",
+  "expiryText": "This code expires in 10 minutes.",
+  "footerText": "If you didn't request this code, you can safely ignore this email. Someone may have entered your email by mistake."
 }
