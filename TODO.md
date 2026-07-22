@@ -75,3 +75,21 @@ UPDATE sub_meters SET initial_reading = <actual_value> WHERE meter_label = '<lab
 ```
 
 ---
+
+## Known risk: Razorpay partial refund webhook not idempotent
+
+**Priority:** Low (low-probability in practice)
+**Introduced in:** `20260725000001_partial_refund.sql` + webhook route change (2026-07-22)
+
+**Risk:** The `record_payment_reversal(payment_id, refund_amount)` function accumulates `refunded_amount` on each call. If Razorpay delivers the same partial refund webhook event twice (e.g., our server returned non-200 on first delivery, triggering Razorpay retry), the refunded amount gets double-counted.
+
+**Example:** ₹300 partial refund on a ₹1,000 payment.
+- First delivery: `refunded_amount` → ₹300 ✓
+- Duplicate delivery: `refunded_amount` → ₹600 ✗ (bill incorrectly shows Partial with ₹400 outstanding instead of ₹700)
+
+**Why it is low-risk now:** The webhook handler returns 200 on success, so Razorpay does not retry for the same event. Retries only happen on network failure or a non-2xx response from our side.
+
+**Proper fix:** Store the Razorpay refund ID (`rfnd_xxx`, available in the refund entity payload) in a `payments.razorpay_refund_id` column and add a unique constraint. The `record_payment_reversal` function should skip already-processed refund IDs. Requires a migration to add the column and a webhook change to pass `refundEntity.id`.
+
+---
+

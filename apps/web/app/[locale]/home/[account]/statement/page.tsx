@@ -88,29 +88,47 @@ export default async function StatementPage({ params, searchParams }: Props) {
 
   // ── 1. Bills with nested payments ──────────────────────────────────────────
   // Bills → debit entries (due raised). Payments nested inside → credit entries.
+  // Voided bills are excluded — they carry no outstanding obligation.
   const { data: billRows } = await client
     .from('bills')
     .select(
-      'id, unit_id, bill_type, bill_no, total_amount, generated_at, bill_line_items(description), payments(id, amount, mode, reference_no, paid_at, status, reversed_at)',
+      'id, unit_id, bill_type, bill_no, total_amount, generated_at, bill_line_items(description), payments(id, amount, mode, reference_no, paid_at, status, reversed_at, refunded_amount)',
     )
     .in('unit_id', unitIds)
     .eq('association_id', association.id)
+    .neq('status', 'Void')
     .order('generated_at', { ascending: true });
 
-  // ── 2. Cash ledger — advances only ─────────────────────────────────────────
-  // due_payment rows are now sourced from the payments table above.
-  // We keep advance_payment, advance_applied, and legacy due entries.
+  // ── 2. Cash ledger — advances and due payments ──────────────────────────────
+  // Includes: advance_payment (deposits), advance_applied (auto-pay drawdowns),
+  // due_payment (cash payments against cash-ledger dues), and legacy due entries.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: advanceRows } = await (client as any)
     .from('cash_ledger')
     .select(
-      'id, unit_id, entry_type, bill_type, amount, direction, entry_date, notes',
+      'id, unit_id, entry_type, bill_type, amount, direction, entry_date, notes, reference_bill_id',
     )
     .in('unit_id', unitIds)
     .eq('association_id', association.id)
-    .in('entry_type', ['due', 'advance_payment', 'advance_applied'])
+    .in('entry_type', ['due', 'advance_payment', 'advance_applied', 'due_payment'])
     .order('entry_date', { ascending: true })
     .order('created_at', { ascending: true });
+
+  // Sum of advance_applied amounts per bill — used to compute the remaining
+  // bill debit after advance has been partially or fully applied.
+  const advanceAppliedByBillId = new Map<string, number>();
+  for (const e of (advanceRows ?? []) as {
+    entry_type: string;
+    reference_bill_id: string | null;
+    amount: number;
+  }[]) {
+    if (e.entry_type === 'advance_applied' && e.reference_bill_id) {
+      advanceAppliedByBillId.set(
+        e.reference_bill_id,
+        (advanceAppliedByBillId.get(e.reference_bill_id) ?? 0) + Number(e.amount),
+      );
+    }
+  }
 
   // ── 3. Build flat entry list ────────────────────────────────────────────────
   const raw: Omit<StatementEntry, 'runningBalance'>[] = [];
@@ -132,21 +150,29 @@ export default async function StatementPage({ params, searchParams }: Props) {
         ? uniqueDescriptions.join(', ')
         : null;
 
-    // Debit: due raised when bill was generated
-    raw.push({
-      id: `bill-${bill.id}`,
-      unit_id: bill.unit_id,
-      unit_no: unitNo,
-      entry_type: 'due',
-      bill_type: billType,
-      bill_no: bill.bill_no,
-      charge_name,
-      amount: Number(bill.total_amount),
-      direction: 'debit',
-      entry_date: (bill.generated_at as string).slice(0, 10),
-      notes: null,
-      mode: null,
-    });
+    // Debit: due raised when bill was generated.
+    // If advance was applied (fully or partially), the advance_applied cash_ledger
+    // entries already represent that portion as debits — including the full bill
+    // amount here would double-count. Emit a debit only for the remaining amount
+    // not covered by advance (0 if fully advance-paid, full amount if no advance).
+    const totalAdvanceApplied = advanceAppliedByBillId.get(bill.id) ?? 0;
+    const billDebitAmount = Number(bill.total_amount) - totalAdvanceApplied;
+    if (billDebitAmount > 0) {
+      raw.push({
+        id: `bill-${bill.id}`,
+        unit_id: bill.unit_id,
+        unit_no: unitNo,
+        entry_type: 'due',
+        bill_type: billType,
+        bill_no: bill.bill_no,
+        charge_name,
+        amount: billDebitAmount,
+        direction: 'debit',
+        entry_date: (bill.generated_at as string).slice(0, 10),
+        notes: null,
+        mode: null,
+      });
+    }
 
     // Credits: every payment recorded against this bill (including reversed ones).
     // Cast via unknown: status/reversed_at columns added in 20260718000000_payment_reversal.sql;
@@ -159,7 +185,10 @@ export default async function StatementPage({ params, searchParams }: Props) {
       paid_at: string;
       status: string;
       reversed_at: string | null;
+      refunded_amount: number | null;
     }[]) ?? []) {
+      const refunded = Number(p.refunded_amount ?? 0);
+      const isPartialRefund = p.status === 'active' && refunded > 0;
       raw.push({
         id: `payment-${p.id}`,
         unit_id: bill.unit_id,
@@ -173,31 +202,18 @@ export default async function StatementPage({ params, searchParams }: Props) {
         entry_date: (p.paid_at as string).slice(0, 10),
         notes: p.reference_no ?? null,
         mode: p.mode,
-        payment_status: (p.status as 'active' | 'reversed') ?? 'active',
+        payment_status: isPartialRefund
+          ? 'partial_refund'
+          : (p.status as 'active' | 'reversed'),
+        ...(isPartialRefund ? { refunded_amount: refunded } : {}),
       });
-
-      // For reversed payments, emit a matching debit entry on the reversal date
-      // so the running balance correctly reflects the refund.
-      if (p.status === 'reversed' && p.reversed_at) {
-        raw.push({
-          id: `reversal-${p.id}`,
-          unit_id: bill.unit_id,
-          unit_no: unitNo,
-          entry_type: 'reversal',
-          bill_type: billType,
-          bill_no: bill.bill_no,
-          charge_name,
-          amount: Number(p.amount),
-          direction: 'debit',
-          entry_date: (p.reversed_at as string).slice(0, 10),
-          notes: 'Refunded by Razorpay',
-          mode: null,
-        });
-      }
+      // Full reversal: bill debit already represents the outstanding amount;
+      // the reversed credit is excluded from balance via payment_status='reversed'.
+      // Partial refund: effectiveDelta() nets the credit by subtracting refunded_amount.
     }
   }
 
-  // Advance and legacy due entries from cash_ledger
+  // Advance deposits, advance drawdowns, due-payment credits, and legacy due entries
   for (const e of (advanceRows as {
     id: string;
     unit_id: string;
@@ -207,6 +223,7 @@ export default async function StatementPage({ params, searchParams }: Props) {
     direction: string;
     entry_date: string;
     notes: string | null;
+    reference_bill_id: string | null;
   }[]) ?? []) {
     raw.push({
       id: `ledger-${e.id}`,
@@ -237,7 +254,16 @@ export default async function StatementPage({ params, searchParams }: Props) {
   const perUnitBalance = new Map<string, number>();
   const entries: StatementEntry[] = raw.map((e) => {
     const prev = perUnitBalance.get(e.unit_id) ?? 0;
-    const delta = e.direction === 'credit' ? e.amount : -e.amount;
+    let delta: number;
+    if (e.direction === 'debit') {
+      delta = -e.amount;
+    } else if (e.payment_status === 'reversed') {
+      delta = 0;
+    } else if (e.payment_status === 'partial_refund' && e.refunded_amount) {
+      delta = e.amount - e.refunded_amount;
+    } else {
+      delta = e.amount;
+    }
     const next = prev + delta;
     perUnitBalance.set(e.unit_id, next);
     return { ...e, runningBalance: next };

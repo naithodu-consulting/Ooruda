@@ -1706,8 +1706,26 @@ When a Razorpay payment was reversed or refunded (e.g. a test charge reversal fr
 | Migration | Description |
 |---|---|
 | `20260718000001_payment_reversal.sql` | Adds `status`/`reversed_at` to `payments` + `cash_ledger_payments`; updates trigger; adds `record_payment_reversal()` |
+| `20260725000001_partial_refund.sql` | Adds `refunded_amount` to both tables; updates trigger to use `amount - refunded_amount`; extends `record_payment_reversal()` to accept a partial amount |
 
-_Last updated: 2026-07-18_
+## Razorpay Partial Refunds (2026-07-22)
+
+Extended the reversal model to correctly handle Razorpay partial refunds.
+
+**Problem:** The original implementation always fully reversed a payment (setting `status='reversed'`), regardless of how much Razorpay actually refunded. A ₹300 partial refund on a ₹1000 payment would incorrectly mark the entire ₹1000 as reversed and revert the bill to Unpaid.
+
+**What changed**
+
+- `payments.refunded_amount` and `cash_ledger_payments.refunded_amount` columns added (default 0)
+- `sync_bill_payment_status` trigger now sums `amount - refunded_amount` for active payments, so a partially refunded payment contributes only its net paid amount
+- `record_payment_reversal(payment_id, refund_amount)` — new optional `refund_amount` parameter:
+  - Partial refund: increments `refunded_amount`; bill status recomputes to Partial
+  - Full refund (amount ≥ remaining): marks `status='reversed'`; bill reverts to Unpaid
+  - Repeated partial refund calls accumulate until total reaches full amount
+- Webhook now passes `refundEntity.amount / 100` (paise → rupees) to the function
+- Statement page: partially refunded payments show an orange **Partial refund · ₹X** badge; balance reflects the net paid amount (original − refunded)
+
+_Last updated: 2026-07-22_
 
 ---
 

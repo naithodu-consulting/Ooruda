@@ -136,9 +136,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
     }
 
+    // Convert paise → rupees. Pass the exact refunded amount so partial
+    // refunds reduce paid_amount without fully reversing the payment.
+    const refundAmountRupees = refundEntity.amount / 100;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (admin as any).rpc('record_payment_reversal', {
       p_razorpay_payment_id: razorpayPaymentId,
+      p_refund_amount: refundAmountRupees,
     });
 
     if (error) {

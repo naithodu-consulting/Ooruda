@@ -51,8 +51,10 @@ export interface StatementEntry {
   entry_date: string;
   notes: string | null;
   mode: string | null;
-  /** Set on due_payment entries that were reversed by Razorpay. */
-  payment_status?: 'active' | 'reversed';
+  /** Set on due_payment entries affected by a Razorpay refund. */
+  payment_status?: 'active' | 'reversed' | 'partial_refund';
+  /** Amount already refunded (only set when payment_status='partial_refund'). */
+  refunded_amount?: number;
   runningBalance: number;
 }
 
@@ -273,6 +275,18 @@ export function StatementTable({
     });
   }, [entries, activeUnitId, billTypeFilter, fyFilter]);
 
+  // Effective credit delta for an entry — used by opening balance and running balance.
+  // Full reversals (payment_status='reversed') contribute 0: the bill debit already
+  // represents the outstanding amount. Partial refunds contribute the net amount
+  // (amount - refunded_amount) since the bill trigger has already adjusted paid_amount.
+  function effectiveDelta(e: StatementEntry): number {
+    if (e.direction === 'debit') return -e.amount;
+    if (e.payment_status === 'reversed') return 0;
+    if (e.payment_status === 'partial_refund' && e.refunded_amount)
+      return e.amount - e.refunded_amount;
+    return e.amount;
+  }
+
   // Opening balance: sum of all entries for this unit BEFORE the filtered range.
   const openingBalance = useMemo(() => {
     const range = fyFilter !== FY_ALL ? fyRange(fyFilter) : null;
@@ -285,31 +299,24 @@ export function StatementTable({
             e.bill_type === billTypeFilter) &&
           e.entry_date < range.from,
       )
-      .reduce(
-        (sum, e) => sum + (e.direction === 'credit' ? e.amount : -e.amount),
-        0,
-      );
-  }, [entries, activeUnitId, billTypeFilter, fyFilter]);
+      .reduce((sum, e) => sum + effectiveDelta(e), 0);
+  }, [entries, activeUnitId, billTypeFilter, fyFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recompute running balance on filtered slice (entries arrive newest-first).
-  // Reversed due_payment entries don't move the balance — the paired 'reversal' debit does.
   const rows = useMemo(() => {
     const asc = [...filtered].reverse();
     let bal = openingBalance ?? 0;
     const withBal = asc.map((e) => {
-      const isReversedPayment = e.payment_status === 'reversed';
-      if (!isReversedPayment) {
-        bal += e.direction === 'credit' ? e.amount : -e.amount;
-      }
+      bal += effectiveDelta(e);
       return { ...e, runningBalance: bal };
     });
     return withBal.reverse();
-  }, [filtered, openingBalance]);
+  }, [filtered, openingBalance]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const closingBalance = rows[0]?.runningBalance ?? openingBalance ?? 0;
 
   const totalCredits = rows.reduce(
-    (s, e) => s + (e.direction === 'credit' ? e.amount : 0),
+    (s, e) => s + (e.direction === 'credit' ? Math.max(0, effectiveDelta(e)) : 0),
     0,
   );
   const totalDebits = rows.reduce(
@@ -569,6 +576,11 @@ export function StatementTable({
                                 {e.payment_status === 'reversed' && (
                                   <span className="border-destructive/30 bg-destructive/10 text-destructive inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
                                     Reversed
+                                  </span>
+                                )}
+                                {e.payment_status === 'partial_refund' && e.refunded_amount && (
+                                  <span className="inline-flex items-center rounded-full border border-orange-300/50 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-400">
+                                    Partial refund · {formatINR(e.refunded_amount)}
                                   </span>
                                 )}
                                 {subtext && (
