@@ -163,20 +163,20 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
 
     let error: string | undefined;
     if (!sub_meter_no) {
-      error = 'sub_meter_no is required';
+      error = 'Sub-meter number is missing — add it and re-upload.';
     } else if (duplicates.has(sub_meter_no.toLowerCase())) {
-      error = `Duplicate sub_meter_no "${sub_meter_no}" in this file`;
+      error = `"${sub_meter_no}" appears more than once — remove the duplicate and re-upload.`;
     } else if (currentRaw === '' || Number.isNaN(currentReading)) {
-      error = 'current_meter_reading must be a number';
+      error = 'Current reading must be a number — fix it and re-upload.';
     } else if (currentReading < 0) {
-      error = 'current_meter_reading must be ≥ 0';
+      error = 'Current reading must be 0 or greater.';
     } else if (load_kva !== null && (Number.isNaN(load_kva) || load_kva <= 0)) {
-      error = 'load_kva must be a positive number';
+      error = 'Load (kVA) must be a positive number.';
     } else if (
       minimum_charge !== null &&
       (Number.isNaN(minimum_charge) || minimum_charge < 0)
     ) {
-      error = 'min_charges must be ≥ 0';
+      error = 'Minimum charge must be 0 or greater.';
     }
 
     return {

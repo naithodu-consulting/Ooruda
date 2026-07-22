@@ -1,12 +1,13 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useWatch } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { Alert, AlertDescription } from '@kit/ui/alert';
 import { Button } from '@kit/ui/button';
 import {
   Dialog,
@@ -67,6 +68,7 @@ export function PayDueDialog({
   onSuccess,
 }: Props) {
   const [isPending, startTransition] = useTransition();
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const form = useForm({
     resolver: zodResolver(Schema),
@@ -80,6 +82,7 @@ export function PayDueDialog({
   const selectedMode = useWatch({ control: form.control, name: 'mode' });
 
   const onSubmit = form.handleSubmit((values) => {
+    setErrorMessage(null);
     startTransition(async () => {
       const result = await recordDuePaymentAction(associationId, {
         unit_id: unitId,
@@ -89,12 +92,12 @@ export function PayDueDialog({
         reference_no: values.reference_no?.trim() || undefined,
       });
       if (result.success) {
-        toast.success('Payment recorded');
+        toast.success('Payment recorded successfully');
         form.reset();
         onOpenChange(false);
         onSuccess();
       } else {
-        toast.error(result.error ?? 'Failed to record payment');
+        setErrorMessage(result.error ?? 'Payment could not be recorded. Please try again.');
       }
     });
   });
@@ -113,6 +116,11 @@ export function PayDueDialog({
 
         <Form {...form}>
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
+            {errorMessage && (
+              <Alert variant="destructive">
+                <AlertDescription>{errorMessage}</AlertDescription>
+              </Alert>
+            )}
             <FormField
               control={form.control}
               name="amount"

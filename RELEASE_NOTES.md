@@ -1788,3 +1788,45 @@ _Last updated: 2026-07-18_
 - Added `min-w-max` to the ledger table so it expands to its natural content width. Previously `w-full` constrained the table to the container and the `overflow-x-auto` wrapper had nothing to scroll, causing columns to be cut off.
 
 _Last updated: 2026-07-19_
+
+---
+
+## Error Handling & Logging Improvements (2026-07-22)
+
+### Core: sanitizeActionError utility
+- New `apps/web/lib/errors/sanitize-action-error.ts` utility routes all server-side DB errors through a two-audience pattern: logs the raw error (with Postgres error code, action context, and a ref code) via `getLogger()`, and returns a plain user-safe message to the client.
+- Ref codes (MMDD-HHMM format) are included in unrecoverable error messages so support can correlate a user report to a specific log entry.
+- Errors are classified by Postgres code (`23505` = conflict, `42725` = ambiguous function, `PGRST116`/`23503` = not found) and message patterns (permission keywords), with a `server` fallback for everything else.
+
+### Bug fix: "Record Payment" — raw Postgres error shown to user
+- Recorded a payment failing with a raw Postgres `42725` (ambiguous function) error visible to the user.
+- Root cause: migration `20260724000001` created a 7-arg `record_due_payment` with `p_receipt_no` defaulting to null; migration `20260724000002` created the correct 6-arg version but only revoked permissions on the 7-arg instead of dropping it — both overloads coexisted.
+- Fix: new migration `20260725000000_drop_record_due_payment_7arg.sql` drops the ambiguous 7-arg overload, leaving only the 6-arg version.
+- UX: pay-due-dialog now shows errors inline (destructive Alert inside the form) instead of a toast that dismissed while the dialog stayed open.
+
+### Bug fix: "Remove Member" — assoc_admin incorrectly denied
+- Association admins were getting "Sorry, we couldn't remove the selected member" even when they had legitimate access.
+- Root cause: server action logic was inconsistent with the permissions loader — when no `assoc_admin_permissions` rows were configured for an association, the loader allowed (no restriction), but the action denied (no row = deny).
+- Fix: action now fetches all permission rows first; if none exist it falls through to hierarchy-based access (allow); if rows exist it checks the specific role's `can_delete` flag.
+
+### Error messages — user language across all action files
+- All permission denial messages rewritten from technical ("Not authorized.", "Only an association admin or billing operator can do that.") to plain user language ("You don't have the required permission. Contact your association admin.").
+- All raw `error.message` leaks eliminated from: `cash-ledger-actions.ts`, `payments-actions.ts`, `units-actions.ts`, `electricity-actions.ts`, `update-association.ts`.
+- Permission denials now emit `logger.warn()` with action context before returning, creating a full server-side audit trail.
+
+### Error surfaces standardised
+- Dialog flows (pay-due-dialog) now use inline `<Alert variant="destructive">` for errors so the user sees the message without the dialog closing.
+- Non-blocking list/table actions continue to use `toast.error`.
+
+### Import dialog row error messages
+- Rewrote all `_error` strings across 4 import dialogs (units, cash ledger, sub-meters, meter readings) from technical column-name format (`unit_no is required`) to imperative user-facing format (`Unit number is missing — add it and re-upload.`).
+- Added `.catch()` handler to `parseSpreadsheetFile` in the units import dialog — corrupt or unsupported files now show a toast instead of silently failing.
+- Standardised error-row highlight colour in cash-ledger import dialog to `bg-destructive/5` (was hardcoded `bg-red-50 dark:bg-red-950`).
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260725000000_drop_record_due_payment_7arg.sql` | Drops the ambiguous 7-arg `record_due_payment` overload left by `20260724000001`, resolving the Postgres `42725` error when recording payments |
+
+_Last updated: 2026-07-22_

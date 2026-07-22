@@ -73,7 +73,7 @@ function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
         amount: 0,
         paid_by,
         paid_on,
-        _error: 'unit_no is required',
+        _error: 'Unit number is missing — add it and re-upload.',
       };
     if (!type)
       return {
@@ -84,7 +84,7 @@ function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
         amount: 0,
         paid_by,
         paid_on,
-        _error: 'type is required',
+        _error: 'Entry type is missing — use "Due" or "Advance Payment".',
       };
     if (
       ![
@@ -103,7 +103,7 @@ function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
         amount: 0,
         paid_by,
         paid_on,
-        _error: `Unknown type "${type}"`,
+        _error: `"${type}" is not a valid type — use "Due" or "Advance Payment".`,
       };
     if (!bill_type)
       return {
@@ -114,7 +114,7 @@ function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
         amount: 0,
         paid_by,
         paid_on,
-        _error: 'bill_type is required',
+        _error: 'Bill type is missing — add it and re-upload.',
       };
     const amount = parseFloat(amountRaw);
     if (isNaN(amount) || amount <= 0)
@@ -126,7 +126,7 @@ function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
         amount: 0,
         paid_by,
         paid_on,
-        _error: `Invalid amount "${amountRaw}"`,
+        _error: amountRaw ? `"${amountRaw}" is not a valid amount — enter a number greater than 0.` : 'Amount is missing — enter a number greater than 0.',
       };
 
     return { _row: row, unit_no, type, bill_type, amount, paid_by, paid_on };
@@ -304,7 +304,7 @@ export function ImportCashLedgerDialog({
                   {rows.map((r) => (
                     <TableRow
                       key={r._row}
-                      className={r._error ? 'bg-red-50 dark:bg-red-950' : ''}
+                      className={r._error ? 'bg-destructive/5' : ''}
                     >
                       <TableCell className="text-muted-foreground text-xs">
                         {r._row}

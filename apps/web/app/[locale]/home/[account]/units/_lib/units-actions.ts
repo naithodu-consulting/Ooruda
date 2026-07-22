@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
 import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole } from '~/lib/rbac';
 
@@ -28,7 +29,7 @@ async function requireAssocAdmin(
   const role = await getAssociationRole(associationId);
 
   if (role !== 'assoc_admin') {
-    return 'Only an association admin can do that.';
+    return "You don't have the required permission. Contact your association admin.";
   }
 
   return null;
@@ -74,15 +75,19 @@ export async function createUnitAction(
     .single();
 
   if (error) {
-    // Unique (association_id, unit_no) violation
     if (error.code === '23505') {
       return {
         success: false,
-        error: `Unit "${parsed.data.unit_no}" already exists.`,
+        error: `Unit "${parsed.data.unit_no}" already exists. Use a different unit number.`,
       };
     }
 
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'createUnit',
+      associationId,
+      unitNo: parsed.data.unit_no,
+    });
+    return { success: false, error: userMessage };
   }
 
   void logAuditEvent({
@@ -163,11 +168,16 @@ export async function updateUnitAction(
     if (error.code === '23505') {
       return {
         success: false,
-        error: `Unit "${parsed.data.unit_no}" already exists.`,
+        error: `Unit "${parsed.data.unit_no}" already exists. Use a different unit number.`,
       };
     }
 
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'updateUnit',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
   }
 
   await logAuditEvent({
@@ -195,7 +205,10 @@ export async function deleteUnitAction(
   const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
   if (!isSuperAdmin) {
-    return { success: false, error: 'Only a super admin can delete units.' };
+    return {
+      success: false,
+      error: "You don't have permission to delete units.",
+    };
   }
 
   const { data: unit } = await client
@@ -211,7 +224,12 @@ export async function deleteUnitAction(
     .eq('association_id', associationId);
 
   if (error) {
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'deleteUnit',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
   }
 
   await logAuditEvent({
@@ -270,7 +288,12 @@ export async function assignOwnerAction(
     .eq('association_id', associationId);
 
   if (error) {
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'assignOwner',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
   }
 
   const { data: unit } = await client
@@ -350,11 +373,16 @@ export async function assignTenantAction(
       return {
         success: false,
         error:
-          'This unit already has an active tenant. End that tenancy first.',
+          'This unit already has an active tenant. End the current tenancy before assigning a new one.',
       };
     }
 
-    return { success: false, error: tenancyError.message };
+    const { userMessage } = await sanitizeActionError(tenancyError, {
+      action: 'assignTenant',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
   }
 
   const { error: statusError } = await client
@@ -364,7 +392,12 @@ export async function assignTenantAction(
     .eq('association_id', associationId);
 
   if (statusError) {
-    return { success: false, error: statusError.message };
+    const { userMessage } = await sanitizeActionError(statusError, {
+      action: 'assignTenant.updateStatus',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
   }
 
   const { data: unit } = await client
@@ -414,7 +447,13 @@ export async function endTenancyAction(
     .eq('unit_id', unitId);
 
   if (tenancyError) {
-    return { success: false, error: tenancyError.message };
+    const { userMessage } = await sanitizeActionError(tenancyError, {
+      action: 'endTenancy',
+      associationId,
+      unitId,
+      tenancyId,
+    });
+    return { success: false, error: userMessage };
   }
 
   const { error: statusError } = await client
@@ -424,7 +463,12 @@ export async function endTenancyAction(
     .eq('association_id', associationId);
 
   if (statusError) {
-    return { success: false, error: statusError.message };
+    const { userMessage } = await sanitizeActionError(statusError, {
+      action: 'endTenancy.updateStatus',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
   }
 
   const { data: unit } = await client
@@ -569,7 +613,11 @@ export async function bulkImportUnitsAction(
       return { success: true, imported, skipped: rowByRowSkipped };
     }
 
-    return { success: false, imported: 0, skipped, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'bulkImportUnits',
+      associationId,
+    });
+    return { success: false, imported: 0, skipped, error: userMessage };
   }
 
   const imported = inserted?.length ?? 0;

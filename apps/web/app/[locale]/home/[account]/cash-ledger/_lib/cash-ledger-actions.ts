@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
 import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole } from '~/lib/rbac';
 
@@ -23,7 +24,7 @@ async function requireBillingAccess(
 ): Promise<string | null> {
   const role = await getAssociationRole(associationId);
   if (role !== 'assoc_admin' && role !== 'billing_operator') {
-    return 'Only an association admin or billing operator can do that.';
+    return "You don't have the required permission. Contact your association admin.";
   }
   return null;
 }
@@ -86,7 +87,11 @@ export async function addCashLedgerEntryAction(
       notes: input.notes?.trim() ?? null,
     });
   } catch (err) {
-    return { success: false, error: (err as Error).message };
+    const { userMessage } = await sanitizeActionError(err, {
+      action: 'addCashLedgerEntry',
+      associationId,
+    });
+    return { success: false, error: userMessage };
   }
 
   // A new advance deposit should immediately offset any outstanding bills of the
@@ -225,7 +230,12 @@ export async function bulkImportCashLedgerAction(
   if (toInsert.length > 0) {
     const { error } = await uc(client).from('cash_ledger').insert(toInsert);
     if (error) {
-      return { success: false, imported: 0, skipped, error: error.message };
+      const { userMessage } = await sanitizeActionError(error, {
+        action: 'bulkImportCashLedger',
+        associationId,
+        rowCount: toInsert.length,
+      });
+      return { success: false, imported: 0, skipped, error: userMessage };
     }
 
     // Apply each imported advance against outstanding bills of the same
@@ -304,8 +314,15 @@ export async function recordDuePaymentAction(
     },
   );
 
-  if (error)
-    return { success: false, error: (error as { message: string }).message };
+  if (error) {
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'recordDuePayment',
+      associationId,
+      unitId: input.unit_id,
+      billType: input.bill_type,
+    });
+    return { success: false, error: userMessage };
+  }
 
   await logAuditEvent({
     associationId,
@@ -364,8 +381,14 @@ export async function getCashLedgerEntriesAction(
   }
 
   const { data, error } = await query;
-  if (error)
-    return { success: false, error: (error as { message: string }).message };
+  if (error) {
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'getCashLedgerEntries',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
+  }
 
   return { success: true, entries: (data ?? []) as CashLedgerEntryRow[] };
 }

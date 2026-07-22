@@ -109,9 +109,9 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
     const validType = UNIT_TYPES.includes(type as (typeof UNIT_TYPES)[number]);
 
     let error: string | undefined;
-    if (!unit_no) error = 'unit_no is required';
+    if (!unit_no) error = 'Unit number is missing — add it and re-upload.';
     else if (!validType)
-      error = `type must be one of: ${UNIT_TYPES.join(', ')}`;
+      error = `"${type}" is not a valid unit type. Use one of: ${UNIT_TYPES.join(', ')}.`;
     else {
       if (type === 'Common Area' && (!area_sqft || area_sqft === '')) {
         area_sqft = '0';
@@ -123,8 +123,8 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
       ) {
         error =
           type === 'Common Area'
-            ? 'area_sqft must be 0 or a positive number'
-            : 'area_sqft must be greater than 0';
+            ? 'Area must be 0 or a positive number for Common Area units.'
+            : 'Area must be greater than 0 — enter a valid value and re-upload.';
       }
     }
 
@@ -133,7 +133,7 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
       floor !== '' &&
       (Number.isNaN(Number(floor)) || Number(floor) < -5 || Number(floor) > 200)
     )
-      error = 'floor must be an integer between -5 and 200';
+      error = 'Floor must be a whole number between -5 and 200.';
 
     return {
       _row: i + 1,
@@ -174,7 +174,11 @@ export function ImportUnitsDialog({
     setFileName(file.name);
     setResult(null);
 
-    parseSpreadsheetFile(file).then((raw) => setRows(parseRows(raw)));
+    parseSpreadsheetFile(file)
+      .then((raw) => setRows(parseRows(raw)))
+      .catch(() =>
+        toast.error('Failed to read the file. Check it is a valid CSV or Excel file.'),
+      );
   }
 
   function handleOpenChange(next: boolean) {

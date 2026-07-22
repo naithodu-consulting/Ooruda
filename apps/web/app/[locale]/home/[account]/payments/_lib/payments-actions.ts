@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
 import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole } from '~/lib/rbac';
 
@@ -23,7 +24,7 @@ async function requireBillingAccess(
   const role = await getAssociationRole(associationId);
 
   if (role !== 'assoc_admin' && role !== 'billing_operator') {
-    return 'Only an association admin or billing operator can do that.';
+    return "You don't have permission to do this. Contact your association admin if you think this is incorrect.";
   }
 
   return null;
@@ -68,13 +69,18 @@ export async function recordPaymentAction(
   });
 
   if (error) {
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'recordPayment',
+      associationId,
+      billId,
+    });
     await logAuditEvent({
       associationId,
       action: 'payment.record.failed',
       entityType: 'payment',
       summary: `Failed to record payment for bill ${billId}: ${error.message}`,
     });
-    return { success: false, error: error.message };
+    return { success: false, error: userMessage };
   }
 
   // Persist reference_no if provided. The RPC doesn't accept it and uses
@@ -119,7 +125,10 @@ export async function voidPaymentAction(
   const role = await getAssociationRole(associationId);
 
   if (role !== 'assoc_admin') {
-    return { success: false, error: 'Only an association admin can do that.' };
+    return {
+      success: false,
+      error: "You don't have the required permission. Contact your association admin.",
+    };
   }
 
   const client = getSupabaseServerClient();
@@ -130,6 +139,11 @@ export async function voidPaymentAction(
     .eq('id', paymentId);
 
   if (deleteError) {
+    const { userMessage } = await sanitizeActionError(deleteError, {
+      action: 'voidPayment',
+      associationId,
+      paymentId,
+    });
     await logAuditEvent({
       associationId,
       action: 'payment.void.failed',
@@ -137,7 +151,7 @@ export async function voidPaymentAction(
       entityId: paymentId,
       summary: `Failed to void payment ${paymentId}: ${deleteError.message}`,
     });
-    return { success: false, error: deleteError.message };
+    return { success: false, error: userMessage };
   }
 
   await logAuditEvent({
@@ -177,7 +191,10 @@ export async function deleteAllPaymentsAction(
 
   const { data: isSuperAdmin } = await client.rpc('is_super_admin');
   if (!isSuperAdmin) {
-    return { success: false, error: 'Only a super admin can do that.' };
+    return {
+      success: false,
+      error: "You don't have the required permission.",
+    };
   }
 
   const { data, error } = await client
@@ -187,7 +204,11 @@ export async function deleteAllPaymentsAction(
     .single();
 
   if (error) {
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'deleteAllPayments',
+      associationId,
+    });
+    return { success: false, error: userMessage };
   }
 
   // Best-effort cleanup of orphaned cached receipt PDFs.
