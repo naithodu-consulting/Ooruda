@@ -192,9 +192,13 @@ async function resolveBillingEntity(
  * caller is at least a member of the bill's association, then
  * `canAccessUnit` confirms admins/billing operators can see any unit while
  * owners/tenants are restricted to units they actually own or rent.
+ *
+ * Pass `{ skipAuth: true }` only from server-side generation flows (e.g.
+ * post-generation pre-render) where the caller is already authorised.
  */
 export async function getOrGenerateBillPdf(
   billId: string,
+  opts?: { skipAuth?: boolean },
 ): Promise<GeneratedPdf | null> {
   const cacheKey = `bill_${billId}`;
   if (pendingPdfGenerations.has(cacheKey)) {
@@ -237,6 +241,7 @@ export async function getOrGenerateBillPdf(
     }
 
     if (
+      !opts?.skipAuth &&
       !(await canAccessUnit(
         bill.association_id,
         bill.unit_id,
@@ -563,6 +568,23 @@ export async function getOrGenerateBillPdf(
     return await promise;
   } finally {
     pendingPdfGenerations.delete(cacheKey);
+  }
+}
+
+/**
+ * Best-effort background PDF pre-render called after bill generation.
+ * Skips auth — only invoke from server-side generation flows (generateBillsAction).
+ * Errors are logged and swallowed so one failed render never blocks the others.
+ */
+export async function preRenderBillPdf(billId: string): Promise<void> {
+  try {
+    await getOrGenerateBillPdf(billId, { skipAuth: true });
+  } catch (err) {
+    const logger = await getLogger();
+    logger.error(
+      { billId, err },
+      'preRenderBillPdf: background render failed — will render on first download instead',
+    );
   }
 }
 

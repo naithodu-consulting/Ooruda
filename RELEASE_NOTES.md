@@ -1787,7 +1787,7 @@ _Last updated: 2026-07-18_
 ### Cash Ledger — Table Horizontal Scroll on Mobile
 - Added `min-w-max` to the ledger table so it expands to its natural content width. Previously `w-full` constrained the table to the container and the `overflow-x-auto` wrapper had nothing to scroll, causing columns to be cut off.
 
-_Last updated: 2026-07-21_
+_Last updated: 2026-07-22_
 
 ---
 
@@ -1805,7 +1805,7 @@ _Last updated: 2026-07-21_
 
 _No new migrations in this release._
 
-_Last updated: 2026-07-21_
+_Last updated: 2026-07-22_
 
 ---
 
@@ -1915,7 +1915,9 @@ A new `sinking_fund` bill type (`SNK/` prefix) has been introduced. It behaves l
 - **Unit loop parallelised**: The `generateBills` action now processes units in concurrent batches of 8 instead of serially. For a 100-unit association, this reduces bill-generation wall-clock time by ~60–70% (e.g. 3 bill types × 100 units went from 300 sequential RPCs to ~13 batches of parallel calls). Bill-type RPCs within each unit were already parallel; units are now parallel too.
 
 ### PDF Downloads (Bills & Receipts — all types)
-- **Background storage write**: After rendering, the storage upload + DB update + audit log are now fired in the background (`void` async IIFE). The rendered bytes are returned to the browser immediately, saving 300–400ms on every first-render (cache miss). Cache hits (signed URL redirect) are unaffected.
+- **Pre-render at generation time**: After `generateBillsAction` creates bills, it immediately schedules background PDF rendering for all bills that don't yet have a cached PDF. Uses Next.js `after()` so the action returns to the user without waiting; Vercel keeps the lambda alive to complete the renders. Result: first download is a cache hit (~0.8–1.4s) instead of a cold render (7–8s). Batches of 3 concurrent renders to avoid saturating the CPU.
+- **Auth bypassed for pre-render**: `getOrGenerateBillPdf` now accepts `{ skipAuth: true }` for server-side generation flows, eliminating the 4-sequential-DB-call `getAssociationRole` chain (~400ms) per bill. The skip is internal-only and not exposed to any route handler.
+- **Storage write correctness fix**: Receipt PDF storage upload is now awaited (was previously a fire-and-forget `void` IIFE that could be killed by serverless before completing, leaving `receipts.pdf_url` as NULL). Bill PDF upload was also corrected for the same reason.
 - **Storage + audit parallelised**: The `bills.update` and `logAuditEvent` writes after upload now run concurrently instead of sequentially.
 - **Electricity bill DB parallelised**: The three sequential DB calls (mescom bill → sub-meters → billing entity) are now issued in a single `Promise.all`. Only the meter-readings fetch (which needs the mescom bill ID) remains sequential. Saves 2 round-trips per electricity PDF.
 - **Non-electricity bills**: `resolveBillingEntity` now resolves in the else branch only (not wasted on electricity bills). Same for receipts.
@@ -1985,4 +1987,4 @@ Full management-level PDF via `@react-pdf/renderer`:
 |---|---|
 | `20260721000003_reports_collection_summary.sql` | `get_collection_summary()` function for aggregated collection data |
 
-_Last updated: 2026-07-21_
+_Last updated: 2026-07-22_

@@ -1,8 +1,6 @@
 import { Building2, DoorClosed, DoorOpen, Ruler } from 'lucide-react';
 
-import { AdminBulkInviteDialog } from '@kit/admin/components/admin-bulk-invite-dialog';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { Button } from '@kit/ui/button';
 import { MetricCard } from '@kit/ui/metric-card';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
@@ -40,14 +38,11 @@ export default async function UnitsPage({ params }: Props) {
   const client = getSupabaseServerClient();
   const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
-  const [{ data: association }, { data: accountData }] = await Promise.all([
-    client
-      .from('associations')
-      .select('id')
-      .eq('account_id', accountId)
-      .single(),
-    client.from('accounts').select('name').eq('id', accountId).single(),
-  ]);
+  const { data: association } = await client
+    .from('associations')
+    .select('id')
+    .eq('account_id', accountId)
+    .single();
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');
@@ -220,15 +215,6 @@ export default async function UnitsPage({ params }: Props) {
         ) : null}
 
         <div className="flex items-center justify-end gap-4">
-          {isSuperAdmin ? (
-            <AdminBulkInviteDialog
-              associationName={accountData?.name ?? undefined}
-            >
-              <Button variant="outline" data-test="admin-bulk-invite-button">
-                Invite Members
-              </Button>
-            </AdminBulkInviteDialog>
-          ) : null}
           {canManage ? (
             <>
               <ImportUnitsDialog associationId={association.id} />

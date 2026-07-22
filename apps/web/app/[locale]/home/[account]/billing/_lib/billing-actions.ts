@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 
 import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
@@ -10,6 +11,7 @@ import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole } from '~/lib/rbac';
 
 import { getCashLedgerBalance } from '../../cash-ledger/_lib/cash-ledger-service';
+import { preRenderBillPdf } from './server/pdf-generation';
 import { type GenerateBillsInput, GenerateBillsSchema } from './billing-schema';
 
 const BILLING_PATH = '/home/[account]/billing';
@@ -711,6 +713,36 @@ export async function generateBillsAction(
 
   if (firstBatchError) {
     return { success: false, error: firstBatchError };
+  }
+
+  // Schedule background PDF pre-render so every first download is a cache hit (~0.8s vs 7-8s).
+  // Runs after the action response is sent; Vercel extends the lambda lifetime for `after` callbacks.
+  // Best-effort: a failed render is logged and the bill falls back to on-demand rendering.
+  {
+    const { data: unrenderedBills } = await client
+      .from('bills')
+      .select('id')
+      .eq('association_id', associationId)
+      .eq('period', period)
+      .is('pdf_url', null);
+
+    const preRenderIds = (unrenderedBills ?? []).map((b) => b.id);
+    if (preRenderIds.length > 0) {
+      const PDF_PRE_RENDER_CONCURRENCY = 3;
+      after(async () => {
+        for (
+          let i = 0;
+          i < preRenderIds.length;
+          i += PDF_PRE_RENDER_CONCURRENCY
+        ) {
+          await Promise.allSettled(
+            preRenderIds
+              .slice(i, i + PDF_PRE_RENDER_CONCURRENCY)
+              .map(preRenderBillPdf),
+          );
+        }
+      });
+    }
   }
 
   // Mark unbilled pending charges as billed now that bills are generated.
