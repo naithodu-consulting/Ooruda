@@ -1841,10 +1841,297 @@ _Last updated: 2026-07-19_
 - Added `.catch()` handler to `parseSpreadsheetFile` in the units import dialog — corrupt or unsupported files now show a toast instead of silently failing.
 - Standardised error-row highlight colour in cash-ledger import dialog to `bg-destructive/5` (was hardcoded `bg-red-50 dark:bg-red-950`).
 
+---
+
+## Email Templates — Ooruda Brand Redesign (Jul 21, 2026)
+
+### Changes
+
+- **Shared components** (`wrapper`, `header`, `content`, `footer`, `heading`, `cta-button`, `body-style`): Full redesign with Ooruda brand — amber `#FCD469` header bar with "ooruda" wordmark + "Property Management" tagline, white content card, amber CTA button, minimal footer with copyright and `hello@ooruda.com`
+- **OTP email**: New layout with amber code box (large monospace OTP, amber background), Ooruda-branded subject ("Your Ooruda sign-in code"), clear expiry note, and security disclaimer
+- **Invite email**: Updated subject, heading, copy, and CTA ("Accept Invitation") with Ooruda branding; plain-text link fallback preserved
+- **Account delete email**: Updated all copy to Ooruda voice and tone
+- **All locale files** (`otp-email.json`, `invite-email.json`, `account-delete-email.json`): Rewrote copy — action-first subjects, friendly tone, Ooruda-specific wording
+
+### Migrations Changelog
+
+_No new migrations in this release._
+
+_Last updated: 2026-07-22_
+
+---
+
+## v1.2 — Super Admin Polish, Units UX & Sinking Fund (2026-07-21)
+
+### Super Admin Panel — Association-Centric Language
+
+- **Accounts page defaults to Associations tab** — previously defaulted to "All"; now opens on the Associations tab directly.
+- **Tab switching performance** — `useTransition` keeps current content visible during navigation; `router.prefetch` on mount pre-warms RSC payloads for all three tabs. Active tab stays enabled while sibling tabs are disabled during the transition. A progress bar appears below the filter row while switching.
+- **Terminology cleanup** — "Team Members" → "Members", "Team Accounts" → "Associations", "Delete Team Account" → "Delete Association" throughout the super admin UI.
+- **Subscriptions removed** — `SubscriptionsTable` and all subscription references removed from the super admin panel (not applicable to Ooruda).
+- **Open Workspace button** — promoted to primary button with an `ExternalLink` icon; label shortened to "Open Workspace".
+- **Test badge on Associations** — associations marked `is_test = true` now display an amber "Test" badge in the admin table (previously only personal accounts had test badges).
+
+### Units Page
+
+- **Status column moved** — Status badge now appears immediately after Area (before Owner), improving scannability.
+- **Filter chips simplified** — removed the non-functional "Ground Floor" and "Overdue" filter chips; active filter set is now: All · Occupied · Self Occupied · Rented · Vacant.
+
+### Sinking Fund — New Bill Type
+
+A new `sinking_fund` bill type (`SNK/` prefix) has been introduced. It behaves like Other Charges — ad-hoc, admin-staged, no frequency schedule — allowing associations to collect sinking fund contributions on any cadence (monthly, quarterly, annual) with the description field for period context (e.g. "Q1 Apr–Jun 2026").
+
+**Where it appears:**
+- **Cash Ledger** — Bill Type dropdown includes "Sinking Fund" for both Due and Advance Payment entries.
+- **Billing** — "Sinking Fund" button in the header opens a staging dialog (mirrors Other Charges dialog). Staged charges appear in the Draft Bills tab under a dedicated Sinking Fund section. "Generate Bills" dialog and Bill Type filter both include Sinking Fund.
+- **Payments** — Bill Type filter includes Sinking Fund.
+- **Bills filter** — Generated Bills type filter includes Sinking Fund.
+- **Receipts / Statements** — `bill_type_labels` and `bill_filter_items` updated; Sinking Fund appears wherever bill type is shown.
+
+**Generation logic** — `billing-actions.ts` fetches `pending_sinking_fund_charges` for the period, builds SNK line items per unit, generates `SNK/` bills, then marks all staged charges as billed. Due date is sourced from the staged charge's `due_date` field (falls back to the Other Charges due date).
+
+### Migration
+
+| Migration | Description |
+|---|---|
+| `20260721000001_sinking_fund.sql` | Adds `sinking_fund` charge type to `seed_builtin_charge_types()`, backfills all existing associations, creates `pending_sinking_fund_charges` table with full RLS |
+| `20260721000002_fix_sinking_fund_rls.sql` | Replaces incorrect RLS policies (wrong UUID comparison) with correct `association_role()` pattern — matches `pending_other_charges` policies |
+| `20260721000003_reports_collection_summary.sql` | Adds `get_collection_summary(association_id, from_period, to_period)` DB function for efficient aggregated reporting without full table scans |
+| `20260721000004_fix_collection_summary_types.sql` | Recreates `get_collection_summary` with explicit `::text` casts on `bills.period` (varchar(7)) and `bills.bill_type` (varchar(20)) to fix "structure of query does not match function result type" error caused by plan-cache staleness after subsequent migrations altered the bills table |
+
+### Sinking Fund — Critical Bug Fixes
+
+- **Separate `sinkingCreated` counter** — previously the mark-as-billed guard used the same `created` counter as maintenance bills; if any maintenance bills were generated (setting `created > 0`) but no SNK bills were generated (e.g. `hasSinking` caused a skip), staged sinking fund charges would be incorrectly marked as billed with no corresponding bill. Fixed by introducing a separate `sinkingCreated` counter.
+- **Period format validation** — `addSinkingFundChargeToUnitAction` and `bulkAddSinkingFundChargeAction` now validate that the `period` field matches `YYYY-MM` format before processing.
+
+---
+
+## Reports Screen — Polish & Bug Fixes (2026-07-21)
+
+### Performance — Zero Server Round-Trips on Filter/Tab Change
+
+- **Root cause of filter lag identified**: `router.push()` for filter changes triggered a full Next.js RSC re-render — `page.tsx` re-executed on the server (`requireRole` + association lookup = 2 remote DB calls) before the client could begin fetching data.
+- **Fix: `window.history.replaceState` + React state**: All filter state (`preset`, `from`, `to`, `activeTab`) now lives in `useState` inside `ReportsClientPage`. Filter and tab changes call `setState` + `window.history.replaceState()` — URL stays in sync for bookmarking/refresh without triggering any Next.js navigation. Zero server round-trips.
+- **Tab changes also fixed**: `ReportsTabs` now receives `activeTab` + `onTabChange` as props. No `router.push` for tab switching.
+- **Abort-controller pattern**: Stale in-flight requests are cancelled when a new filter is applied, preventing race conditions.
+- **Loading skeleton**: Pulsing KPI + chart skeleton shown during data fetch.
+- **Pre-existing lint fixes**: Removed unused `FormDescription` import in `phone-otp-sign-in-container.tsx`; refactored `admin-accounts-table.tsx` prefetch effect to use `useCallback` with correct deps.
+
+### Collection Tab — Data Model Fix
+
+- **Root cause fixed**: The Collection tab previously queried `bills.period` for the date range — so "This FY" (Apr 2026–Mar 2027) returned empty if no bills were raised in that period, even though payments had been received against old bills.
+- **Now payment-date-based by default**: Collection tab defaults to "Payments Received" view — data grouped by `paid_at` month (actual cash received in the selected period), matching what the dashboard shows.
+- **"Bills Raised" toggle**: Secondary toggle still lets admins see bills issued in the period and their collection rate.
+- **Empty state** correctly distinguishes "no payments in period" from "no bills raised in period".
+
+### Export UI Redesign
+
+- Replaced the broken wrapping menu with a clean icon + two-line layout per option.
+- Green `FileSpreadsheet` icon for CSV, blue `FileText` icon for PDF.
+- Section label ("Download report") and separator added for clarity.
+- `min-w-[220px]` on dropdown ensures it never collapses.
+- Export button shows abbreviated label on mobile (`sm:hidden`/`sm:inline`).
+
+### Custom Date Range — Full Day Precision
+
+- Replaced `<input type="month">` (month/year only) with `<input type="date">` — admins can now pick exact dates like "10 May 2026 – 20 Jun 2026".
+- `from`/`to` are now full `YYYY-MM-DD` dates throughout the system (previously `YYYY-MM`).
+- DB queries adapt automatically: period-based tables (`bills.period`, `mescom_bills.period`) receive `YYYY-MM` via `date.slice(0,7)`; payments receive exact dates for full precision.
+- `<input max>` / `<input min>` constraints prevent selecting an invalid range in the picker itself.
+- Live preview below each input shows formatted date ("10 May 2026") for confirmation.
+- "Range: X – Y" summary shown before applying so admins can confirm the selection.
+- Custom button label after applying shows the exact human-readable range (e.g., "10 May – 20 Jun 2026").
+- Popover re-syncs to current range whenever reopened.
+- `resolvePreset()` now returns `YYYY-MM-DD` dates (e.g., `last_fy` → `2025-04-01` to `2026-03-31`).
+
+### Responsiveness
+
+- Tab bar (`Collection | Outstanding | Payments | Electricity`) is now `overflow-x-auto` + `w-max` on mobile — all 4 tabs are horizontally scrollable without wrapping.
+- Tab row and Export button stack vertically on mobile (`flex-col sm:flex-row`).
+- Default preset changed to "Last 6 months" (was "This FY") so the screen almost always shows data on first load.
+
+### All Time Filter
+
+- Added **All Time** as a new preset (appears first in the pill row) — queries return every record with no date bounds.
+- **All Time is now the default** when the Reports screen is opened fresh (no URL params).
+- When All Time is active, period/date filters are omitted from all four DB queries (bills, payments, mescom_bills, `get_collection_summary`) so no records are excluded.
+- URL is kept clean: `from`/`to` params are removed when switching to All Time; only `preset=all_time` is stored.
+- Opening the Custom Range popover while on All Time pre-fills dates to last 6 months as a sensible starting point.
+- Hydration-safe: `from`/`to` URL params are optional — absence is handled gracefully on SSR.
+
+---
+
+## Performance — Bill Generation, PDF Downloads & CSV Imports (2026-07-21)
+
+### Bill Generation
+- **Unit loop parallelised**: The `generateBills` action now processes units in concurrent batches of 8 instead of serially. For a 100-unit association, this reduces bill-generation wall-clock time by ~60–70% (e.g. 3 bill types × 100 units went from 300 sequential RPCs to ~13 batches of parallel calls). Bill-type RPCs within each unit were already parallel; units are now parallel too.
+
+### PDF Downloads (Bills & Receipts — all types)
+- **Pre-render at generation time**: After `generateBillsAction` creates bills, it immediately schedules background PDF rendering for all bills that don't yet have a cached PDF. Uses Next.js `after()` so the action returns to the user without waiting; Vercel keeps the lambda alive to complete the renders. Result: first download is a cache hit (~0.8–1.4s) instead of a cold render (7–8s). Batches of 3 concurrent renders to avoid saturating the CPU.
+- **Auth bypassed for pre-render**: `getOrGenerateBillPdf` now accepts `{ skipAuth: true }` for server-side generation flows, eliminating the 4-sequential-DB-call `getAssociationRole` chain (~400ms) per bill. The skip is internal-only and not exposed to any route handler.
+- **Storage write correctness fix**: Receipt PDF storage upload is now awaited (was previously a fire-and-forget `void` IIFE that could be killed by serverless before completing, leaving `receipts.pdf_url` as NULL). Bill PDF upload was also corrected for the same reason.
+- **Storage + audit parallelised**: The `bills.update` and `logAuditEvent` writes after upload now run concurrently instead of sequentially.
+- **Electricity bill DB parallelised**: The three sequential DB calls (mescom bill → sub-meters → billing entity) are now issued in a single `Promise.all`. Only the meter-readings fetch (which needs the mescom bill ID) remains sequential. Saves 2 round-trips per electricity PDF.
+- **Non-electricity bills**: `resolveBillingEntity` now resolves in the else branch only (not wasted on electricity bills). Same for receipts.
+- Font registration was already guarded with a `registered` flag; no redundant work.
+
+### CSV/XLSX Imports
+- **Units import**: Replaced the O(n) row-by-row fallback on unique-key conflict with a single pre-flight query that identifies existing unit numbers. Only truly new units are bulk-inserted; conflicts are reported directly without serial DB calls.
+- **Meter readings import**: Three independent pre-flight queries (units, mescom bills, generated-bill count) are now fetched in a single `Promise.all`. Sub-meters and last-readings fetches follow sequentially (they depend on the units result), cutting total round-trips from 5 sequential to 3 sequential steps.
+- **Cash ledger import**: The `apply_available_advance` RPC calls (one per unique unit + bill-type bucket) now run concurrently via `Promise.all` instead of serially. An import touching 10 unit/bill-type combos previously made 10 sequential RPCs; now they fire in one parallel wave.
+- **Bulk invite members (Units → Invite Members)**: Rewrote `bulkInviteMembersAction` from a fully serial loop to a three-phase parallel pipeline. Previously: 100 rows × ~800ms per `createUser` Auth call = **~80 seconds**. Now:
+  - **Phase 1** — Synchronous validation (phone normalisation, association lookup, role check) with no DB calls. Invalid rows are collected instantly.
+  - **Phase 2** — Unique new-user creation in **parallel batches of 8**. Phones are deduplicated so two rows sharing a phone (e.g. RENTED unit owner + tenant) only fire one `createUser` call. 100 new users now takes ~13 batches × ~800ms = **~10 seconds** (8× faster).
+  - **Phase 3** — All `accounts_memberships` inserts fire concurrently in a single `Promise.all` wave.
+  - Unit-level updates (status, owner, tenancy) and audit logs were already parallelised; unchanged.
+
+## Reports Screen Redesign (2026-07-21)
+
+Complete overhaul of the Reports screen for admins — replaced the old table-heavy layout with a chart-first, visually rich analytics dashboard.
+
+### Overview
+
+- **4 tabbed views**: Collection Overview · Outstanding Dues · Payments · Electricity
+- **Date range picker**: Preset buttons (This FY, Last FY, 6m, 3m) + custom month/year range popover; state driven by URL `searchParams` so tab switches preserve the selected range
+- **Dual export**: "Export" dropdown → Download CSV (current tab) or Download PDF (full report)
+- **Property owner view** unchanged — still shows personal dues only
+
+### Collection Overview Tab
+
+- 4 KPI tiles: Total Billed, Total Collected, Outstanding, Collection Rate %
+- Grouped bar chart: Billed vs Collected per month, colour-coded by bill type
+- Donut pie: Bill-type breakdown, clickable to filter the bar chart
+- Line chart: Collection rate % trend with 100% reference dashed line
+
+### Outstanding Dues Tab
+
+- 3 KPI tiles: Total Outstanding, Overdue Bills count, Oldest Unpaid date
+- Horizontal bar chart: Ageing buckets (Current / 1–7d / 8–30d / 30d+)
+- Horizontal bar chart: Top-10 defaulters by unit (highest outstanding)
+- Expandable table: All outstanding bills with unit/bill-number search, paginated 25/page
+
+### Payments Tab
+
+- 4 KPI tiles: Total Collected, Transaction count, Avg Payment, Top Mode
+- Area chart: Payment timeline with gradient fill (weekly if range > 60 days, else daily)
+- Donut pie: Payment mode mix (UPI / Cash / NEFT / etc.)
+- Stacked bar chart: Payments by bill type per month (only shown if 2+ bill types present)
+- Paginated payment log table
+
+### Electricity Tab
+
+- 3 KPI tiles: Total Cost, Total Block Units, Avg Rate / kWh
+- Composed chart: Bar for invoice amount + Line for block units on dual Y-axes
+- Period selector dropdown for per-unit consumption view
+- Detail table: MESCOM bill data per period
+
+### PDF Report Export
+
+Full management-level PDF via `@react-pdf/renderer`:
+- Association header (logo, name, address, GSTIN)
+- 4 sections: Collection Summary table, Outstanding Dues table, Payments Received table, Electricity Summary table
+- KPI boxes per section, alternating-row tables
+- Fixed footer: "Generated on [date] by [user]" + "Page X of Y"
+
 ### Migrations Changelog
 
 | Migration | Description |
 |---|---|
+| `20260721000003_reports_collection_summary.sql` | `get_collection_summary()` function for aggregated collection data |
 | `20260725000000_drop_record_due_payment_7arg.sql` | Drops the ambiguous 7-arg `record_due_payment` overload left by `20260724000001`, resolving the Postgres `42725` error when recording payments |
 
-_Last updated: 2026-07-22_
+_Last updated: 2026-07-23_
+
+---
+
+## v1.2 — Billing & Payments UX Fixes (2026-07-23)
+
+### Billing Overview
+
+- **Overdue count now correct** — KPI tiles and "Collection by Period" table were showing 0 overdue even when bills were past due. Root cause: the filter checked `b.status === 'Unpaid'` but the DB stores `status = 'Overdue'` for past-due bills after the nightly recompute. Fixed by using `displayBillStatus(b) === 'Overdue'` everywhere, matching what the Payments page has always shown.
+- **"Fully Paid" tile is now interactive** — was a plain non-interactive `<div>`; now wrapped in a `TileButton` that filters the period table to fully-collected periods.
+- **"Outstanding" tile filter** — now hides periods with zero outstanding (not just re-sorts); instantly shows which periods need attention.
+- **Cursor pointer on tiles** — added `cursor-pointer` to `TileButton`; browsers don't auto-apply it to `<button>` elements without explicit CSS.
+- **Removed "All bill types" period filter** — a per-bill-type filter on an aggregate period table was unintuitive. Full type/unit/status filtering is available in the period drill-down (Layer 2).
+- **KPI tile visual consistency** — replaced custom `KpiTile` sub-component with the shared `MetricCard` primitive; both the overview and period detail now use identical tile styling.
+- **"Collection by Period" heading size** — bumped from `text-sm` to `text-base font-semibold`.
+- **Tile filter performance** — `setActiveTile` now runs in `startTransition()`.
+
+### Bills Section
+
+- **"View Drafts" button now works** — `useState(props.defaultOpen)` only initialises on mount; soft navigation doesn't remount the component. Fixed with `useSearchParams` + `useEffect` that syncs `open` and `activeTab` when `?bills=` URL param changes.
+- **Controlled Tabs** — converted from uncontrolled (`defaultValue`) to controlled (`value`/`onValueChange`) so tab state stays in sync with URL-driven opens.
+- **Toggle UI** — replaced inline "↓ Show bill list / ↑ Hide" text button with a clean chevron icon on the section title.
+
+### MultiSelect — Accessibility
+
+- **Nested interactive element fixed** — clear button moved outside the PopoverTrigger into an absolutely-positioned sibling.
+- **Focus ring, ARIA roles** — `focus-visible:ring-1` on clear button; `role="listbox" aria-multiselectable="true"` on options container; `aria-haspopup="listbox"` on trigger.
+
+### Date Parsing
+
+- **Timezone-safe due date display** — `new Date('YYYY-MM-DD')` parses as UTC midnight, shifting displayed date by one day for IST users. Fixed with `.replace(/-/g, '/')` in `billing-period-detail.tsx` and `billing-unit-sheet.tsx`.
+
+### Payments Page
+
+- **"Record Payment" button** — changed from primary to `variant="outline"` so it doesn't dominate table rows visually.
+- **Table typography** — period/type are `text-sm text-muted-foreground`; unit `font-medium`; total `font-medium`; outstanding uses dark-mode-safe `text-red-600 dark:text-red-400`.
+- **Overdue row highlight** — now uses semantic `bg-destructive/[0.04]`.
+- **Metrics strip** — label font normalised to `text-[11px]`; value weight `font-semibold`.
+
+_Last updated: 2026-07-23_
+
+---
+
+## v1.2 — Security & Correctness Hardening (2026-07-23)
+
+Adversarial bug-hunt across the entire v1.2 branch. 22 confirmed findings resolved (7 high, 9 medium, 6 low). No user-facing feature changes.
+
+### Critical / High — Security Fixes
+
+- **[FINANCIAL] verify-due amount not HMAC-verified** — `/api/billing/razorpay/verify-due` accepted client-supplied `amount` after HMAC verification, allowing a payer to capture a small payment then claim the full outstanding. Fixed: the route now fetches the actual captured amount from the Razorpay API (`GET /v1/payments/{id}`) server-side and uses that instead of the body value.
+- **[AUTHZ] Webhook isDue: unit_id not validated against association** — a caller with Razorpay credentials for Association A could supply a foreign `unit_id` (from Association B) in order notes and credit that association's cash-ledger. Fixed: unit ownership is now verified against `association_id` after HMAC verification.
+- **[INFODISCL] Webhook refund.processed: payment-ID oracle** — unauthenticated callers could distinguish valid from invalid Razorpay payment IDs by comparing HTTP responses (400 vs 200) on HMAC failure. Fixed: all HMAC failures in the refund branch now return 200.
+- **[FINANCIAL] recordDuePaymentAction: no outstanding cap** — billing operators could record payments exceeding actual outstanding, inflating ledger credits. Fixed: action now fetches balance via `get_cash_ledger_balance` RPC and rejects amounts > outstanding.
+- **[SSRF] PDF logo URL fetched server-side without validation** — association admins control `picture_url`; react-pdf fetches it during PDF render. Pointing to `169.254.169.254` or internal services = SSRF. Fixed: `sanitizeLogoUrl()` helper now validates HTTPS and blocks all private/reserved IP ranges before passing to the renderer.
+- **[BIZLOGIC] bill_type casing inconsistency strands advance credit** — `addCashLedgerEntryAction` stored bill_type as-is; `bulkImportCashLedgerAction` lowercased. The `apply_available_advance` RPC uses case-sensitive equality, so credits from one path never matched the other. Fixed: `addCashLedgerEntryAction` now applies `.trim().toLowerCase()`.
+
+### Medium — Logic & Authorization Fixes
+
+- **PDF dedup Map auth race** — concurrent requests for the same `billId` shared an in-flight Promise before auth was checked, potentially bypassing `canAccessUnit`. Fixed: auth pre-check now runs before consulting the dedup map in both `getOrGenerateBillPdf` and `getOrGenerateReceiptPdf`.
+- **getCashLedgerEntriesAction weak role check** — any association member (prop_owner, tenant) could call the server action and read the full association cash ledger. Fixed: upgraded to `requireBillingAccess` (assoc_admin / billing_operator only).
+- **Reports allTime guard broken** — when only one date bound was empty, `!from && !to` was false but the bound was null, causing `.gte('period', null)` to filter out all rows. Fixed: each bound is now applied individually with `if (fromPeriod) / if (toPeriod_)` guards.
+- **paidByRole from webhook notes not enum-validated** — arbitrary role strings could be stored in payment records. Fixed: validated against `['Owner', 'Tenant']`, defaulting to `'Owner'`.
+- **bulkAddOtherChargeAction split_mode not runtime-validated** — zod schema validated on client only; direct calls could pass arbitrary strings. Fixed: added `if (input.split_mode !== 'flat' && ...'per_sqft')` guard.
+- **Invalid date strings in payments tab reports** — unvalidated date strings passed to `paid_at` filter could cause opaque DB errors. Fixed: ISO date regex guard `(/^\d{4}-\d{2}-\d{2}$/)` applied before filter.
+- **PDF render errors re-threw and poisoned shared Promises** — concurrent waiters on the same dedup Promise would all reject if render failed. Fixed: render catch blocks now `return null` instead of `throw`.
+
+### Migrations
+
+| Migration | Purpose |
+|-----------|---------|
+| `20260727000000_cash_ledger_payments_idempotency.sql` | Unique partial index on `cash_ledger_payments(razorpay_payment_id)` — prevents double-credit on concurrent/retry payment recording |
+
+_Last updated: 2026-07-23_
+
+---
+
+## v1.2 — Bulk Export: Bills & Payments (2026-07-23)
+
+Full bulk-export capability for the Billing and Payments screens, supporting both CSV (client-side, instant) and PDF (server-rendered, formatted report).
+
+### Features
+
+- **Export Menu** (`components/export-menu.tsx`) — Split-button dropdown on both screens. Shows count of currently-filtered rows. CSV downloads instantly; PDF is fetched from a server route with a toast progress indicator. Warns at 200+ rows; blocks at 300+.
+- **Bills CSV export** (`lib/export-csv.ts`) — RFC 4180-compliant CSV with raw number values for spreadsheet compatibility. Exports all filtered bills from client state (no server round-trip).
+- **Payments CSV export** — Flattens nested payments; bills with zero payments get one empty row.
+- **Bills PDF export** (`/api/billing/bills/export/pdf`) — POST endpoint accepting an array of bill IDs. Fetches via RLS-enforced client (only authorized bills returned). A4 landscape PDF with KPI summary, proportional-flex table, alternating rows, and totals footer.
+- **Payments PDF export** (`/api/billing/payments/export/pdf`) — Same pattern; flattens one row per payment server-side.
+- **PDF templates** (`packages/pdf-templates`) — `BillsExportDocument` and `PaymentsExportDocument`. A4 landscape, 9 columns, `<View overflow:'hidden'>` cell wrappers to prevent column bleed, `BILL_TYPE_LABELS` and `PAYMENT_MODE_LABELS` for human-readable values.
+- **SSRF guard** (`lib/server/sanitize-logo-url.ts`) — Extracted shared helper; blocks private/reserved IP ranges before react-pdf fetches the association logo.
+
+### PDF Quality Fixes (2026-07-23)
+
+Column bleed identified after initial test export: text from narrow columns overflowing into adjacent cells, causing headers to visually merge (e.g. "AdvanceReference"). Root cause: `overflow:'hidden'` on `<Text>` nodes is unreliable in react-pdf — only `<View>` clips correctly. All table cells refactored to `<C flex={n}>` View wrappers. Also added `razorpay` to `PAYMENT_MODE_LABELS`.
+
+### No new migrations

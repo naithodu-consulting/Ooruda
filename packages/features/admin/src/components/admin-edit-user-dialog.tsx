@@ -126,7 +126,7 @@ export function AdminEditUserDialog(
           <DialogTitle>Edit User Details</DialogTitle>
           <DialogDescription>
             {isTeamMode
-              ? "Update this member's profile details and role in the current team account."
+              ? "Update this member's profile details and role in the current association."
               : "Update this user's profile name and phone number."}
           </DialogDescription>
         </DialogHeader>

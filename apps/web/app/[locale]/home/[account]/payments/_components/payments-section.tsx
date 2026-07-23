@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Badge } from '@kit/ui/badge';
+import { Button } from '@kit/ui/button';
 import {
   Card,
   CardContent,
@@ -14,6 +15,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@kit/ui/card';
+import { MultiSelect } from '@kit/ui/multi-select';
+import type { MultiSelectOption } from '@kit/ui/multi-select';
 import {
   Select,
   SelectContent,
@@ -31,15 +34,12 @@ import {
 } from '@kit/ui/table';
 import { cn } from '@kit/ui/utils';
 
-import {
-  BILL_STATUS_ITEMS,
-  BILL_TYPE_FILTER_ITEMS,
-  getDurationItems,
-} from '~/lib/bill-filter-items';
+import { ExportMenu } from '~/components/export-menu';
+import { getDurationItems } from '~/lib/bill-filter-items';
 import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import { billTypeLabel } from '~/lib/bill-type-labels';
-import { todayInBillingZone } from '~/lib/billing-dates';
+import { exportPaymentsCsv } from '~/lib/export-csv';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
@@ -66,6 +66,20 @@ export interface BillPaymentRow {
 const PAGE_SIZE = 25;
 const ALL_UNITS = '__all__';
 
+const STATUS_OPTIONS: MultiSelectOption[] = [
+  { value: 'Paid', label: 'Paid' },
+  { value: 'Unpaid', label: 'Unpaid' },
+  { value: 'Partial', label: 'Partial' },
+  { value: 'Overdue', label: 'Overdue' },
+];
+
+const TYPE_OPTIONS: MultiSelectOption[] = [
+  { value: 'maintenance', label: 'Maintenance' },
+  { value: 'electricity', label: 'Electricity' },
+  { value: 'other_charges', label: 'Other Charges' },
+  { value: 'sinking_fund', label: 'Sinking Fund' },
+];
+
 export function PaymentsSection(props: {
   associationId: string;
   bills: BillPaymentRow[];
@@ -86,17 +100,25 @@ export function PaymentsSection(props: {
   const searchParams = useSearchParams();
   const onPaymentSuccess = useCallback(() => router.refresh(), [router]);
 
-  const [statusVal, setStatusVal] = useState(props.initialStatus ?? 'all');
-  const [typeVal, setTypeVal] = useState('all');
+  // Multi-select filters
+  const [statusFilter, setStatusFilter] = useState<string[]>(() => {
+    const s = props.initialStatus;
+    if (!s || s === 'all') return [];
+    // Backward compat: old URL values are lowercase — capitalise first letter.
+    return [s.charAt(0).toUpperCase() + s.slice(1)];
+  });
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [unitFilter, setUnitFilter] = useState<string[]>([]);
   const [durationVal, setDurationVal] = useState(
     props.initialDuration ?? 'all',
   );
+  // unitTab is kept exclusively for the owner/tenant pill UI (controls Pay All scope).
   const [unitTab, setUnitTab] = useState(
     () => searchParams.get('unit') ?? ALL_UNITS,
   );
   const [page, setPage] = useState(1);
 
-  // Distinct units from all bills — used to render unit tabs for owner/tenant view
+  // Distinct units — for pill tabs (owner/tenant) and MultiSelect (admin)
   const unitList = useMemo(() => {
     const seen = new Set<string>();
     const units: string[] = [];
@@ -106,48 +128,57 @@ export function PaymentsSection(props: {
         units.push(b.unit_no);
       }
     }
-    return units.sort();
+    return units.sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true }),
+    );
   }, [props.bills]);
 
+  const unitOptions = useMemo(
+    (): MultiSelectOption[] => unitList.map((u) => ({ value: u, label: u })),
+    [unitList],
+  );
+
   const durationItems = useMemo(() => getDurationItems(), []);
-  const today = useMemo(() => todayInBillingZone(), []);
+
+  const hasActiveFilters =
+    statusFilter.length > 0 ||
+    typeFilter.length > 0 ||
+    unitFilter.length > 0 ||
+    durationVal !== 'all';
+
+  function clearAllFilters() {
+    setStatusFilter([]);
+    setTypeFilter([]);
+    setUnitFilter([]);
+    setDurationVal('all');
+    setPage(1);
+  }
 
   // Derived: filtered rows (instant — no network)
   const filtered = useMemo(() => {
     let rows = props.bills;
 
-    if (unitTab !== ALL_UNITS) {
+    // Owner/tenant unit pill selection (single-unit scope for Pay All)
+    if (props.canPay && unitTab !== ALL_UNITS) {
       rows = rows.filter((b) => b.unit_no === unitTab);
     }
 
-    if (statusVal !== 'all') {
-      if (statusVal === 'collected') {
-        // Collected = any bill with money received (Paid or Partial)
-        rows = rows.filter(
-          (b) => b.status === 'Paid' || b.status === 'Partial',
-        );
-      } else if (statusVal === 'paid') {
-        rows = rows.filter((b) => b.status === 'Paid');
-      } else if (statusVal === 'unpaid') {
-        rows = rows.filter((b) => b.status === 'Unpaid' && b.due_date >= today);
-      } else if (statusVal === 'partial') {
-        rows = rows.filter(
-          (b) => b.status === 'Partial' && b.due_date >= today,
-        );
-      } else if (statusVal === 'overdue') {
-        rows = rows.filter(
-          (b) =>
-            b.status === 'Overdue' ||
-            ((b.status === 'Unpaid' || b.status === 'Partial') &&
-              b.due_date < today),
-        );
-      }
+    // Admin unit multi-select filter
+    if (!props.canPay && unitFilter.length > 0) {
+      rows = rows.filter((b) => unitFilter.includes(b.unit_no));
     }
 
-    if (typeVal !== 'all') {
-      rows = rows.filter((b) => b.bill_type === typeVal);
+    // Status multi-select — filter on displayBillStatus (handles Overdue promotion)
+    if (statusFilter.length > 0) {
+      rows = rows.filter((b) => statusFilter.includes(displayBillStatus(b)));
     }
 
+    // Type multi-select
+    if (typeFilter.length > 0) {
+      rows = rows.filter((b) => typeFilter.includes(b.bill_type));
+    }
+
+    // Duration single-select (date range concept — multi doesn't apply)
     if (durationVal !== 'all') {
       const periods = getPeriodsForDuration(durationVal);
       if (periods) {
@@ -157,7 +188,15 @@ export function PaymentsSection(props: {
     }
 
     return rows;
-  }, [props.bills, unitTab, statusVal, typeVal, durationVal, today]);
+  }, [
+    props.bills,
+    props.canPay,
+    unitTab,
+    unitFilter,
+    statusFilter,
+    typeFilter,
+    durationVal,
+  ]);
 
   // Derived: summary metrics
   const metrics = useMemo(() => {
@@ -184,8 +223,8 @@ export function PaymentsSection(props: {
     [filtered, safePage],
   );
 
-  const setFilter = (setter: (v: string) => void) => (val: string | null) => {
-    setter(val ?? 'all');
+  const handleDuration = (val: string | null) => {
+    setDurationVal(val ?? 'all');
     setPage(1);
   };
 
@@ -226,12 +265,7 @@ export function PaymentsSection(props: {
       .filter((b) => b.outstanding > 0);
   }, [props.bills, unitTab]);
 
-  const isEmpty =
-    props.bills.length === 0 &&
-    statusVal === 'all' &&
-    typeVal === 'all' &&
-    durationVal === 'all' &&
-    unitTab === ALL_UNITS;
+  const isEmpty = props.bills.length === 0 && !hasActiveFilters;
 
   return (
     <Card className="border-0 shadow-none">
@@ -302,78 +336,95 @@ export function PaymentsSection(props: {
       </CardHeader>
 
       <CardContent className="flex flex-col gap-3.5">
-        {/* Filters always visible */}
-        <div className="flex flex-wrap items-center gap-4 border-b pb-4">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
-              Payment Status
-            </span>
-            <Select
-              items={BILL_STATUS_ITEMS}
-              value={statusVal}
-              onValueChange={setFilter(setStatusVal)}
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2 border-b pb-4">
+          <MultiSelect
+            options={STATUS_OPTIONS}
+            selected={statusFilter}
+            onSelectionChange={(v) => {
+              setStatusFilter(v);
+              setPage(1);
+            }}
+            placeholder="All statuses"
+            summaryLabel="Status"
+            maxShownLabels={2}
+            data-test="payments-status-filter"
+          />
+          <MultiSelect
+            options={TYPE_OPTIONS}
+            selected={typeFilter}
+            onSelectionChange={(v) => {
+              setTypeFilter(v);
+              setPage(1);
+            }}
+            placeholder="All types"
+            summaryLabel="Type"
+            maxShownLabels={1}
+            data-test="payments-type-filter"
+          />
+          {/* Unit multi-select only for admin — owner/tenant use pill tabs */}
+          {!props.canPay && unitOptions.length > 1 && (
+            <MultiSelect
+              options={unitOptions}
+              selected={unitFilter}
+              onSelectionChange={(v) => {
+                setUnitFilter(v);
+                setPage(1);
+              }}
+              placeholder="All units"
+              summaryLabel="Unit"
+              maxShownLabels={2}
+              data-test="payments-unit-filter"
+            />
+          )}
+          <Select
+            items={durationItems}
+            value={durationVal}
+            onValueChange={handleDuration}
+          >
+            <SelectTrigger
+              className={cn(
+                'bg-background h-9 w-[160px] text-xs font-normal [&_svg]:size-3.5',
+                durationVal === 'all' && 'text-muted-foreground',
+              )}
+              data-test="payments-duration-filter"
             >
-              <SelectTrigger className="bg-background h-9 w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="unpaid">Unpaid</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="partial">Partial</SelectItem>
-                <SelectItem value="overdue">Overdue</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              <SelectValue placeholder="Duration" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Time</SelectItem>
+              <SelectItem value="current_month">Current Month</SelectItem>
+              <SelectItem value="prev_month">Previous Month</SelectItem>
+              <SelectItem value="last_3m">Last 3 Months</SelectItem>
+              <SelectItem value="last_6m">Last 6 Months</SelectItem>
+              <SelectItem value="this_fy">{durationItems.this_fy}</SelectItem>
+              <SelectItem value="prev_fy">{durationItems.prev_fy}</SelectItem>
+            </SelectContent>
+          </Select>
 
-          <div className="flex flex-col gap-1.5">
-            <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
-              Bill Type
-            </span>
-            <Select
-              items={BILL_TYPE_FILTER_ITEMS}
-              value={typeVal}
-              onValueChange={setFilter(setTypeVal)}
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground h-9 text-xs"
+              onClick={clearAllFilters}
+              data-test="payments-clear-filters"
             >
-              <SelectTrigger className="bg-background h-9 w-[150px]">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="electricity">Electricity</SelectItem>
-                <SelectItem value="maintenance">Maintenance</SelectItem>
-                <SelectItem value="other_charges">Other Charges</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              Clear all
+            </Button>
+          )}
 
-          <div className="flex flex-col gap-1.5">
-            <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
-              Duration
-            </span>
-            <Select
-              items={durationItems}
-              value={durationVal}
-              onValueChange={setFilter(setDurationVal)}
-            >
-              <SelectTrigger className="bg-background h-9 w-[180px]">
-                <SelectValue placeholder="Duration" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="current_month">Current Month</SelectItem>
-                <SelectItem value="prev_month">Previous Month</SelectItem>
-                <SelectItem value="last_3m">Last 3 Months</SelectItem>
-                <SelectItem value="last_6m">Last 6 Months</SelectItem>
-                <SelectItem value="this_fy">{durationItems.this_fy}</SelectItem>
-                <SelectItem value="prev_fy">{durationItems.prev_fy}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <ExportMenu
+            ids={filtered.map((b) => b.id)}
+            count={filtered.length}
+            noun="payments"
+            onCsvExport={() => exportPaymentsCsv(filtered)}
+            pdfEndpoint="/api/billing/payments/export/pdf"
+          />
 
           {/* Live metrics strip */}
           {filtered.length > 0 && (
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center gap-1.5">
               {[
                 { label: 'Bills', value: String(filtered.length) },
                 {
@@ -389,14 +440,14 @@ export function PaymentsSection(props: {
               ].map(({ label, value, highlight }) => (
                 <div
                   key={label}
-                  className="bg-muted/60 flex flex-col items-center rounded-lg px-3 py-1.5 text-center"
+                  className="bg-muted/50 flex flex-col items-center rounded-md px-2.5 py-1.5 text-center"
                 >
                   <span
-                    className={`text-sm font-bold tabular-nums ${highlight ? 'text-destructive' : 'text-foreground'}`}
+                    className={`text-sm font-semibold tabular-nums ${highlight ? 'text-destructive' : 'text-foreground'}`}
                   >
                     {value}
                   </span>
-                  <span className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+                  <span className="text-muted-foreground text-[11px] font-medium">
                     {label}
                   </span>
                 </div>
@@ -440,33 +491,31 @@ export function PaymentsSection(props: {
                   return (
                     <TableRow
                       key={bill.id}
-                      className={
-                        isOverdue ? 'bg-red-50/60 dark:bg-red-950/20' : ''
-                      }
+                      className={isOverdue ? 'bg-destructive/[0.04]' : ''}
                     >
-                      <TableCell className="text-muted-foreground font-medium">
+                      <TableCell className="text-muted-foreground text-sm">
                         {formatPeriod(bill.period)}
                       </TableCell>
                       {!props.hideUnitColumn && (
-                        <TableCell className="font-semibold">
+                        <TableCell className="font-medium">
                           {bill.unit_no}
                         </TableCell>
                       )}
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-muted-foreground text-sm">
                         {billTypeLabel(bill.bill_type)}
                       </TableCell>
                       <TableCell
-                        className="text-muted-foreground max-w-[180px] truncate"
+                        className="text-muted-foreground max-w-[180px] truncate text-sm"
                         title={bill.bill_no}
                       >
                         {bill.bill_no}
                       </TableCell>
-                      <TableCell className="text-right font-bold tabular-nums">
+                      <TableCell className="text-right font-medium tabular-nums">
                         {formatINR(bill.total_amount)}
                       </TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">
+                      <TableCell className="text-right tabular-nums">
                         {outstanding > 0 ? (
-                          <span className="text-red-600">
+                          <span className="font-medium text-red-600 dark:text-red-400">
                             {formatINR(outstanding)}
                           </span>
                         ) : (

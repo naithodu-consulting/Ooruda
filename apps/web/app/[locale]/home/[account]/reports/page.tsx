@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
@@ -6,12 +8,11 @@ import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import {
-  CollectionSummaryCard,
-  type CollectionSummaryRow,
-  ElectricityUsageCard,
-  type ElectricityUsageRow,
+  ReportsClientPage,
+  ReportsSkeleton,
+} from './_components/reports-client-page';
+import {
   MyDuesCard,
-  OutstandingDuesCard,
   type OutstandingDueRow,
 } from './_components/reports-sections';
 
@@ -23,8 +24,7 @@ export const metadata = { title: 'Reports' };
 
 export default async function ReportsPage({ params }: Props) {
   const { account } = await params;
-  // prop_owner only sees dues for their own units; admin/operator see the
-  // full association-level reports below.
+
   const { accountId, role, userId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
@@ -43,6 +43,7 @@ export default async function ReportsPage({ params }: Props) {
     throw new Error('Unable to load the association for this account.');
   }
 
+  // ── prop_owner: personal dues — kept server-side (no filter state needed) ──
   if (role === 'prop_owner') {
     const { data: ownedUnits } = await client
       .from('units')
@@ -85,96 +86,25 @@ export default async function ReportsPage({ params }: Props) {
           description={
             myDues.length === 0
               ? 'No bills yet'
-              : `${myDues.length} bills across your unit(s)`
+              : `${myDues.length} bill${myDues.length !== 1 ? 's' : ''} across your unit(s)`
           }
         />
-
         <MyDuesCard bills={myDues} />
       </PageBody>
     );
   }
 
-  const { data: allBills } = await client
-    .from('bills')
-    .select(
-      'id, period, bill_no, total_amount, paid_amount, status, due_date, units(unit_no)',
-    )
-    .eq('association_id', association.id)
-    .order('period', { ascending: false });
-
-  const billRows = allBills ?? [];
-
-  const summaryByPeriod = new Map<string, CollectionSummaryRow>();
-
-  for (const bill of billRows) {
-    const existing = summaryByPeriod.get(bill.period) ?? {
-      period: bill.period,
-      billed: 0,
-      collected: 0,
-      billCount: 0,
-    };
-
-    existing.billed += bill.total_amount;
-    existing.collected += bill.paid_amount;
-    existing.billCount += 1;
-    summaryByPeriod.set(bill.period, existing);
-  }
-
-  const collectionSummary = Array.from(summaryByPeriod.values()).sort((a, b) =>
-    b.period.localeCompare(a.period),
-  );
-
-  const outstandingDues: OutstandingDueRow[] = billRows
-    .filter((b) => b.status !== 'Paid')
-    .map((b) => ({
-      id: b.id,
-      period: b.period,
-      bill_no: b.bill_no,
-      unit_no:
-        (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
-      total_amount: b.total_amount,
-      paid_amount: b.paid_amount,
-      status: b.status,
-      due_date: b.due_date,
-    }))
-    .sort((a, b) => a.due_date.localeCompare(b.due_date));
-
-  const { data: mescomBills } = await client
-    .from('mescom_bills')
-    .select('id, period, invoice_amount, block_consumption_units')
-    .eq('association_id', association.id)
-    .order('period', { ascending: false });
-
-  const electricityUsage: ElectricityUsageRow[] = (mescomBills ?? []).map(
-    (m) => ({
-      id: m.id,
-      period: m.period,
-      invoice_amount: m.invoice_amount,
-      block_consumption_units: m.block_consumption_units,
-      rate:
-        m.block_consumption_units > 0
-          ? m.invoice_amount / m.block_consumption_units
-          : null,
-    }),
-  );
-
+  // ── admin / billing_operator: all data fetched client-side ─────────────────
   return (
     <PageBody>
       <TeamAccountLayoutPageHeader
         account={account}
         title={<Trans i18nKey="association.nav.reports" />}
-        description={
-          billRows.length === 0
-            ? 'No bills yet'
-            : `${collectionSummary.length} periods · ${outstandingDues.length} outstanding · ${electricityUsage.length} Electricity bills`
-        }
+        description="Association financial analytics"
       />
-
-      <div className="flex flex-col gap-6">
-        <CollectionSummaryCard rows={collectionSummary} />
-        <OutstandingDuesCard rows={outstandingDues} />
-        <ElectricityUsageCard rows={electricityUsage} />
-      </div>
+      <Suspense fallback={<ReportsSkeleton />}>
+        <ReportsClientPage account={account} associationId={association.id} />
+      </Suspense>
     </PageBody>
   );
 }

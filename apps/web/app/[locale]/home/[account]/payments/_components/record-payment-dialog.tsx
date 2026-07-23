@@ -61,7 +61,11 @@ export function RecordPaymentDialog(props: {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button size="sm" data-test={`record-payment-${props.billId}`}>
+          <Button
+            size="sm"
+            variant="outline"
+            data-test={`record-payment-${props.billId}`}
+          >
             Record Payment
           </Button>
         }

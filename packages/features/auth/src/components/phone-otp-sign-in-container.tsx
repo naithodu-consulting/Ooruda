@@ -17,7 +17,6 @@ import { Button } from '@kit/ui/button';
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -82,7 +81,7 @@ export function PhoneOtpSignInContainer() {
   const signInMutation = useSignInWithOtp();
   const verifyMutation = useVerifyOtp();
 
-  const isMockMode = process.env.NEXT_PUBLIC_MOCK_OTP === 'true';
+  const isMockMode = process.env.NEXT_PUBLIC_MOCK_OTP === 'false';
   const config = CHANNEL_CONFIG[channel];
 
   // Countdown timer for resend cooldown
@@ -273,7 +272,7 @@ export function PhoneOtpSignInContainer() {
 
           <Button
             type="submit"
-            className="w-full border-0 !bg-[#1a1a1a] !text-white shadow-none hover:!bg-black"
+            className="w-full border border-[#FCD469] !bg-[#FCD469] font-semibold !text-[#1a1a1a] shadow-none hover:!bg-[#f0c740]"
             disabled={signInMutation.isPending}
             data-test="phone-send-otp-button"
           >
@@ -347,7 +346,7 @@ export function PhoneOtpSignInContainer() {
 
           <Button
             type="submit"
-            className="w-full border-0 !bg-[#1a1a1a] !text-white shadow-none hover:!bg-black"
+            className="w-full border border-[#FCD469] !bg-[#FCD469] font-semibold !text-[#1a1a1a] shadow-none hover:!bg-[#f0c740]"
             disabled={signInMutation.isPending}
             data-test="email-send-otp-button"
           >
@@ -460,9 +459,6 @@ export function PhoneOtpSignInContainer() {
                     </InputOTPGroup>
                   </InputOTP>
                 </FormControl>
-                <FormDescription className="text-center text-xs text-[#6f6a5a]">
-                  <Trans i18nKey="auth.phoneOtpLabel" />
-                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -470,7 +466,7 @@ export function PhoneOtpSignInContainer() {
 
           <Button
             type="submit"
-            className="mt-2 flex h-12 w-full items-center justify-center gap-2 border-0 !bg-[#1a1a1a] text-[13px] font-extrabold !text-white shadow-none transition-all hover:!bg-black active:scale-[0.98]"
+            className="mt-2 flex h-12 w-full items-center justify-center gap-2 border border-[#FCD469] !bg-[#FCD469] text-[13px] font-extrabold !text-[#1a1a1a] shadow-none transition-all hover:!bg-[#f0c740] active:scale-[0.98]"
             disabled={verifyMutation.isPending || tooManyAttempts}
             data-test="otp-verify-button"
           >

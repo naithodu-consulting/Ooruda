@@ -5,6 +5,8 @@ import { Trans } from '@kit/ui/trans';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { BillingOverview } from './_components/billing-overview';
+import { BillingPeriodDetail } from './_components/billing-period-detail';
 import {
   BillsSection,
   type BillRow,
@@ -13,16 +15,19 @@ import {
 
 interface Props {
   params: Promise<{ account: string }>;
-  searchParams: Promise<{ duration?: string; status?: string }>;
+  searchParams: Promise<{
+    duration?: string;
+    status?: string;
+    period?: string;
+    bills?: string;
+  }>;
 }
 
 export const metadata = { title: 'Billing' };
 
 export default async function BillingPage({ params, searchParams }: Props) {
-  const [{ account }, { duration, status }] = await Promise.all([
-    params,
-    searchParams,
-  ]);
+  const [{ account }, { duration, status, period, bills: billsParam }] =
+    await Promise.all([params, searchParams]);
   const { accountId, role } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
@@ -45,12 +50,57 @@ export default async function BillingPage({ params, searchParams }: Props) {
     throw new Error('Unable to load the association for this account.');
   }
 
+  // Period drill-down: fast path when ?period=YYYY-MM is present.
+  // Skips all heavy pending charges / mescom / deletion count queries.
+  if (period) {
+    const { data: periodBillsData } = await client
+      .from('bills')
+      .select(
+        'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, gst_amount, units(unit_no), bill_line_items(id, description, payer, gst_applicable, amount, area_sqft, rate_per_sqft)',
+      )
+      .eq('association_id', association.id)
+      .order('period', { ascending: false })
+      .order('bill_no');
+
+    const billRows: BillRow[] = (periodBillsData ?? []).map((b) => ({
+      id: b.id,
+      period: b.period,
+      bill_no: b.bill_no,
+      bill_type: b.bill_type ?? 'maintenance',
+      total_amount: Number(b.total_amount),
+      paid_amount: Number(b.paid_amount),
+      status: b.status,
+      due_date: b.due_date,
+      unit_no:
+        (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
+      gst_amount: b.gst_amount != null ? Number(b.gst_amount) : null,
+      lineItems: b.bill_line_items,
+    }));
+
+    return (
+      <PageBody>
+        <TeamAccountLayoutPageHeader
+          account={account}
+          title={<Trans i18nKey="association.nav.billing" />}
+          description={null}
+        />
+        <BillingPeriodDetail
+          bills={billRows}
+          period={period}
+          accountSlug={account}
+        />
+      </PageBody>
+    );
+  }
+
   // Fetch all independent data in parallel — no filter logic here.
   const [
     billsResult,
     unitsResult,
     otherChargesCTResult,
+    sinkingFundCTResult,
     pendingChargesResult,
+    pendingSinkingChargesResult,
     mescomBillsResult,
   ] = await Promise.all([
     client
@@ -73,7 +123,22 @@ export default async function BillingPage({ params, searchParams }: Props) {
       .eq('key', 'other_charges')
       .maybeSingle(),
     client
+      .from('charge_types')
+      .select('is_active')
+      .eq('association_id', association.id)
+      .eq('key', 'sinking_fund')
+      .maybeSingle(),
+    client
       .from('pending_other_charges')
+      .select(
+        'id, unit_id, period, label, amount, split_mode, due_date, billed',
+      )
+      .eq('association_id', association.id)
+      .eq('billed', false)
+      .order('created_at', { ascending: false }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (client as any)
+      .from('pending_sinking_fund_charges')
       .select(
         'id, unit_id, period, label, amount, split_mode, due_date, billed',
       )
@@ -125,8 +190,25 @@ export default async function BillingPage({ params, searchParams }: Props) {
   const unitNoById = new Map(unitRows.map((u) => [u.id, u.unit_no]));
 
   const isOtherChargesActive = otherChargesCTResult.data?.is_active ?? false;
+  const isSinkingFundActive = sinkingFundCTResult.data?.is_active ?? false;
 
   const pendingCharges = (pendingChargesResult.data ?? []).map((pc) => ({
+    ...pc,
+    unit_no: pc.unit_id ? (unitNoById.get(pc.unit_id) ?? null) : null,
+  }));
+
+  const pendingSinkingCharges = (
+    (pendingSinkingChargesResult.data as Array<{
+      id: string;
+      unit_id: string | null;
+      period: string;
+      label: string;
+      amount: number;
+      split_mode: string | null;
+      due_date: string | null;
+      billed: boolean;
+    }>) ?? []
+  ).map((pc) => ({
     ...pc,
     unit_no: pc.unit_id ? (unitNoById.get(pc.unit_id) ?? null) : null,
   }));
@@ -198,24 +280,34 @@ export default async function BillingPage({ params, searchParams }: Props) {
         }
       />
 
-      <BillsSection
-        associationId={association.id}
-        bills={billRows}
-        canManage={canManage}
-        canDelete={canDelete}
-        isSuperAdmin={!!isSuperAdmin}
-        deletionCounts={deletionCounts}
-        units={unitRows}
-        pendingCharges={pendingCharges}
-        periodOptions={periodOptions}
-        isOtherChargesActive={isOtherChargesActive}
-        accountSlug={account}
-        initialDuration={duration}
-        initialStatus={status}
-        pendingElectricityBills={pendingElectricityBills}
-        maintenancePending={maintenancePending}
-        currentPeriod={currentPeriod}
-      />
+      <div className="space-y-8">
+        <BillingOverview bills={billRows} accountSlug={account} />
+
+        <div className="border-t pt-4">
+          <BillsSection
+            associationId={association.id}
+            bills={billRows}
+            canManage={canManage}
+            canDelete={canDelete}
+            isSuperAdmin={!!isSuperAdmin}
+            deletionCounts={deletionCounts}
+            units={unitRows}
+            pendingCharges={pendingCharges}
+            periodOptions={periodOptions}
+            isOtherChargesActive={isOtherChargesActive}
+            isSinkingFundActive={isSinkingFundActive}
+            pendingSinkingCharges={pendingSinkingCharges}
+            accountSlug={account}
+            initialDuration={duration}
+            initialStatus={status}
+            pendingElectricityBills={pendingElectricityBills}
+            maintenancePending={maintenancePending}
+            currentPeriod={currentPeriod}
+            defaultOpen={billsParam === 'draft' || billsParam === 'open'}
+            initialTab={billsParam === 'draft' ? 'draft' : undefined}
+          />
+        </div>
+      </div>
     </PageBody>
   );
 }

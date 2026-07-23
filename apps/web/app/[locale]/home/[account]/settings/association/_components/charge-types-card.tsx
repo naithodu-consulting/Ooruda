@@ -173,7 +173,8 @@ export function ChargeTypesCard({
         <div className="divide-y">
           {optimistic.map((ct) => {
             const isElectricity = ct.calc_method === 'electricity';
-            const isOtherCharges = ct.key === 'other_charges';
+            const isOtherCharges =
+              ct.key === 'other_charges' || ct.key === 'sinking_fund';
             const isMaintenance = ct.key === 'maintenance';
             const needsRate =
               !isElectricity &&

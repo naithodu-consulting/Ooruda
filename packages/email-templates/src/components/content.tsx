@@ -9,9 +9,12 @@ export function EmailContent({
 }>) {
   return (
     <Container
-      className={
-        'mx-auto rounded-xl bg-white px-[48px] py-[36px] ' + className || ''
-      }
+      style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '0 0 12px 12px',
+        padding: '8px 40px 36px',
+      }}
+      className={className ?? ''}
     >
       {children}
     </Container>

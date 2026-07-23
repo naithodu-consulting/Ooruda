@@ -74,7 +74,7 @@ export function TeamAccountTopbar(props: {
         <Button
           variant="outline"
           size="icon-sm"
-          className="shrink-0 border-border bg-background lg:hidden"
+          className="border-border bg-background shrink-0 lg:hidden"
           onClick={toggleSidebar}
         >
           <Menu className="h-5 w-5" />

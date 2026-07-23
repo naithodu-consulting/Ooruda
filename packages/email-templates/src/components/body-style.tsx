@@ -3,12 +3,12 @@ export function BodyStyle() {
     <style>
       {`
         body {
-          background-color: #fafafa;
+          background-color: #f5f5f0;
           margin: auto;
-          font-family: sans-serif;
-          color: #242424;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          color: #1d1e20;
         }
-    `}
+      `}
     </style>
   );
 }

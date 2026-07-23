@@ -174,6 +174,7 @@ function AddChargeForm(props: {
   });
 
   const scope = useWatch({ control: form.control, name: 'scope' });
+  const splitMode = useWatch({ control: form.control, name: 'split_mode' });
   const periodOptions = getPeriodOptions(props.periods);
 
   const onSubmit = form.handleSubmit((values) => {
@@ -368,7 +369,13 @@ function AddChargeForm(props: {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Amount (₹{scope === 'all' ? '/unit' : ''})
+                  Amount (₹
+                  {scope === 'all'
+                    ? splitMode === 'per_sqft'
+                      ? '/sqft'
+                      : '/unit'
+                    : ''}
+                  )
                 </FormLabel>
                 <FormControl>
                   <Input

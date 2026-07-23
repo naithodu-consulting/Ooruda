@@ -120,9 +120,13 @@ async function AccountsPage(props: AdminAccountsPageProps) {
         page={page}
         where={(queryBuilder) => {
           const { account_type: type, query } = searchParams;
+          const effectiveType = type ?? 'team';
 
-          if (type && type !== 'all') {
-            queryBuilder.eq('is_personal_account', type === 'personal');
+          if (effectiveType !== 'all') {
+            queryBuilder.eq(
+              'is_personal_account',
+              effectiveType === 'personal',
+            );
           }
 
           if (safeKind !== 'all') {
@@ -160,7 +164,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
               superAdminIds={superAdminIds}
               testAccountIds={testAccountIds}
               filters={{
-                type: searchParams.account_type ?? 'all',
+                type: searchParams.account_type ?? 'team',
                 kind: safeKind,
                 query: searchParams.query ?? '',
               }}

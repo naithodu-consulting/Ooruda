@@ -52,7 +52,7 @@ export function AdminRemoveMemberDialog(props: {
           <AlertDialogTitle>Remove Member</AlertDialogTitle>
           <AlertDialogDescription>
             Are you sure you want to remove <b>{props.userName}</b> from this
-            team account? This action cannot be undone.
+            association? This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
 

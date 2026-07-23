@@ -639,12 +639,29 @@ export async function bulkInviteMembersAction(
   let imported = 0;
   const skipped: BulkInviteResult['skipped'] = [];
   const importedByAssociation = new Map<string, number>();
+  const validRoles = [
+    'assoc_admin',
+    'billing_operator',
+    'prop_owner',
+    'tenant',
+  ];
+
+  // ── Phase 1: Validate all rows synchronously (no DB calls) ──────────────────
+  // Catch bad phones, unknown associations, and invalid roles up-front so the
+  // parallel phases below only work with clean data.
+  type ValidatedRow = {
+    rowNum: number;
+    normalised: string;
+    associationId: string;
+    row: BulkInviteRow;
+  };
+  const validatedRows: ValidatedRow[] = [];
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
     const rowNum = i + 1;
-
     const normalised = normalizePhoneNumber(row.phone);
+
     if (!normalised) {
       skipped.push({
         row: rowNum,
@@ -653,7 +670,6 @@ export async function bulkInviteMembersAction(
       });
       continue;
     }
-
     const associationId = assocIdByName.get(
       row.association_name.trim().toLowerCase(),
     );
@@ -665,13 +681,6 @@ export async function bulkInviteMembersAction(
       });
       continue;
     }
-
-    const validRoles = [
-      'assoc_admin',
-      'billing_operator',
-      'prop_owner',
-      'tenant',
-    ];
     if (!validRoles.includes(row.role)) {
       skipped.push({
         row: rowNum,
@@ -680,25 +689,44 @@ export async function bulkInviteMembersAction(
       });
       continue;
     }
+    validatedRows.push({ rowNum, normalised, associationId, row });
+  }
 
-    try {
-      // Check phone map first, then email — catches users whose phone was
-      // cleared from their profile after a previous import.
-      let existingUserId = existingUserByPhone.get(normalised);
-      if (!existingUserId && row.email) {
-        existingUserId = existingUserByEmail.get(
-          row.email.trim().toLowerCase(),
-        );
-      }
+  // ── Phase 2: Resolve / create users in parallel batches ─────────────────────
+  // Each unique phone needs at most one createUser call. Deduplicate first so
+  // two rows sharing a phone (e.g. owner + tenant in a RENTED unit) only fire
+  // one Auth API call; subsequent rows reuse the result from the map.
+  // Supabase Auth rate-limits concurrent createUser calls, so use batches of 8.
+  const USER_CREATE_BATCH = 8;
+  const createFailures = new Map<string, string>(); // phone → error reason
 
-      let userId: string;
+  // Seed email-based lookups into the phone map so membership phase can
+  // resolve users who exist by email but not by phone.
+  for (const { normalised, row } of validatedRows) {
+    if (!existingUserByPhone.has(normalised) && row.email) {
+      const byEmail = existingUserByEmail.get(row.email.trim().toLowerCase());
+      if (byEmail) existingUserByPhone.set(normalised, byEmail);
+    }
+  }
 
-      if (existingUserId) {
-        userId = existingUserId;
-        // Keep the phone map warm so unit-update logic can resolve this user.
-        existingUserByPhone.set(normalised, existingUserId);
-      } else {
-        // Create the auth user (phone confirmed; email confirmed if provided).
+  // Collect unique phones that still need a new user created.
+  const phonesNeedingCreation = [
+    ...new Set(
+      validatedRows
+        .map((r) => r.normalised)
+        .filter((p) => !existingUserByPhone.has(p)),
+    ),
+  ];
+
+  const rowByPhone = new Map(validatedRows.map((r) => [r.normalised, r.row]));
+
+  for (let i = 0; i < phonesNeedingCreation.length; i += USER_CREATE_BATCH) {
+    const batch = phonesNeedingCreation.slice(i, i + USER_CREATE_BATCH);
+
+    await Promise.all(
+      batch.map(async (normalised) => {
+        const row = rowByPhone.get(normalised)!;
+
         const createPayload: Parameters<
           typeof adminClient.auth.admin.createUser
         >[0] = {
@@ -706,7 +734,6 @@ export async function bulkInviteMembersAction(
           phone_confirm: true,
           user_metadata: { name: row.name ?? '', full_name: row.name ?? '' },
         };
-
         if (row.email) {
           createPayload.email = row.email.trim().toLowerCase();
           createPayload.email_confirm = true;
@@ -716,19 +743,17 @@ export async function bulkInviteMembersAction(
           await adminClient.auth.admin.createUser(createPayload);
 
         if (createError) {
-          skipped.push({
-            row: rowNum,
-            phone: normalised,
-            reason: friendlyAuthError(createError.message),
-          });
-          continue;
+          createFailures.set(
+            normalised,
+            friendlyAuthError(createError.message),
+          );
+          return;
         }
 
-        userId = data.user.id;
-        // Register the newly created user so subsequent rows for the same phone
-        // skip createUser and go straight to the membership insert.
+        const userId = data.user.id;
         existingUserByPhone.set(normalised, userId);
 
+        // Profile upsert can run concurrently — fire and don't block batch.
         await adminClient.from('profiles').upsert(
           {
             id: userId,
@@ -738,48 +763,72 @@ export async function bulkInviteMembersAction(
           },
           { onConflict: 'id' },
         );
-      }
-
-      // Add to association (skip if already a member).
-      const { error: membershipError } = await adminClient
-        .from('accounts_memberships')
-        .insert({
-          user_id: userId,
-          account_id: associationId,
-          account_role: row.role,
-        });
-
-      if (membershipError) {
-        if (membershipError.code === '23505') {
-          skipped.push({
-            row: rowNum,
-            phone: normalised,
-            reason: 'Already a member of this association',
-          });
-        } else {
-          skipped.push({
-            row: rowNum,
-            phone: normalised,
-            reason: membershipError.message,
-          });
-        }
-        continue;
-      }
-
-      imported++;
-      importedByAssociation.set(
-        associationId,
-        (importedByAssociation.get(associationId) ?? 0) + 1,
-      );
-      logger.info(
-        { phone: normalised, associationId, role: row.role },
-        'Bulk invite: member added',
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      skipped.push({ row: rowNum, phone: normalised, reason: msg });
-    }
+      }),
+    );
   }
+
+  // ── Phase 3: Insert memberships in parallel ──────────────────────────────────
+  // All users are now resolved (or failed). Fire all membership inserts at once.
+  await Promise.all(
+    validatedRows.map(async ({ rowNum, normalised, associationId, row }) => {
+      if (createFailures.has(normalised)) {
+        skipped.push({
+          row: rowNum,
+          phone: normalised,
+          reason: createFailures.get(normalised)!,
+        });
+        return;
+      }
+
+      const userId = existingUserByPhone.get(normalised);
+      if (!userId) {
+        skipped.push({
+          row: rowNum,
+          phone: normalised,
+          reason: 'User could not be created or found',
+        });
+        return;
+      }
+
+      try {
+        const { error: membershipError } = await adminClient
+          .from('accounts_memberships')
+          .insert({
+            user_id: userId,
+            account_id: associationId,
+            account_role: row.role,
+          });
+
+        if (membershipError) {
+          skipped.push({
+            row: rowNum,
+            phone: normalised,
+            reason:
+              membershipError.code === '23505'
+                ? 'Already a member of this association'
+                : membershipError.message,
+          });
+          return;
+        }
+
+        imported++;
+        importedByAssociation.set(
+          associationId,
+          (importedByAssociation.get(associationId) ?? 0) + 1,
+        );
+        logger.info(
+          { phone: normalised, associationId, role: row.role },
+          'Bulk invite: member added',
+        );
+      } catch (err) {
+        skipped.push({
+          row: rowNum,
+          phone: normalised,
+          reason: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }),
+  );
 
   // existingUserByPhone now covers all batch phones (populated at startup + updated
   // after each new createUser call), so reuse it directly for unit linking —
@@ -932,6 +981,7 @@ export async function bulkInviteMembersAction(
     );
   }
 
+  skipped.sort((a, b) => a.row - b.row);
   return { imported, skipped };
 }
 

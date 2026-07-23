@@ -132,8 +132,11 @@ export async function POST(req: NextRequest) {
       .update(rawBody)
       .digest('hex');
 
+    // Return 200 on bad signature — same as the "not found" path — so
+    // unauthenticated callers cannot distinguish a valid payment_id from an
+    // unknown one (information oracle eliminated).
     if (expectedSig !== signature) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+      return new Response('OK', { status: 200 });
     }
 
     // Convert paise → rupees. Pass the exact refunded amount so partial
@@ -167,7 +170,13 @@ export async function POST(req: NextRequest) {
   const notes = paymentEntity.notes ?? {};
   const associationId = notes.association_id;
   const billIds = notes.bill_ids?.split(',').filter(Boolean) ?? [];
-  const paidByRole = notes.paid_by_role ?? 'Owner';
+  const VALID_PAID_BY_ROLES = ['Owner', 'Tenant'] as const;
+  const rawPaidByRole = notes.paid_by_role ?? 'Owner';
+  const paidByRole: string = (
+    VALID_PAID_BY_ROLES as readonly string[]
+  ).includes(rawPaidByRole)
+    ? rawPaidByRole
+    : 'Owner';
   const isDue = notes.is_due === 'true';
   const dueUnitId = notes.unit_id;
   const dueBillType = notes.bill_type;
@@ -210,6 +219,22 @@ export async function POST(req: NextRequest) {
     if (!dueUnitId || !dueBillType) {
       return NextResponse.json(
         { error: 'Missing unit_id or bill_type in due payment notes' },
+        { status: 400 },
+      );
+    }
+
+    // Validate unit_id from notes belongs to the association — the HMAC only
+    // authenticates the association, not which unit was embedded in the notes.
+    const { data: unitCheck } = await admin
+      .from('units')
+      .select('id')
+      .eq('id', dueUnitId)
+      .eq('association_id', associationId)
+      .maybeSingle();
+
+    if (!unitCheck) {
+      return NextResponse.json(
+        { error: 'Unit not found in association' },
         { status: 400 },
       );
     }

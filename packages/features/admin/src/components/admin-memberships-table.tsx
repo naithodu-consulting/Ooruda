@@ -27,7 +27,7 @@ export function AdminMembershipsTable(props: { memberships: Membership[] }) {
 function getColumns(): ColumnDef<Membership>[] {
   return [
     {
-      header: 'Team',
+      header: 'Association',
       enableSorting: true,
       accessorFn: (row) => row.account.name ?? '',
       cell: ({ row }) => {

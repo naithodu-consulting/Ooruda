@@ -1,12 +1,17 @@
 import Link from 'next/link';
 
-import { BadgeX, Ban, ShieldPlus, VenetianMask } from 'lucide-react';
+import {
+  BadgeX,
+  Ban,
+  ExternalLink,
+  ShieldPlus,
+  VenetianMask,
+} from 'lucide-react';
 
 import { normalizePhoneNumber } from '@kit/shared/utils';
 import { Tables } from '@kit/supabase/database';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
@@ -21,14 +26,6 @@ import { Heading } from '@kit/ui/heading';
 import { If } from '@kit/ui/if';
 import { PageBody, PageHeader } from '@kit/ui/page';
 import { ProfileAvatar } from '@kit/ui/profile-avatar';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@kit/ui/table';
 
 import {
   AdminAssocPermissions,
@@ -193,10 +190,8 @@ async function PersonalAccountPage(props: { account: Account }) {
       </div>
 
       <div className={'flex flex-col gap-y-8'}>
-        <SubscriptionsTable accountId={props.account.id} />
-
         <div className={'flex flex-col gap-y-2.5'}>
-          <Heading level={6}>Teams</Heading>
+          <Heading level={6}>Associations</Heading>
 
           <div className={'rounded-lg border p-2'}>
             <AdminMembershipsTable memberships={memberships} />
@@ -252,8 +247,9 @@ async function TeamAccountPage(props: {
       >
         <div className={'flex gap-x-2.5'}>
           <Link href={`/home/${props.account.slug}`} target="_blank">
-            <Button size={'sm'} variant={'outline'}>
-              Open Association Workspace
+            <Button size={'sm'}>
+              <ExternalLink className={'mr-1.5 h-3.5 w-3.5'} />
+              Open Workspace
             </Button>
           </Link>
         </div>
@@ -287,10 +283,8 @@ async function TeamAccountPage(props: {
 
       <div>
         <div className={'flex flex-col gap-y-8'}>
-          <SubscriptionsTable accountId={props.account.id} />
-
           <div className={'flex flex-col gap-y-2.5'}>
-            <Heading level={6}>Team Members</Heading>
+            <Heading level={6}>Members</Heading>
 
             <div className={'rounded-lg border p-2'}>
               <AdminMembersTable members={members} />
@@ -318,10 +312,10 @@ async function TeamAccountPage(props: {
               <div className={'flex flex-col space-y-4'}>
                 <div className={'flex flex-col space-y-1'}>
                   <span className={'text-sm font-medium'}>
-                    Delete Team Account
+                    Delete Association
                   </span>
                   <p className={'text-muted-foreground text-sm'}>
-                    Once you delete this team account, all associated data,
+                    Once you delete this association, all associated data,
                     settings, and members will be permanently removed. This
                     action is irreversible.
                   </p>
@@ -334,7 +328,7 @@ async function TeamAccountPage(props: {
                       data-test={'admin-delete-account-button'}
                     >
                       <BadgeX className={'mr-1 h-4'} />
-                      Delete Team Account
+                      Delete Association
                     </Button>
                   </AdminDeleteAccountDialog>
                 </div>
@@ -344,147 +338,6 @@ async function TeamAccountPage(props: {
         </div>
       </div>
     </PageBody>
-  );
-}
-
-async function SubscriptionsTable(props: { accountId: string }) {
-  const client = getSupabaseServerClient();
-
-  const { data: subscription, error } = await client
-    .from('subscriptions')
-    .select('*, subscription_items !inner (*)')
-    .eq('account_id', props.accountId)
-    .maybeSingle();
-
-  if (error) {
-    return (
-      <Alert variant={'destructive'}>
-        <AlertTitle>There was an error loading subscription.</AlertTitle>
-
-        <AlertDescription>
-          Please check the logs for more information or try again later.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  return (
-    <div className={'flex flex-col gap-y-1'}>
-      <Heading level={6}>Subscription</Heading>
-
-      <If
-        condition={subscription}
-        fallback={
-          <span className={'text-muted-foreground text-sm'}>
-            This account does not currently have a subscription.
-          </span>
-        }
-      >
-        {(subscription) => {
-          return (
-            <div className={'flex flex-col space-y-4'}>
-              <Table>
-                <TableHeader>
-                  <TableHead>Subscription ID</TableHead>
-
-                  <TableHead>Provider</TableHead>
-
-                  <TableHead>Customer ID</TableHead>
-
-                  <TableHead>Status</TableHead>
-
-                  <TableHead>Created At</TableHead>
-
-                  <TableHead>Period Starts At</TableHead>
-
-                  <TableHead>Ends At</TableHead>
-                </TableHeader>
-
-                <TableBody>
-                  <TableRow>
-                    <TableCell>
-                      <span>{subscription.id}</span>
-                    </TableCell>
-
-                    <TableCell>
-                      <span>{subscription.billing_provider}</span>
-                    </TableCell>
-
-                    <TableCell>
-                      <span>{subscription.billing_customer_id}</span>
-                    </TableCell>
-
-                    <TableCell>
-                      <span>{subscription.status}</span>
-                    </TableCell>
-
-                    <TableCell>
-                      <span>{subscription.created_at}</span>
-                    </TableCell>
-
-                    <TableCell>
-                      <span>{subscription.period_starts_at}</span>
-                    </TableCell>
-
-                    <TableCell>
-                      <span>{subscription.period_ends_at}</span>
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-
-              <Table>
-                <TableHeader>
-                  <TableHead>Product ID</TableHead>
-
-                  <TableHead>Variant ID</TableHead>
-
-                  <TableHead>Quantity</TableHead>
-
-                  <TableHead>Price</TableHead>
-
-                  <TableHead>Interval</TableHead>
-
-                  <TableHead>Type</TableHead>
-                </TableHeader>
-
-                <TableBody>
-                  {subscription.subscription_items.map((item) => {
-                    return (
-                      <TableRow key={item.variant_id}>
-                        <TableCell>
-                          <span>{item.product_id}</span>
-                        </TableCell>
-
-                        <TableCell>
-                          <span>{item.variant_id}</span>
-                        </TableCell>
-
-                        <TableCell>
-                          <span>{item.quantity}</span>
-                        </TableCell>
-
-                        <TableCell>
-                          <span>{item.price_amount}</span>
-                        </TableCell>
-
-                        <TableCell>
-                          <span>{item.interval}</span>
-                        </TableCell>
-
-                        <TableCell>
-                          <span>{item.type}</span>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          );
-        }}
-      </If>
-    </div>
   );
 }
 

@@ -1,9 +1,9 @@
 {
-  "subject": "We have deleted your {productName} account",
-  "previewText": "We have deleted your {productName} account",
-  "hello": "Hello {displayName},",
-  "paragraph1": "This is to confirm that we have processed your request to delete your account with {productName}.",
-  "paragraph2": "We're sorry to see you go. Please note that this action is irreversible, and we'll make sure to delete all of your data from our systems.",
-  "paragraph3": "We thank you again for using {productName}.",
-  "paragraph4": "The {productName} Team"
+  "subject": "Your Ooruda account has been deleted",
+  "previewText": "Your Ooruda account has been deleted",
+  "hello": "Hi there,",
+  "paragraph1": "This confirms that your Ooruda account has been deleted as requested.",
+  "paragraph2": "This action is permanent and cannot be undone. All your data has been removed from our systems.",
+  "paragraph3": "Thank you for being part of Ooruda. If you ever want to return, you're always welcome.",
+  "paragraph4": "— The Ooruda Team"
 }
