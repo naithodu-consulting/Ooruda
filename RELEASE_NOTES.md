@@ -2027,3 +2027,36 @@ _Last updated: 2026-07-23_
 - **Metrics strip** — label font normalised to `text-[11px]`; value weight `font-semibold`.
 
 _Last updated: 2026-07-23_
+
+---
+
+## v1.2 — Security & Correctness Hardening (2026-07-23)
+
+Adversarial bug-hunt across the entire v1.2 branch. 22 confirmed findings resolved (7 high, 9 medium, 6 low). No user-facing feature changes.
+
+### Critical / High — Security Fixes
+
+- **[FINANCIAL] verify-due amount not HMAC-verified** — `/api/billing/razorpay/verify-due` accepted client-supplied `amount` after HMAC verification, allowing a payer to capture a small payment then claim the full outstanding. Fixed: the route now fetches the actual captured amount from the Razorpay API (`GET /v1/payments/{id}`) server-side and uses that instead of the body value.
+- **[AUTHZ] Webhook isDue: unit_id not validated against association** — a caller with Razorpay credentials for Association A could supply a foreign `unit_id` (from Association B) in order notes and credit that association's cash-ledger. Fixed: unit ownership is now verified against `association_id` after HMAC verification.
+- **[INFODISCL] Webhook refund.processed: payment-ID oracle** — unauthenticated callers could distinguish valid from invalid Razorpay payment IDs by comparing HTTP responses (400 vs 200) on HMAC failure. Fixed: all HMAC failures in the refund branch now return 200.
+- **[FINANCIAL] recordDuePaymentAction: no outstanding cap** — billing operators could record payments exceeding actual outstanding, inflating ledger credits. Fixed: action now fetches balance via `get_cash_ledger_balance` RPC and rejects amounts > outstanding.
+- **[SSRF] PDF logo URL fetched server-side without validation** — association admins control `picture_url`; react-pdf fetches it during PDF render. Pointing to `169.254.169.254` or internal services = SSRF. Fixed: `sanitizeLogoUrl()` helper now validates HTTPS and blocks all private/reserved IP ranges before passing to the renderer.
+- **[BIZLOGIC] bill_type casing inconsistency strands advance credit** — `addCashLedgerEntryAction` stored bill_type as-is; `bulkImportCashLedgerAction` lowercased. The `apply_available_advance` RPC uses case-sensitive equality, so credits from one path never matched the other. Fixed: `addCashLedgerEntryAction` now applies `.trim().toLowerCase()`.
+
+### Medium — Logic & Authorization Fixes
+
+- **PDF dedup Map auth race** — concurrent requests for the same `billId` shared an in-flight Promise before auth was checked, potentially bypassing `canAccessUnit`. Fixed: auth pre-check now runs before consulting the dedup map in both `getOrGenerateBillPdf` and `getOrGenerateReceiptPdf`.
+- **getCashLedgerEntriesAction weak role check** — any association member (prop_owner, tenant) could call the server action and read the full association cash ledger. Fixed: upgraded to `requireBillingAccess` (assoc_admin / billing_operator only).
+- **Reports allTime guard broken** — when only one date bound was empty, `!from && !to` was false but the bound was null, causing `.gte('period', null)` to filter out all rows. Fixed: each bound is now applied individually with `if (fromPeriod) / if (toPeriod_)` guards.
+- **paidByRole from webhook notes not enum-validated** — arbitrary role strings could be stored in payment records. Fixed: validated against `['Owner', 'Tenant']`, defaulting to `'Owner'`.
+- **bulkAddOtherChargeAction split_mode not runtime-validated** — zod schema validated on client only; direct calls could pass arbitrary strings. Fixed: added `if (input.split_mode !== 'flat' && ...'per_sqft')` guard.
+- **Invalid date strings in payments tab reports** — unvalidated date strings passed to `paid_at` filter could cause opaque DB errors. Fixed: ISO date regex guard `(/^\d{4}-\d{2}-\d{2}$/)` applied before filter.
+- **PDF render errors re-threw and poisoned shared Promises** — concurrent waiters on the same dedup Promise would all reject if render failed. Fixed: render catch blocks now `return null` instead of `throw`.
+
+### Migrations
+
+| Migration | Purpose |
+|-----------|---------|
+| `20260727000000_cash_ledger_payments_idempotency.sql` | Unique partial index on `cash_ledger_payments(razorpay_payment_id)` — prevents double-credit on concurrent/retry payment recording |
+
+_Last updated: 2026-07-23_
