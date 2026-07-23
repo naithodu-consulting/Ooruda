@@ -50,6 +50,49 @@ export default async function BillingPage({ params, searchParams }: Props) {
     throw new Error('Unable to load the association for this account.');
   }
 
+  // Period drill-down: fast path when ?period=YYYY-MM is present.
+  // Skips all heavy pending charges / mescom / deletion count queries.
+  if (period) {
+    const { data: periodBillsData } = await client
+      .from('bills')
+      .select(
+        'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, gst_amount, units(unit_no), bill_line_items(id, description, payer, gst_applicable, amount, area_sqft, rate_per_sqft)',
+      )
+      .eq('association_id', association.id)
+      .order('period', { ascending: false })
+      .order('bill_no');
+
+    const billRows: BillRow[] = (periodBillsData ?? []).map((b) => ({
+      id: b.id,
+      period: b.period,
+      bill_no: b.bill_no,
+      bill_type: b.bill_type ?? 'maintenance',
+      total_amount: Number(b.total_amount),
+      paid_amount: Number(b.paid_amount),
+      status: b.status,
+      due_date: b.due_date,
+      unit_no:
+        (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
+      gst_amount: b.gst_amount != null ? Number(b.gst_amount) : null,
+      lineItems: b.bill_line_items,
+    }));
+
+    return (
+      <PageBody>
+        <TeamAccountLayoutPageHeader
+          account={account}
+          title={<Trans i18nKey="association.nav.billing" />}
+          description={null}
+        />
+        <BillingPeriodDetail
+          bills={billRows}
+          period={period}
+          accountSlug={account}
+        />
+      </PageBody>
+    );
+  }
+
   // Fetch all independent data in parallel — no filter logic here.
   const [
     billsResult,
@@ -227,30 +270,6 @@ export default async function BillingPage({ params, searchParams }: Props) {
   const canManage = role === 'assoc_admin' || role === 'billing_operator';
   const canDelete = role === 'assoc_admin';
 
-  const draftCount =
-    (maintenancePending ? 1 : 0) +
-    (pendingElectricityBills.length > 0 ? 1 : 0) +
-    (pendingCharges.length > 0 ? 1 : 0) +
-    (pendingSinkingCharges.length > 0 ? 1 : 0);
-
-  // Period drill-down: show Layer 2 when ?period=YYYY-MM is present.
-  if (period) {
-    return (
-      <PageBody>
-        <TeamAccountLayoutPageHeader
-          account={account}
-          title={<Trans i18nKey="association.nav.billing" />}
-          description={null}
-        />
-        <BillingPeriodDetail
-          bills={billRows}
-          period={period}
-          accountSlug={account}
-        />
-      </PageBody>
-    );
-  }
-
   return (
     <PageBody>
       <TeamAccountLayoutPageHeader
@@ -262,11 +281,7 @@ export default async function BillingPage({ params, searchParams }: Props) {
       />
 
       <div className="space-y-8">
-        <BillingOverview
-          bills={billRows}
-          draftCount={draftCount}
-          accountSlug={account}
-        />
+        <BillingOverview bills={billRows} accountSlug={account} />
 
         <div className="border-t pt-4">
           <BillsSection

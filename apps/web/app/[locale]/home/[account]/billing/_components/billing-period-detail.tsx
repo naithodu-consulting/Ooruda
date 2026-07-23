@@ -123,7 +123,8 @@ export function BillingPeriodDetail(props: {
         (s, b) => s + (b.total_amount - b.paid_amount),
         0,
       ),
-      paidCount: periodBills.filter((b) => b.status === 'Paid').length,
+      paidCount: periodBills.filter((b) => displayBillStatus(b) === 'Paid')
+        .length,
       total: periodBills.length,
     };
   }, [periodBills]);

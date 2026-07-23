@@ -310,7 +310,10 @@ export async function recordDuePaymentAction(
     };
   const outstanding = -Number(balance ?? 0);
   if (outstanding <= 0)
-    return { success: false, error: 'No outstanding due for this unit and bill type.' };
+    return {
+      success: false,
+      error: 'No outstanding due for this unit and bill type.',
+    };
   if (input.amount > outstanding + 0.01)
     return { success: false, error: 'Amount exceeds the outstanding due.' };
 

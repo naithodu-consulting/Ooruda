@@ -8,15 +8,12 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronRight,
-  Clock,
   FileText,
   TrendingUp,
   X,
 } from 'lucide-react';
 
 import { Badge } from '@kit/ui/badge';
-import { Button } from '@kit/ui/button';
-import { Card, CardContent } from '@kit/ui/card';
 import { MetricCard } from '@kit/ui/metric-card';
 import {
   Table,
@@ -53,7 +50,6 @@ interface PeriodSummary {
 
 export function BillingOverview(props: {
   bills: BillRow[];
-  draftCount: number;
   accountSlug: string;
 }) {
   const router = useRouter();
@@ -70,7 +66,7 @@ export function BillingOverview(props: {
     const overdue = props.bills.filter(
       (b) => displayBillStatus(b) === 'Overdue',
     );
-    const paid = props.bills.filter((b) => b.status === 'Paid');
+    const paid = props.bills.filter((b) => displayBillStatus(b) === 'Paid');
     return {
       thisMonthBilled: thisMonth.reduce((s, b) => s + b.total_amount, 0),
       thisMonthCollected: thisMonth.reduce((s, b) => s + b.paid_amount, 0),
@@ -80,10 +76,11 @@ export function BillingOverview(props: {
       ),
       overdueCount: overdue.length,
       overdueAmount: overdue.reduce(
-        (s, b) => s + (b.total_amount - b.paid_amount),
+        (s, b) => s + Math.max(0, b.total_amount - b.paid_amount),
         0,
       ),
       paidCount: paid.length,
+      paidAmount: paid.reduce((s, b) => s + b.total_amount, 0),
       totalBills: props.bills.length,
     };
   }, [props.bills, currentPeriod]);
@@ -156,11 +153,33 @@ export function BillingOverview(props: {
   }
 
   function handleTileClick(tile: ActiveTile) {
-    if (tile === 'this-month') {
-      router.push(`/home/${props.accountSlug}/billing?period=${currentPeriod}`);
-      return;
-    }
-    toggleTile(tile);
+    startTransition(() => {
+      if (tile === 'this-month') {
+        router.push(
+          `/home/${props.accountSlug}/billing?period=${currentPeriod}`,
+        );
+        return;
+      }
+      if (tile === 'outstanding') {
+        router.push(
+          `/home/${props.accountSlug}/billing?status=unpaid&bills=open`,
+        );
+        return;
+      }
+      if (tile === 'overdue') {
+        router.push(
+          `/home/${props.accountSlug}/billing?status=overdue&bills=open`,
+        );
+        return;
+      }
+      if (tile === 'fully-paid') {
+        router.push(
+          `/home/${props.accountSlug}/billing?status=paid&bills=open`,
+        );
+        return;
+      }
+      toggleTile(tile);
+    });
   }
 
   const tileFilterLabel =
@@ -183,32 +202,6 @@ export function BillingOverview(props: {
 
   return (
     <div className="space-y-6">
-      {/* Draft alert */}
-      {props.draftCount > 0 && (
-        <Card className="border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10">
-          <CardContent className="flex items-center justify-between gap-4 py-3.5 pr-3 pl-4">
-            <div className="flex items-center gap-2.5 text-amber-800 dark:text-amber-400">
-              <Clock className="size-4 shrink-0" />
-              <span className="text-sm font-medium">
-                {props.draftCount} pending draft
-                {props.draftCount !== 1 ? 's' : ''} — bills not yet generated
-              </span>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-400"
-              data-test="view-drafts-btn"
-              onClick={() =>
-                router.push(`/home/${props.accountSlug}/billing?bills=draft`)
-              }
-            >
-              View drafts
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
       {/* KPI tiles */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <TileButton
@@ -267,8 +260,8 @@ export function BillingOverview(props: {
           <MetricCard
             icon={CheckCircle2}
             label="Fully Paid"
-            value={String(kpis.paidCount)}
-            sublabel={`of ${kpis.totalBills} bills`}
+            value={formatINR(kpis.paidAmount)}
+            sublabel={`${kpis.paidCount} of ${kpis.totalBills} bills`}
             variant="green"
           />
         </TileButton>
@@ -324,10 +317,17 @@ export function BillingOverview(props: {
                         'cursor-pointer transition-colors',
                         isHighlighted && 'bg-primary/[0.03]',
                       )}
-                      onClick={() =>
-                        router.push(
+                      onMouseEnter={() =>
+                        router.prefetch(
                           `/home/${props.accountSlug}/billing?period=${row.period}`,
                         )
+                      }
+                      onClick={() =>
+                        startTransition(() => {
+                          router.push(
+                            `/home/${props.accountSlug}/billing?period=${row.period}`,
+                          );
+                        })
                       }
                       data-test={`period-row-${row.period}`}
                     >

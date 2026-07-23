@@ -110,7 +110,7 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
                     size={'sm'}
                     data-test={'admin-bulk-invite-button'}
                   >
-                    Invite Members
+                    Bulk Invite Members
                   </Button>
                 </AdminBulkInviteDialog>
               ) : null}

@@ -2060,3 +2060,25 @@ Adversarial bug-hunt across the entire v1.2 branch. 22 confirmed findings resolv
 | `20260727000000_cash_ledger_payments_idempotency.sql` | Unique partial index on `cash_ledger_payments(razorpay_payment_id)` — prevents double-credit on concurrent/retry payment recording |
 
 _Last updated: 2026-07-23_
+
+---
+
+## v1.2 — Bulk Export: Bills & Payments (2026-07-23)
+
+Full bulk-export capability for the Billing and Payments screens, supporting both CSV (client-side, instant) and PDF (server-rendered, formatted report).
+
+### Features
+
+- **Export Menu** (`components/export-menu.tsx`) — Split-button dropdown on both screens. Shows count of currently-filtered rows. CSV downloads instantly; PDF is fetched from a server route with a toast progress indicator. Warns at 200+ rows; blocks at 300+.
+- **Bills CSV export** (`lib/export-csv.ts`) — RFC 4180-compliant CSV with raw number values for spreadsheet compatibility. Exports all filtered bills from client state (no server round-trip).
+- **Payments CSV export** — Flattens nested payments; bills with zero payments get one empty row.
+- **Bills PDF export** (`/api/billing/bills/export/pdf`) — POST endpoint accepting an array of bill IDs. Fetches via RLS-enforced client (only authorized bills returned). A4 landscape PDF with KPI summary, proportional-flex table, alternating rows, and totals footer.
+- **Payments PDF export** (`/api/billing/payments/export/pdf`) — Same pattern; flattens one row per payment server-side.
+- **PDF templates** (`packages/pdf-templates`) — `BillsExportDocument` and `PaymentsExportDocument`. A4 landscape, 9 columns, `<View overflow:'hidden'>` cell wrappers to prevent column bleed, `BILL_TYPE_LABELS` and `PAYMENT_MODE_LABELS` for human-readable values.
+- **SSRF guard** (`lib/server/sanitize-logo-url.ts`) — Extracted shared helper; blocks private/reserved IP ranges before react-pdf fetches the association logo.
+
+### PDF Quality Fixes (2026-07-23)
+
+Column bleed identified after initial test export: text from narrow columns overflowing into adjacent cells, causing headers to visually merge (e.g. "AdvanceReference"). Root cause: `overflow:'hidden'` on `<Text>` nodes is unreliable in react-pdf — only `<View>` clips correctly. All table cells refactored to `<C flex={n}>` View wrappers. Also added `razorpay` to `PAYMENT_MODE_LABELS`.
+
+### No new migrations

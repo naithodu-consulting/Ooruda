@@ -285,7 +285,8 @@ export async function downloadPdfAction(
     .eq('status', 'active')
     .order('paid_at', { ascending: false })
     .limit(50);
-  if (from && ISO_DATE_PDF.test(from)) paymentsQ = paymentsQ.gte('paid_at', from);
+  if (from && ISO_DATE_PDF.test(from))
+    paymentsQ = paymentsQ.gte('paid_at', from);
   if (to && ISO_DATE_PDF.test(to))
     paymentsQ = paymentsQ.lte('paid_at', `${to}T23:59:59.999`);
 

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Badge } from '@kit/ui/badge';
+import { Button } from '@kit/ui/button';
 import {
   Card,
   CardContent,
@@ -141,12 +142,13 @@ export function CashLedgerDuesSection({
                     )}
                     {canManage && (
                       <TableCell className="py-3 text-right">
-                        <button
-                          className="text-primary text-sm font-medium hover:underline"
+                        <Button
+                          size="sm"
+                          variant="outline"
                           onClick={() => setPayTarget(due)}
                         >
                           Record payment
-                        </button>
+                        </Button>
                       </TableCell>
                     )}
                     {canPay && (

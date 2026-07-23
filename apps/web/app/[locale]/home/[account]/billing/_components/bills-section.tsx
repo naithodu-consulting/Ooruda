@@ -60,6 +60,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@kit/ui/tooltip';
 import { cn } from '@kit/ui/utils';
 
 import { DownloadPdfButton } from '~/components/download-pdf-button';
+import { ExportMenu } from '~/components/export-menu';
 import {
   BILL_STATUS_ITEMS,
   BILL_TYPE_FILTER_ITEMS,
@@ -68,6 +69,7 @@ import {
 import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import { todayInBillingZone } from '~/lib/billing-dates';
+import { exportBillsCsv } from '~/lib/export-csv';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
@@ -203,9 +205,9 @@ export function BillsSection(props: {
           type="button"
           onClick={() => setOpen((v) => !v)}
           data-test="bills-section-toggle"
-          className="hover:text-foreground focus-visible:ring-ring flex items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-1"
+          className="hover:text-foreground focus-visible:ring-ring flex items-center gap-2 text-left focus-visible:ring-1 focus-visible:outline-none"
         >
-          <span className="text-foreground text-lg font-semibold leading-none tracking-tight">
+          <span className="text-foreground text-lg leading-none font-semibold tracking-tight">
             Bills
           </span>
           <span className="text-muted-foreground flex items-center">
@@ -796,6 +798,13 @@ function GeneratedBillsTab(props: {
   );
   const [page, setPage] = useState(1);
 
+  useEffect(() => {
+    if (props.initialStatus) {
+      setStatusVal(props.initialStatus);
+      setPage(1);
+    }
+  }, [props.initialStatus]);
+
   const durationItems = useMemo(() => getDurationItems(), []);
   const today = useMemo(() => todayInBillingZone(), []);
 
@@ -804,20 +813,13 @@ function GeneratedBillsTab(props: {
 
     if (statusVal !== 'all') {
       if (statusVal === 'paid') {
-        rows = rows.filter((b) => b.status === 'Paid');
+        rows = rows.filter((b) => displayBillStatus(b) === 'Paid');
       } else if (statusVal === 'unpaid') {
-        rows = rows.filter((b) => b.status === 'Unpaid' && b.due_date >= today);
+        rows = rows.filter((b) => displayBillStatus(b) === 'Unpaid');
       } else if (statusVal === 'partial') {
-        rows = rows.filter(
-          (b) => b.status === 'Partial' && b.due_date >= today,
-        );
+        rows = rows.filter((b) => displayBillStatus(b) === 'Partial');
       } else if (statusVal === 'overdue') {
-        rows = rows.filter(
-          (b) =>
-            b.status === 'Overdue' ||
-            ((b.status === 'Unpaid' || b.status === 'Partial') &&
-              b.due_date < today),
-        );
+        rows = rows.filter((b) => displayBillStatus(b) === 'Overdue');
       }
     }
 
@@ -901,7 +903,12 @@ function GeneratedBillsTab(props: {
             value={statusVal}
             onValueChange={setFilter(setStatusVal)}
           >
-            <SelectTrigger className="bg-background h-9 w-[150px]">
+            <SelectTrigger
+              className={cn(
+                'bg-background h-9 w-[150px] text-xs font-normal [&_svg]:size-3.5',
+                statusVal === 'all' && 'text-muted-foreground',
+              )}
+            >
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -923,7 +930,12 @@ function GeneratedBillsTab(props: {
             value={typeVal}
             onValueChange={setFilter(setTypeVal)}
           >
-            <SelectTrigger className="bg-background h-9 w-[150px]">
+            <SelectTrigger
+              className={cn(
+                'bg-background h-9 w-[150px] text-xs font-normal [&_svg]:size-3.5',
+                typeVal === 'all' && 'text-muted-foreground',
+              )}
+            >
               <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
@@ -945,7 +957,12 @@ function GeneratedBillsTab(props: {
             value={durationVal}
             onValueChange={setFilter(setDurationVal)}
           >
-            <SelectTrigger className="bg-background h-9 w-[180px]">
+            <SelectTrigger
+              className={cn(
+                'bg-background h-9 w-[180px] text-xs font-normal [&_svg]:size-3.5',
+                durationVal === 'all' && 'text-muted-foreground',
+              )}
+            >
               <SelectValue placeholder="Duration" />
             </SelectTrigger>
             <SelectContent>
@@ -970,7 +987,12 @@ function GeneratedBillsTab(props: {
               value={unitVal}
               onValueChange={setFilter(setUnitVal)}
             >
-              <SelectTrigger className="bg-background h-9 w-[120px]">
+              <SelectTrigger
+                className={cn(
+                  'bg-background h-9 w-[120px] text-xs font-normal [&_svg]:size-3.5',
+                  unitVal === 'all' && 'text-muted-foreground',
+                )}
+              >
                 <SelectValue placeholder="Unit" />
               </SelectTrigger>
               <SelectContent>
@@ -1012,6 +1034,14 @@ function GeneratedBillsTab(props: {
             )}
           </div>
         )}
+
+        <ExportMenu
+          ids={filtered.map((b) => b.id)}
+          count={filtered.length}
+          noun="bills"
+          onCsvExport={() => exportBillsCsv(filtered)}
+          pdfEndpoint="/api/billing/bills/export/pdf"
+        />
       </div>
 
       {filtered.length === 0 ? (
@@ -1024,7 +1054,7 @@ function GeneratedBillsTab(props: {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Bill No.</TableHead>
+                  <TableHead>Bill No</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead>Breakdown</TableHead>
                   <TableHead className="text-right">Total</TableHead>
@@ -1087,7 +1117,13 @@ function GeneratedBillsTab(props: {
                         {formatINR(bill.total_amount)}
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
-                        {formatINR(bill.paid_amount)}
+                        {bill.paid_amount > 0 ? (
+                          <span className="text-green-700 dark:text-green-400">
+                            {formatINR(bill.paid_amount)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge

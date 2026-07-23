@@ -34,10 +34,12 @@ import {
 } from '@kit/ui/table';
 import { cn } from '@kit/ui/utils';
 
+import { ExportMenu } from '~/components/export-menu';
 import { getDurationItems } from '~/lib/bill-filter-items';
 import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
 import { billTypeLabel } from '~/lib/bill-type-labels';
+import { exportPaymentsCsv } from '~/lib/export-csv';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
@@ -381,7 +383,10 @@ export function PaymentsSection(props: {
             onValueChange={handleDuration}
           >
             <SelectTrigger
-              className="bg-background h-9 w-[160px]"
+              className={cn(
+                'bg-background h-9 w-[160px] text-xs font-normal [&_svg]:size-3.5',
+                durationVal === 'all' && 'text-muted-foreground',
+              )}
               data-test="payments-duration-filter"
             >
               <SelectValue placeholder="Duration" />
@@ -408,6 +413,14 @@ export function PaymentsSection(props: {
               Clear all
             </Button>
           )}
+
+          <ExportMenu
+            ids={filtered.map((b) => b.id)}
+            count={filtered.length}
+            noun="payments"
+            onCsvExport={() => exportPaymentsCsv(filtered)}
+            pdfEndpoint="/api/billing/payments/export/pdf"
+          />
 
           {/* Live metrics strip */}
           {filtered.length > 0 && (
