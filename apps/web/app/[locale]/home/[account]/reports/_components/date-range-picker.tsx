@@ -7,7 +7,11 @@ import { CalendarRange, Loader2 } from 'lucide-react';
 import { Button } from '@kit/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@kit/ui/popover';
 
-import { type PresetKey, PRESET_RANGES, resolvePreset } from '../_lib/reports-types';
+import {
+  type PresetKey,
+  PRESET_RANGES,
+  resolvePreset,
+} from '../_lib/reports-types';
 
 interface Props {
   preset: string;

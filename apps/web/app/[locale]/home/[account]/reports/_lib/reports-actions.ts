@@ -93,7 +93,9 @@ export async function downloadCsvAction(
   const slug = fileSlug(from, to);
 
   if (tab === 'collection') {
-    const rpcParams: Record<string, unknown> = { p_association_id: associationId };
+    const rpcParams: Record<string, unknown> = {
+      p_association_id: associationId,
+    };
     if (fromPeriod) rpcParams['p_from_period'] = fromPeriod;
     if (toPeriod_) rpcParams['p_to_period'] = toPeriod_;
 
@@ -259,7 +261,9 @@ export async function downloadPdfAction(
   const toPeriod_ = toPeriod(to);
 
   // Build collection RPC — omit period params for All Time
-  const rpcParams: Record<string, unknown> = { p_association_id: associationId };
+  const rpcParams: Record<string, unknown> = {
+    p_association_id: associationId,
+  };
   if (fromPeriod) rpcParams['p_from_period'] = fromPeriod;
   if (toPeriod_) rpcParams['p_to_period'] = toPeriod_;
 
@@ -301,14 +305,19 @@ export async function downloadPdfAction(
     elecQ = (elecQ as any).gte('period', fromPeriod).lte('period', toPeriod_);
   }
 
-  const [collectionRes, outstandingRes, paymentsRes, electricityRes, profileRes] =
-    await Promise.all([
-      (client as any).rpc('get_collection_summary', rpcParams),
-      billsQ,
-      paymentsQ,
-      elecQ,
-      client.from('profiles').select('full_name').maybeSingle(),
-    ]);
+  const [
+    collectionRes,
+    outstandingRes,
+    paymentsRes,
+    electricityRes,
+    profileRes,
+  ] = await Promise.all([
+    (client as any).rpc('get_collection_summary', rpcParams),
+    billsQ,
+    paymentsQ,
+    elecQ,
+    client.from('profiles').select('full_name').maybeSingle(),
+  ]);
 
   if (collectionRes.error) {
     return {

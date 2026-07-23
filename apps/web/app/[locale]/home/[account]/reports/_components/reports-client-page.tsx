@@ -147,7 +147,8 @@ export function ReportsClientPage({ account: _account, associationId }: Props) {
           outstandingRes.error ??
           paymentsRes.error ??
           mescomRes.error;
-        if (queryError) throw new Error((queryError as any).message ?? String(queryError));
+        if (queryError)
+          throw new Error((queryError as any).message ?? String(queryError));
 
         const collectionRows: CollectionRow[] = (
           (collectionRes.data as any[]) ?? []
@@ -269,7 +270,8 @@ export function ReportsClientPage({ account: _account, associationId }: Props) {
       0,
     ) ?? 0;
 
-  const periodLabel = preset === 'all_time' ? 'all time' : 'the selected period';
+  const periodLabel =
+    preset === 'all_time' ? 'all time' : 'the selected period';
   const headerSub = loading
     ? 'Loading…'
     : data && (data.collectionRows.length > 0 || data.payments.length > 0)

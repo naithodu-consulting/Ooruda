@@ -311,46 +311,45 @@ export async function getOrGenerateBillPdf(
 
       // Fetch mescom_bill, sub_meters, and billing entity in parallel — none
       // of these depend on each other.
-      const [
-        { data: mescomBill },
-        { data: subMeters },
-        billTo,
-      ] = await Promise.all([
-        admin
-          .from('mescom_bills')
-          .select('id, invoice_amount, period_start, period_end')
-          .eq('association_id', bill.association_id)
-          .eq('period', bill.period)
-          .maybeSingle(),
-        isCommonAreaBill
-          ? admin
-              .from('sub_meters')
-              .select('id, meter_label, load_kva, units!inner(association_id)')
-              .eq('meter_type', 'CommonArea')
-              .eq('is_active', true)
-              .eq('units.association_id', bill.association_id)
-              .order('meter_label')
-          : admin
-              .from('sub_meters')
-              .select('id, meter_label, load_kva')
-              .eq('unit_id', bill.unit_id)
-              // Exclude CommonArea meters: they carry a FK-placeholder unit_id
-              // (the first unit), so they'd otherwise leak into that unit's bill.
-              .neq('meter_type', 'CommonArea')
-              .eq('is_active', true)
-              .order('meter_label'),
-        resolveBillingEntity(
-          {
-            bill_to: unitData.bill_to ?? 'auto',
-            owner_id: unitData.owner_id,
-            owner_is_company: unitData.owner_is_company ?? false,
-            owner_company_name: unitData.owner_company_name ?? null,
-            owner_company_address: unitData.owner_company_address ?? null,
-            owner_company_gstin: unitData.owner_company_gstin ?? null,
-          },
-          bill.tenancy_id,
-        ),
-      ]);
+      const [{ data: mescomBill }, { data: subMeters }, billTo] =
+        await Promise.all([
+          admin
+            .from('mescom_bills')
+            .select('id, invoice_amount, period_start, period_end')
+            .eq('association_id', bill.association_id)
+            .eq('period', bill.period)
+            .maybeSingle(),
+          isCommonAreaBill
+            ? admin
+                .from('sub_meters')
+                .select(
+                  'id, meter_label, load_kva, units!inner(association_id)',
+                )
+                .eq('meter_type', 'CommonArea')
+                .eq('is_active', true)
+                .eq('units.association_id', bill.association_id)
+                .order('meter_label')
+            : admin
+                .from('sub_meters')
+                .select('id, meter_label, load_kva')
+                .eq('unit_id', bill.unit_id)
+                // Exclude CommonArea meters: they carry a FK-placeholder unit_id
+                // (the first unit), so they'd otherwise leak into that unit's bill.
+                .neq('meter_type', 'CommonArea')
+                .eq('is_active', true)
+                .order('meter_label'),
+          resolveBillingEntity(
+            {
+              bill_to: unitData.bill_to ?? 'auto',
+              owner_id: unitData.owner_id,
+              owner_is_company: unitData.owner_is_company ?? false,
+              owner_company_name: unitData.owner_company_name ?? null,
+              owner_company_address: unitData.owner_company_address ?? null,
+              owner_company_gstin: unitData.owner_company_gstin ?? null,
+            },
+            bill.tenancy_id,
+          ),
+        ]);
 
       if (!mescomBill) {
         const logger = await getLogger();

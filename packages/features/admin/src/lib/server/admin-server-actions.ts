@@ -639,7 +639,12 @@ export async function bulkInviteMembersAction(
   let imported = 0;
   const skipped: BulkInviteResult['skipped'] = [];
   const importedByAssociation = new Map<string, number>();
-  const validRoles = ['assoc_admin', 'billing_operator', 'prop_owner', 'tenant'];
+  const validRoles = [
+    'assoc_admin',
+    'billing_operator',
+    'prop_owner',
+    'tenant',
+  ];
 
   // ── Phase 1: Validate all rows synchronously (no DB calls) ──────────────────
   // Catch bad phones, unknown associations, and invalid roles up-front so the
@@ -658,16 +663,30 @@ export async function bulkInviteMembersAction(
     const normalised = normalizePhoneNumber(row.phone);
 
     if (!normalised) {
-      skipped.push({ row: rowNum, phone: row.phone, reason: 'Invalid phone number' });
+      skipped.push({
+        row: rowNum,
+        phone: row.phone,
+        reason: 'Invalid phone number',
+      });
       continue;
     }
-    const associationId = assocIdByName.get(row.association_name.trim().toLowerCase());
+    const associationId = assocIdByName.get(
+      row.association_name.trim().toLowerCase(),
+    );
     if (!associationId) {
-      skipped.push({ row: rowNum, phone: normalised, reason: `Association "${row.association_name}" not found` });
+      skipped.push({
+        row: rowNum,
+        phone: normalised,
+        reason: `Association "${row.association_name}" not found`,
+      });
       continue;
     }
     if (!validRoles.includes(row.role)) {
-      skipped.push({ row: rowNum, phone: normalised, reason: `Invalid role "${row.role}"` });
+      skipped.push({
+        row: rowNum,
+        phone: normalised,
+        reason: `Invalid role "${row.role}"`,
+      });
       continue;
     }
     validatedRows.push({ rowNum, normalised, associationId, row });
@@ -724,7 +743,10 @@ export async function bulkInviteMembersAction(
           await adminClient.auth.admin.createUser(createPayload);
 
         if (createError) {
-          createFailures.set(normalised, friendlyAuthError(createError.message));
+          createFailures.set(
+            normalised,
+            friendlyAuthError(createError.message),
+          );
           return;
         }
 
@@ -750,37 +772,60 @@ export async function bulkInviteMembersAction(
   await Promise.all(
     validatedRows.map(async ({ rowNum, normalised, associationId, row }) => {
       if (createFailures.has(normalised)) {
-        skipped.push({ row: rowNum, phone: normalised, reason: createFailures.get(normalised)! });
+        skipped.push({
+          row: rowNum,
+          phone: normalised,
+          reason: createFailures.get(normalised)!,
+        });
         return;
       }
 
       const userId = existingUserByPhone.get(normalised);
       if (!userId) {
-        skipped.push({ row: rowNum, phone: normalised, reason: 'User could not be created or found' });
+        skipped.push({
+          row: rowNum,
+          phone: normalised,
+          reason: 'User could not be created or found',
+        });
         return;
       }
 
       try {
         const { error: membershipError } = await adminClient
           .from('accounts_memberships')
-          .insert({ user_id: userId, account_id: associationId, account_role: row.role });
+          .insert({
+            user_id: userId,
+            account_id: associationId,
+            account_role: row.role,
+          });
 
         if (membershipError) {
           skipped.push({
             row: rowNum,
             phone: normalised,
-            reason: membershipError.code === '23505'
-              ? 'Already a member of this association'
-              : membershipError.message,
+            reason:
+              membershipError.code === '23505'
+                ? 'Already a member of this association'
+                : membershipError.message,
           });
           return;
         }
 
         imported++;
-        importedByAssociation.set(associationId, (importedByAssociation.get(associationId) ?? 0) + 1);
-        logger.info({ phone: normalised, associationId, role: row.role }, 'Bulk invite: member added');
+        importedByAssociation.set(
+          associationId,
+          (importedByAssociation.get(associationId) ?? 0) + 1,
+        );
+        logger.info(
+          { phone: normalised, associationId, role: row.role },
+          'Bulk invite: member added',
+        );
       } catch (err) {
-        skipped.push({ row: rowNum, phone: normalised, reason: err instanceof Error ? err.message : 'Unknown error' });
+        skipped.push({
+          row: rowNum,
+          phone: normalised,
+          reason: err instanceof Error ? err.message : 'Unknown error',
+        });
       }
     }),
   );
