@@ -1764,3 +1764,21 @@ _Last updated: 2026-07-18_
 _No new migrations in this release._
 
 _Last updated: 2026-07-19_
+
+---
+
+## Payments — Overdue Filter Fix (Jul 23, 2026)
+
+### Bug Fixed
+
+**Payments page: Overdue filter returned no results** despite bills displaying correctly as Overdue in the table.
+
+Root cause: the status filter branches for `unpaid`, `partial`, and `overdue` compared `b.status` directly against raw DB values. Bills that the `mark_overdue_bills` cron had already promoted to `status = 'Overdue'` in the database did not satisfy `b.status === 'Unpaid' || b.status === 'Partial'`, so they were silently excluded. The `today` memo added a secondary risk of stale date comparisons.
+
+Fix: all three filter branches now use `displayBillStatus(b)` — the same function used to render the status badge — ensuring filter logic and display are always in sync. Removed the stale `today` useMemo and unused `todayInBillingZone` import.
+
+### Migrations Changelog
+
+_No new migrations._
+
+_Last updated: 2026-07-23_

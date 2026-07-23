@@ -36,7 +36,6 @@ import {
 } from '~/lib/bill-filter-items';
 import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
-import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
@@ -82,8 +81,6 @@ export function PaymentsSection(props: {
   const [page, setPage] = useState(1);
 
   const durationItems = useMemo(() => getDurationItems(), []);
-  const today = useMemo(() => todayInBillingZone(), []);
-
   // Derived: filtered rows (instant — no network)
   const filtered = useMemo(() => {
     let rows = props.bills;
@@ -97,17 +94,11 @@ export function PaymentsSection(props: {
       } else if (statusVal === 'paid') {
         rows = rows.filter((b) => b.status === 'Paid');
       } else if (statusVal === 'unpaid') {
-        rows = rows.filter((b) => b.status === 'Unpaid' && b.due_date >= today);
+        rows = rows.filter((b) => displayBillStatus(b) === 'Unpaid');
       } else if (statusVal === 'partial') {
-        rows = rows.filter(
-          (b) => b.status === 'Partial' && b.due_date >= today,
-        );
+        rows = rows.filter((b) => displayBillStatus(b) === 'Partial');
       } else if (statusVal === 'overdue') {
-        rows = rows.filter(
-          (b) =>
-            (b.status === 'Unpaid' || b.status === 'Partial') &&
-            b.due_date < today,
-        );
+        rows = rows.filter((b) => displayBillStatus(b) === 'Overdue');
       }
     }
 
@@ -128,7 +119,7 @@ export function PaymentsSection(props: {
     }
 
     return rows;
-  }, [props.bills, statusVal, typeVal, unitVal, durationVal, today]);
+  }, [props.bills, statusVal, typeVal, unitVal, durationVal]);
 
   // Derived: summary metrics
   const metrics = useMemo(() => {
