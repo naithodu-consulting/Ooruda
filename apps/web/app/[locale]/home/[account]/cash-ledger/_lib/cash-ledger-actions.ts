@@ -77,7 +77,7 @@ export async function addCashLedgerEntryAction(
       association_id: associationId,
       unit_id: input.unit_id,
       entry_type: input.entry_type,
-      bill_type: input.bill_type,
+      bill_type: input.bill_type.trim().toLowerCase(),
       amount: input.amount,
       direction,
       paid_by_user_id: input.paid_by_user_id ?? null,
@@ -297,6 +297,23 @@ export async function recordDuePaymentAction(
 
   const client = getSupabaseServerClient();
 
+  // Cap the payment amount against the actual outstanding due so a billing
+  // operator cannot over-credit the ledger beyond what is owed.
+  const { data: balance, error: balanceError } = await uc(client).rpc(
+    'get_cash_ledger_balance',
+    { p_unit_id: input.unit_id, p_bill_type: input.bill_type },
+  );
+  if (balanceError)
+    return {
+      success: false,
+      error: 'Unable to verify outstanding due. Please try again.',
+    };
+  const outstanding = -Number(balance ?? 0);
+  if (outstanding <= 0)
+    return { success: false, error: 'No outstanding due for this unit and bill type.' };
+  if (input.amount > outstanding + 0.01)
+    return { success: false, error: 'Amount exceeds the outstanding due.' };
+
   // Single RPC call — both cash_ledger_payments insert and cash_ledger credit
   // entry are written atomically; receipt number is generated inside the RPC.
   const { data: paymentId, error } = await uc(client).rpc(
@@ -339,8 +356,8 @@ export async function getCashLedgerEntriesAction(
   entries?: CashLedgerEntryRow[];
   error?: string;
 }> {
-  const role = await getAssociationRole(associationId);
-  if (!role) return { success: false, error: 'Not authorized.' };
+  const roleError = await requireBillingAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
 
   const client = getSupabaseServerClient();
 

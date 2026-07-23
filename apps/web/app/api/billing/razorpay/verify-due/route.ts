@@ -104,10 +104,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Gateway secret — fetched only now that the request is fully authorized.
+  // Gateway credentials — fetched only now that the request is fully authorized.
   const { data: gateway } = await admin
     .from('association_payment_gateways')
-    .select('key_secret, is_active')
+    .select('key_id, key_secret, is_active')
     .eq('association_id', associationId)
     .maybeSingle();
 
@@ -146,9 +146,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ paymentId: null, alreadyRecorded: true });
   }
 
-  // Validate the amount against the actual outstanding due (server-authoritative).
-  // The HMAC signature does NOT cover the amount, so a caller could pair a valid
-  // low-value order signature with an inflated amount — this guard blocks that.
+  // Fetch the actual captured amount from Razorpay — do NOT trust the
+  // client-supplied amount. The HMAC only covers orderId|paymentId, so a
+  // caller could submit a low-value payment signature with an inflated amount
+  // and record more credit than they actually paid.
+  const rzpCredentials = Buffer.from(
+    `${gateway.key_id}:${gateway.key_secret}`,
+  ).toString('base64');
+  const rzpPaymentRes = await fetch(
+    `https://api.razorpay.com/v1/payments/${razorpayPaymentId}`,
+    { headers: { Authorization: `Basic ${rzpCredentials}` } },
+  );
+  if (!rzpPaymentRes.ok) {
+    return NextResponse.json(
+      { error: 'Unable to verify payment details with Razorpay.' },
+      { status: 502 },
+    );
+  }
+  const rzpPayment = (await rzpPaymentRes.json()) as {
+    amount: number;
+    status: string;
+  };
+  if (rzpPayment.status !== 'captured') {
+    return NextResponse.json(
+      { error: 'Payment has not been captured.' },
+      { status: 400 },
+    );
+  }
+  const verifiedAmount = rzpPayment.amount / 100; // paise → rupees
+
+  // Secondary guard: verified amount must not exceed the current outstanding due.
   const { data: balance, error: balanceError } = await client.rpc(
     'get_cash_ledger_balance',
     { p_unit_id: unitId, p_bill_type: billType },
@@ -160,7 +187,7 @@ export async function POST(req: NextRequest) {
     );
   }
   const outstanding = -Number(balance ?? 0); // negative balance = amount owed
-  if (amount > outstanding + 0.01) {
+  if (verifiedAmount > outstanding + 0.01) {
     return NextResponse.json(
       { error: 'Amount exceeds the outstanding due.' },
       { status: 400 },
@@ -174,7 +201,7 @@ export async function POST(req: NextRequest) {
       p_association_id: associationId,
       p_unit_id: unitId,
       p_bill_type: billType,
-      p_amount: amount,
+      p_amount: verifiedAmount,
       p_razorpay_payment_id: razorpayPaymentId,
     },
   );

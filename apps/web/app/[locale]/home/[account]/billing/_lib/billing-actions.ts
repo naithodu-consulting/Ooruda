@@ -869,6 +869,8 @@ export async function bulkAddOtherChargeAction(
     return { success: false, error: 'Label is required.' };
   if (input.amount <= 0)
     return { success: false, error: 'Amount must be positive.' };
+  if (input.split_mode !== 'flat' && input.split_mode !== 'per_sqft')
+    return { success: false, error: 'Invalid split mode.' };
 
   const client = getSupabaseServerClient();
   const { error } = await client.from('pending_other_charges').insert({

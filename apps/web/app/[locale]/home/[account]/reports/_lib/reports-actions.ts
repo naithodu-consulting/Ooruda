@@ -87,7 +87,6 @@ export async function downloadCsvAction(
     return { success: false, error: 'Access denied.' };
   }
 
-  const allTime = !from && !to;
   const fromPeriod = toPeriod(from);
   const toPeriod_ = toPeriod(to);
   const slug = fileSlug(from, to);
@@ -134,9 +133,8 @@ export async function downloadCsvAction(
       .eq('association_id', associationId)
       .neq('status', 'Paid')
       .order('due_date');
-    if (!allTime) {
-      q = (q as any).gte('period', fromPeriod).lte('period', toPeriod_);
-    }
+    if (fromPeriod) q = (q as any).gte('period', fromPeriod);
+    if (toPeriod_) q = (q as any).lte('period', toPeriod_);
     const { data, error } = await q;
     if (error) return { success: false, error: error.message };
     const csv = toCSV(
@@ -178,9 +176,9 @@ export async function downloadCsvAction(
       .eq('association_id', associationId)
       .eq('status', 'active')
       .order('paid_at', { ascending: false });
-    if (!allTime) {
-      q = q.gte('paid_at', from).lte('paid_at', `${to}T23:59:59.999`);
-    }
+    const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+    if (from && ISO_DATE.test(from)) q = q.gte('paid_at', from);
+    if (to && ISO_DATE.test(to)) q = q.lte('paid_at', `${to}T23:59:59.999`);
     const { data, error } = await q;
     if (error) return { success: false, error: (error as any).message };
     const csv = toCSV(
@@ -222,9 +220,8 @@ export async function downloadCsvAction(
       .select('period, invoice_amount, block_consumption_units')
       .eq('association_id', associationId)
       .order('period', { ascending: false });
-    if (!allTime) {
-      q = (q as any).gte('period', fromPeriod).lte('period', toPeriod_);
-    }
+    if (fromPeriod) q = (q as any).gte('period', fromPeriod);
+    if (toPeriod_) q = (q as any).lte('period', toPeriod_);
     const { data, error } = await q;
     if (error) return { success: false, error: error.message };
     const csv = toCSV(
@@ -256,7 +253,6 @@ export async function downloadPdfAction(
   const { client, association } = await resolveAssociation(associationId);
   if (!association) return { success: false, error: 'Access denied.' };
 
-  const allTime = !from && !to;
   const fromPeriod = toPeriod(from);
   const toPeriod_ = toPeriod(to);
 
@@ -277,11 +273,11 @@ export async function downloadPdfAction(
     .neq('status', 'Paid')
     .order('due_date')
     .limit(50);
-  if (!allTime) {
-    billsQ = (billsQ as any).gte('period', fromPeriod).lte('period', toPeriod_);
-  }
+  if (fromPeriod) billsQ = (billsQ as any).gte('period', fromPeriod);
+  if (toPeriod_) billsQ = (billsQ as any).lte('period', toPeriod_);
 
   // Build payments query
+  const ISO_DATE_PDF = /^\d{4}-\d{2}-\d{2}$/;
   let paymentsQ = (client as any)
     .from('payments')
     .select('amount, mode, paid_at, status, bills(bill_no, units(unit_no))')
@@ -289,11 +285,9 @@ export async function downloadPdfAction(
     .eq('status', 'active')
     .order('paid_at', { ascending: false })
     .limit(50);
-  if (!allTime) {
-    paymentsQ = paymentsQ
-      .gte('paid_at', from)
-      .lte('paid_at', `${to}T23:59:59.999`);
-  }
+  if (from && ISO_DATE_PDF.test(from)) paymentsQ = paymentsQ.gte('paid_at', from);
+  if (to && ISO_DATE_PDF.test(to))
+    paymentsQ = paymentsQ.lte('paid_at', `${to}T23:59:59.999`);
 
   // Build electricity query
   let elecQ = client
@@ -301,9 +295,8 @@ export async function downloadPdfAction(
     .select('period, invoice_amount, block_consumption_units')
     .eq('association_id', associationId)
     .order('period', { ascending: false });
-  if (!allTime) {
-    elecQ = (elecQ as any).gte('period', fromPeriod).lte('period', toPeriod_);
-  }
+  if (fromPeriod) elecQ = (elecQ as any).gte('period', fromPeriod);
+  if (toPeriod_) elecQ = (elecQ as any).lte('period', toPeriod_);
 
   const [
     collectionRes,

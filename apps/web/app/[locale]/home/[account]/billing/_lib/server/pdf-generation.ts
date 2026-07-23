@@ -17,6 +17,37 @@ const BUCKET = 'billing-documents';
 
 const pendingPdfGenerations = new Map<string, Promise<GeneratedPdf | null>>();
 
+/**
+ * Validates that a logo URL is an absolute HTTPS URL pointing to a
+ * public host. Rejects private/internal URLs to prevent SSRF — the
+ * @react-pdf/renderer <Image> component fetches this URL server-side.
+ */
+function sanitizeLogoUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return null;
+    const h = parsed.hostname;
+    // Block localhost and common private ranges.
+    if (
+      h === 'localhost' ||
+      h === '127.0.0.1' ||
+      h === '0.0.0.0' ||
+      h.endsWith('.local') ||
+      /^10\.\d+\.\d+\.\d+$/.test(h) ||
+      /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(h) ||
+      /^192\.168\.\d+\.\d+$/.test(h) ||
+      /^169\.254\.\d+\.\d+$/.test(h) ||
+      /^fd[0-9a-f]{2}:/i.test(h) // IPv6 ULA
+    ) {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 export interface GeneratedPdf {
   /** Raw bytes — set when the PDF was just rendered (cache miss). */
   bytes?: Buffer;
@@ -200,6 +231,27 @@ export async function getOrGenerateBillPdf(
   billId: string,
   opts?: { skipAuth?: boolean },
 ): Promise<GeneratedPdf | null> {
+  // Auth is checked independently for every caller before consulting the
+  // dedup map — without this, a concurrent second request could receive the
+  // shared in-flight promise before its auth is checked.
+  if (!opts?.skipAuth) {
+    const client = getSupabaseServerClient();
+    const { data: billMeta } = await client
+      .from('bills')
+      .select('association_id, unit_id, tenancy_id, units(owner_id)')
+      .eq('id', billId)
+      .maybeSingle();
+    if (!billMeta) return null;
+    const authorized = await canAccessUnit(
+      billMeta.association_id,
+      billMeta.unit_id,
+      (billMeta.units as unknown as { owner_id: string | null } | null)
+        ?.owner_id ?? null,
+      billMeta.tenancy_id,
+    );
+    if (!authorized) return null;
+  }
+
   const cacheKey = `bill_${billId}`;
   if (pendingPdfGenerations.has(cacheKey)) {
     return pendingPdfGenerations.get(cacheKey)!;
@@ -419,7 +471,7 @@ export async function getOrGenerateBillPdf(
           association: {
             name: association.accounts?.name ?? 'Association',
             address: association.address,
-            logoUrl: association.accounts?.picture_url ?? null,
+            logoUrl: sanitizeLogoUrl(association.accounts?.picture_url),
             gstin: association.gstin,
             panNumber,
             registrationNumber: association.registration_number ?? null,
@@ -456,7 +508,7 @@ export async function getOrGenerateBillPdf(
           { billId, error },
           'Failed to render electricity bill PDF',
         );
-        throw error;
+        return null;
       }
     } else {
       const billTo = await resolveBillingEntity(
@@ -478,7 +530,7 @@ export async function getOrGenerateBillPdf(
             gstin: association.gstin,
             panNumber,
             registrationNumber: association.registration_number ?? null,
-            logoUrl: association.accounts?.picture_url ?? null,
+            logoUrl: sanitizeLogoUrl(association.accounts?.picture_url),
             gstEnabled: association.gst_enabled,
             gstRate: association.gst_rate,
             email: assocData.email ?? null,
@@ -517,7 +569,7 @@ export async function getOrGenerateBillPdf(
         });
       } catch (error) {
         logger.error({ billId, error }, 'Failed to render bill PDF');
-        throw error;
+        return null;
       }
     }
 
@@ -593,6 +645,27 @@ export async function preRenderBillPdf(billId: string): Promise<void> {
 export async function getOrGenerateReceiptPdf(
   paymentId: string,
 ): Promise<GeneratedPdf | null> {
+  // Auth pre-check before the dedup map — see getOrGenerateBillPdf for rationale.
+  const authClient = getSupabaseServerClient();
+  const { data: paymentMeta } = await authClient
+    .from('payments')
+    .select('association_id, bills(unit_id, tenancy_id, units(owner_id))')
+    .eq('id', paymentId)
+    .maybeSingle();
+  if (!paymentMeta?.bills) return null;
+  const bill = paymentMeta.bills as unknown as {
+    unit_id: string;
+    tenancy_id: string | null;
+    units: { owner_id: string | null } | null;
+  };
+  const authorized = await canAccessUnit(
+    paymentMeta.association_id,
+    bill.unit_id,
+    bill.units?.owner_id ?? null,
+    bill.tenancy_id,
+  );
+  if (!authorized) return null;
+
   const cacheKey = `receipt_${paymentId}`;
   if (pendingPdfGenerations.has(cacheKey)) {
     return pendingPdfGenerations.get(cacheKey)!;
@@ -752,7 +825,7 @@ export async function getOrGenerateReceiptPdf(
       });
     } catch (error) {
       logger.error({ paymentId, error }, 'Failed to render receipt PDF');
-      throw error;
+      return null;
     }
 
     const storagePath = `receipts/${payment.association_id}/${payment.id}.pdf`;
