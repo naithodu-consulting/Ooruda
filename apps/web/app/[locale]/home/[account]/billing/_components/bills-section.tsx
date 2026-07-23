@@ -20,7 +20,7 @@ import { useForm } from 'react-hook-form';
 
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
+import { Card, CardContent, CardHeader } from '@kit/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -203,12 +203,12 @@ export function BillsSection(props: {
           type="button"
           onClick={() => setOpen((v) => !v)}
           data-test="bills-section-toggle"
-          className="hover:text-foreground group flex items-center gap-2 text-left"
+          className="hover:text-foreground focus-visible:ring-ring flex items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-1"
         >
-          <CardTitle className="group-hover:text-foreground transition-colors">
+          <span className="text-foreground text-lg font-semibold leading-none tracking-tight">
             Bills
-          </CardTitle>
-          <span className="text-muted-foreground flex items-center transition-colors">
+          </span>
+          <span className="text-muted-foreground flex items-center">
             {open ? (
               <ChevronUp className="size-4" />
             ) : (
