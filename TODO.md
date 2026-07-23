@@ -4,6 +4,37 @@ Items that are scoped and understood but not yet implemented. Each entry include
 
 ---
 
+## Enhancement: URL sync for Payments page type/unit filters
+
+**Priority:** Low  
+**File:** `apps/web/app/[locale]/home/[account]/payments/_components/payments-section.tsx:102-117`
+
+**Context:** `typeFilter` and `unitFilter` are client-side state only. The `statusFilter` already syncs from the `?status=` URL param (used by billing overview "Outstanding" links), but `typeFilter` and `unitFilter` don't persist in the URL. This means you can't bookmark or share a filtered payments view for type or unit.
+
+**Fix:** Add `?type=` and `?unit=` query params to the URL using `useRouter`/`useSearchParams`, similar to how `?status=` is handled. The payments-section will need to read initial values from `searchParams` passed as props from the page server component.
+
+---
+
+## Bug: "Partial" payment status filter returns no results when all partial bills are overdue
+
+**Priority:** Medium  
+**File:** `apps/web/app/[locale]/home/[account]/payments/_components/payments-section.tsx:133`
+
+**Root cause:** The Partial filter gates on `b.due_date >= today`, so it only finds partially paid bills still within their due date. Once a partial bill crosses its due date, `displayBillStatus()` promotes its badge to "Overdue" and the Partial filter stops matching it. In a live association where most partial bills have aged past due, the filter returns nothing — which looks broken to the admin.
+
+**Fix:** Remove the date restriction from the Partial filter:
+```typescript
+// Before
+rows = rows.filter((b) => b.status === 'Partial' && b.due_date >= today);
+
+// After
+rows = rows.filter((b) => b.status === 'Partial');
+```
+
+"Partial" should mean any bill with a payment received but not fully paid, regardless of due date. The row-level badge already distinguishes Partial vs Overdue per bill. This is consistent with how the Paid and Collected filters work (no date restriction). The overlap between Partial and Overdue filters is acceptable — the badge tells the full story at row level.
+
+---
+
 ## Feature: assoc_admin personal bill view + Razorpay self-service
 
 **Priority:** High  

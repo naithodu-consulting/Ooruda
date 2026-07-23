@@ -1987,4 +1987,43 @@ Full management-level PDF via `@react-pdf/renderer`:
 |---|---|
 | `20260721000003_reports_collection_summary.sql` | `get_collection_summary()` function for aggregated collection data |
 
-_Last updated: 2026-07-22_
+_Last updated: 2026-07-23_
+
+---
+
+## v1.2 — Billing & Payments UX Fixes (2026-07-23)
+
+### Billing Overview
+
+- **Overdue count now correct** — KPI tiles and "Collection by Period" table were showing 0 overdue even when bills were past due. Root cause: the filter checked `b.status === 'Unpaid'` but the DB stores `status = 'Overdue'` for past-due bills after the nightly recompute. Fixed by using `displayBillStatus(b) === 'Overdue'` everywhere, matching what the Payments page has always shown.
+- **"Fully Paid" tile is now interactive** — was a plain non-interactive `<div>`; now wrapped in a `TileButton` that filters the period table to fully-collected periods.
+- **"Outstanding" tile filter** — now hides periods with zero outstanding (not just re-sorts); instantly shows which periods need attention.
+- **Cursor pointer on tiles** — added `cursor-pointer` to `TileButton`; browsers don't auto-apply it to `<button>` elements without explicit CSS.
+- **Removed "All bill types" period filter** — a per-bill-type filter on an aggregate period table was unintuitive. Full type/unit/status filtering is available in the period drill-down (Layer 2).
+- **KPI tile visual consistency** — replaced custom `KpiTile` sub-component with the shared `MetricCard` primitive; both the overview and period detail now use identical tile styling.
+- **"Collection by Period" heading size** — bumped from `text-sm` to `text-base font-semibold`.
+- **Tile filter performance** — `setActiveTile` now runs in `startTransition()`.
+
+### Bills Section
+
+- **"View Drafts" button now works** — `useState(props.defaultOpen)` only initialises on mount; soft navigation doesn't remount the component. Fixed with `useSearchParams` + `useEffect` that syncs `open` and `activeTab` when `?bills=` URL param changes.
+- **Controlled Tabs** — converted from uncontrolled (`defaultValue`) to controlled (`value`/`onValueChange`) so tab state stays in sync with URL-driven opens.
+- **Toggle UI** — replaced inline "↓ Show bill list / ↑ Hide" text button with a clean chevron icon on the section title.
+
+### MultiSelect — Accessibility
+
+- **Nested interactive element fixed** — clear button moved outside the PopoverTrigger into an absolutely-positioned sibling.
+- **Focus ring, ARIA roles** — `focus-visible:ring-1` on clear button; `role="listbox" aria-multiselectable="true"` on options container; `aria-haspopup="listbox"` on trigger.
+
+### Date Parsing
+
+- **Timezone-safe due date display** — `new Date('YYYY-MM-DD')` parses as UTC midnight, shifting displayed date by one day for IST users. Fixed with `.replace(/-/g, '/')` in `billing-period-detail.tsx` and `billing-unit-sheet.tsx`.
+
+### Payments Page
+
+- **"Record Payment" button** — changed from primary to `variant="outline"` so it doesn't dominate table rows visually.
+- **Table typography** — period/type are `text-sm text-muted-foreground`; unit `font-medium`; total `font-medium`; outstanding uses dark-mode-safe `text-red-600 dark:text-red-400`.
+- **Overdue row highlight** — now uses semantic `bg-destructive/[0.04]`.
+- **Metrics strip** — label font normalised to `text-[11px]`; value weight `font-semibold`.
+
+_Last updated: 2026-07-23_

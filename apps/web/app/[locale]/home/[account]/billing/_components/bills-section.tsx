@@ -1,13 +1,15 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   PiggyBank,
   Plus,
   Receipt,
@@ -149,7 +151,27 @@ export function BillsSection(props: {
   pendingElectricityBills?: PendingElectricityBill[];
   maintenancePending?: boolean;
   currentPeriod?: string;
+  /** Whether the bill list content is expanded on first render */
+  defaultOpen?: boolean;
+  /** Which tab to show on open: 'draft' | 'generated' */
+  initialTab?: string;
 }) {
+  const searchParams = useSearchParams();
+  const billsUrlParam = searchParams.get('bills');
+
+  const [open, setOpen] = useState(
+    billsUrlParam === 'draft' ||
+      billsUrlParam === 'open' ||
+      (props.defaultOpen ?? false),
+  );
+
+  // Sync open/tab when the ?bills= URL param changes (e.g. "View drafts" button)
+  useEffect(() => {
+    if (billsUrlParam === 'draft' || billsUrlParam === 'open') {
+      setOpen(true);
+    }
+  }, [billsUrlParam]);
+
   const draftCount =
     (props.maintenancePending ? 1 : 0) +
     ((props.pendingElectricityBills?.length ?? 0) > 0 ? 1 : 0) +
@@ -162,12 +184,38 @@ export function BillsSection(props: {
   // would silently strand the requested filter on the wrong tab.
   const hasIncomingFilter = !!(props.initialStatus || props.initialDuration);
   const defaultTab =
-    hasIncomingFilter || draftCount === 0 ? 'generated' : 'draft';
+    billsUrlParam === 'draft' || props.initialTab === 'draft'
+      ? 'draft'
+      : hasIncomingFilter || draftCount === 0
+        ? 'generated'
+        : 'draft';
+
+  const [activeTab, setActiveTab] = useState(defaultTab);
+
+  useEffect(() => {
+    if (billsUrlParam === 'draft') setActiveTab('draft');
+  }, [billsUrlParam]);
 
   return (
     <Card className="border-0 shadow-none">
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <CardTitle>Bills</CardTitle>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          data-test="bills-section-toggle"
+          className="hover:text-foreground group flex items-center gap-2 text-left"
+        >
+          <CardTitle className="group-hover:text-foreground transition-colors">
+            Bills
+          </CardTitle>
+          <span className="text-muted-foreground flex items-center transition-colors">
+            {open ? (
+              <ChevronUp className="size-4" />
+            ) : (
+              <ChevronDown className="size-4" />
+            )}
+          </span>
+        </button>
 
         <div className="flex items-center gap-2 sm:shrink-0">
           {props.canManage ? (
@@ -212,49 +260,51 @@ export function BillsSection(props: {
         </div>
       </CardHeader>
 
-      <CardContent>
-        <Tabs defaultValue={defaultTab}>
-          <TabsList className="mb-4">
-            <TabsTrigger value="draft" className="relative">
-              Draft Bills
-              {draftCount > 0 && (
-                <span className="bg-primary text-primary-foreground ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold">
-                  {draftCount}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="generated">
-              Generated Bills
-              {props.bills.length > 0 && (
-                <span className="text-muted-foreground ml-2 text-[11px]">
-                  {props.bills.length}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
+      {open && (
+        <CardContent>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="mb-4">
+              <TabsTrigger value="draft" className="relative">
+                Draft Bills
+                {draftCount > 0 && (
+                  <span className="bg-primary text-primary-foreground ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold">
+                    {draftCount}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="generated">
+                Generated Bills
+                {props.bills.length > 0 && (
+                  <span className="text-muted-foreground ml-2 text-[11px]">
+                    {props.bills.length}
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="draft">
-            <DraftBillsTab
-              associationId={props.associationId}
-              maintenancePending={props.maintenancePending ?? false}
-              currentPeriod={props.currentPeriod ?? ''}
-              pendingElectricityBills={props.pendingElectricityBills ?? []}
-              pendingCharges={props.pendingCharges ?? []}
-              pendingSinkingCharges={props.pendingSinkingCharges ?? []}
-              canManage={props.canManage}
-            />
-          </TabsContent>
+            <TabsContent value="draft">
+              <DraftBillsTab
+                associationId={props.associationId}
+                maintenancePending={props.maintenancePending ?? false}
+                currentPeriod={props.currentPeriod ?? ''}
+                pendingElectricityBills={props.pendingElectricityBills ?? []}
+                pendingCharges={props.pendingCharges ?? []}
+                pendingSinkingCharges={props.pendingSinkingCharges ?? []}
+                canManage={props.canManage}
+              />
+            </TabsContent>
 
-          <TabsContent value="generated">
-            <GeneratedBillsTab
-              bills={props.bills}
-              units={props.units}
-              initialDuration={props.initialDuration}
-              initialStatus={props.initialStatus}
-            />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
+            <TabsContent value="generated">
+              <GeneratedBillsTab
+                bills={props.bills}
+                units={props.units}
+                initialDuration={props.initialDuration}
+                initialStatus={props.initialStatus}
+              />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      )}
     </Card>
   );
 }

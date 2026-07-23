@@ -5,6 +5,8 @@ import { Trans } from '@kit/ui/trans';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { BillingOverview } from './_components/billing-overview';
+import { BillingPeriodDetail } from './_components/billing-period-detail';
 import {
   BillsSection,
   type BillRow,
@@ -13,16 +15,19 @@ import {
 
 interface Props {
   params: Promise<{ account: string }>;
-  searchParams: Promise<{ duration?: string; status?: string }>;
+  searchParams: Promise<{
+    duration?: string;
+    status?: string;
+    period?: string;
+    bills?: string;
+  }>;
 }
 
 export const metadata = { title: 'Billing' };
 
 export default async function BillingPage({ params, searchParams }: Props) {
-  const [{ account }, { duration, status }] = await Promise.all([
-    params,
-    searchParams,
-  ]);
+  const [{ account }, { duration, status, period, bills: billsParam }] =
+    await Promise.all([params, searchParams]);
   const { accountId, role } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
@@ -222,6 +227,30 @@ export default async function BillingPage({ params, searchParams }: Props) {
   const canManage = role === 'assoc_admin' || role === 'billing_operator';
   const canDelete = role === 'assoc_admin';
 
+  const draftCount =
+    (maintenancePending ? 1 : 0) +
+    (pendingElectricityBills.length > 0 ? 1 : 0) +
+    (pendingCharges.length > 0 ? 1 : 0) +
+    (pendingSinkingCharges.length > 0 ? 1 : 0);
+
+  // Period drill-down: show Layer 2 when ?period=YYYY-MM is present.
+  if (period) {
+    return (
+      <PageBody>
+        <TeamAccountLayoutPageHeader
+          account={account}
+          title={<Trans i18nKey="association.nav.billing" />}
+          description={null}
+        />
+        <BillingPeriodDetail
+          bills={billRows}
+          period={period}
+          accountSlug={account}
+        />
+      </PageBody>
+    );
+  }
+
   return (
     <PageBody>
       <TeamAccountLayoutPageHeader
@@ -232,26 +261,38 @@ export default async function BillingPage({ params, searchParams }: Props) {
         }
       />
 
-      <BillsSection
-        associationId={association.id}
-        bills={billRows}
-        canManage={canManage}
-        canDelete={canDelete}
-        isSuperAdmin={!!isSuperAdmin}
-        deletionCounts={deletionCounts}
-        units={unitRows}
-        pendingCharges={pendingCharges}
-        periodOptions={periodOptions}
-        isOtherChargesActive={isOtherChargesActive}
-        isSinkingFundActive={isSinkingFundActive}
-        pendingSinkingCharges={pendingSinkingCharges}
-        accountSlug={account}
-        initialDuration={duration}
-        initialStatus={status}
-        pendingElectricityBills={pendingElectricityBills}
-        maintenancePending={maintenancePending}
-        currentPeriod={currentPeriod}
-      />
+      <div className="space-y-8">
+        <BillingOverview
+          bills={billRows}
+          draftCount={draftCount}
+          accountSlug={account}
+        />
+
+        <div className="border-t pt-4">
+          <BillsSection
+            associationId={association.id}
+            bills={billRows}
+            canManage={canManage}
+            canDelete={canDelete}
+            isSuperAdmin={!!isSuperAdmin}
+            deletionCounts={deletionCounts}
+            units={unitRows}
+            pendingCharges={pendingCharges}
+            periodOptions={periodOptions}
+            isOtherChargesActive={isOtherChargesActive}
+            isSinkingFundActive={isSinkingFundActive}
+            pendingSinkingCharges={pendingSinkingCharges}
+            accountSlug={account}
+            initialDuration={duration}
+            initialStatus={status}
+            pendingElectricityBills={pendingElectricityBills}
+            maintenancePending={maintenancePending}
+            currentPeriod={currentPeriod}
+            defaultOpen={billsParam === 'draft' || billsParam === 'open'}
+            initialTab={billsParam === 'draft' ? 'draft' : undefined}
+          />
+        </div>
+      </div>
     </PageBody>
   );
 }
