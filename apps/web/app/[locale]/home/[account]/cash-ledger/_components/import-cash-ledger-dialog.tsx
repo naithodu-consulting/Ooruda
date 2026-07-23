@@ -126,7 +126,9 @@ function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
         amount: 0,
         paid_by,
         paid_on,
-        _error: amountRaw ? `"${amountRaw}" is not a valid amount — enter a number greater than 0.` : 'Amount is missing — enter a number greater than 0.',
+        _error: amountRaw
+          ? `"${amountRaw}" is not a valid amount — enter a number greater than 0.`
+          : 'Amount is missing — enter a number greater than 0.',
       };
 
     return { _row: row, unit_no, type, bill_type, amount, paid_by, paid_on };

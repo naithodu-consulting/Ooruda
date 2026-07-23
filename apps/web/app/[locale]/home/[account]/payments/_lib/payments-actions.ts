@@ -5,8 +5,8 @@ import { revalidatePath } from 'next/cache';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
-import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
 import { logAuditEvent } from '~/lib/audit-log';
+import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
 import { getAssociationRole } from '~/lib/rbac';
 
 import {
@@ -127,7 +127,8 @@ export async function voidPaymentAction(
   if (role !== 'assoc_admin') {
     return {
       success: false,
-      error: "You don't have the required permission. Contact your association admin.",
+      error:
+        "You don't have the required permission. Contact your association admin.",
     };
   }
 

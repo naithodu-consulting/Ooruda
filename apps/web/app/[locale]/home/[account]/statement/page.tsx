@@ -110,7 +110,12 @@ export default async function StatementPage({ params, searchParams }: Props) {
     )
     .in('unit_id', unitIds)
     .eq('association_id', association.id)
-    .in('entry_type', ['due', 'advance_payment', 'advance_applied', 'due_payment'])
+    .in('entry_type', [
+      'due',
+      'advance_payment',
+      'advance_applied',
+      'due_payment',
+    ])
     .order('entry_date', { ascending: true })
     .order('created_at', { ascending: true });
 
@@ -125,7 +130,8 @@ export default async function StatementPage({ params, searchParams }: Props) {
     if (e.entry_type === 'advance_applied' && e.reference_bill_id) {
       advanceAppliedByBillId.set(
         e.reference_bill_id,
-        (advanceAppliedByBillId.get(e.reference_bill_id) ?? 0) + Number(e.amount),
+        (advanceAppliedByBillId.get(e.reference_bill_id) ?? 0) +
+          Number(e.amount),
       );
     }
   }

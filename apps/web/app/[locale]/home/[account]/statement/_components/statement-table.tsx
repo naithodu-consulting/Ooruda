@@ -316,7 +316,8 @@ export function StatementTable({
   const closingBalance = rows[0]?.runningBalance ?? openingBalance ?? 0;
 
   const totalCredits = rows.reduce(
-    (s, e) => s + (e.direction === 'credit' ? Math.max(0, effectiveDelta(e)) : 0),
+    (s, e) =>
+      s + (e.direction === 'credit' ? Math.max(0, effectiveDelta(e)) : 0),
     0,
   );
   const totalDebits = rows.reduce(
@@ -578,11 +579,13 @@ export function StatementTable({
                                     Reversed
                                   </span>
                                 )}
-                                {e.payment_status === 'partial_refund' && e.refunded_amount && (
-                                  <span className="inline-flex items-center rounded-full border border-orange-300/50 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-400">
-                                    Partial refund · {formatINR(e.refunded_amount)}
-                                  </span>
-                                )}
+                                {e.payment_status === 'partial_refund' &&
+                                  e.refunded_amount && (
+                                    <span className="inline-flex items-center rounded-full border border-orange-300/50 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-orange-700 uppercase dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-400">
+                                      Partial refund ·{' '}
+                                      {formatINR(e.refunded_amount)}
+                                    </span>
+                                  )}
                                 {subtext && (
                                   <span className="text-muted-foreground/60 mt-0.5 block text-[11px]">
                                     {subtext}
@@ -614,8 +617,14 @@ export function StatementTable({
                     );
                   })}
                   {/* Period totals footer row */}
-                  <TableRow className="bg-muted/20 hover:bg-muted/20 border-t-2">
-                    <TableCell className="text-muted-foreground py-3 pl-4 text-xs font-semibold tracking-wide uppercase">
+                  <TableRow
+                    className="border-t-2"
+                    style={{
+                      backgroundColor:
+                        'color-mix(in srgb, var(--muted) 60%, transparent)',
+                    }}
+                  >
+                    <TableCell className="text-foreground py-3 pl-4 text-sm font-bold tracking-wide uppercase">
                       Period totals
                     </TableCell>
                     <TableCell className="text-destructive py-3 text-right text-sm font-bold whitespace-nowrap tabular-nums">

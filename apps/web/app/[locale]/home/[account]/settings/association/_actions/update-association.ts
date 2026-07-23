@@ -4,10 +4,9 @@ import { revalidatePath } from 'next/cache';
 
 import * as z from 'zod';
 
+import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-
-import { getLogger } from '@kit/shared/logger';
 
 import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
 import { getAssociationRole } from '~/lib/rbac';
@@ -114,7 +113,10 @@ export async function updateAssociationAction(
 
   if (role !== 'assoc_admin') {
     const logger = await getLogger();
-    logger.warn({ associationId, role, action: 'updateAssociation' }, 'Permission denied');
+    logger.warn(
+      { associationId, role, action: 'updateAssociation' },
+      'Permission denied',
+    );
     return {
       success: false,
       error: 'You are not authorized to update this association.',
@@ -205,8 +207,15 @@ export async function updateChargeTypeRateAction(
 
   if (role !== 'assoc_admin' && role !== 'billing_operator') {
     const logger = await getLogger();
-    logger.warn({ associationId, role, action: 'updateChargeTypeRate', chargeTypeId: id }, 'Permission denied');
-    return { success: false, error: "You don't have the required permission. Contact your association admin." };
+    logger.warn(
+      { associationId, role, action: 'updateChargeTypeRate', chargeTypeId: id },
+      'Permission denied',
+    );
+    return {
+      success: false,
+      error:
+        "You don't have the required permission. Contact your association admin.",
+    };
   }
 
   const client = getSupabaseServerClient();
@@ -241,7 +250,10 @@ export async function updateChargeTypeCalcMethodAction(
 
   if (!isSuperAdmin) {
     const logger = await getLogger();
-    logger.warn({ associationId, action: 'updateChargeTypeCalcMethod', chargeTypeId: id }, 'Permission denied — super admin required');
+    logger.warn(
+      { associationId, action: 'updateChargeTypeCalcMethod', chargeTypeId: id },
+      'Permission denied — super admin required',
+    );
     return {
       success: false,
       error: "You don't have the required permission.",
@@ -277,8 +289,20 @@ export async function updateChargeTypeGstApplicableAction(
 
   if (role !== 'assoc_admin' && role !== 'billing_operator') {
     const logger = await getLogger();
-    logger.warn({ associationId, role, action: 'updateChargeTypeGstApplicable', chargeTypeId: id }, 'Permission denied');
-    return { success: false, error: "You don't have the required permission. Contact your association admin." };
+    logger.warn(
+      {
+        associationId,
+        role,
+        action: 'updateChargeTypeGstApplicable',
+        chargeTypeId: id,
+      },
+      'Permission denied',
+    );
+    return {
+      success: false,
+      error:
+        "You don't have the required permission. Contact your association admin.",
+    };
   }
 
   const client = getSupabaseServerClient();
@@ -314,8 +338,15 @@ export async function toggleChargeTypeAction(
 
   if (role !== 'assoc_admin' && role !== 'billing_operator') {
     const logger = await getLogger();
-    logger.warn({ associationId, role, action: 'toggleChargeType', chargeTypeId: id }, 'Permission denied');
-    return { success: false, error: "You don't have the required permission. Contact your association admin." };
+    logger.warn(
+      { associationId, role, action: 'toggleChargeType', chargeTypeId: id },
+      'Permission denied',
+    );
+    return {
+      success: false,
+      error:
+        "You don't have the required permission. Contact your association admin.",
+    };
   }
 
   const client = getSupabaseServerClient();
@@ -360,7 +391,10 @@ export async function createPaymentGatewayAction(
   const role = await getAssociationRole(associationId);
   if (role !== 'assoc_admin') {
     const logger = await getLogger();
-    logger.warn({ associationId, role, action: 'createPaymentGateway' }, 'Permission denied');
+    logger.warn(
+      { associationId, role, action: 'createPaymentGateway' },
+      'Permission denied',
+    );
     return {
       success: false,
       error: 'Only association admins can configure the payment gateway.',
@@ -435,8 +469,15 @@ export async function toggleGatewayActiveAction(
   const role = await getAssociationRole(associationId);
   if (role !== 'assoc_admin') {
     const logger = await getLogger();
-    logger.warn({ associationId, role, action: 'toggleGatewayActive' }, 'Permission denied');
-    return { success: false, error: "You don't have the required permission. Contact your association admin." };
+    logger.warn(
+      { associationId, role, action: 'toggleGatewayActive' },
+      'Permission denied',
+    );
+    return {
+      success: false,
+      error:
+        "You don't have the required permission. Contact your association admin.",
+    };
   }
 
   const admin = getSupabaseServerAdminClient();
@@ -463,8 +504,15 @@ export async function deletePaymentGatewayAction(
   const role = await getAssociationRole(associationId);
   if (role !== 'assoc_admin') {
     const logger = await getLogger();
-    logger.warn({ associationId, role, action: 'deletePaymentGateway' }, 'Permission denied');
-    return { success: false, error: "You don't have the required permission. Contact your association admin." };
+    logger.warn(
+      { associationId, role, action: 'deletePaymentGateway' },
+      'Permission denied',
+    );
+    return {
+      success: false,
+      error:
+        "You don't have the required permission. Contact your association admin.",
+    };
   }
 
   const admin = getSupabaseServerAdminClient();

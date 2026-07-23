@@ -162,7 +162,7 @@ export function BillingOverview(props: {
       }
       if (tile === 'outstanding') {
         router.push(
-          `/home/${props.accountSlug}/billing?status=unpaid&bills=open`,
+          `/home/${props.accountSlug}/billing?status=outstanding&bills=open`,
         );
         return;
       }

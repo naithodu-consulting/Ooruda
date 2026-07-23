@@ -50,7 +50,12 @@ export const removeMemberFromAccountAction = authActionClient
 
           if (!perm?.can_delete) {
             logger.warn(
-              { accountId, targetUserId: userId, actorId: user.id, targetRole: membership.account_role },
+              {
+                accountId,
+                targetUserId: userId,
+                actorId: user.id,
+                targetRole: membership.account_role,
+              },
               'removeMemberFromAccount: permission denied — can_delete not set for role',
             );
             throw new Error(
@@ -98,7 +103,11 @@ export const updateMemberRoleAction = authActionClient
 
         if (!perm?.can_edit) {
           logger.warn(
-            { accountId: data.accountId, actorId: user.id, targetRole: data.role },
+            {
+              accountId: data.accountId,
+              actorId: user.id,
+              targetRole: data.role,
+            },
             'updateMemberRole: permission denied — can_edit not set for role',
           );
           throw new Error(

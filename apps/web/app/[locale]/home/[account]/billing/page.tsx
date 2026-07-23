@@ -84,11 +84,13 @@ export default async function BillingPage({ params, searchParams }: Props) {
           title={<Trans i18nKey="association.nav.billing" />}
           description={null}
         />
-        <BillingPeriodDetail
-          bills={billRows}
-          period={period}
-          accountSlug={account}
-        />
+        <div className="mt-2">
+          <BillingPeriodDetail
+            bills={billRows}
+            period={period}
+            accountSlug={account}
+          />
+        </div>
       </PageBody>
     );
   }
@@ -280,7 +282,7 @@ export default async function BillingPage({ params, searchParams }: Props) {
         }
       />
 
-      <div className="space-y-8">
+      <div className="mt-2 space-y-8">
         <BillingOverview bills={billRows} accountSlug={account} />
 
         <div className="border-t pt-4">

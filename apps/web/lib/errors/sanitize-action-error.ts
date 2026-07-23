@@ -1,5 +1,4 @@
 import 'server-only';
-
 import { getLogger } from '@kit/shared/logger';
 
 export type ErrorClass =

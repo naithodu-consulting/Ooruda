@@ -423,7 +423,7 @@ function DraftBillsTab(props: {
     filteredSinking.length > 0;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 pt-2">
       {/* Summary bar */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b pb-4 text-sm">
         <span>
@@ -816,6 +816,11 @@ function GeneratedBillsTab(props: {
         rows = rows.filter((b) => displayBillStatus(b) === 'Paid');
       } else if (statusVal === 'unpaid') {
         rows = rows.filter((b) => displayBillStatus(b) === 'Unpaid');
+      } else if (statusVal === 'outstanding') {
+        rows = rows.filter((b) => {
+          const s = displayBillStatus(b);
+          return s === 'Unpaid' || s === 'Partial' || s === 'Overdue';
+        });
       } else if (statusVal === 'partial') {
         rows = rows.filter((b) => displayBillStatus(b) === 'Partial');
       } else if (statusVal === 'overdue') {
@@ -891,7 +896,7 @@ function GeneratedBillsTab(props: {
   }
 
   return (
-    <div className="flex flex-col gap-3.5">
+    <div className="flex flex-col gap-3.5 pt-2">
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4 border-b pb-4">
         <div className="flex flex-col gap-1.5">
@@ -913,10 +918,11 @@ function GeneratedBillsTab(props: {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="unpaid">Unpaid</SelectItem>
-              <SelectItem value="paid">Paid</SelectItem>
-              <SelectItem value="partial">Partial</SelectItem>
+              <SelectItem value="outstanding">Outstanding</SelectItem>
               <SelectItem value="overdue">Overdue</SelectItem>
+              <SelectItem value="unpaid">Unpaid</SelectItem>
+              <SelectItem value="partial">Partial</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
             </SelectContent>
           </Select>
         </div>

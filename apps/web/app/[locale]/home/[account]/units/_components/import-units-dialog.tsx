@@ -177,7 +177,9 @@ export function ImportUnitsDialog({
     parseSpreadsheetFile(file)
       .then((raw) => setRows(parseRows(raw)))
       .catch(() =>
-        toast.error('Failed to read the file. Check it is a valid CSV or Excel file.'),
+        toast.error(
+          'Failed to read the file. Check it is a valid CSV or Excel file.',
+        ),
       );
   }
 

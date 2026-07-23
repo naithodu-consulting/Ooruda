@@ -97,7 +97,9 @@ export function PayDueDialog({
         onOpenChange(false);
         onSuccess();
       } else {
-        setErrorMessage(result.error ?? 'Payment could not be recorded. Please try again.');
+        setErrorMessage(
+          result.error ?? 'Payment could not be recorded. Please try again.',
+        );
       }
     });
   });
