@@ -80,24 +80,26 @@ export function AdminAccountsTable(
   }>,
 ) {
   return (
-    <div className={'flex flex-col space-y-4'}>
+    <div className={'flex min-w-0 flex-col space-y-4'}>
       <AccountsTableFilters filters={props.filters} />
 
-      <div className={'rounded-lg border p-2'}>
-        <DataTable
-          pageSize={props.pageSize}
-          pageIndex={props.page - 1}
-          pageCount={props.pageCount}
-          data={props.data}
-          manualSorting={false}
-          columns={getColumns(
-            props.membershipsByAccountId ?? {},
-            props.phoneByAccountId ?? {},
-            props.associations ?? [],
-            props.superAdminIds ?? new Set(),
-            props.testAccountIds ?? new Set(),
-          )}
-        />
+      <div className={'overflow-x-auto rounded-lg border'}>
+        <div className={'min-w-[1200px] p-2'}>
+          <DataTable
+            pageSize={props.pageSize}
+            pageIndex={props.page - 1}
+            pageCount={props.pageCount}
+            data={props.data}
+            manualSorting={false}
+            columns={getColumns(
+              props.membershipsByAccountId ?? {},
+              props.phoneByAccountId ?? {},
+              props.associations ?? [],
+              props.superAdminIds ?? new Set(),
+              props.testAccountIds ?? new Set(),
+            )}
+          />
+        </div>
       </div>
     </div>
   );

@@ -162,13 +162,9 @@ type SidebarConfig = ReturnType<typeof getTeamAccountSidebarConfig>;
 export function filterSidebarConfigByRole(
   config: SidebarConfig,
   role: string | null | undefined,
+  disabledNavKeys: string[] = [],
 ): SidebarConfig {
   const allowed = role ? ROLE_NAV_ALLOWLIST[role] : undefined;
-
-  // unknown role or full access → return as-is
-  if (!allowed || allowed === '*') {
-    return config;
-  }
 
   const routes = config.routes
     .map((section) => {
@@ -178,9 +174,14 @@ export function filterSidebarConfigByRole(
 
       return {
         ...section,
-        children: section.children.filter((item) =>
-          'label' in item ? allowed.includes(item.label as string) : false,
-        ),
+        children: section.children.filter((item) => {
+          if (!('label' in item)) return false;
+          const label = item.label as string;
+          if (disabledNavKeys.includes(label)) return false;
+          // unknown role or full access → only apply disabled keys filter
+          if (!allowed || allowed === '*') return true;
+          return allowed.includes(label);
+        }),
       };
     })
     .filter(

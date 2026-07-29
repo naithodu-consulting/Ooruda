@@ -532,3 +532,31 @@ export async function deletePaymentGatewayAction(
   revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
   return { success: true };
 }
+
+export async function toggleCashLedgerEnabledAction(
+  associationId: string,
+  enabled: boolean,
+): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseServerClient();
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+
+  if (!isSuperAdmin) {
+    return { success: false, error: 'Super admin permission required.' };
+  }
+
+  const { error } = await client
+    .from('associations')
+    .update({ cash_ledger_enabled: enabled })
+    .eq('id', associationId);
+
+  if (error) {
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'toggleCashLedgerEnabled',
+      associationId,
+    });
+    return { success: false, error: userMessage };
+  }
+
+  revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
+  return { success: true };
+}

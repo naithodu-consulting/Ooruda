@@ -25,14 +25,16 @@ export function TeamAccountLayoutSidebar(props: {
   accounts: AccountModel[];
   user: JWTUserData;
   role: string | null;
+  disabledNavKeys?: string[];
 }) {
-  const { account, user, role } = props;
+  const { account, user, role, disabledNavKeys = [] } = props;
   const { open: isSidebarOpen, isMobile } = useSidebar();
   const { data: personalAccountData } = usePersonalAccountData(user.id);
 
   const config = filterSidebarConfigByRole(
     getTeamAccountSidebarConfig(account),
     role,
+    disabledNavKeys,
   );
   const collapsible = config.sidebarCollapsedStyle;
   const collapsed = !isSidebarOpen && !isMobile;

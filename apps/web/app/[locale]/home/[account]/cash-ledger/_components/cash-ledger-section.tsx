@@ -206,7 +206,7 @@ export function CashLedgerSection({
                 {isAllUnits
                   ? 'All Units'
                   : selectedUnit
-                    ? `Unit ${selectedUnit.unit_no}`
+                    ? selectedUnit.unit_no
                     : 'Select unit'}
               </span>
             </SelectTrigger>
@@ -214,7 +214,7 @@ export function CashLedgerSection({
               <SelectItem value="all">All Units</SelectItem>
               {units.map((u) => (
                 <SelectItem key={u.id} value={u.id}>
-                  Unit {u.unit_no}
+                  {u.unit_no}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -315,7 +315,7 @@ export function CashLedgerSection({
               {isAllUnits
                 ? 'All Units'
                 : selectedUnit
-                  ? `Unit ${selectedUnit.unit_no}`
+                  ? selectedUnit.unit_no
                   : 'Ledger'}
             </CardTitle>
             {!loading && entries.length > 0 && (

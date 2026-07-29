@@ -28,6 +28,19 @@ export interface ReceiptPdfData {
     paidAt: string;
     referenceNo?: string | null;
   };
+  /**
+   * Present for cash-ledger payments (dues or advance-applied).
+   * When set, "Invoice Number" is replaced with "Payment Type" and a
+   * description note is shown so the document is distinguishable from
+   * a regular bill receipt.
+   */
+  paymentContext?: {
+    type: 'due_payment' | 'advance_applied';
+    /** Human-readable category label, e.g. "Maintenance", "Electricity" */
+    billTypeLabel: string;
+    /** For advance_applied: the bill reference this was applied against */
+    appliedToBillNo?: string | null;
+  } | null;
 }
 
 /** Bill-To address lines: [unit line, floor+association-address line], or company address as a single line. */
@@ -62,6 +75,7 @@ export function ReceiptDocument({
   bill,
   receipt,
   payment,
+  paymentContext,
 }: ReceiptPdfData) {
   const addressLines = buildAddressLines(billTo, unit, association.address);
 
@@ -92,8 +106,21 @@ export function ReceiptDocument({
           </View>
           <View style={styles.metaGridRow}>
             <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Invoice Number:</Text>
-              <Text style={styles.metaValue}>{bill.billNo}</Text>
+              {paymentContext ? (
+                <>
+                  <Text style={styles.metaLabel}>Payment Type:</Text>
+                  <Text style={styles.metaValue}>
+                    {paymentContext.type === 'due_payment'
+                      ? `Cash Ledger Dues Payment - ${paymentContext.billTypeLabel}`
+                      : `Advance Applied - ${paymentContext.billTypeLabel}`}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.metaLabel}>Invoice Number:</Text>
+                  <Text style={styles.metaValue}>{bill.billNo}</Text>
+                </>
+              )}
             </View>
             <View style={styles.metaRow}>
               <Text style={styles.metaLabel}>Payment Date:</Text>
@@ -145,6 +172,22 @@ export function ReceiptDocument({
             </Text>
           </View>
         </View>
+
+        {/* Payment context note — only for cash-ledger documents */}
+        {paymentContext ? (
+          <View style={[styles.section, { marginTop: 4 }]}>
+            <Text
+              style={[
+                styles.billToAddress,
+                { fontStyle: 'italic', color: '#6b7280' },
+              ]}
+            >
+              {paymentContext.type === 'due_payment'
+                ? `This receipt confirms cash settlement of outstanding ${paymentContext.billTypeLabel} dues. No invoice was raised; payment was recorded directly against the unit cash ledger.`
+                : `This voucher confirms the application of pre-paid advance funds to ${paymentContext.appliedToBillNo ? `invoice ${paymentContext.appliedToBillNo}` : `a ${paymentContext.billTypeLabel} bill`}.`}
+            </Text>
+          </View>
+        ) : null}
 
         {/* Total */}
         <View style={styles.summaryBlock}>

@@ -2135,3 +2135,250 @@ Full bulk-export capability for the Billing and Payments screens, supporting bot
 Column bleed identified after initial test export: text from narrow columns overflowing into adjacent cells, causing headers to visually merge (e.g. "AdvanceReference"). Root cause: `overflow:'hidden'` on `<Text>` nodes is unreliable in react-pdf — only `<View>` clips correctly. All table cells refactored to `<C flex={n}>` View wrappers. Also added `razorpay` to `PAYMENT_MODE_LABELS`.
 
 ### No new migrations
+
+---
+
+## v1.2 — Units, Billing & Cash Ledger UX + Feature Flag (2026-07-27)
+
+### Changes
+
+- **Units table — Door No column**: Added a "Door No" column to the units list view, displayed between Unit and Type. Shows `—` when not set.
+- **Cash ledger unit dropdown**: Removed the "Unit " prefix from dropdown items and card title — now shows bare unit numbers (e.g., `101` instead of `Unit 101`). "All Units" label unchanged.
+- **Billing view — removed Paid & Status columns**: The "Paid" amount and "Status" (Paid/Unpaid/Partial/Overdue) columns have been removed from the billing table. These are payment-layer concepts, not billing-layer — they belong in the Payments view. The billing view now focuses on invoice data (Bill No, Unit, Breakdown, Total). Status filtering and summary tiles remain unaffected.
+- **Cash Ledger feature flag**: Cash Ledger is now an optional per-association feature. Super admins can enable/disable it from the Association Settings page under a new "Workspace Features" card. When disabled: the nav item is hidden for all roles, and direct URL access redirects to the dashboard. Defaults to enabled for all existing associations.
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260727000001_cash_ledger_feature_flag.sql` | Adds `cash_ledger_enabled boolean NOT NULL DEFAULT true` to `associations` table |
+
+_Last updated: 2026-07-27_
+
+---
+
+## v1.2 — Owner/Tenant View Polish: Dashboard & Statement (2026-07-27)
+
+### Changes
+
+- **Dashboard — Amount Due color coding**: The total outstanding amount on the owner/tenant dashboard is now color-coded: green (₹0 / fully paid), red (overdue), amber (unpaid but not yet overdue).
+- **Dashboard — Advance Credit tile**: The advance credit section is fully themed in green (border, background, text) to visually distinguish credits from dues.
+- **Dashboard — Side-by-side tiles**: Pending Dues and Advance Credit tiles are now displayed in a 2-column grid on `md+` screens and stacked on mobile, giving equal visual weight to both.
+- **Payments — Paid dues removed**: Paid cash ledger dues are no longer shown on the Payments page. Paid history belongs in the Statement; the Dues section on Payments now shows only outstanding items.
+- **Statement — Date column**: Added a dedicated "Date" column as the first column in the Statement transaction table. Rows are sorted newest-first by default; clicking the Date header toggles ascending/descending. The previous date-group separator rows have been removed — each row is now fully self-contained (bank-statement style).
+- **Statement — Receipt number**: Cash ledger due payments now show their receipt number in the Statement subtext (e.g., "Paid via Cash · Receipt: CL-MAINT-abc123-R1"). The `record_due_payment` DB function now embeds the auto-generated receipt number into the `cash_ledger` entry notes so it flows through to the Statement without a cross-table join.
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260727000002_due_payment_receipt_in_notes.sql` | Updates `record_due_payment` function to embed `receipt_no` in `cash_ledger.notes` for Statement visibility |
+
+_Last updated: 2026-07-27_
+
+
+---
+
+## v1.2 — Statement Page: Comprehensive UX & Correctness Fixes (2026-07-27)
+
+### Changes
+
+- **Balance column — no + prefix, ₹0 neutral**: Removed the misleading `+` prefix from all balance cells. Color alone conveys direction (green = credit, red = owing, muted = zero). Matches standard bank-statement convention.
+- **Opening balance row placement**: Now appears at the bottom of the table when sorted newest-first (default), and at the top when sorted oldest-first — always anchors the chronological start of the period.
+- **"Maintain dur" raw text bug fixed**: `due` entries no longer display raw `notes` as subtext (truncated system strings). Only a structured `bill_no` is shown for due entries.
+- **Sort icon shows direction**: Date column sort button now shows ↓ when newest-first and ↑ when oldest-first, replacing the static ↕ icon.
+- **Year shown when needed**: Date cells include the year when FY filter is "All time" or entries span multiple calendar years.
+- **Export CSV**: "Export" button added to the transaction history card header. Downloads the current filtered view as a CSV with metadata header (unit, period, opening balance).
+- **Advance payment subtext**: `advance_payment` entries now show their `notes` as subtext (e.g. "via NEFT · Ref: TXN123").
+- **Date column min-width**: Explicit `w-[72px] min-w-[72px]` prevents date column from collapsing on narrow screens.
+- **Mobile responsive columns**: Debit and Credit columns collapse into a single color-coded "Amount" column on screens < 640px. Desktop keeps the split view.
+
+### Migrations Changelog
+
+_No new migrations — all changes are frontend only._
+
+_Last updated: 2026-07-27_
+
+---
+
+## v1.2 — Payments Page: Owner/Tenant View Redesign (2026-07-27)
+
+### Changes
+
+- **Unified "What you owe" section**: Bills and cash ledger dues are merged into a single list sorted by urgency — overdue items first (most overdue at top), then upcoming bills by due date, then cash ledger dues with no date. Owners no longer need to understand two separate billing systems.
+- **Total outstanding hero**: A prominent card at the top shows the combined amount owed across all bills and cash ledger dues, with urgency-aware color coding (red = overdue, amber = pending, green = all clear) and a plain-English sub-label ("3 overdue · oldest 17 days past due").
+- **Pay All bills button**: When a Razorpay gateway is active, a "Pay all bills" button appears in the hero card, triggering payment across all outstanding bills in a single checkout.
+- **Per-item Pay buttons**: Each outstanding row has its own Pay button — Razorpay checkout for bills, Razorpay due checkout for cash ledger items.
+- **Recent payments section**: Replaces the full bills table for owners. Shows the 5 most recent bill payments (bill type, period, date, mode, receipt number) with a "Full statement →" link to the Statement page for full history.
+- **Admin/operator view unchanged**: The full PaymentsSection (bills table with filters, record payment, void) and CashLedgerDuesSection remain exactly as-is for admins and billing operators.
+- **Filters removed from owner view**: Duration and status filters were admin tools surfaced incorrectly to owners. The new view shows only what matters: outstanding items and recent history.
+
+### Migrations Changelog
+
+_No new migrations — all changes are frontend only._
+
+_Last updated: 2026-07-27_
+
+---
+
+## v1.2 — Owner/Tenant View: Comprehensive UX & Logic Fixes (2026-07-28)
+
+### Changes
+
+**Dashboard (owner-units-view)**
+- **Total amount due now includes cash ledger dues**: Previously the hero only counted outstanding bill amounts. It now adds cash ledger dues (e.g. Electricity cash charge) so the total matches the Payments page.
+- **Accurate sub-label**: The hero sub-label now distinguishes bills and cash charges ("2 bills · 1 cash charge") instead of only counting bills.
+- **Cash charges breakdown in hero**: When cash dues exist, a "Cash charges" row appears in the period breakdown within the hero card, matching the Payments page's breakdown.
+- **"Pay now · ₹X" button with amount**: The action button now shows the exact total, and the redundant "Pay by bill" button (which navigated to the same URL) has been removed.
+- **Bill history shows bill type**: Bill type label (e.g. "Maintenance", "Sinking Fund") now appears as the primary label in Bill History rows; the bill number is shown as muted secondary text.
+- **"My payments" — cash ledger entries now show receipt number**: Due payment entries now extract the receipt number from notes and display it. Label changed from "Due · {type}" to just the type name with receipt prefix.
+- **"My payments" → "Full statement" link**: Changed from "View all" (which went to Payments) to "Full statement" (which correctly links to the Statement page).
+- **Advance credit description updated**: Changed from "Automatically applied..." to "Will be auto-applied to your future bills of the same type" — clearer about future-only application.
+- **`bill_type` added to dashboard bill query**: `bills` select now includes `bill_type` so bill type labels can be displayed.
+
+**Payments page (owner-payments-view)**
+- **"Balance due" badge renamed to "Cash charge"**: Clearer distinction between regular bill dues and cash ledger charges.
+- **"Pay all bills" shows exact amount**: Button label now includes the payable bills total ("Pay all bills · ₹1,200") to prevent confusion with the combined ₹6,200 total.
+- **Disclaimer when cash dues present**: A note below the "Pay all bills" button explains that it covers bills only and cash charges are paid separately from the list below.
+- **Recent payments now includes cash ledger payments**: Previously only showed bill payments. Now fetches and merges cash ledger payment history (`cash_ledger_payments`) — up to 10 entries, merged with bill payments and sorted newest-first. Cash ledger entries show bill type, "Cash charge" label, mode, and receipt number from notes.
+- **"Full statement →" link moved to card header**: The statement link now appears in the top-right of the Recent payments card header instead of below the fold at the bottom of the page.
+- **Hero card tint increased**: Background opacity increased slightly (50%→60% light, 20%→30% dark) for more visible urgency signal.
+- **Hero AlertCircle icon bumped to h-6 w-6**: Slightly larger to anchor the urgency card visually.
+
+**Statement page (statement-table)**
+- **Default sort changed to oldest-first**: The transaction list now defaults to chronological order (oldest at top), making the running balance progression natural and readable. Users can still toggle to newest-first.
+- **Closing balance card renamed to "Ledger balance"**: Previously labeled "Amount due / Credit available / All settled" — now correctly labeled "Ledger balance due / Credit balance / Ledger balanced" to distinguish it from the Payments page's actionable total.
+- **Cross-type advance disclaimer**: When advance deposits are present, a note appears on the closing balance card: "Advance credits are type-restricted — e.g. a Maintenance advance cannot offset Electricity dues. See Payments for your exact payable amount."
+- **Always-visible Payments link**: The "Go to Payments →" button now appears on the closing balance card regardless of balance state (not just when owing), since the Statement's aggregate balance may differ from the actionable amount due.
+- **Credits breakdown**: When both advances and payments are present, the Total Credits card now shows a sub-breakdown of "Payments: ₹X · Advances: ₹Y" so users understand the composition.
+
+**Super admin Accounts table**
+- **Overflow fix for desktop and mobile**: Added `overflow-x-auto` to the table wrapper and `min-w-0` to the outer container, preventing the accounts table from bleeding past the viewport edge.
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260727000003_advance_application_receipts.sql` | New `advance_application_receipts` table (association_id, unit_id, cash_ledger_id, bill_id, bill_type, amount, voucher_no, applied_at, pdf_url); RLS: `SELECT` for authenticated members; storage path for cached advance application PDFs |
+
+## v1.2 — Owner/Tenant View: Bug Fixes & UX Polish Round 2 (2026-07-28)
+
+Second pass of fixes following a critical analysis of the updated screenshots.
+
+**Dashboard (owner-units-view)**
+- **Fixed: ₹5,000 Electricity shown twice** — Removed the "Cash charges" breakdown row from the hero card. The hero total (₹6,200) and sub-label ("1 bill · 1 cash charge") sufficiently communicate the combined due; the Pending Dues card below carries the detail. Eliminates user confusion about double-counting.
+- **Fixed: Duplicate "Pay now" buttons** — Removed the redundant "Pay now" button from the Pending Dues card. The hero CTA ("Pay now · ₹X") is the single primary action. Pending Dues card now shows the amount and breakdown only, without a competing action.
+- **Fixed: Floating "Overdue" badge removed** — The status badge that floated in the top-right corner of the hero card (disconnected from the amount) has been removed. The period breakdown rows already label overdue periods inline — the badge was redundant and visually confusing.
+
+**Payments page (payments/page.tsx + owner-payments-view)**
+- **Fixed: Cash ledger payment history completely broken across Dashboard and Payments** — Two compounding bugs: (1) query was selecting `unit_no`, which does not exist on `cash_ledger_payments`; (2) query was selecting `notes`, which also does not exist — the column is `receipt_no`. Both caused Supabase to return `null` for the entire result set, silently hiding all cash ledger payment entries everywhere. Fixed by selecting only valid columns (`id, unit_id, bill_type, amount, mode, paid_at, receipt_no`), making `unit_no` optional in the type, and replacing the regex-based notes extraction with direct `dp.receipt_no` access. Applied consistently across `association-dashboard.tsx`, `payments/page.tsx`, `owner-units-view.tsx`, and `owner-payments-view.tsx`.
+- **Fixed: Hero card ₹6,200 vs ₹1,200 contradiction** — "Total outstanding ₹6,200" with a "Pay all bills · ₹1,200" button created a confusing 5× gap. Implemented Option B: when both bills and cash dues are present, the hero card now shows the ₹6,200 total and splits the breakdown into two inline panels — "Bills ₹1,200 [Pay · ₹1,200]" and "Cash charges ₹5,000 [Pay individually below ↓]". The total is self-explaining: the two panels add up to it exactly. When only bills are present (no cash dues), falls back to the original single "Pay all bills · ₹X" button.
+
+**Statement page (statement-table)**
+- **Fixed: Balance column — CR/DR indicator added** — The running balance cell now shows a small "CR" or "DR" suffix (e.g. "₹2,350 CR") so colour-blind users and printed exports can distinguish credit balance from debit balance. Applied to both transaction rows and the opening balance row.
+- **Improved: "Amount owed per ledger" sub-label** — Changed from "Ledger balance due" (awkward phrasing) to "Amount owed per ledger" when balance is negative. Zero state changed from "Ledger balanced" to "Ledger settled" for slightly clearer language.
+- **Improved: Advance disclaimer moved before Payments button** — When advance credits are present and the balance is negative, the type-restriction disclaimer now appears immediately below the sub-label (before the "Payments →" button), so users read the context before clicking. The disclaimer is also now only shown when the balance is negative (the case where it's most impactful).
+
+### Migrations Changelog
+
+_No new migrations — all changes are frontend only._
+
+_Last updated: 2026-07-28_
+
+## v1.2 — Receipt Downloads: PDF Fix & UX Polish (2026-07-28)
+
+Three issues with the cash-ledger payment receipt download flow were resolved.
+
+### Bug fix: Cash-ledger receipt PDF returned 404
+
+`/api/billing/cash-ledger-payments/[id]/pdf` was querying `cash_ledger_payments` using the admin (`service_role`) Supabase client. The migration for that table explicitly revokes all access from `service_role`, so the admin query always returned no rows and the route returned 404. Fixed by switching to the regular authenticated client, which has `GRANT SELECT` and passes through the `clp_read` RLS policy (`is_association_member`). Authorization is maintained via an explicit membership + unit-ownership/tenancy check.
+
+Additional hardening added: DB query errors now return 500 (not a silent 404), a missing membership row returns 403 rather than silently downgrading to non-admin, `referenceNo` falls back to `'-'` instead of an em-dash (which is outside the Noto Sans subset and would render blank), and PDF render errors are logged server-side.
+
+### Bug fix: Dashboard "My payments" — download icon appeared before amount
+
+In `owner-units-view.tsx`, the `DownloadPdfButton` for due payments was rendered before the amount text. Fixed to match the bill-payment row layout: amount first, then the download icon.
+
+### UX: Payments page — added visible receipt download buttons
+
+The prior implementation placed tiny 12×12 px `<a>` icons inside payment description sub-text, invisible in practice. Replaced with `DownloadPdfButton` components in a dedicated rightmost column for both bill and due-payment rows.
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260728000001_webhook_receipt_no.sql` | Updates `record_due_payment_webhook` to generate and store `receipt_no` (using `_allocate_ledger_doc_no`) — superseded and expanded by `20260728000002` |
+
+_Last updated: 2026-07-28_
+
+## v1.2 — Cash Ledger: Human-Readable Bill Numbering & PDF Context (2026-07-28)
+
+### Feature: Unified bill number format for cash ledger documents
+
+Cash ledger due payment receipts and advance application vouchers now use exactly the same format as regular bills. The document type is conveyed by the PDF title and content, not the number.
+
+| Document | Old format | New format |
+|---|---|---|
+| Due payment receipt | `CL-MAIN-A1B2C3-R1` | `PRM/26-27/MNT/000001` |
+| Advance application | `ADV-MAIN-A1B2C3-A1` | `PRM/26-27/MNT/000001` |
+
+Format: `{INITIALS}/{FY}/{TYPE}/{NNNNNN}` — identical to `allocate_bill_no` output. CL and ADV draw from separate counters in a new `cash_ledger_sequences` table, so bill numbering is unaffected.
+
+### Feature: Cash ledger receipt PDFs show payment type context
+
+- "Invoice Number" replaced with "Payment Type" (e.g. "Cash Ledger Dues Payment — Maintenance") — no invoice is raised for CL payments
+- Context note added below the payment table explaining the transaction nature
+
+### Fix: Advance application voucher shows readable category name
+
+Description row now shows "Advance credit — Maintenance" instead of "Advance credit — MNT".
+
+### Migrations Changelog
+
+| Migration | Description |
+|---|---|
+| `20260728000002_cash_ledger_bill_numbering.sql` | `cash_ledger_sequences` table; `_allocate_ledger_doc_no()` helper; updated `record_due_payment`, `record_due_payment_webhook`, `_apply_advance_internal` |
+
+_Last updated: 2026-07-28_
+
+---
+
+## v1.2 — Critical Bug Fixes: Code Review Pass (2026-07-28)
+
+Four critical bugs and several minor issues identified and resolved following a comprehensive multi-perspective code review of all uncommitted changes.
+
+### Bug fixes
+
+- **Advance application PDF always returned 404**: `getOrGenerateAdvanceApplicationPdf` used the admin (`service_role`) client for the full-data fetch from `advance_application_receipts`. That table has `REVOKE ALL FROM service_role`, so the query silently returned null and every advance voucher download failed. Fixed by switching the table query to `authClient` (the user is already authorized by `canAccessUnit` at that point). Admin client is retained only for storage signed-URL and upload operations.
+- **CSV export order was always inverted**: `toCsv` in `statement-table.tsx` called `.reverse()` unconditionally on the `rows` array, which is already in the user's chosen sort order. This made the exported file always the opposite of what the screen showed. Removed the `.reverse()` call.
+- **Unit column blank for cash due payments in multi-unit view**: The `cash_ledger_payments` query in `payments/page.tsx` did not join `units(unit_no)`, so `unit_no` was always `undefined`. Multi-unit owners saw blank unit cells for cash due payment rows in "Recent payments". Fixed by adding the join and mapping the result.
+- **Status column removed from admin bills view**: A prior cleanup accidentally removed the "Status" column from the Generated Bills table in `bills-section.tsx`. Admins rely on this to distinguish Paid / Partial / Overdue / Unpaid at a glance. Restored with color-coded badges.
+
+### Minor fixes
+
+- **Feature flag defaults to visible**: `layout.tsx` changed from `!assocFlags?.cash_ledger_enabled` to `assocFlags?.cash_ledger_enabled === false` so the Cash Ledger nav item is hidden only when explicitly disabled, not when the flag row doesn't exist yet.
+- **Cash receipt PDF reference number**: `referenceNo` fallback changed from `'-'` to `null` so the PDF template renders a proper em-dash for cash payments with no reference number.
+
+### Migrations Changelog
+
+_No new migrations — all changes are code only._
+
+_Last updated: 2026-07-28_
+
+---
+
+## v1.2 — billTypeLabel Consolidation & Statement Receipt Downloads (2026-07-28)
+
+### Fix: Single source of truth for bill type labels
+
+`billTypeLabel` was defined in two separate places with different key formats: `apps/web/lib/bill-type-labels.ts` used lowercase full names (`maintenance`, `electricity`, `sinking_fund`) and `packages/pdf-templates/src/lib/bill-type-labels.ts` used uppercase short codes (`MNT`, `ELT`, `SNK`). Both conventions exist in the DB: bills/cash_ledger use lowercase, bill_sequences uses uppercase. The package version has been merged to cover both by adding lowercase entries. All six web app import sites now import from `@kit/pdf-templates`; the local `lib/bill-type-labels.ts` file has been deleted.
+
+### Feature: Receipt download link on Statement for cash ledger due payments
+
+`due_payment` entries on the Statement page now show a "Download receipt" link, consistent with `advance_applied` entries which already had a link. A new API route `/api/billing/cash-ledger-payments/by-receipt?receipt_no=<value>` was added to look up a cash ledger payment by its `receipt_no` (extracted from the ledger notes field where it's stored as `Receipt: PRM/26-27/MNT/000001`). The route reuses the same auth logic as the existing `[id]` route — authenticated client only, explicit membership + unit-ownership check.
+
+### Migrations Changelog
+
+_No new migrations — all changes are code only._
+
+_Last updated: 2026-07-28_

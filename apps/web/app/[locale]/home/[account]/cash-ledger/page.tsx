@@ -45,12 +45,17 @@ export default async function CashLedgerPage({ params }: Props) {
 
   const { data: association } = await client
     .from('associations')
-    .select('id')
+    .select('id, cash_ledger_enabled')
     .eq('account_id', accountId)
     .single();
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');
+  }
+
+  // Feature gate: redirect to dashboard if cash ledger is disabled for this association.
+  if (association.cash_ledger_enabled === false) {
+    redirect(`/home/${account}`);
   }
 
   const canManage = role === 'assoc_admin' || role === 'billing_operator';

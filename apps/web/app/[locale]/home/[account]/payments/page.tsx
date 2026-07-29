@@ -3,15 +3,17 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
+import { displayBillStatus } from '~/lib/bill-status';
 import { loadUnitLedgerBalances } from '~/lib/cash-ledger-aggregation';
+import { formatINR } from '~/lib/format-inr';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import {
   type CashLedgerDueRow,
-  type PaidDueRow,
   CashLedgerDuesSection,
 } from './_components/cash-ledger-dues-section';
+import { OwnerPaymentsView } from './_components/owner-payments-view';
 import {
   type BillPaymentRow,
   PaymentsSection,
@@ -214,78 +216,87 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
   // For owners/tenants use the shared aggregation util (per-unit, no cross-unit
   // netting). For admins/operators use the association-wide RPC which covers all
   // units and includes the negative-balance filter already.
-  const [{ data: bills }, rawDues, rawPaidDues] = await Promise.all([
-    query,
-    isUserRestricted
-      ? loadUnitLedgerBalances(
-          association.id,
-          allUnitIds.length > 0
-            ? await client
-                .from('units')
-                .select('id, unit_no')
-                .in('id', allUnitIds)
-                .then(
-                  ({ data }) =>
-                    (data ?? []) as { id: string; unit_no: string }[],
-                )
-            : [],
-        ).then((balances) =>
-          balances.flatMap((b) =>
-            b.dues.map((d) => ({
-              unit_id: b.unit_id,
-              unit_no: b.unit_no,
-              bill_type: d.bill_type,
-              balance: -d.amount,
-            })),
-          ),
-        )
-      : uc(client)
-          .rpc('get_association_cash_ledger_balances', {
-            p_association_id: association.id,
-          })
-          .then(
-            ({
-              data,
-            }: {
-              data:
-                | {
-                    unit_id: string;
-                    unit_no: string;
-                    bill_type: string;
-                    balance: number;
-                  }[]
-                | null;
-            }) =>
-              (data ?? [])
-                .filter((r) => r.balance < 0)
-                .map((r) => ({ ...r, balance: Number(r.balance) })),
-          ),
-    // Paid due payments for owners/tenants (cash ledger payments for their units).
-    isUserRestricted && allUnitIds.length > 0
-      ? uc(client)
-          .from('cash_ledger_payments')
-          .select('unit_id, bill_type, amount, paid_at, mode, units(unit_no)')
-          .in('unit_id', allUnitIds)
-          .eq('association_id', association.id)
-          .order('paid_at', { ascending: false })
-          .then(
-            ({
-              data,
-            }: {
-              data:
-                | {
-                    unit_id: string;
-                    bill_type: string;
-                    amount: number;
-                    paid_at: string;
-                    mode: string;
-                    units: { unit_no: string } | null;
-                  }[]
-                | null;
-            }) => data ?? [],
+  const [{ data: bills }, rawDues, { data: rawDuePaymentHistory }] =
+    await Promise.all([
+      query,
+      isUserRestricted
+        ? loadUnitLedgerBalances(
+            association.id,
+            allUnitIds.length > 0
+              ? await client
+                  .from('units')
+                  .select('id, unit_no')
+                  .in('id', allUnitIds)
+                  .then(
+                    ({ data }) =>
+                      (data ?? []) as { id: string; unit_no: string }[],
+                  )
+              : [],
+          ).then((balances) =>
+            balances.flatMap((b) =>
+              b.dues.map((d) => ({
+                unit_id: b.unit_id,
+                unit_no: b.unit_no,
+                bill_type: d.bill_type,
+                balance: -d.amount,
+              })),
+            ),
           )
-      : Promise.resolve([]),
-  ]);
+        : uc(client)
+            .rpc('get_association_cash_ledger_balances', {
+              p_association_id: association.id,
+            })
+            .then(
+              ({
+                data,
+              }: {
+                data:
+                  | {
+                      unit_id: string;
+                      unit_no: string;
+                      bill_type: string;
+                      balance: number;
+                    }[]
+                  | null;
+              }) =>
+                (data ?? [])
+                  .filter((r) => r.balance < 0)
+                  .map((r) => ({ ...r, balance: Number(r.balance) })),
+            ),
+      // Cash ledger payment history for owner/tenant recent payments
+      isUserRestricted && allUnitIds.length > 0
+        ? uc(client)
+            .from('cash_ledger_payments')
+            .select(
+              'id, unit_id, bill_type, amount, mode, paid_at, receipt_no, units(unit_no)',
+            )
+            .in('unit_id', allUnitIds)
+            .eq('association_id', association.id)
+            .order('paid_at', { ascending: false })
+            .limit(10)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+  type DuePaymentHistoryRow = {
+    id: string;
+    unit_id: string;
+    unit_no?: string;
+    bill_type: string;
+    amount: number;
+    mode: string;
+    paid_at: string;
+    receipt_no: string | null;
+  };
+  const duePaymentHistory: DuePaymentHistoryRow[] = (
+    (rawDuePaymentHistory as
+      | (Omit<DuePaymentHistoryRow, 'unit_no'> & {
+          units: { unit_no: string } | null;
+        })[]
+      | null) ?? []
+  ).map((dp) => ({
+    ...dp,
+    unit_no: (dp.units as { unit_no: string } | null)?.unit_no,
+  }));
 
   const cashLedgerDues: CashLedgerDueRow[] = Array.isArray(rawDues)
     ? (rawDues as {
@@ -295,24 +306,6 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         balance: number;
       }[])
     : [];
-
-  const cashLedgerPaidDues: PaidDueRow[] = (
-    rawPaidDues as {
-      unit_id: string;
-      bill_type: string;
-      amount: number;
-      paid_at: string;
-      mode: string;
-      units: { unit_no: string } | null;
-    }[]
-  ).map((p) => ({
-    unit_id: p.unit_id,
-    unit_no: p.units?.unit_no ?? '?',
-    bill_type: p.bill_type,
-    amount: Number(p.amount),
-    paid_at: p.paid_at,
-    mode: p.mode,
-  }));
 
   const rows: BillPaymentRow[] = (bills ?? []).map((b) => ({
     id: b.id,
@@ -340,65 +333,85 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     ),
   }));
 
+  const allUnitCount = allUnitIds.length;
+
+  let ownerDescription = 'Your bills and payment history.';
+  if (isUserRestricted) {
+    const totalOwed =
+      rows.reduce((sum, b) => {
+        const owed = b.total_amount - b.paid_amount - (b.advance_applied ?? 0);
+        return owed > 0.009 ? sum + owed : sum;
+      }, 0) + cashLedgerDues.reduce((sum, d) => sum + Math.abs(d.balance), 0);
+    if (totalOwed <= 0) {
+      ownerDescription = 'All paid up — nothing due.';
+    } else {
+      const overdueCount = rows.filter((b) => {
+        const owed = b.total_amount - b.paid_amount - (b.advance_applied ?? 0);
+        return owed > 0.009 && displayBillStatus(b) === 'Overdue';
+      }).length;
+      ownerDescription =
+        overdueCount > 0
+          ? `${overdueCount} overdue · ${formatINR(totalOwed)} total due`
+          : `${formatINR(totalOwed)} outstanding`;
+    }
+  }
+
+  if (isUserRestricted) {
+    return (
+      <PageBody>
+        <TeamAccountLayoutPageHeader
+          account={account}
+          title={<Trans i18nKey="association.nav.payments" />}
+          description={ownerDescription}
+        />
+        <OwnerPaymentsView
+          associationId={association.id}
+          bills={rows}
+          dues={cashLedgerDues}
+          duePaymentHistory={duePaymentHistory}
+          canPay={gatewayActive}
+          paidByRole={role === 'prop_owner' ? 'Owner' : 'Tenant'}
+          account={account}
+          showUnitColumn={allUnitCount > 1}
+        />
+      </PageBody>
+    );
+  }
+
   return (
     <PageBody>
       <TeamAccountLayoutPageHeader
         account={account}
         title={<Trans i18nKey="association.nav.payments" />}
         description={
-          isUserRestricted
-            ? 'Bills and payment history for your unit(s).'
-            : rows.length === 0
-              ? 'No bills yet'
-              : `${rows.length} bills`
+          rows.length === 0 ? 'No bills yet' : `${rows.length} bills`
         }
       />
 
       <PaymentsSection
         associationId={association.id}
         bills={rows}
-        canManage={
-          !isUserRestricted &&
-          (role === 'assoc_admin' || role === 'billing_operator')
-        }
-        canVoid={!isUserRestricted && role === 'assoc_admin'}
+        canManage={role === 'assoc_admin' || role === 'billing_operator'}
+        canVoid={role === 'assoc_admin'}
         isSuperAdmin={!!isSuperAdmin}
         deletionCounts={deletionCounts}
-        canPay={isUserRestricted && gatewayActive}
-        paidByRole={
-          isUserRestricted
-            ? role === 'prop_owner'
-              ? 'Owner'
-              : 'Tenant'
-            : undefined
-        }
-        title={isUserRestricted ? 'Your payments' : 'Payments'}
-        hideUnitColumn={
-          isUserRestricted && [...ownedUnitIds, ...rentedUnitIds].length <= 1
-        }
-        initialDuration={duration ?? (isUserRestricted ? 'this_fy' : undefined)}
+        canPay={false}
+        title="Payments"
+        initialDuration={duration}
         initialStatus={status}
-        description={
-          isUserRestricted
-            ? 'Every payment recorded against your bills.'
-            : 'Record payments against bills and track receipts.'
-        }
+        description="Record payments against bills and track receipts."
         accountSlug={account}
       />
 
-      {(cashLedgerDues.length > 0 || cashLedgerPaidDues.length > 0) && (
+      {cashLedgerDues.length > 0 && (
         <div className="mt-6">
           <CashLedgerDuesSection
             associationId={association.id}
             dues={cashLedgerDues}
-            paidDues={isUserRestricted ? cashLedgerPaidDues : undefined}
-            canManage={
-              !isUserRestricted &&
-              (role === 'assoc_admin' || role === 'billing_operator')
-            }
-            canPay={isUserRestricted && gatewayActive}
-            isOwnerView={isUserRestricted}
-            unitCount={[...ownedUnitIds, ...rentedUnitIds].length}
+            canManage={role === 'assoc_admin' || role === 'billing_operator'}
+            canPay={false}
+            isOwnerView={false}
+            unitCount={allUnitCount}
           />
         </div>
       )}

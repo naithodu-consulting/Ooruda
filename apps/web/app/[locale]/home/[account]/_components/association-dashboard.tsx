@@ -167,6 +167,7 @@ async function loadAdminOverview(associationId: string) {
 interface BillWithLineItems {
   id: string;
   bill_no: string;
+  bill_type: string;
   period: string;
   total_amount: number;
   paid_amount: number;
@@ -194,6 +195,7 @@ interface DuePaymentRow {
   amount: number;
   mode: string;
   paid_at: string;
+  receipt_no: string | null;
 }
 
 async function loadMyBillSummary(
@@ -252,6 +254,7 @@ async function loadMyBillSummary(
     .select(`
       id,
       bill_no,
+      bill_type,
       period,
       total_amount,
       paid_amount,
@@ -310,7 +313,7 @@ async function loadMyBillSummary(
     loadUnitLedgerBalances(associationId, units),
     (client as any)
       .from('cash_ledger_payments')
-      .select('id, unit_id, bill_type, amount, mode, paid_at')
+      .select('id, unit_id, bill_type, amount, mode, paid_at, receipt_no')
       .in('unit_id', unitIds)
       .eq('association_id', associationId)
       .order('paid_at', { ascending: false }),

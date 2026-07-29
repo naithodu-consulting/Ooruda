@@ -1,6 +1,7 @@
 import 'server-only';
 import type { BillingEntityData } from '@kit/pdf-templates';
 import {
+  renderAdvanceApplicationPdf,
   renderBillPdf,
   renderElectricityBillPdf,
   renderReceiptPdf,
@@ -826,6 +827,236 @@ export async function getOrGenerateReceiptPdf(
           entityType: 'receipt',
           entityId: receipt.id,
           summary: `Generated PDF for receipt ${receipt.receipt_no}`,
+        }),
+      ]);
+    }
+
+    return { bytes, filename };
+  };
+
+  const promise = generate();
+  pendingPdfGenerations.set(cacheKey, promise);
+  try {
+    return await promise;
+  } finally {
+    pendingPdfGenerations.delete(cacheKey);
+  }
+}
+
+/**
+ * Returns the cached advance application PDF if one exists, otherwise renders
+ * it and caches it in the private `billing-documents` bucket.
+ *
+ * Authorization mirrors getOrGenerateReceiptPdf: any member of the association
+ * may request the PDF, but owners/tenants are further restricted to units they
+ * own or rent via `canAccessUnit`.
+ */
+export async function getOrGenerateAdvanceApplicationPdf(
+  voucherNo: string,
+): Promise<GeneratedPdf | null> {
+  const authClient = getSupabaseServerClient();
+
+  const { data: receiptMeta } = await authClient
+    .from('advance_application_receipts')
+    .select('id, association_id, unit_id, pdf_url, applied_at, units(owner_id)')
+    .eq('voucher_no', voucherNo)
+    .maybeSingle();
+
+  if (!receiptMeta) return null;
+
+  type ReceiptMeta = {
+    id: string;
+    association_id: string;
+    unit_id: string;
+    pdf_url: string | null;
+    applied_at: string;
+    units: { owner_id: string | null } | null;
+  };
+  const meta = receiptMeta as ReceiptMeta;
+
+  const authorized = await canAccessUnit(
+    meta.association_id,
+    meta.unit_id,
+    meta.units?.owner_id ?? null,
+    null, // advance applications are not tenancy-scoped; any current tenant may access
+  );
+  if (!authorized) return null;
+
+  const cacheKey = `advance_application_${voucherNo}`;
+  if (pendingPdfGenerations.has(cacheKey)) {
+    return pendingPdfGenerations.get(cacheKey)!;
+  }
+
+  const generate = async (): Promise<GeneratedPdf | null> => {
+    const logger = await getLogger();
+    const admin = getSupabaseServerAdminClient();
+
+    const filename = `${voucherNo}.pdf`;
+
+    // Serve from cache if available.
+    if (meta.pdf_url) {
+      const { data: signed } = await admin.storage
+        .from(BUCKET)
+        .createSignedUrl(meta.pdf_url, 300);
+      if (signed?.signedUrl) {
+        return { signedUrl: signed.signedUrl, filename };
+      }
+    }
+
+    // Fetch full record for PDF generation.
+    // Use authClient — advance_application_receipts has REVOKE ALL FROM service_role.
+    const { data: receipt, error } = await authClient
+      .from('advance_application_receipts')
+      .select(
+        `id, voucher_no, bill_type, amount, applied_at,
+         bills(bill_no, period, unit_id, tenancy_id,
+           units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin),
+           associations(address, gstin, pan_number, registration_number, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts(name, picture_url)))`,
+      )
+      .eq('voucher_no', voucherNo)
+      .maybeSingle();
+
+    if (error) {
+      logger.error(
+        { voucherNo, error },
+        'Failed to fetch advance application receipt for PDF generation',
+      );
+      return null;
+    }
+
+    type FullReceipt = {
+      id: string;
+      voucher_no: string;
+      bill_type: string;
+      amount: number;
+      applied_at: string;
+      bills: {
+        bill_no: string;
+        period: string;
+        unit_id: string;
+        tenancy_id: string | null;
+        units: {
+          unit_no: string;
+          door_no: string | null;
+          floor: number | null;
+          bill_to: string;
+          owner_id: string | null;
+          owner_is_company: boolean;
+          owner_company_name: string | null;
+          owner_company_address: string | null;
+          owner_company_gstin: string | null;
+        } | null;
+        associations: {
+          address: string | null;
+          gstin: string | null;
+          pan_number: string | null;
+          registration_number: string | null;
+          email: string | null;
+          phone: string | null;
+          bank_account_name: string | null;
+          bank_account_number: string | null;
+          bank_name: string | null;
+          bank_ifsc: string | null;
+          bank_branch: string | null;
+          accounts: { name: string | null; picture_url: string | null } | null;
+        } | null;
+      } | null;
+    };
+
+    const r = receipt as FullReceipt | null;
+
+    if (!r?.bills?.units || !r.bills.associations) {
+      logger.warn(
+        { voucherNo },
+        'Advance application receipt missing bill/unit/association join',
+      );
+      return null;
+    }
+
+    const unitData = r.bills.units;
+    const association = r.bills.associations;
+
+    const billTo = await resolveBillingEntity(
+      {
+        bill_to: unitData.bill_to ?? 'auto',
+        owner_id: unitData.owner_id,
+        owner_is_company: unitData.owner_is_company ?? false,
+        owner_company_name: unitData.owner_company_name ?? null,
+        owner_company_address: unitData.owner_company_address ?? null,
+        owner_company_gstin: unitData.owner_company_gstin ?? null,
+      },
+      r.bills.tenancy_id,
+    );
+
+    let bytes: Buffer;
+    try {
+      bytes = await renderAdvanceApplicationPdf({
+        association: {
+          name: association.accounts?.name ?? 'Association',
+          address: association.address,
+          gstin: association.gstin,
+          panNumber: association.pan_number ?? null,
+          registrationNumber: association.registration_number ?? null,
+          logoUrl: sanitizeLogoUrl(association.accounts?.picture_url),
+          email: association.email ?? null,
+          phone: association.phone ?? null,
+          bankAccountName: association.bank_account_name ?? null,
+          bankAccountNumber: association.bank_account_number ?? null,
+          bankName: association.bank_name ?? null,
+          bankIfsc: association.bank_ifsc ?? null,
+          bankBranch: association.bank_branch ?? null,
+        },
+        unit: {
+          unitNo: unitData.unit_no,
+          doorNo: unitData.door_no ?? null,
+          floor: unitData.floor ?? null,
+        },
+        billTo,
+        voucher: {
+          voucherNo: r.voucher_no,
+          appliedAt: r.applied_at,
+        },
+        application: {
+          billNo: r.bills.bill_no,
+          billType: r.bill_type,
+          period: r.bills.period,
+          amountApplied: Number(r.amount),
+        },
+      });
+    } catch (renderError) {
+      logger.error(
+        { voucherNo, error: renderError },
+        'Failed to render advance application PDF',
+      );
+      return null;
+    }
+
+    const storagePath = `advance-applications/${meta.association_id}/${voucherNo}.pdf`;
+
+    const { error: uploadError } = await admin.storage
+      .from(BUCKET)
+      .upload(storagePath, bytes, {
+        contentType: 'application/pdf',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      logger.error(
+        { voucherNo, storagePath, error: uploadError },
+        'Failed to cache advance application PDF',
+      );
+    } else {
+      await Promise.all([
+        admin
+          .from('advance_application_receipts')
+          .update({ pdf_url: storagePath })
+          .eq('id', meta.id),
+        logAuditEvent({
+          associationId: meta.association_id,
+          action: 'receipt.pdf_generated',
+          entityType: 'advance_application_receipt',
+          entityId: meta.id,
+          summary: `Generated PDF for advance application voucher ${voucherNo}`,
         }),
       ]);
     }

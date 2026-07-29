@@ -140,6 +140,7 @@ export function UnitsTable({
           <TableHeader>
             <TableRow>
               <TableHead>Unit</TableHead>
+              <TableHead>Door No</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Floor</TableHead>
               <TableHead className="text-right">Area (sq.ft)</TableHead>
@@ -172,6 +173,9 @@ export function UnitsTable({
                     >
                       {unit.unit_no}
                     </Link>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {unit.door_no ?? '—'}
                   </TableCell>
                   <TableCell>{unit.type}</TableCell>
                   <TableCell>{unit.floor ?? '—'}</TableCell>

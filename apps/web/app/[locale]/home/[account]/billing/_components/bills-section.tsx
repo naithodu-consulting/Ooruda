@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
-import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import { Card, CardContent, CardHeader } from '@kit/ui/card';
 import {
@@ -67,8 +66,7 @@ import {
   getDurationItems,
 } from '~/lib/bill-filter-items';
 import { getPeriodsForDuration } from '~/lib/bill-period-filter';
-import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
-import { todayInBillingZone } from '~/lib/billing-dates';
+import { displayBillStatus } from '~/lib/bill-status';
 import { exportBillsCsv } from '~/lib/export-csv';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
@@ -806,7 +804,6 @@ function GeneratedBillsTab(props: {
   }, [props.initialStatus]);
 
   const durationItems = useMemo(() => getDurationItems(), []);
-  const today = useMemo(() => todayInBillingZone(), []);
 
   const filtered = useMemo(() => {
     let rows = props.bills;
@@ -845,7 +842,7 @@ function GeneratedBillsTab(props: {
     }
 
     return rows;
-  }, [props.bills, statusVal, typeVal, unitVal, durationVal, today]);
+  }, [props.bills, statusVal, typeVal, unitVal, durationVal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const metrics = useMemo(() => {
     const totalBilled = filtered.reduce((s, b) => s + b.total_amount, 0);
@@ -1064,14 +1061,12 @@ function GeneratedBillsTab(props: {
                   <TableHead>Unit</TableHead>
                   <TableHead>Breakdown</TableHead>
                   <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Paid</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginated.map((bill) => {
-                  const status = displayBillStatus(bill);
                   const breakdownItems = bill.lineItems
                     .filter((li) => li.amount > 0)
                     .map((li) => {
@@ -1083,6 +1078,8 @@ function GeneratedBillsTab(props: {
                           : '📄';
                       return { icon, label: li.description, amount: li.amount };
                     });
+
+                  const status = displayBillStatus(bill);
 
                   return (
                     <TableRow key={bill.id}>
@@ -1122,37 +1119,22 @@ function GeneratedBillsTab(props: {
                       <TableCell className="text-right font-bold tabular-nums">
                         {formatINR(bill.total_amount)}
                       </TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">
-                        {bill.paid_amount > 0 ? (
-                          <span className="text-green-700 dark:text-green-400">
-                            {formatINR(bill.paid_amount)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
                       <TableCell>
-                        <Badge
-                          variant="outline"
+                        <span
                           className={cn(
-                            billStatusBadgeClassName(status),
-                            'border-0 bg-transparent px-0 font-bold shadow-none',
+                            'inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold',
+                            status === 'Paid' &&
+                              'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400',
+                            status === 'Partial' &&
+                              'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400',
+                            status === 'Overdue' &&
+                              'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400',
+                            status === 'Unpaid' &&
+                              'bg-muted text-muted-foreground',
                           )}
                         >
-                          <span
-                            className={cn(
-                              'mr-2 inline-block h-2 w-2 rounded-full',
-                              status === 'Paid'
-                                ? 'bg-green-500'
-                                : status === 'Overdue'
-                                  ? 'bg-red-500'
-                                  : status === 'Partial'
-                                    ? 'bg-orange-500'
-                                    : 'bg-yellow-500',
-                            )}
-                          />
                           {status}
-                        </Badge>
+                        </span>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-2">

@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -138,6 +143,77 @@ export type Database = {
           },
         ]
       }
+      advance_application_receipts: {
+        Row: {
+          amount: number
+          applied_at: string
+          association_id: string
+          bill_id: string | null
+          bill_type: string
+          cash_ledger_id: string
+          created_at: string
+          id: string
+          pdf_url: string | null
+          unit_id: string
+          voucher_no: string
+        }
+        Insert: {
+          amount: number
+          applied_at?: string
+          association_id: string
+          bill_id?: string | null
+          bill_type: string
+          cash_ledger_id: string
+          created_at?: string
+          id?: string
+          pdf_url?: string | null
+          unit_id: string
+          voucher_no: string
+        }
+        Update: {
+          amount?: number
+          applied_at?: string
+          association_id?: string
+          bill_id?: string | null
+          bill_type?: string
+          cash_ledger_id?: string
+          created_at?: string
+          id?: string
+          pdf_url?: string | null
+          unit_id?: string
+          voucher_no?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advance_application_receipts_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advance_application_receipts_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advance_application_receipts_cash_ledger_id_fkey"
+            columns: ["cash_ledger_id"]
+            isOneToOne: false
+            referencedRelation: "cash_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advance_application_receipts_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assoc_admin_permissions: {
         Row: {
           association_id: string
@@ -258,6 +334,7 @@ export type Database = {
           bank_ifsc: string | null
           bank_name: string | null
           brand_colour: string
+          cash_ledger_enabled: boolean
           created_at: string
           email: string | null
           gst_enabled: boolean
@@ -284,6 +361,7 @@ export type Database = {
           bank_ifsc?: string | null
           bank_name?: string | null
           brand_colour?: string
+          cash_ledger_enabled?: boolean
           created_at?: string
           email?: string | null
           gst_enabled?: boolean
@@ -310,6 +388,7 @@ export type Database = {
           bank_ifsc?: string | null
           bank_name?: string | null
           brand_colour?: string
+          cash_ledger_enabled?: boolean
           created_at?: string
           email?: string | null
           gst_enabled?: boolean
@@ -722,10 +801,14 @@ export type Database = {
           id: string
           mode: string
           paid_at: string
+          razorpay_payment_id: string | null
           receipt_no: string | null
           receipt_pdf_url: string | null
           recorded_by: string | null
           reference_no: string | null
+          refunded_amount: number
+          reversed_at: string | null
+          status: string
           unit_id: string
         }
         Insert: {
@@ -736,10 +819,14 @@ export type Database = {
           id?: string
           mode: string
           paid_at?: string
+          razorpay_payment_id?: string | null
           receipt_no?: string | null
           receipt_pdf_url?: string | null
           recorded_by?: string | null
           reference_no?: string | null
+          refunded_amount?: number
+          reversed_at?: string | null
+          status?: string
           unit_id: string
         }
         Update: {
@@ -750,10 +837,14 @@ export type Database = {
           id?: string
           mode?: string
           paid_at?: string
+          razorpay_payment_id?: string | null
           receipt_no?: string | null
           receipt_pdf_url?: string | null
           recorded_by?: string | null
           reference_no?: string | null
+          refunded_amount?: number
+          reversed_at?: string | null
+          status?: string
           unit_id?: string
         }
         Relationships: [
@@ -1345,6 +1436,9 @@ export type Database = {
           razorpay_payment_id: string | null
           recorded_by: string | null
           reference_no: string | null
+          refunded_amount: number
+          reversed_at: string | null
+          status: string
         }
         Insert: {
           amount: number
@@ -1359,6 +1453,9 @@ export type Database = {
           razorpay_payment_id?: string | null
           recorded_by?: string | null
           reference_no?: string | null
+          refunded_amount?: number
+          reversed_at?: string | null
+          status?: string
         }
         Update: {
           amount?: number
@@ -1373,6 +1470,9 @@ export type Database = {
           razorpay_payment_id?: string | null
           recorded_by?: string | null
           reference_no?: string | null
+          refunded_amount?: number
+          reversed_at?: string | null
+          status?: string
         }
         Relationships: [
           {
@@ -1438,6 +1538,60 @@ export type Database = {
           },
           {
             foreignKeyName: "pending_other_charges_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pending_sinking_fund_charges: {
+        Row: {
+          amount: number
+          association_id: string
+          billed: boolean
+          created_at: string
+          due_date: string | null
+          id: string
+          label: string
+          period: string
+          split_mode: string | null
+          unit_id: string | null
+        }
+        Insert: {
+          amount: number
+          association_id: string
+          billed?: boolean
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          label: string
+          period: string
+          split_mode?: string | null
+          unit_id?: string | null
+        }
+        Update: {
+          amount?: number
+          association_id?: string
+          billed?: boolean
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          label?: string
+          period?: string
+          split_mode?: string | null
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_sinking_fund_charges_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_sinking_fund_charges_unit_id_fkey"
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
@@ -1909,6 +2063,14 @@ export type Database = {
       }
     }
     Functions: {
+      _apply_advance_internal: {
+        Args: {
+          p_association_id: string
+          p_bill_type: string
+          p_unit_id: string
+        }
+        Returns: number
+      }
       accept_invitation: {
         Args: { token: string; user_id: string }
         Returns: string
@@ -1928,6 +2090,14 @@ export type Database = {
           p_period: string
         }
         Returns: string
+      }
+      apply_available_advance: {
+        Args: {
+          p_association_id: string
+          p_bill_type: string
+          p_unit_id: string
+        }
+        Returns: number
       }
       association_role: { Args: { p_association_id: string }; Returns: string }
       can_action_account_member: {
@@ -2113,9 +2283,25 @@ export type Database = {
         Args: { p_bill_type: string; p_unit_id: string }
         Returns: number
       }
+      get_collection_summary: {
+        Args: {
+          p_association_id: string
+          p_from_period?: string
+          p_to_period?: string
+        }
+        Returns: {
+          bill_count: number
+          bill_type: string
+          billed: number
+          collected: number
+          period: string
+        }[]
+      }
       get_config: { Args: never; Returns: Json }
       get_nonce_status: { Args: { p_id: string }; Returns: Json }
       get_upper_system_role: { Args: never; Returns: string }
+      get_user_id_by_email: { Args: { p_email: string }; Returns: string }
+      get_user_id_by_phone: { Args: { p_phone: string }; Returns: string }
       has_active_subscription: {
         Args: { target_account_id: string }
         Returns: boolean
@@ -2176,6 +2362,28 @@ export type Database = {
         Args: { account_id: string; user_id: string }
         Returns: boolean
       }
+      recompute_overdue_bills: { Args: never; Returns: undefined }
+      record_due_payment: {
+        Args: {
+          p_amount: number
+          p_association_id: string
+          p_bill_type: string
+          p_mode: string
+          p_reference_no?: string
+          p_unit_id: string
+        }
+        Returns: string
+      }
+      record_due_payment_webhook: {
+        Args: {
+          p_amount: number
+          p_association_id: string
+          p_bill_type: string
+          p_razorpay_payment_id: string
+          p_unit_id: string
+        }
+        Returns: string
+      }
       record_payment:
         | {
             Args: {
@@ -2200,6 +2408,10 @@ export type Database = {
             }
             Returns: string
           }
+      record_payment_reversal: {
+        Args: { p_razorpay_payment_id: string; p_refund_amount?: number }
+        Returns: undefined
+      }
       revoke_nonce: {
         Args: { p_id: string; p_reason?: string }
         Returns: boolean
@@ -2444,101 +2656,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      iceberg_namespaces: {
-        Row: {
-          bucket_name: string
-          catalog_id: string
-          created_at: string
-          id: string
-          metadata: Json
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          bucket_name: string
-          catalog_id: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          bucket_name?: string
-          catalog_id?: string
-          created_at?: string
-          id?: string
-          metadata?: Json
-          name?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "iceberg_namespaces_catalog_id_fkey"
-            columns: ["catalog_id"]
-            isOneToOne: false
-            referencedRelation: "buckets_analytics"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      iceberg_tables: {
-        Row: {
-          bucket_name: string
-          catalog_id: string
-          created_at: string
-          id: string
-          location: string
-          name: string
-          namespace_id: string
-          remote_table_id: string | null
-          shard_id: string | null
-          shard_key: string | null
-          updated_at: string
-        }
-        Insert: {
-          bucket_name: string
-          catalog_id: string
-          created_at?: string
-          id?: string
-          location: string
-          name: string
-          namespace_id: string
-          remote_table_id?: string | null
-          shard_id?: string | null
-          shard_key?: string | null
-          updated_at?: string
-        }
-        Update: {
-          bucket_name?: string
-          catalog_id?: string
-          created_at?: string
-          id?: string
-          location?: string
-          name?: string
-          namespace_id?: string
-          remote_table_id?: string | null
-          shard_id?: string | null
-          shard_key?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "iceberg_tables_catalog_id_fkey"
-            columns: ["catalog_id"]
-            isOneToOne: false
-            referencedRelation: "buckets_analytics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "iceberg_tables_namespace_id_fkey"
-            columns: ["namespace_id"]
-            isOneToOne: false
-            referencedRelation: "iceberg_namespaces"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       migrations: {
         Row: {
@@ -3053,4 +3170,3 @@ export const Constants = {
     },
   },
 } as const
-

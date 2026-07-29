@@ -3,6 +3,10 @@ import * as React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
 
 import { registerPdfFonts } from './assets/fonts/register';
+import {
+  AdvanceApplicationDocument,
+  type AdvanceApplicationPdfData,
+} from './documents/advance-application-document';
 import { BillDocument, type BillPdfData } from './documents/bill-document';
 import {
   BillsExportDocument,
@@ -24,7 +28,12 @@ import {
   ReportDocument,
   type ReportPdfData,
 } from './documents/report-document';
+import {
+  StatementDocument,
+  type StatementPdfData,
+} from './documents/statement-document';
 
+export type { AdvanceApplicationPdfData } from './documents/advance-application-document';
 export type {
   BillPdfData,
   BillPdfLineItem,
@@ -36,7 +45,12 @@ export type {
 } from './documents/electricity-bill-document';
 export type { ReceiptPdfData } from './documents/receipt-document';
 export type { AssociationBranding } from './components/document-header';
+export { billTypeLabel, BILL_TYPE_LABELS } from './lib/bill-type-labels';
 export type { ReportPdfData } from './documents/report-document';
+export type {
+  StatementPdfData,
+  StatementPdfEntry,
+} from './documents/statement-document';
 export type {
   BillsExportPdfData,
   BillsExportRow,
@@ -45,6 +59,13 @@ export type {
   PaymentsExportPdfData,
   PaymentsExportRow,
 } from './documents/payments-export-document';
+
+export async function renderAdvanceApplicationPdf(
+  data: AdvanceApplicationPdfData,
+): Promise<Buffer> {
+  registerPdfFonts();
+  return renderToBuffer(<AdvanceApplicationDocument {...data} />);
+}
 
 export async function renderReportPdf(data: ReportPdfData): Promise<Buffer> {
   registerPdfFonts();
@@ -73,6 +94,13 @@ export async function renderBillsExportPdf(
 ): Promise<Buffer> {
   registerPdfFonts();
   return renderToBuffer(<BillsExportDocument data={data} />);
+}
+
+export async function renderStatementPdf(
+  data: StatementPdfData,
+): Promise<Buffer> {
+  registerPdfFonts();
+  return renderToBuffer(<StatementDocument {...data} />);
 }
 
 export async function renderPaymentsExportPdf(

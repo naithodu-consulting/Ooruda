@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
+import { billTypeLabel } from '@kit/pdf-templates';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import {
@@ -38,7 +39,6 @@ import { ExportMenu } from '~/components/export-menu';
 import { getDurationItems } from '~/lib/bill-filter-items';
 import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
-import { billTypeLabel } from '~/lib/bill-type-labels';
 import { exportPaymentsCsv } from '~/lib/export-csv';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';

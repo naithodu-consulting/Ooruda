@@ -4,12 +4,12 @@ import { useState } from 'react';
 
 import Link from 'next/link';
 
+import { billTypeLabel } from '@kit/pdf-templates';
 import { Badge } from '@kit/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 
 import { DownloadPdfButton } from '~/components/download-pdf-button';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
-import { billTypeLabel } from '~/lib/bill-type-labels';
 import type { UnitCashLedgerBalance } from '~/lib/cash-ledger-aggregation';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
@@ -19,6 +19,7 @@ import { formatPeriod } from '~/lib/format-period';
 export interface SerializableBill {
   id: string;
   bill_no: string;
+  bill_type: string;
   period: string;
   total_amount: number;
   paid_amount: number;
@@ -45,6 +46,7 @@ export interface SerializableDuePayment {
   amount: number;
   mode: string;
   paid_at: string;
+  receipt_no: string | null;
 }
 
 interface Props {
@@ -148,17 +150,23 @@ export function OwnerUnitsView({
             b.status === 'Overdue',
         );
 
-        const totalOutstanding = unpaidBills.reduce(
+        // Resolve ledger balance for this unit — needed before totalOutstanding
+        const bal = ledgerBalances.find((b) => b.unit_id === unit.id);
+
+        // True total: outstanding bill amounts + cash ledger dues
+        const billOutstanding = unpaidBills.reduce(
           (sum, b) => sum + Math.max(0, b.total_amount - b.paid_amount),
           0,
         );
+        const cashDueTotal = bal?.totalDue ?? 0;
+        const totalOutstanding = billOutstanding + cashDueTotal;
 
         const hasOverdue = unpaidBills.some(
           (b) => displayBillStatus(b) === 'Overdue',
         );
         const overallStatus = hasOverdue
           ? 'Overdue'
-          : unpaidBills.length > 0
+          : totalOutstanding > 0
             ? 'Unpaid'
             : 'Paid';
 
@@ -173,9 +181,18 @@ export function OwnerUnitsView({
         const periodBreakdown = Array.from(unpaidByPeriod.entries()).sort(
           ([a], [b]) => b.localeCompare(a),
         );
-        const latestPeriod = periodBreakdown[0]?.[0] ?? null;
 
-        const bal = ledgerBalances.find((b) => b.unit_id === unit.id);
+        // Sub-label: summarise bills + cash dues
+        const billCount = unpaidBills.length;
+        const cashDueCount = bal ? bal.dues.length : 0;
+        let dueSub = 'All paid';
+        if (billCount > 0 && cashDueCount > 0) {
+          dueSub = `${billCount} bill${billCount !== 1 ? 's' : ''} · ${cashDueCount} due${cashDueCount !== 1 ? 's' : ''}`;
+        } else if (billCount > 0) {
+          dueSub = `${billCount} bill${billCount !== 1 ? 's' : ''} across ${periodBreakdown.length} month${periodBreakdown.length !== 1 ? 's' : ''}`;
+        } else if (cashDueCount > 0) {
+          dueSub = `${cashDueCount} due${cashDueCount !== 1 ? 's' : ''}`;
+        }
 
         return (
           <div
@@ -199,46 +216,25 @@ export function OwnerUnitsView({
                   <span className="text-[10px] font-bold tracking-wider text-white/40 uppercase">
                     Total amount due
                   </span>
-                  <div className="mt-1 text-5xl font-black tracking-tight text-[#F59E0B]">
+                  <div
+                    className={`mt-1 text-5xl font-black tracking-tight ${
+                      totalOutstanding === 0
+                        ? 'text-green-400'
+                        : overallStatus === 'Overdue'
+                          ? 'text-red-400'
+                          : 'text-[#F59E0B]'
+                    }`}
+                  >
                     {formatINR(totalOutstanding)}
                   </div>
-                  <div className="mt-2 text-xs text-white/50">
-                    {unpaidBills.length === 0
-                      ? 'All paid'
-                      : `${unpaidBills.length} bill${unpaidBills.length !== 1 ? 's' : ''} across ${periodBreakdown.length} month${periodBreakdown.length !== 1 ? 's' : ''}`}
-                  </div>
+                  <div className="mt-2 text-xs text-white/50">{dueSub}</div>
                 </div>
-
-                {unpaidBills.length > 0 && (
-                  <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold shadow-sm">
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        overallStatus === 'Paid'
-                          ? 'bg-green-600'
-                          : overallStatus === 'Overdue'
-                            ? 'bg-red-600'
-                            : 'bg-amber-500'
-                      }`}
-                    />
-                    <span
-                      className={
-                        overallStatus === 'Paid'
-                          ? 'text-green-700'
-                          : overallStatus === 'Overdue'
-                            ? 'text-red-700'
-                            : 'text-amber-700'
-                      }
-                    >
-                      {overallStatus}
-                    </span>
-                  </div>
-                )}
               </div>
 
               {periodBreakdown.length > 0 && (
                 <div className="relative z-10 mt-5 flex flex-col gap-2 border-t border-white/10 pt-5">
                   {periodBreakdown.map(([period, amt]) => {
-                    const isLatest = period === latestPeriod;
+                    const isLatest = period === periodBreakdown[0]?.[0];
                     const periodBills = unpaidBills.filter(
                       (b) => b.period === period,
                     );
@@ -281,23 +277,23 @@ export function OwnerUnitsView({
                   href={`/home/${account}/payments?unit=${unit.unit_no}`}
                   className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-bold shadow-sm transition-colors"
                 >
-                  Pay all
-                </Link>
-                <Link
-                  href={`/home/${account}/payments?unit=${unit.unit_no}`}
-                  className="border-border bg-card text-foreground hover:bg-muted inline-flex items-center justify-center rounded-xl border px-5 py-2.5 text-sm font-bold transition-colors"
-                >
-                  Pay by bill
+                  Pay now · {formatINR(totalOutstanding)}
                 </Link>
               </div>
             )}
 
-            {/* Ledger balance */}
+            {/* Ledger balance — side-by-side on md+ */}
             {bal && (bal.totalDue > 0 || bal.totalCredit > 0) && (
-              <div className="border-border overflow-hidden rounded-xl border">
+              <div
+                className={`grid gap-3 ${
+                  bal.totalDue > 0 && bal.totalCredit > 0
+                    ? 'grid-cols-1 md:grid-cols-2'
+                    : 'grid-cols-1'
+                }`}
+              >
                 {bal.totalDue > 0 && (
-                  <div className="bg-destructive/5 border-border border-l-destructive border-b border-l-4 p-4 last:border-b-0">
-                    <div className="flex items-center justify-between gap-3">
+                  <div className="bg-destructive/5 border-destructive/30 border-l-destructive overflow-hidden rounded-xl border border-l-4 p-4">
+                    <div className="flex items-center gap-3">
                       <div>
                         <p className="text-destructive/70 text-xs font-semibold tracking-wide uppercase">
                           Pending dues
@@ -309,12 +305,6 @@ export function OwnerUnitsView({
                           Separate from your monthly bills
                         </p>
                       </div>
-                      <Link
-                        href={`/home/${account}/payments`}
-                        className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors"
-                      >
-                        Pay now
-                      </Link>
                     </div>
                     {bal.dues.length >= 1 && (
                       <div className="border-destructive/10 mt-3 flex flex-col gap-1.5 border-t pt-3">
@@ -336,30 +326,27 @@ export function OwnerUnitsView({
                   </div>
                 )}
                 {bal.totalCredit > 0 && (
-                  <div
-                    className="bg-accent border-primary border-l-4 p-4"
-                    style={{ color: 'var(--sidebar-foreground)' }}
-                  >
-                    <p className="text-xs font-semibold tracking-wide uppercase opacity-70">
+                  <div className="overflow-hidden rounded-xl border border-l-4 border-green-200 border-l-green-500 bg-green-50 p-4 dark:border-green-800 dark:border-l-green-400 dark:bg-green-950/40">
+                    <p className="text-xs font-semibold tracking-wide text-green-700 uppercase dark:text-green-400">
                       Advance credit
                     </p>
-                    <p className="mt-1 text-2xl font-bold tabular-nums">
+                    <p className="mt-1 text-2xl font-bold text-green-700 tabular-nums dark:text-green-300">
                       {formatINR(bal.totalCredit)}
                     </p>
-                    <p className="mt-0.5 text-xs opacity-60">
-                      Automatically applied to your bills of the same type
+                    <p className="mt-0.5 text-xs text-green-600/70 dark:text-green-400/60">
+                      Will be auto-applied to your future bills of the same type
                     </p>
                     {bal.credits.length >= 1 && (
-                      <div className="border-primary/20 mt-3 flex flex-col gap-1.5 border-t pt-3">
+                      <div className="mt-3 flex flex-col gap-1.5 border-t border-green-200 pt-3 dark:border-green-800">
                         {bal.credits.map((c) => (
                           <div
                             key={c.bill_type}
                             className="flex items-center justify-between text-xs"
                           >
-                            <span className="opacity-70">
+                            <span className="text-green-600/70 dark:text-green-400/70">
                               {billTypeLabel(c.bill_type)}
                             </span>
-                            <span className="font-medium tabular-nums">
+                            <span className="font-medium text-green-700 tabular-nums dark:text-green-300">
                               {formatINR(c.amount)}
                             </span>
                           </div>
@@ -404,7 +391,10 @@ export function OwnerUnitsView({
                         >
                           <div>
                             <span className="text-foreground block text-sm font-semibold">
-                              {formatPeriod(b.period)}
+                              {billTypeLabel(b.bill_type)}{' '}
+                              <span className="text-muted-foreground font-normal">
+                                · {formatPeriod(b.period)}
+                              </span>
                             </span>
                             <span className="text-muted-foreground block text-xs">
                               {b.bill_no}
@@ -439,10 +429,10 @@ export function OwnerUnitsView({
                     </CardTitle>
                     {totalPaymentCount > PREVIEW_COUNT && (
                       <Link
-                        href={`/home/${account}/payments`}
+                        href={`/home/${account}/statement`}
                         className="border-border text-muted-foreground hover:text-foreground rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors"
                       >
-                        View all
+                        Full statement
                       </Link>
                     )}
                   </div>
@@ -500,32 +490,50 @@ export function OwnerUnitsView({
                           0,
                           Math.max(0, PREVIEW_COUNT - previewPayments.length),
                         )
-                        .map((dp) => (
-                          <div
-                            key={dp.id}
-                            className="border-border/40 flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
-                          >
-                            <div>
-                              <span className="text-foreground block text-sm font-semibold">
-                                Due · {billTypeLabel(dp.bill_type)}
-                              </span>
-                              <span className="text-muted-foreground block text-xs">
-                                {dp.mode} &middot;{' '}
-                                {new Date(dp.paid_at).toLocaleDateString(
-                                  'en-IN',
-                                  {
-                                    day: 'numeric',
-                                    month: 'short',
-                                    year: 'numeric',
-                                  },
-                                )}
-                              </span>
+                        .map((dp) => {
+                          const receiptNo = dp.receipt_no ?? null;
+                          return (
+                            <div
+                              key={dp.id}
+                              className="border-border/40 flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
+                            >
+                              <div>
+                                <span className="text-foreground block text-sm font-semibold">
+                                  {billTypeLabel(dp.bill_type)}
+                                  {receiptNo ? (
+                                    <span className="text-muted-foreground font-normal">
+                                      {' '}
+                                      · {receiptNo}
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="text-muted-foreground block text-xs">
+                                  {dp.mode} &middot;{' '}
+                                  {new Date(dp.paid_at).toLocaleDateString(
+                                    'en-IN',
+                                    {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric',
+                                    },
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-foreground text-sm font-bold tabular-nums">
+                                  {formatINR(dp.amount)}
+                                </span>
+                                <DownloadPdfButton
+                                  href={`/api/billing/cash-ledger-payments/${dp.id}/pdf`}
+                                  label="Download receipt PDF"
+                                  dataTest={`download-due-receipt-${dp.id}`}
+                                  variant="ghost"
+                                  iconSize="icon-xs"
+                                />
+                              </div>
                             </div>
-                            <span className="text-foreground text-sm font-bold tabular-nums">
-                              {formatINR(dp.amount)}
-                            </span>
-                          </div>
-                        ))}
+                          );
+                        })}
                     </>
                   )}
                 </CardContent>

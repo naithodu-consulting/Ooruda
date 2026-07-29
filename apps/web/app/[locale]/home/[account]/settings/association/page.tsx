@@ -9,6 +9,7 @@ import { AssociationLogoUploader } from './_components/association-logo-uploader
 import { AssociationNameCard } from './_components/association-name-card';
 import { ChargeTypesCard } from './_components/charge-types-card';
 import { PaymentGatewayCard } from './_components/payment-gateway-card';
+import { WorkspaceFeaturesCard } from './_components/workspace-features-card';
 
 interface Props {
   params: Promise<{ account: string }>;
@@ -155,6 +156,13 @@ export default async function AssociationSettingsPage({ params }: Props) {
         associationId={association.id}
         gateway={gatewayConfig}
       />
+
+      {isSuperAdmin && (
+        <WorkspaceFeaturesCard
+          associationId={association.id}
+          cashLedgerEnabled={association.cash_ledger_enabled ?? true}
+        />
+      )}
     </div>
   );
 }
