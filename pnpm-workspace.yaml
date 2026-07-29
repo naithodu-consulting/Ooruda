@@ -53,6 +53,7 @@ catalog:
   date-fns: ^4.4.0
   dotenv: 17.4.2
   embla-carousel-react: ^8.6.0
+  fflate: ^0.8.3
   input-otp: ^1.4.2
   libphonenumber-js: ^1.13.7
   lucide-react: 1.17.0

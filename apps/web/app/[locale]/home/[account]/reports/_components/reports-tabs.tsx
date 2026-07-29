@@ -3,15 +3,26 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@kit/ui/tabs';
 
 import {
+  type CashLedgerRow,
   type CollectionRow,
   type MescomRow,
   type OutstandingBill,
   type PaymentRow,
+  type ReportsFilters,
   type UnitConsumptionRow,
+  type UnitOption,
 } from '../_lib/reports-types';
+import { CashLedgerTab } from './cash-ledger-tab';
 import { CollectionTab } from './collection-tab';
 import { ElectricityTab } from './electricity-tab';
 import { ExportButton } from './export-button';
+import {
+  ActiveFilterChips,
+  BillTypeFilter,
+  ModeFilter,
+  StatusFilter,
+  UnitFilter,
+} from './filter-bar';
 import { OutstandingTab } from './outstanding-tab';
 import { PaymentsTab } from './payments-tab';
 
@@ -21,9 +32,13 @@ interface Props {
   to: string;
   activeTab: string;
   onTabChange: (tab: string) => void;
+  filters: ReportsFilters;
+  onFiltersChange: (patch: Partial<ReportsFilters>) => void;
+  units: UnitOption[];
   collectionRows: CollectionRow[];
   outstandingBills: OutstandingBill[];
   payments: PaymentRow[];
+  cashLedgerRows: CashLedgerRow[];
   mescomRows: MescomRow[];
   consumptionByPeriod: Record<string, UnitConsumptionRow[]>;
 }
@@ -32,8 +47,21 @@ const TABS = [
   { value: 'collection', label: 'Collection' },
   { value: 'outstanding', label: 'Outstanding' },
   { value: 'payments', label: 'Payments' },
+  { value: 'cash_ledger', label: 'Cash Ledger' },
   { value: 'electricity', label: 'Electricity' },
 ];
+
+// Which filter controls appear on each tab
+const TAB_FILTERS: Record<
+  string,
+  ('units' | 'bill_types' | 'status' | 'mode')[]
+> = {
+  collection: ['units', 'bill_types'],
+  outstanding: ['units', 'bill_types', 'status'],
+  payments: ['units', 'bill_types', 'mode'],
+  cash_ledger: ['units', 'bill_types'],
+  electricity: [],
+};
 
 export function ReportsTabs({
   associationId,
@@ -41,16 +69,26 @@ export function ReportsTabs({
   to,
   activeTab,
   onTabChange,
+  filters,
+  onFiltersChange,
+  units,
   collectionRows,
   outstandingBills,
   payments,
+  cashLedgerRows,
   mescomRows,
   consumptionByPeriod,
 }: Props) {
+  const tabFilters = TAB_FILTERS[activeTab] ?? [];
+  const hasActiveFilters =
+    filters.unitIds.length > 0 ||
+    filters.billTypes.length > 0 ||
+    filters.outstandingStatus !== 'all' ||
+    !!filters.paymentMode;
+
   return (
-    // Tab state is controlled externally — no router usage here
     <Tabs value={activeTab} onValueChange={onTabChange}>
-      {/* Header: tabs + export — stacks on mobile */}
+      {/* Header row: tabs + export */}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="overflow-x-auto pb-0.5">
           <TabsList className="w-max">
@@ -67,19 +105,122 @@ export function ReportsTabs({
           from={from}
           to={to}
           activeTab={activeTab}
+          filters={filters}
         />
       </div>
+
+      {/* Per-tab filter bar */}
+      {tabFilters.length > 0 && (
+        <div className="bg-muted/40 mb-4 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
+          {tabFilters.includes('units') && units.length > 0 && (
+            <>
+              <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+                Units
+              </span>
+              <UnitFilter
+                units={units}
+                selected={filters.unitIds}
+                onChange={(ids) => onFiltersChange({ unitIds: ids })}
+              />
+            </>
+          )}
+
+          {tabFilters.includes('bill_types') && (
+            <>
+              <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+                Type
+              </span>
+              <BillTypeFilter
+                selected={filters.billTypes}
+                onChange={(types) => onFiltersChange({ billTypes: types })}
+              />
+            </>
+          )}
+
+          {tabFilters.includes('status') && (
+            <>
+              <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+                Status
+              </span>
+              <StatusFilter
+                value={filters.outstandingStatus}
+                onChange={(s) => onFiltersChange({ outstandingStatus: s })}
+              />
+            </>
+          )}
+
+          {tabFilters.includes('mode') && (
+            <>
+              <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+                Mode
+              </span>
+              <ModeFilter
+                value={filters.paymentMode}
+                onChange={(m) => onFiltersChange({ paymentMode: m })}
+              />
+            </>
+          )}
+
+          {hasActiveFilters && (
+            <>
+              <div className="bg-border mx-1 h-4 w-px" />
+              <button
+                onClick={() =>
+                  onFiltersChange({
+                    unitIds: [],
+                    billTypes: [],
+                    outstandingStatus: 'all',
+                    paymentMode: '',
+                  })
+                }
+                className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+              >
+                Clear all
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Active filter chips */}
+      {(filters.unitIds.length > 0 || filters.billTypes.length > 0) && (
+        <div className="mb-3">
+          <ActiveFilterChips
+            unitIds={filters.unitIds}
+            billTypes={filters.billTypes}
+            units={units}
+            onRemoveUnit={(id) =>
+              onFiltersChange({
+                unitIds: filters.unitIds.filter((x) => x !== id),
+              })
+            }
+            onRemoveBillType={(t) =>
+              onFiltersChange({
+                billTypes: filters.billTypes.filter((x) => x !== t),
+              })
+            }
+            onClearAll={() => onFiltersChange({ unitIds: [], billTypes: [] })}
+          />
+        </div>
+      )}
 
       <TabsContent value="collection">
         <CollectionTab rows={collectionRows} payments={payments} />
       </TabsContent>
 
       <TabsContent value="outstanding">
-        <OutstandingTab bills={outstandingBills} />
+        <OutstandingTab
+          bills={outstandingBills}
+          statusFilter={filters.outstandingStatus}
+        />
       </TabsContent>
 
       <TabsContent value="payments">
         <PaymentsTab payments={payments} />
+      </TabsContent>
+
+      <TabsContent value="cash_ledger">
+        <CashLedgerTab rows={cashLedgerRows} />
       </TabsContent>
 
       <TabsContent value="electricity">

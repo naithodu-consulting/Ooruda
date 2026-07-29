@@ -1,7 +1,31 @@
+import { billTypeLabel } from '@kit/pdf-templates';
+
+export { billTypeLabel };
+
 export interface DateRange {
   from: string; // YYYY-MM-DD
   to: string; // YYYY-MM-DD
 }
+
+// ── Filter state ──────────────────────────────────────────────────────────────
+
+export type OutstandingStatus = 'all' | 'overdue' | 'partial' | 'unpaid';
+
+export interface ReportsFilters {
+  unitIds: string[]; // empty = all units
+  billTypes: string[]; // empty = all bill types
+  outstandingStatus: OutstandingStatus;
+  paymentMode: string; // '' = all modes
+}
+
+export const DEFAULT_FILTERS: ReportsFilters = {
+  unitIds: [],
+  billTypes: [],
+  outstandingStatus: 'all',
+  paymentMode: '',
+};
+
+// ── Data row types ────────────────────────────────────────────────────────────
 
 export interface CollectionRow {
   period: string;
@@ -19,6 +43,8 @@ export interface OutstandingBill {
   unit_no: string;
   total_amount: number;
   paid_amount: number;
+  /** Portion settled from the unit's advance credit rather than a payment row. */
+  advance_applied: number;
   status: string;
   due_date: string;
 }
@@ -33,6 +59,19 @@ export interface PaymentRow {
   mode: string;
   reference_no: string | null;
   receipt_no: string | null;
+  source: 'razorpay' | 'cash_ledger';
+}
+
+export interface CashLedgerRow {
+  id: string;
+  entry_date: string;
+  unit_no: string;
+  entry_type: string;
+  bill_type: string;
+  direction: string;
+  amount: number;
+  notes: string | null;
+  paid_by_name: string;
 }
 
 export interface MescomRow {
@@ -50,6 +89,45 @@ export interface UnitConsumptionRow {
   prev_reading: number | null;
   curr_reading: number | null;
 }
+
+export interface UnitOption {
+  id: string;
+  unit_no: string;
+}
+
+// ── Bill type metadata ────────────────────────────────────────────────────────
+
+export const ALL_BILL_TYPES = [
+  'maintenance',
+  'electricity',
+  'sinking_fund',
+  'other_charges',
+  'dg_usage',
+  'water',
+] as const;
+
+export const BILL_TYPE_COLORS: Record<string, string> = {
+  maintenance: '#6366f1',
+  electricity: '#f59e0b',
+  other_charges: '#10b981',
+  sinking_fund: '#ec4899',
+  dg_usage: '#8b5cf6',
+  water: '#0ea5e9',
+};
+
+// ── Payment modes ─────────────────────────────────────────────────────────────
+
+export const PAYMENT_MODES = [
+  'UPI',
+  'NEFT',
+  'RTGS',
+  'Cash',
+  'Cheque',
+  'Razorpay',
+  'NetBanking',
+] as const;
+
+// ── Date/period helpers ───────────────────────────────────────────────────────
 
 // FY runs April–March in India.
 export function fyPeriods(fy: string): { from: string; to: string } {
@@ -125,17 +203,3 @@ export function resolvePreset(key: PresetKey | string): DateRange {
 export function dateToPeriod(date: string): string {
   return date.slice(0, 7);
 }
-
-export const BILL_TYPE_LABELS: Record<string, string> = {
-  maintenance: 'Maintenance',
-  electricity: 'Electricity',
-  other_charges: 'Other Charges',
-  sinking_fund: 'Sinking Fund',
-};
-
-export const BILL_TYPE_COLORS: Record<string, string> = {
-  maintenance: '#6366f1',
-  electricity: '#f59e0b',
-  other_charges: '#10b981',
-  sinking_fund: '#ec4899',
-};

@@ -102,7 +102,9 @@ export default async function UnitsPage({ params }: Props) {
   const { data: openBills } = unitIds.length
     ? await client
         .from('bills')
-        .select('unit_id, status, due_date')
+        .select(
+          'unit_id, status, due_date, total_amount, paid_amount, advance_applied',
+        )
         .in('unit_id', unitIds)
         .in('status', ['Unpaid', 'Partial', 'Overdue'])
     : { data: [] };

@@ -1,14 +1,27 @@
 'use server';
 
 import 'server-only';
-import { renderReportPdf, type ReportPdfData } from '@kit/pdf-templates';
+import {
+  billTypeLabel,
+  renderReportPdf,
+  type ReportPdfData,
+} from '@kit/pdf-templates';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { getAssociationRole } from '~/lib/rbac';
 
+import type { ReportsFilters } from './reports-types';
+
 type ActionResult<T = Record<string, never>> =
   | ({ success: true } & T)
   | { success: false; error: string };
+
+type TabKey =
+  | 'collection'
+  | 'outstanding'
+  | 'payments'
+  | 'cash_ledger'
+  | 'electricity';
 
 async function resolveAssociation(associationId: string) {
   const client = getSupabaseServerClient();
@@ -31,12 +44,25 @@ async function resolveAssociation(associationId: string) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const BILL_TYPE_LABELS: Record<string, string> = {
-  maintenance: 'Maintenance',
-  electricity: 'Electricity',
-  other_charges: 'Other Charges',
-  sinking_fund: 'Sinking Fund',
-};
+/**
+ * Amount settled against a bill: payments plus any advance credit applied to it.
+ * A bill cleared entirely from advance has paid_amount = 0 but is fully settled.
+ */
+function settledAmount(b: {
+  paid_amount?: unknown;
+  advance_applied?: unknown;
+}): number {
+  return Number(b.paid_amount ?? 0) + Number(b.advance_applied ?? 0);
+}
+
+/** Amount still genuinely owed on a bill, never negative. */
+function outstandingAmount(b: {
+  total_amount?: unknown;
+  paid_amount?: unknown;
+  advance_applied?: unknown;
+}): number {
+  return Math.max(0, Number(b.total_amount ?? 0) - settledAmount(b));
+}
 
 function toCSV(headers: string[], rows: (string | number | null)[][]): string {
   const escape = (v: string | number | null) => {
@@ -68,9 +94,10 @@ function periodLabel(from: string, to: string): string {
   return from === to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`;
 }
 
-/** File slug for download names: "2026-04_to_2026-07" or "all_time". */
-function fileSlug(from: string, to: string): string {
-  return from && to ? `${from}_to_${to}` : 'all_time';
+/** File slug for download names. */
+function fileSlug(from: string, to: string, extra?: string): string {
+  const range = from && to ? `${from}_to_${to}` : 'all_time';
+  return extra ? `${range}_${extra}` : range;
 }
 
 // ── CSV Export ────────────────────────────────────────────────────────────────
@@ -79,7 +106,8 @@ export async function downloadCsvAction(
   associationId: string,
   from: string,
   to: string,
-  tab: string,
+  tab: TabKey,
+  filters: Partial<ReportsFilters> = {},
 ): Promise<ActionResult<{ csv: string; filename: string }>> {
   const client = getSupabaseServerClient();
   const role = await getAssociationRole(associationId);
@@ -90,6 +118,12 @@ export async function downloadCsvAction(
   const fromPeriod = toPeriod(from);
   const toPeriod_ = toPeriod(to);
   const slug = fileSlug(from, to);
+  const {
+    unitIds = [],
+    billTypes = [],
+    outstandingStatus = 'all',
+    paymentMode = '',
+  } = filters;
 
   if (tab === 'collection') {
     const rpcParams: Record<string, unknown> = {
@@ -97,12 +131,17 @@ export async function downloadCsvAction(
     };
     if (fromPeriod) rpcParams['p_from_period'] = fromPeriod;
     if (toPeriod_) rpcParams['p_to_period'] = toPeriod_;
+    if (unitIds.length > 0) rpcParams['p_unit_ids'] = unitIds;
+    if (billTypes.length > 0) rpcParams['p_bill_types'] = billTypes;
 
     const { data, error } = await (client as any).rpc(
       'get_collection_summary',
       rpcParams,
     );
     if (error) return { success: false, error: (error as any).message };
+
+    const rows: any[] = data ?? [];
+
     const csv = toCSV(
       [
         'Period',
@@ -112,9 +151,9 @@ export async function downloadCsvAction(
         'Collected (₹)',
         'Outstanding (₹)',
       ],
-      ((data as any[]) ?? []).map((r: any) => [
+      rows.map((r: any) => [
         r.period,
-        BILL_TYPE_LABELS[r.bill_type] ?? r.bill_type,
+        billTypeLabel(r.bill_type),
         r.bill_count,
         r.billed,
         r.collected,
@@ -128,15 +167,33 @@ export async function downloadCsvAction(
     let q = client
       .from('bills')
       .select(
-        'period, bill_no, bill_type, total_amount, paid_amount, status, due_date, units(unit_no)',
+        'period, bill_no, bill_type, total_amount, paid_amount, advance_applied, status, due_date, unit_id, units(unit_no)',
       )
       .eq('association_id', associationId)
       .neq('status', 'Paid')
+      .neq('status', 'Reversed')
       .order('due_date');
+
     if (fromPeriod) q = (q as any).gte('period', fromPeriod);
     if (toPeriod_) q = (q as any).lte('period', toPeriod_);
+    if (unitIds.length > 0) q = (q as any).in('unit_id', unitIds);
+    if (billTypes.length > 0) q = (q as any).in('bill_type', billTypes);
+
     const { data, error } = await q;
     if (error) return { success: false, error: error.message };
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let rows = data ?? [];
+    if (outstandingStatus === 'overdue') {
+      rows = rows.filter((b: any) => new Date(b.due_date) < today);
+    } else if (outstandingStatus === 'partial') {
+      rows = rows.filter((b: any) => settledAmount(b) > 0);
+    } else if (outstandingStatus === 'unpaid') {
+      rows = rows.filter((b: any) => settledAmount(b) === 0);
+    }
+
     const csv = toCSV(
       [
         'Unit',
@@ -145,20 +202,22 @@ export async function downloadCsvAction(
         'Period',
         'Billed (₹)',
         'Paid (₹)',
+        'Advance Applied (₹)',
         'Outstanding (₹)',
         'Status',
         'Due Date',
       ],
-      (data ?? []).map((b) => {
+      rows.map((b: any) => {
         const unit = b.units as { unit_no: string } | null;
         return [
           unit?.unit_no ?? '—',
           b.bill_no,
-          BILL_TYPE_LABELS[b.bill_type ?? ''] ?? b.bill_type,
+          billTypeLabel(b.bill_type),
           b.period,
           b.total_amount,
           b.paid_amount,
-          Number(b.total_amount) - Number(b.paid_amount),
+          Number(b.advance_applied ?? 0),
+          outstandingAmount(b),
           b.status,
           b.due_date,
         ];
@@ -168,19 +227,83 @@ export async function downloadCsvAction(
   }
 
   if (tab === 'payments') {
-    let q = (client as any)
+    const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+    // Razorpay payments
+    let rpQ = (client as any)
       .from('payments')
       .select(
-        'amount, mode, reference_no, paid_at, bills(bill_no, bill_type, units(unit_no)), receipts(receipt_no)',
+        'amount, mode, reference_no, paid_at, bills(bill_no, bill_type, unit_id, units(unit_no)), receipts(receipt_no)',
+      )
+      .eq('association_id', associationId)
+      .order('paid_at', { ascending: false });
+    if (from && ISO_DATE.test(from)) rpQ = rpQ.gte('paid_at', from);
+    if (to && ISO_DATE.test(to)) rpQ = rpQ.lte('paid_at', `${to}T23:59:59.999`);
+    if (unitIds.length > 0)
+      rpQ = rpQ.filter('bills.unit_id', 'in', `(${unitIds.join(',')})`);
+    if (paymentMode) rpQ = rpQ.eq('mode', paymentMode);
+
+    // Cash ledger payments (manual entries)
+    let clQ = client
+      .from('cash_ledger_payments')
+      .select(
+        'amount, mode, reference_no, paid_at, unit_id, bill_type, receipt_no, units(unit_no)',
       )
       .eq('association_id', associationId)
       .eq('status', 'active')
       .order('paid_at', { ascending: false });
-    const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-    if (from && ISO_DATE.test(from)) q = q.gte('paid_at', from);
-    if (to && ISO_DATE.test(to)) q = q.lte('paid_at', `${to}T23:59:59.999`);
-    const { data, error } = await q;
-    if (error) return { success: false, error: (error as any).message };
+    if (from && ISO_DATE.test(from)) clQ = (clQ as any).gte('paid_at', from);
+    if (to && ISO_DATE.test(to))
+      clQ = (clQ as any).lte('paid_at', `${to}T23:59:59.999`);
+    if (unitIds.length > 0) clQ = (clQ as any).in('unit_id', unitIds);
+    if (billTypes.length > 0) clQ = (clQ as any).in('bill_type', billTypes);
+    if (paymentMode) clQ = (clQ as any).eq('mode', paymentMode);
+
+    const [rpRes, clRes] = await Promise.all([rpQ, clQ]);
+    if (rpRes.error)
+      return { success: false, error: (rpRes.error as any).message };
+    if (clRes.error) return { success: false, error: clRes.error.message };
+
+    const rpRows = ((rpRes.data as any[]) ?? []).map((p: any) => {
+      const bill = p.bills as {
+        bill_no: string;
+        bill_type: string;
+        units: { unit_no: string } | null;
+      } | null;
+      const receipt = Array.isArray(p.receipts) ? p.receipts[0] : p.receipts;
+      return [
+        p.paid_at?.slice(0, 10) ?? '',
+        bill?.units?.unit_no ?? '—',
+        bill?.bill_no ?? '—',
+        billTypeLabel(bill?.bill_type),
+        p.amount,
+        p.mode,
+        p.reference_no ?? '',
+        (receipt as { receipt_no: string } | null)?.receipt_no ?? '',
+        'Razorpay',
+      ];
+    });
+
+    const clRows = ((clRes.data as any[]) ?? []).map((p: any) => {
+      const unit = p.units as { unit_no: string } | null;
+      return [
+        p.paid_at?.slice(0, 10) ?? '',
+        unit?.unit_no ?? '—',
+        '—',
+        billTypeLabel(p.bill_type),
+        p.amount,
+        p.mode,
+        p.reference_no ?? '',
+        p.receipt_no ?? '',
+        'Cash Ledger',
+      ];
+    });
+
+    // Merge and sort by date desc
+    const allRows = [...rpRows, ...clRows].sort((a, b) =>
+      String(b[0]).localeCompare(String(a[0])),
+    );
+
     const csv = toCSV(
       [
         'Date',
@@ -191,27 +314,57 @@ export async function downloadCsvAction(
         'Mode',
         'Reference',
         'Receipt No.',
+        'Source',
       ],
-      ((data as any[]) ?? []).map((p: any) => {
-        const bill = p.bills as {
-          bill_no: string;
-          bill_type: string;
-          units: { unit_no: string } | null;
-        } | null;
-        const receipt = Array.isArray(p.receipts) ? p.receipts[0] : p.receipts;
+      allRows,
+    );
+    return { success: true, csv, filename: `payments_${slug}.csv` };
+  }
+
+  if (tab === 'cash_ledger') {
+    let q = client
+      .from('cash_ledger')
+      .select(
+        'entry_date, entry_type, bill_type, direction, amount, notes, paid_by_name, unit_id, units(unit_no)',
+      )
+      .eq('association_id', associationId)
+      .order('entry_date', { ascending: false });
+
+    const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+    if (from && ISO_DATE.test(from)) q = (q as any).gte('entry_date', from);
+    if (to && ISO_DATE.test(to)) q = (q as any).lte('entry_date', to);
+    if (unitIds.length > 0) q = (q as any).in('unit_id', unitIds);
+    if (billTypes.length > 0) q = (q as any).in('bill_type', billTypes);
+
+    const { data, error } = await q;
+    if (error) return { success: false, error: error.message };
+
+    const csv = toCSV(
+      [
+        'Date',
+        'Unit',
+        'Entry Type',
+        'Bill Type',
+        'Direction',
+        'Amount (₹)',
+        'Paid By',
+        'Notes',
+      ],
+      (data ?? []).map((r: any) => {
+        const unit = r.units as { unit_no: string } | null;
         return [
-          p.paid_at?.slice(0, 10) ?? '',
-          bill?.units?.unit_no ?? '—',
-          bill?.bill_no ?? '—',
-          BILL_TYPE_LABELS[bill?.bill_type ?? ''] ?? bill?.bill_type ?? '—',
-          p.amount,
-          p.mode,
-          p.reference_no ?? '',
-          (receipt as { receipt_no: string } | null)?.receipt_no ?? '',
+          r.entry_date,
+          unit?.unit_no ?? '—',
+          r.entry_type,
+          billTypeLabel(r.bill_type),
+          r.direction,
+          r.amount,
+          r.paid_by_name,
+          r.notes ?? '',
         ];
       }),
     );
-    return { success: true, csv, filename: `payments_${slug}.csv` };
+    return { success: true, csv, filename: `cash_ledger_${slug}.csv` };
   }
 
   if (tab === 'electricity') {
@@ -222,8 +375,10 @@ export async function downloadCsvAction(
       .order('period', { ascending: false });
     if (fromPeriod) q = (q as any).gte('period', fromPeriod);
     if (toPeriod_) q = (q as any).lte('period', toPeriod_);
+
     const { data, error } = await q;
     if (error) return { success: false, error: error.message };
+
     const csv = toCSV(
       ['Period', 'Invoice Amount (₹)', 'Block Units (kWh)', 'Rate / kWh (₹)'],
       (data ?? []).map((r) => [
@@ -249,48 +404,55 @@ export async function downloadPdfAction(
   associationId: string,
   from: string,
   to: string,
+  filters: Partial<ReportsFilters> = {},
 ): Promise<ActionResult<{ base64: string; filename: string }>> {
   const { client, association } = await resolveAssociation(associationId);
   if (!association) return { success: false, error: 'Access denied.' };
 
   const fromPeriod = toPeriod(from);
   const toPeriod_ = toPeriod(to);
+  const { unitIds = [], billTypes = [] } = filters;
 
-  // Build collection RPC — omit period params for All Time
   const rpcParams: Record<string, unknown> = {
     p_association_id: associationId,
   };
   if (fromPeriod) rpcParams['p_from_period'] = fromPeriod;
   if (toPeriod_) rpcParams['p_to_period'] = toPeriod_;
+  if (unitIds.length > 0) rpcParams['p_unit_ids'] = unitIds;
+  if (billTypes.length > 0) rpcParams['p_bill_types'] = billTypes;
 
-  // Build outstanding bills query
   let billsQ = client
     .from('bills')
     .select(
-      'bill_no, bill_type, total_amount, paid_amount, status, due_date, period, units(unit_no)',
+      'bill_no, bill_type, total_amount, paid_amount, advance_applied, status, due_date, period, unit_id, units(unit_no)',
     )
     .eq('association_id', associationId)
     .neq('status', 'Paid')
+    .neq('status', 'Reversed')
     .order('due_date')
-    .limit(50);
+    .limit(200);
   if (fromPeriod) billsQ = (billsQ as any).gte('period', fromPeriod);
   if (toPeriod_) billsQ = (billsQ as any).lte('period', toPeriod_);
+  if (unitIds.length > 0) billsQ = (billsQ as any).in('unit_id', unitIds);
+  if (billTypes.length > 0) billsQ = (billsQ as any).in('bill_type', billTypes);
 
-  // Build payments query
-  const ISO_DATE_PDF = /^\d{4}-\d{2}-\d{2}$/;
+  const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
   let paymentsQ = (client as any)
     .from('payments')
-    .select('amount, mode, paid_at, status, bills(bill_no, units(unit_no))')
+    .select('amount, mode, paid_at, bills(bill_no, unit_id, units(unit_no))')
     .eq('association_id', associationId)
-    .eq('status', 'active')
     .order('paid_at', { ascending: false })
-    .limit(50);
-  if (from && ISO_DATE_PDF.test(from))
-    paymentsQ = paymentsQ.gte('paid_at', from);
-  if (to && ISO_DATE_PDF.test(to))
+    .limit(100);
+  if (from && ISO_DATE.test(from)) paymentsQ = paymentsQ.gte('paid_at', from);
+  if (to && ISO_DATE.test(to))
     paymentsQ = paymentsQ.lte('paid_at', `${to}T23:59:59.999`);
+  if (unitIds.length > 0)
+    paymentsQ = paymentsQ.filter(
+      'bills.unit_id',
+      'in',
+      `(${unitIds.join(',')})`,
+    );
 
-  // Build electricity query
   let elecQ = client
     .from('mescom_bills')
     .select('period, invoice_amount, block_consumption_units')
@@ -321,11 +483,11 @@ export async function downloadPdfAction(
   }
 
   const collectionRows: any[] = (collectionRes.data as any[]) ?? [];
+
   const outstandingBills = outstandingRes.data ?? [];
   const paymentRows = paymentsRes.data ?? [];
   const mescomRows = electricityRes.data ?? [];
 
-  // Aggregate collection by period (sum across bill types)
   const byPeriod = new Map<
     string,
     { billed: number; collected: number; bill_count: number }
@@ -388,7 +550,7 @@ export async function downloadPdfAction(
     },
     outstanding: {
       totalOutstanding: outstandingBills.reduce(
-        (s, b) => s + Number(b.total_amount) - Number(b.paid_amount),
+        (s, b) => s + outstandingAmount(b),
         0,
       ),
       overdueCount: outstandingBills.filter((b) => {
@@ -400,7 +562,7 @@ export async function downloadPdfAction(
         bill_no: b.bill_no,
         bill_type: b.bill_type ?? 'maintenance',
         period: b.period,
-        outstanding: Number(b.total_amount) - Number(b.paid_amount),
+        outstanding: outstandingAmount(b),
         due_date: b.due_date,
       })),
     },

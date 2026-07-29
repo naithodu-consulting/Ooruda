@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -860,6 +855,38 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_ledger_sequences: {
+        Row: {
+          association_id: string
+          bill_type: string
+          financial_year: number
+          next_val: number
+          prefix: string
+        }
+        Insert: {
+          association_id: string
+          bill_type: string
+          financial_year: number
+          next_val?: number
+          prefix: string
+        }
+        Update: {
+          association_id?: string
+          bill_type?: string
+          financial_year?: number
+          next_val?: number
+          prefix?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_ledger_sequences_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
             referencedColumns: ["id"]
           },
         ]
@@ -2063,6 +2090,15 @@ export type Database = {
       }
     }
     Functions: {
+      _allocate_ledger_doc_no: {
+        Args: {
+          p_association_id: string
+          p_bill_type: string
+          p_date: string
+          p_prefix: string
+        }
+        Returns: string
+      }
       _apply_advance_internal: {
         Args: {
           p_association_id: string
@@ -2286,8 +2322,10 @@ export type Database = {
       get_collection_summary: {
         Args: {
           p_association_id: string
+          p_bill_types?: string[]
           p_from_period?: string
           p_to_period?: string
+          p_unit_ids?: string[]
         }
         Returns: {
           bill_count: number
@@ -2300,8 +2338,6 @@ export type Database = {
       get_config: { Args: never; Returns: Json }
       get_nonce_status: { Args: { p_id: string }; Returns: Json }
       get_upper_system_role: { Args: never; Returns: string }
-      get_user_id_by_email: { Args: { p_email: string }; Returns: string }
-      get_user_id_by_phone: { Args: { p_phone: string }; Returns: string }
       has_active_subscription: {
         Args: { target_account_id: string }
         Returns: boolean
@@ -2656,6 +2692,101 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      iceberg_namespaces: {
+        Row: {
+          bucket_name: string
+          catalog_id: string
+          created_at: string
+          id: string
+          metadata: Json
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          bucket_name: string
+          catalog_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          bucket_name?: string
+          catalog_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iceberg_namespaces_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "buckets_analytics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      iceberg_tables: {
+        Row: {
+          bucket_name: string
+          catalog_id: string
+          created_at: string
+          id: string
+          location: string
+          name: string
+          namespace_id: string
+          remote_table_id: string | null
+          shard_id: string | null
+          shard_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          bucket_name: string
+          catalog_id: string
+          created_at?: string
+          id?: string
+          location: string
+          name: string
+          namespace_id: string
+          remote_table_id?: string | null
+          shard_id?: string | null
+          shard_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bucket_name?: string
+          catalog_id?: string
+          created_at?: string
+          id?: string
+          location?: string
+          name?: string
+          namespace_id?: string
+          remote_table_id?: string | null
+          shard_id?: string | null
+          shard_key?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iceberg_tables_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "buckets_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "iceberg_tables_namespace_id_fkey"
+            columns: ["namespace_id"]
+            isOneToOne: false
+            referencedRelation: "iceberg_namespaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       migrations: {
         Row: {
@@ -3170,3 +3301,4 @@ export const Constants = {
     },
   },
 } as const
+

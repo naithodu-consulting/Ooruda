@@ -126,6 +126,9 @@ catalogs:
     embla-carousel-react:
       specifier: ^8.6.0
       version: 8.6.0
+    fflate:
+      specifier: ^0.8.3
+      version: 0.8.3
     input-otp:
       specifier: ^1.4.2
       version: 1.4.2
@@ -492,6 +495,9 @@ importers:
       date-fns:
         specifier: 'catalog:'
         version: 4.4.0
+      fflate:
+        specifier: 'catalog:'
+        version: 0.8.3
       lucide-react:
         specifier: 'catalog:'
         version: 1.17.0(react@19.2.7)

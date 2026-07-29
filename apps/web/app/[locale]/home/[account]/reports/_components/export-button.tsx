@@ -17,17 +17,38 @@ import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 
 import { downloadCsvAction, downloadPdfAction } from '../_lib/reports-actions';
+import type { ReportsFilters } from '../_lib/reports-types';
+
+type TabKey =
+  | 'collection'
+  | 'outstanding'
+  | 'payments'
+  | 'cash_ledger'
+  | 'electricity';
 
 interface Props {
   associationId: string;
   from: string;
   to: string;
   activeTab: string;
+  filters: ReportsFilters;
 }
 
-export function ExportButton({ associationId, from, to, activeTab }: Props) {
+export function ExportButton({
+  associationId,
+  from,
+  to,
+  activeTab,
+  filters,
+}: Props) {
   const [isPending, startTransition] = useTransition();
   const [exportType, setExportType] = useState<'csv' | 'pdf' | null>(null);
+
+  const hasFilters =
+    filters.unitIds.length > 0 ||
+    filters.billTypes.length > 0 ||
+    filters.outstandingStatus !== 'all' ||
+    !!filters.paymentMode;
 
   const handleCsv = () => {
     setExportType('csv');
@@ -36,7 +57,8 @@ export function ExportButton({ associationId, from, to, activeTab }: Props) {
         associationId,
         from,
         to,
-        activeTab,
+        activeTab as TabKey,
+        filters,
       );
       setExportType(null);
       if (!result.success) {
@@ -56,7 +78,7 @@ export function ExportButton({ associationId, from, to, activeTab }: Props) {
   const handlePdf = () => {
     setExportType('pdf');
     startTransition(async () => {
-      const result = await downloadPdfAction(associationId, from, to);
+      const result = await downloadPdfAction(associationId, from, to, filters);
       setExportType(null);
       if (!result.success) {
         toast.error(result.error ?? 'Could not generate PDF.');
@@ -90,15 +112,24 @@ export function ExportButton({ associationId, from, to, activeTab }: Props) {
           <Download className="h-3.5 w-3.5" />
         )}
         <span className="hidden sm:inline">
-          {isPending ? loadingLabel : 'Export'}
+          {isPending
+            ? loadingLabel
+            : hasFilters
+              ? 'Export (filtered)'
+              : 'Export'}
         </span>
         <span className="sm:hidden">{isPending ? '…' : 'Export'}</span>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="min-w-[220px]">
+      <DropdownMenuContent align="end" className="min-w-[240px]">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="text-muted-foreground text-xs font-medium">
             Download report
+            {hasFilters && (
+              <span className="text-primary ml-1 font-semibold">
+                · filtered
+              </span>
+            )}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
 
@@ -111,7 +142,8 @@ export function ExportButton({ associationId, from, to, activeTab }: Props) {
             <div className="flex flex-col">
               <span className="font-medium">Export CSV</span>
               <span className="text-muted-foreground text-xs">
-                Current tab data as spreadsheet
+                Current tab ·{' '}
+                {hasFilters ? 'applies active filters' : 'all data'}
               </span>
             </div>
           </DropdownMenuItem>
@@ -125,7 +157,8 @@ export function ExportButton({ associationId, from, to, activeTab }: Props) {
             <div className="flex flex-col">
               <span className="font-medium">Export PDF</span>
               <span className="text-muted-foreground text-xs">
-                Full report across all sections
+                Full summary report ·{' '}
+                {hasFilters ? 'applies unit & type filters' : 'all data'}
               </span>
             </div>
           </DropdownMenuItem>

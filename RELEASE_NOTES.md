@@ -2382,3 +2382,236 @@ _Last updated: 2026-07-28_
 _No new migrations — all changes are code only._
 
 _Last updated: 2026-07-28_
+
+---
+
+## v1.2 — Reports: Full Revamp (Admin-Only, Filters, Cash Ledger Tab, Exports) (2026-07-29)
+
+Complete overhaul of the Reports feature — from a basic chart screen to a production-grade analytics dashboard. Reports are now restricted to association admins only, with contextual filters, per-tab lazy loading, and filter-aware exports.
+
+### Access control
+
+- **Admin-only**: Reports are now restricted to `assoc_admin` and `billing_operator` roles via `requireRole()`. The previous `prop_owner` path (MyDuesCard, own-data view) has been removed entirely. Owners and tenants do not see Reports in the navigation.
+
+### Filter infrastructure
+
+A new per-tab filter bar has been added above tab content:
+
+- **Unit filter** — searchable multi-select dropdown; shows only units belonging to the association (fetched server-side)
+- **Bill type filter** — multi-select across all 6 bill types (maintenance, electricity, sinking fund, other charges, DG usage, water)
+- **Outstanding status** — radio buttons: All / Overdue / Partial / Unpaid (Outstanding tab only)
+- **Payment mode** — single-select: UPI, NEFT, RTGS, Cash, Cheque, Razorpay, NetBanking (Payments tab only)
+- **Active filter chips** — removable badges showing active unit/bill-type selections below the filter bar
+- **Clear all** — one-click reset of all filters
+- **URL sync** — all active filters are serialized to URL search params (`units`, `types`, `status`, `mode`) for bookmarkable, shareable report views
+- **Contextual display** — each tab only shows the filters relevant to it (e.g., Electricity tab shows no filters)
+
+### Per-tab lazy loading
+
+Each tab's data is fetched only when that tab is first activated. A `TabData` cache ensures subsequent tab switches do not re-fetch. Smart invalidation: changing `outstandingStatus` applies client-side (no re-fetch); changing units, bill types, or payment mode re-fetches only the tabs that use those dimensions.
+
+### New: Cash Ledger tab (5th tab)
+
+A new Cash Ledger analytics tab added alongside Collection, Outstanding, Payments, and Electricity:
+
+- **KPI tiles**: Total Credits, Total Debits, Net Movement, Total Entries
+- **Monthly cash flow chart**: AreaChart showing credits (green) vs. debits (amber) by month
+- **Credits by charge type**: Horizontal progress bars breaking down credit inflows by bill type
+- **Full transaction table**: Date, Unit, Entry Type, Bill Type, Paid By, Direction (↑ CR / ↓ DR), Amount, Notes
+
+### Payments tab: unified view
+
+The Payments tab now merges both payment sources:
+- **Online payments** (`payments` table) — Razorpay-initiated
+- **Cash/NEFT/Cheque payments** (`cash_ledger_payments` table) — manually entered
+
+A Source badge column distinguishes "Cash" (manual) from "Online" (Razorpay) entries.
+
+### Export improvements
+
+- **Filter-aware CSV/PDF**: All exports respect the active unit, bill type, status, and mode filters
+- **"Export (filtered)"** label when any filter is active; plain "Export" otherwise
+- **Payments CSV**: Now queries both `payments` and `cash_ledger_payments` (previously cash payments were invisible in exports)
+- **Cash Ledger CSV**: New export for the Cash Ledger tab
+- **Outstanding PDF**: Bill limit raised from 50 to 200; unit and bill type filters applied before generation
+- **dg_usage / water** now appear correctly in all chart labels and exports
+
+### Bug fixes
+
+- **`BILL_TYPE_LABELS` duplication removed**: Both Reports files were maintaining a local copy of bill type labels; all now import `billTypeLabel` from `@kit/pdf-templates`
+- **Outstanding `.neq('status', 'Reversed')`** applied consistently across all outstanding queries
+- **`dg_usage` and `water`** added to `BILL_TYPE_COLORS` for correct chart coloring
+
+### Migrations Changelog
+
+_No new migrations — all changes are code only._
+
+_Last updated: 2026-07-29_
+
+---
+
+## v1.2 — Billing: Unit-Centric Revamp (2026-07-29)
+
+The Billing screen has been rebuilt around the **unit**, not the bill. Previously the Generated Bills table was a flat list that grew as *Units × Periods × Charge Types* — an association with 30 units, 12 months, and 4 charge types produced 1,440 rows to scroll and filter through. Admins think in units ("what does 101 owe?"), so the unit is now the row, and everything else unfolds inside it.
+
+### New: Bills by Unit table
+
+A 3-level progressive-disclosure table. **The row count always equals the unit count** — 30 units means 30 rows, every time, regardless of how many bills exist.
+
+**Level 1 — Unit row** (always visible)
+- Colored status dot: green (all paid) / amber (partial) / red (overdue) / grey (no bills)
+- Columns: Unit no + floor, Owner name, Last billed period + type count, Outstanding, Overdue, Status badge
+- Advance credit shown as a blue badge next to the owner name when the unit is carrying a cash-ledger credit
+- Units with no bills still get a row, with a "No Bills" badge and an explanatory message on expand
+
+**Level 2 — Period row** (e.g. "July 2026")
+- Collection % progress bar (green at 100%, amber below)
+- Outstanding and total billed for that period
+- Bill type count
+
+**Level 3 — Bill type row** (e.g. "Maintenance")
+- Bill number in mono, amount-derived status badge, total, outstanding/paid
+- Days-past-due shown in red for overdue bills
+- Per-bill PDF download button
+
+**Level 4 — Bill detail panel** (inline, no modal)
+- Line item breakdown with sqft/rate, GST badges, and payer
+- GST and advance-applied lines, with a warning when line items and total don't reconcile
+- Full payment history: date, mode, reference no, receipt no, with reversed payments struck through and badged
+
+### Unbilled drafts, per unit
+
+Pending Other Charges and Sinking Fund items now surface as a **"Pending" pseudo-period** pinned above the real billing periods inside each unit — you see what's staged for a unit right where you're looking at that unit, rather than in a separate flat tab.
+
+### Search, filter, and navigation
+
+- **Search** by unit number or owner name (instant, client-side)
+- **Filter pills**: All Units / Outstanding / Overdue / All Paid, each showing a live count
+- **Expand all / Collapse all** for the current page
+- **Pagination** at 25 units per page
+- **Deep linking**: `?unit=101` auto-expands that unit and its newest period; `?filter=overdue` pre-applies a filter. Filter state syncs to the URL via `replaceState` (no navigation, no scroll loss).
+- **Keyboard accessible**: every row is a real button with `aria-expanded`; Enter/Space toggles
+
+### Performance
+
+- The `bill_line_items` join was removed from the initial page payload. The unit → period → type tree is built entirely from data the server already sends, so **expanding and collapsing never hits the network**.
+- Line items and payment history are fetched on demand when a bill row is expanded, then cached for the session — collapsing and re-expanding is instant.
+- Owner names resolve through a single batched `profiles` query.
+- Per-unit advance balances come from one `cash_ledger` aggregate rather than ~180 `get_cash_ledger_balance()` RPC round trips.
+
+### Correctness
+
+- **Void/reversed bills** are excluded from all outstanding, overdue, and collection totals, and rendered struck-through with a Void badge rather than silently dropped
+- Status is **derived from amounts**, not the stored DB status, via the existing `displayBillStatus()` — a bill marked Paid with an outstanding balance reclassifies correctly
+- Collection % guards against divide-by-zero on fully-waived periods
+
+### What was kept
+
+All existing actions are unchanged and still available: Generate Bills, Add Other Charges, Sinking Fund, CSV/PDF bulk export, and the super-admin Delete All Bills danger zone. The previous Bills section remains below the new table (collapsed by default) so no existing workflow is lost.
+
+### Migrations Changelog
+
+_No new migrations — all changes are code only._
+
+_Last updated: 2026-07-29_
+
+---
+
+## v1.2 — Billing: Unit Table Enhancements & Bulk PDF Export (2026-07-29)
+
+### Bulk PDF export (ZIP)
+
+Admins can now select one or more units in the billing table and download all their bills as a ZIP archive of individual PDFs.
+
+- **Checkbox column** added to the unit table — each unit row has a checkbox; the column header has a "select all on page" checkbox with indeterminate state.
+- **Export PDFs (N) button** appears in the toolbar when any units are selected; shows a spinner while the export is in progress.
+- New API route `POST /api/billing/bills/export/zip` accepts `{ unitIds, accountSlug }`, verifies the caller has `assoc_admin` or `billing_operator` role, fetches all non-Void bills for the selected units scoped to the association, generates PDFs in parallel batches of 5 (reusing the existing `getOrGenerateBillPdf` cache), and streams back a ZIP with folder structure: `unit-{unit_no}/{period}-{bill_type}-{bill_no}.pdf`.
+- Uses `fflate` (new dependency) for ZIP creation.
+
+### UI clean-up
+
+- **Removed floor numbers** — the `Fl. X` sub-label is no longer shown on unit rows; it was redundant and added noise.
+- **Fixed duplicate status badge** — in bill type rows the status badge had been duplicated (inline in the label column AND in the Status column). The inline duplicate is removed; the badge stays only in the aligned Status column.
+- **Removed "Collection by Period" section** — the collapsible period summary table that sat above the unit table has been fully removed. The four KPI tiles remain the primary summary surface.
+
+### Migrations Changelog
+
+_No new migrations — all changes are code only._
+
+_Last updated: 2026-07-29_
+
+---
+
+## v1.2 — Reports: Filter Correctness Fixes (2026-07-29)
+
+### Filters now actually apply to the Collection tab
+
+Selecting a unit (or bill type) on the Reports screen changed the filter chips and the URL, but the Collection tab kept showing **association-wide totals**. Filtering to a single unit still reported every bill in the association.
+
+The cause was the `get_collection_summary` database function: it only accepted an association id and a period range, with no way to narrow by unit or bill type. The client passed the filters to the surrounding queries but the aggregate itself ignored them, so billed / collected / bill count / collection rate were computed across the whole association regardless of what was selected.
+
+- `get_collection_summary` now accepts `p_unit_ids uuid[]` and `p_bill_types text[]`; both default to `null`, meaning "no restriction", so existing callers are unaffected.
+- The Reports screen, the Collection CSV export, and the management PDF export all pass the active filters through to the function.
+- The client-side bill-type filter that ran over the returned rows was removed. It could hide rows but could not correct the amounts inside them, so it gave the impression of filtering while the numbers stayed wrong.
+
+**Example** — unit 111 in Sandbox Residency Test previously reported ₹29,805 billed across 34 bills at a 48% collection rate (the association total). It now correctly reports ₹7,250 billed across 4 bills at 21%, matching the Billing screen for the same unit.
+
+### Header summary no longer reports zero outstanding
+
+The summary line under the page title read its outstanding figure from the Outstanding tab's data. Tabs are fetched lazily, so on first load that data did not exist yet and the header always claimed **₹0.0L outstanding**. It is now derived from the same filtered collection rows that produce the billed figure, so it is correct immediately and always consistent with the billed number beside it.
+
+### Amounts stop collapsing to "₹0.0L"
+
+The header formatted every amount in lakhs. Once filtered to a single unit, real amounts such as ₹5,750 rendered as "₹0.1L", and smaller ones as "₹0.0L" — indistinguishable from no data. Amounts below ₹1 lakh are now shown in full with Indian digit grouping, and the lakh shorthand is used only when the value genuinely reaches that magnitude.
+
+### React warning on load
+
+Applying a filter from the URL triggered `Cannot update a component (Router) while rendering a different component (ReportsClientPage)`, because the URL sync ran `history.replaceState` during render. The sync is now deferred until after the render pass.
+
+### Note on an issue found while verifying
+
+Six bills carry `status = 'Paid'` while `paid_amount` is 0. These were initially suspected of hiding unpaid dues, but on inspection all six are fully settled from the unit's advance credit (`advance_applied` equals `total_amount`), so the stored status is correct and the database is consistent. The actual defect was on the display side — see the advance-credit section in the next release below.
+
+### Migrations Changelog
+
+| Migration | Purpose |
+| --- | --- |
+| `20260729000001_collection_summary_filters.sql` | Adds `p_unit_ids` and `p_bill_types` parameters to `get_collection_summary` so Reports aggregates respect the selected unit and bill-type filters. Drops and recreates the function; read-only and non-destructive. |
+
+_Last updated: 2026-07-29_
+
+---
+
+## v1.2 — Advance Credit Counted as Settlement (2026-07-29)
+
+### Bills paid from advance were still being shown as owed
+
+A bill can be settled two ways: by a payment (`bills.paid_amount`) or from the unit's advance balance (`bills.advance_applied`). Every screen that judged whether a bill was settled looked only at `paid_amount` and ignored `advance_applied` entirely.
+
+The result: a bill cleared in full from a member's advance credit was displayed as **Overdue with the full amount still owed**. `displayBillStatus()` went further — it treated the database's correct `status = 'Paid'` as stale, reclassified the bill to Unpaid, then promoted it to Overdue because the due date had passed.
+
+**Association-wide impact:** ₹9,830 across 6 bills was being demanded from members who had already paid it. Reported collection was understated at 36% when the true figure is 40%.
+
+**Example** — unit 111 has two Other Charges bills (₹5,000 and ₹500) settled entirely from advance. The app reported ₹5,750 outstanding at a 21% collection rate. The unit actually owes **₹250** — a single Sinking Fund bill — at a **97%** collection rate.
+
+The database was never wrong. All 190 bills were verified consistent: no bill is marked Paid while genuinely short, and no fully-settled bill is left unmarked. This was purely a reporting defect.
+
+### What changed
+
+- `lib/bill-status.ts` gains `billSettledAmount()` (payments + advance) and `billOutstanding()` (never negative). `displayBillStatus()` now judges against the settled amount, so an advance-cleared bill reads as Paid.
+- The Billing screen's per-bill outstanding, and its per-period and per-unit `collected` totals, now count advance credit.
+- The Reports Outstanding tab, its Partial/Unpaid filters, the outstanding CSV export, and the management PDF export all account for advance. The CSV gains an **Advance Applied (₹)** column so the arithmetic is auditable.
+- `get_collection_summary` counts `paid_amount + advance_applied` as collected, capped at the bill total so an over-application can never report collection above the amount billed.
+
+### Two related defects fixed
+
+- **The Units screen never flagged an overdue unit.** Its query selected `unit_id, status, due_date` but no amount columns. With `total_amount` absent, the old sentinel default made every row compare as fully settled and return "Paid", so the overdue set was always empty. The query now selects the amount columns.
+- **`displayBillStatus()` no longer guesses from missing data.** A missing `total_amount` previously defaulted to a sentinel that made any row look settled. It now derives from amounts only when they were actually selected, and otherwise falls back to the stored status.
+
+### Migrations Changelog
+
+| Migration | Purpose |
+| --- | --- |
+| `20260729000002_collection_summary_advance.sql` | `get_collection_summary` counts advance credit as collected, capped at the bill total. Drops and recreates the function; read-only and non-destructive. |
+
+_Last updated: 2026-07-29_

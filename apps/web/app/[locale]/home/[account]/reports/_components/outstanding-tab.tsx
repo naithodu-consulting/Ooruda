@@ -32,17 +32,27 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
-import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
+import {
+  billOutstanding,
+  billSettledAmount,
+  billStatusBadgeClassName,
+  displayBillStatus,
+} from '~/lib/bill-status';
 import { formatDateDMY } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
-import { BILL_TYPE_LABELS, type OutstandingBill } from '../_lib/reports-types';
+import {
+  billTypeLabel,
+  type OutstandingBill,
+  type OutstandingStatus,
+} from '../_lib/reports-types';
 import { TOOLTIP_STYLE } from './chart-tooltip-style';
 import { KpiTile } from './kpi-tile';
 
 interface Props {
   bills: OutstandingBill[];
+  statusFilter: OutstandingStatus;
 }
 
 const AGEING_BUCKETS = [
@@ -73,7 +83,7 @@ function daysOverdue(dueDate: string): number {
 
 const PAGE_SIZE = 25;
 
-export function OutstandingTab({ bills }: Props) {
+export function OutstandingTab({ bills, statusFilter }: Props) {
   const [showTable, setShowTable] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -82,17 +92,31 @@ export function OutstandingTab({ bills }: Props) {
   today.setHours(0, 0, 0, 0);
 
   // Compute per-bill outstanding amount and ageing
-  const enriched = useMemo(
+  const enrichedAll = useMemo(
     () =>
       bills.map((b) => ({
         ...b,
-        outstanding: b.total_amount - b.paid_amount,
+        outstanding: billOutstanding(b),
+        settled: billSettledAmount(b),
         bucket: ageingBucket(b.due_date),
         days: daysOverdue(b.due_date),
         statusDisplay: displayBillStatus(b),
       })),
     [bills],
   );
+
+  // Apply status filter client-side (server already filtered by unit/bill_type)
+  const enriched = useMemo(() => {
+    if (statusFilter === 'overdue')
+      return enrichedAll.filter((b) => b.days > 0);
+    // "Partial" / "Unpaid" are about how much has been settled — advance credit
+    // counts as settlement just like a payment does.
+    if (statusFilter === 'partial')
+      return enrichedAll.filter((b) => b.settled > 0);
+    if (statusFilter === 'unpaid')
+      return enrichedAll.filter((b) => b.settled === 0);
+    return enrichedAll;
+  }, [enrichedAll, statusFilter]);
 
   const totalOutstanding = enriched.reduce((s, b) => s + b.outstanding, 0);
   const overdueCount = enriched.filter((b) => b.days > 0).length;
@@ -340,7 +364,7 @@ export function OutstandingTab({ bills }: Props) {
                         {b.bill_no}
                       </TableCell>
                       <TableCell className="text-xs">
-                        {BILL_TYPE_LABELS[b.bill_type] ?? b.bill_type}
+                        {billTypeLabel(b.bill_type)}
                       </TableCell>
                       <TableCell>{formatPeriod(b.period)}</TableCell>
                       <TableCell className="text-right font-semibold tabular-nums">

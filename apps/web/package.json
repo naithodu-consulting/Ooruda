@@ -59,6 +59,7 @@
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-table": "catalog:",
     "date-fns": "catalog:",
+    "fflate": "catalog:",
     "lucide-react": "catalog:",
     "next": "catalog:",
     "next-intl": "catalog:",

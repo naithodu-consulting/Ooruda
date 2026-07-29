@@ -7,12 +7,16 @@ import { useSearchParams } from 'next/navigation';
 import { useSupabase } from '@kit/supabase/hooks/use-supabase';
 
 import {
+  type CashLedgerRow,
   type CollectionRow,
+  DEFAULT_FILTERS,
   type MescomRow,
   type OutstandingBill,
   type PaymentRow,
   type PresetKey,
+  type ReportsFilters,
   type UnitConsumptionRow,
+  type UnitOption,
   dateToPeriod,
   resolvePreset,
 } from '../_lib/reports-types';
@@ -22,14 +26,21 @@ import { ReportsTabs } from './reports-tabs';
 interface Props {
   account: string;
   associationId: string;
+  units: UnitOption[];
 }
 
-interface ReportsData {
-  collectionRows: CollectionRow[];
-  outstandingBills: OutstandingBill[];
-  payments: PaymentRow[];
-  mescomRows: MescomRow[];
-  consumptionByPeriod: Record<string, UnitConsumptionRow[]>;
+interface TabData {
+  collection: {
+    collectionRows: CollectionRow[];
+    payments: PaymentRow[];
+  } | null;
+  outstanding: { outstandingBills: OutstandingBill[] } | null;
+  payments: { payments: PaymentRow[] } | null;
+  cash_ledger: { cashLedgerRows: CashLedgerRow[] } | null;
+  electricity: {
+    mescomRows: MescomRow[];
+    consumptionByPeriod: Record<string, UnitConsumptionRow[]>;
+  } | null;
 }
 
 const DEFAULT_PRESET: PresetKey = 'all_time';
@@ -37,19 +48,44 @@ const DEFAULT_PRESET: PresetKey = 'all_time';
 /** Push URL without triggering a Next.js server round-trip. */
 function syncUrl(params: Record<string, string>, remove?: string[]) {
   if (typeof window === 'undefined') return;
-  const url = new URL(window.location.href);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  for (const k of remove ?? []) url.searchParams.delete(k);
-  window.history.replaceState(null, '', url.toString());
+  // Defer to avoid calling replaceState during a React render cycle
+  // (triggers "Cannot update Router while rendering" warning in Next.js dev).
+  setTimeout(() => {
+    const url = new URL(window.location.href);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    for (const k of remove ?? []) url.searchParams.delete(k);
+    window.history.replaceState(null, '', url.toString());
+  }, 0);
 }
 
-export function ReportsClientPage({ account: _account, associationId }: Props) {
-  // ── Read URL search params once on initial render ─────────────────────────
+/**
+ * Format a rupee amount for the header summary. Only switches to the lakh
+ * shorthand once the value is actually of that magnitude — filtering down to a
+ * single unit otherwise rendered real amounts as a meaningless "₹0.0L".
+ */
+function formatAmount(n: number): string {
+  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
+  return `₹${Math.round(n).toLocaleString('en-IN')}`;
+}
+
+function serializeIds(ids: string[]): string {
+  return ids.join(',');
+}
+function parseIds(s: string | null): string[] {
+  if (!s) return [];
+  return s.split(',').filter(Boolean);
+}
+
+export function ReportsClientPage({
+  account: _account,
+  associationId,
+  units,
+}: Props) {
   const searchParams = useSearchParams();
+
   const initPreset = searchParams.get('preset') ?? DEFAULT_PRESET;
   const initResolved = resolvePreset(initPreset);
 
-  // ── ALL filter/tab state lives here — no router.push, no server round-trips ──
   const [preset, setPreset] = useState(initPreset);
   const [from, setFrom] = useState(
     searchParams.get('from') ?? initResolved.from,
@@ -59,16 +95,51 @@ export function ReportsClientPage({ account: _account, associationId }: Props) {
     searchParams.get('tab') ?? 'collection',
   );
 
-  const [data, setData] = useState<ReportsData | null>(null);
+  // Filter state — all dimensions
+  const [filters, setFilters] = useState<ReportsFilters>({
+    unitIds: parseIds(searchParams.get('units')),
+    billTypes: parseIds(searchParams.get('types')),
+    outstandingStatus:
+      (searchParams.get('status') as ReportsFilters['outstandingStatus']) ??
+      DEFAULT_FILTERS.outstandingStatus,
+    paymentMode: searchParams.get('mode') ?? DEFAULT_FILTERS.paymentMode,
+  });
+
+  // Per-tab data cache — null means "not yet fetched for current filter+date"
+  const [tabData, setTabData] = useState<TabData>({
+    collection: null,
+    outstanding: null,
+    payments: null,
+    cash_ledger: null,
+    electricity: null,
+  });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const supabase = useSupabase();
   const abortRef = useRef<AbortController | null>(null);
 
-  // ── Data fetch — triggered only when from/to change ───────────────────────
-  const fetchData = useCallback(
-    async (fromDate: string, toDate: string) => {
+  // Invalidate all cached tab data when date range or filters change
+  const invalidateAll = useCallback(() => {
+    setTabData({
+      collection: null,
+      outstanding: null,
+      payments: null,
+      cash_ledger: null,
+      electricity: null,
+    });
+  }, []);
+
+  // ── Per-tab fetch ─────────────────────────────────────────────────────────
+
+  const fetchTab = useCallback(
+    async (
+      tab: string,
+      fromDate: string,
+      toDate: string,
+      f: ReportsFilters,
+    ) => {
       abortRef.current?.abort();
       const ctrl = new AbortController();
       abortRef.current = ctrl;
@@ -76,131 +147,277 @@ export function ReportsClientPage({ account: _account, associationId }: Props) {
       setLoading(true);
       setError(null);
 
-      // Empty strings mean "All Time" — skip period/date filters in that case
       const allTime = !fromDate && !toDate;
       const fromPeriod = fromDate ? dateToPeriod(fromDate) : null;
       const toPeriod = toDate ? dateToPeriod(toDate) : null;
       const toEndOfDay = toDate ? `${toDate}T23:59:59.999` : null;
+      const unitFilter = f.unitIds.length > 0 ? f.unitIds : null;
+      const typeFilter = f.billTypes.length > 0 ? f.billTypes : null;
 
       try {
-        // Build queries conditionally — date filters are optional for All Time
-        let billsQuery = supabase
-          .from('bills')
-          .select(
-            'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, units(unit_no)',
-          )
-          .eq('association_id', associationId)
-          .neq('status', 'Paid')
-          .order('due_date');
-        if (!allTime) {
-          billsQuery = (billsQuery as any)
-            .gte('period', fromPeriod)
-            .lte('period', toPeriod);
-        }
+        if (tab === 'collection') {
+          const rpcParams: Record<string, unknown> = {
+            p_association_id: associationId,
+          };
+          if (fromPeriod) rpcParams['p_from_period'] = fromPeriod;
+          if (toPeriod) rpcParams['p_to_period'] = toPeriod;
+          if (unitFilter) rpcParams['p_unit_ids'] = unitFilter;
+          if (typeFilter) rpcParams['p_bill_types'] = typeFilter;
 
-        let paymentsQuery = (supabase as any)
-          .from('payments')
-          .select(
-            'id, amount, mode, reference_no, paid_at, bills(bill_no, bill_type, units(unit_no)), receipts(receipt_no)',
-          )
-          .eq('association_id', associationId)
-          .eq('status', 'active')
-          .order('paid_at', { ascending: false });
-        if (!allTime && fromDate && toEndOfDay) {
-          paymentsQuery = paymentsQuery
-            .gte('paid_at', fromDate)
-            .lte('paid_at', toEndOfDay);
-        }
+          let paymentsQ = (supabase as any)
+            .from('payments')
+            .select(
+              'id, amount, mode, reference_no, paid_at, bills(bill_no, bill_type, unit_id, units(unit_no)), receipts(receipt_no)',
+            )
+            .eq('association_id', associationId)
+            .order('paid_at', { ascending: false });
+          if (!allTime && fromDate && toEndOfDay) {
+            paymentsQ = paymentsQ
+              .gte('paid_at', fromDate)
+              .lte('paid_at', toEndOfDay);
+          }
+          if (unitFilter)
+            paymentsQ = paymentsQ.filter(
+              'bills.unit_id',
+              'in',
+              `(${unitFilter.join(',')})`,
+            );
+          if (typeFilter) {
+            // can't filter payments by bill_type directly — filter client-side after join
+          }
 
-        let mescomQuery = supabase
-          .from('mescom_bills')
-          .select('id, period, invoice_amount, block_consumption_units')
-          .eq('association_id', associationId)
-          .order('period', { ascending: false });
-        if (!allTime) {
-          mescomQuery = (mescomQuery as any)
-            .gte('period', fromPeriod)
-            .lte('period', toPeriod);
-        }
-
-        // Build RPC params: omit period keys entirely when null so Postgres
-        // uses DEFAULT NULL (passing explicit null causes a 400 Bad Request).
-        const rpcParams: Record<string, unknown> = {
-          p_association_id: associationId,
-        };
-        if (fromPeriod) rpcParams['p_from_period'] = fromPeriod;
-        if (toPeriod) rpcParams['p_to_period'] = toPeriod;
-
-        const [collectionRes, outstandingRes, paymentsRes, mescomRes] =
-          await Promise.all([
+          const [collectionRes, paymentsRes] = await Promise.all([
             (supabase as any).rpc('get_collection_summary', rpcParams),
-            billsQuery,
-            paymentsQuery,
-            mescomQuery,
+            paymentsQ,
           ]);
+          if (ctrl.signal.aborted) return;
+          if (collectionRes.error) throw new Error(collectionRes.error.message);
+          if (paymentsRes.error) throw new Error(paymentsRes.error.message);
 
-        if (ctrl.signal.aborted) return;
+          const collectionRows: CollectionRow[] = (
+            (collectionRes.data as any[]) ?? []
+          ).map((r: any) => ({
+            period: r.period,
+            bill_type: r.bill_type ?? 'maintenance',
+            bill_count: Number(r.bill_count),
+            billed: Number(r.billed),
+            collected: Number(r.collected),
+          }));
 
-        // Surface any query-level errors rather than silently showing empty data
-        const queryError =
-          collectionRes.error ??
-          outstandingRes.error ??
-          paymentsRes.error ??
-          mescomRes.error;
-        if (queryError)
-          throw new Error((queryError as any).message ?? String(queryError));
+          const payments: PaymentRow[] = ((paymentsRes.data as any[]) ?? [])
+            .map((p: any) => {
+              const bill = p.bills as {
+                bill_no: string;
+                bill_type: string;
+                units: { unit_no: string } | null;
+              } | null;
+              const receipt = Array.isArray(p.receipts)
+                ? p.receipts[0]
+                : p.receipts;
+              return {
+                id: p.id,
+                paid_at: p.paid_at,
+                unit_no: bill?.units?.unit_no ?? '—',
+                bill_no: bill?.bill_no ?? '—',
+                bill_type: bill?.bill_type ?? 'maintenance',
+                amount: Number(p.amount),
+                mode: p.mode,
+                reference_no: p.reference_no ?? null,
+                receipt_no:
+                  (receipt as { receipt_no: string } | null)?.receipt_no ??
+                  null,
+                source: 'razorpay' as const,
+              };
+            })
+            .filter(
+              (p) => !typeFilter || typeFilter.includes(p.bill_type as string),
+            );
 
-        const collectionRows: CollectionRow[] = (
-          (collectionRes.data as any[]) ?? []
-        ).map((r: any) => ({
-          period: r.period,
-          bill_type: r.bill_type ?? 'maintenance',
-          bill_count: Number(r.bill_count),
-          billed: Number(r.billed),
-          collected: Number(r.collected),
-        }));
+          setTabData((prev) => ({
+            ...prev,
+            collection: { collectionRows, payments },
+          }));
+        } else if (tab === 'outstanding') {
+          let q = supabase
+            .from('bills')
+            .select(
+              'id, period, bill_no, bill_type, total_amount, paid_amount, advance_applied, status, due_date, unit_id, units(unit_no)',
+            )
+            .eq('association_id', associationId)
+            .neq('status', 'Paid')
+            .neq('status', 'Reversed')
+            .order('due_date');
+          if (!allTime) {
+            if (fromPeriod) q = (q as any).gte('period', fromPeriod);
+            if (toPeriod) q = (q as any).lte('period', toPeriod);
+          }
+          if (unitFilter) q = (q as any).in('unit_id', unitFilter);
+          if (typeFilter) q = (q as any).in('bill_type', typeFilter);
 
-        const outstandingBills: OutstandingBill[] = (
-          outstandingRes.data ?? []
-        ).map((b: any) => ({
-          id: b.id,
-          period: b.period,
-          bill_no: b.bill_no,
-          bill_type: b.bill_type ?? 'maintenance',
-          unit_no: (b.units as { unit_no: string } | null)?.unit_no ?? '—',
-          total_amount: Number(b.total_amount),
-          paid_amount: Number(b.paid_amount),
-          status: b.status,
-          due_date: b.due_date,
-        }));
+          const { data, error: qErr } = await q;
+          if (ctrl.signal.aborted) return;
+          if (qErr) throw new Error(qErr.message);
 
-        const payments: PaymentRow[] = (paymentsRes.data ?? []).map(
-          (p: any) => {
-            const bill = p.bills as {
-              bill_no: string;
-              bill_type: string;
-              units: { unit_no: string } | null;
-            } | null;
-            const receipt = Array.isArray(p.receipts)
-              ? p.receipts[0]
-              : p.receipts;
-            return {
-              id: p.id,
-              paid_at: p.paid_at,
-              unit_no: bill?.units?.unit_no ?? '—',
-              bill_no: bill?.bill_no ?? '—',
-              bill_type: bill?.bill_type ?? 'maintenance',
-              amount: Number(p.amount),
-              mode: p.mode,
-              reference_no: p.reference_no ?? null,
-              receipt_no:
-                (receipt as { receipt_no: string } | null)?.receipt_no ?? null,
-            };
-          },
-        );
+          const outstandingBills: OutstandingBill[] = (data ?? []).map(
+            (b: any) => ({
+              id: b.id,
+              period: b.period,
+              bill_no: b.bill_no,
+              bill_type: b.bill_type ?? 'maintenance',
+              unit_no: (b.units as { unit_no: string } | null)?.unit_no ?? '—',
+              total_amount: Number(b.total_amount),
+              paid_amount: Number(b.paid_amount),
+              advance_applied: Number(b.advance_applied ?? 0),
+              status: b.status,
+              due_date: b.due_date,
+            }),
+          );
 
-        const mescomRows: MescomRow[] = (mescomRes.data ?? []).map(
-          (m: any) => ({
+          setTabData((prev) => ({
+            ...prev,
+            outstanding: { outstandingBills },
+          }));
+        } else if (tab === 'payments') {
+          // Fetch both Razorpay payments and cash_ledger_payments
+          let rpQ = (supabase as any)
+            .from('payments')
+            .select(
+              'id, amount, mode, reference_no, paid_at, bills(bill_no, bill_type, unit_id, units(unit_no)), receipts(receipt_no)',
+            )
+            .eq('association_id', associationId)
+            .order('paid_at', { ascending: false });
+          if (!allTime && fromDate && toEndOfDay) {
+            rpQ = rpQ.gte('paid_at', fromDate).lte('paid_at', toEndOfDay);
+          }
+          if (unitFilter)
+            rpQ = rpQ.filter(
+              'bills.unit_id',
+              'in',
+              `(${unitFilter.join(',')})`,
+            );
+          if (f.paymentMode) rpQ = rpQ.eq('mode', f.paymentMode);
+
+          let clQ = supabase
+            .from('cash_ledger_payments')
+            .select(
+              'id, amount, mode, reference_no, paid_at, unit_id, bill_type, receipt_no, units(unit_no)',
+            )
+            .eq('association_id', associationId)
+            .eq('status', 'active')
+            .order('paid_at', { ascending: false });
+          if (!allTime && fromDate && toEndOfDay) {
+            clQ = (clQ as any)
+              .gte('paid_at', fromDate)
+              .lte('paid_at', toEndOfDay);
+          }
+          if (unitFilter) clQ = (clQ as any).in('unit_id', unitFilter);
+          if (typeFilter) clQ = (clQ as any).in('bill_type', typeFilter);
+          if (f.paymentMode) clQ = (clQ as any).eq('mode', f.paymentMode);
+
+          const [rpRes, clRes] = await Promise.all([rpQ, clQ]);
+          if (ctrl.signal.aborted) return;
+          if (rpRes.error) throw new Error(rpRes.error.message);
+          if (clRes.error) throw new Error(clRes.error.message);
+
+          const rpRows: PaymentRow[] = ((rpRes.data as any[]) ?? [])
+            .map((p: any) => {
+              const bill = p.bills as {
+                bill_no: string;
+                bill_type: string;
+                units: { unit_no: string } | null;
+              } | null;
+              const receipt = Array.isArray(p.receipts)
+                ? p.receipts[0]
+                : p.receipts;
+              return {
+                id: p.id,
+                paid_at: p.paid_at,
+                unit_no: bill?.units?.unit_no ?? '—',
+                bill_no: bill?.bill_no ?? '—',
+                bill_type: bill?.bill_type ?? 'maintenance',
+                amount: Number(p.amount),
+                mode: p.mode,
+                reference_no: p.reference_no ?? null,
+                receipt_no:
+                  (receipt as { receipt_no: string } | null)?.receipt_no ??
+                  null,
+                source: 'razorpay' as const,
+              };
+            })
+            .filter((p) => !typeFilter || typeFilter.includes(p.bill_type));
+
+          const clRows: PaymentRow[] = ((clRes.data as any[]) ?? []).map(
+            (p: any) => {
+              const unit = p.units as { unit_no: string } | null;
+              return {
+                id: p.id,
+                paid_at: p.paid_at,
+                unit_no: unit?.unit_no ?? '—',
+                bill_no: '—',
+                bill_type: p.bill_type ?? 'maintenance',
+                amount: Number(p.amount),
+                mode: p.mode,
+                reference_no: p.reference_no ?? null,
+                receipt_no: p.receipt_no ?? null,
+                source: 'cash_ledger' as const,
+              };
+            },
+          );
+
+          // Merge and sort by paid_at desc
+          const payments = [...rpRows, ...clRows].sort((a, b) =>
+            b.paid_at.localeCompare(a.paid_at),
+          );
+
+          setTabData((prev) => ({ ...prev, payments: { payments } }));
+        } else if (tab === 'cash_ledger') {
+          let q = supabase
+            .from('cash_ledger')
+            .select(
+              'id, entry_date, entry_type, bill_type, direction, amount, notes, paid_by_name, unit_id, units(unit_no)',
+            )
+            .eq('association_id', associationId)
+            .order('entry_date', { ascending: false });
+          if (!allTime && fromDate) q = (q as any).gte('entry_date', fromDate);
+          if (!allTime && toDate) q = (q as any).lte('entry_date', toDate);
+          if (unitFilter) q = (q as any).in('unit_id', unitFilter);
+          if (typeFilter) q = (q as any).in('bill_type', typeFilter);
+
+          const { data, error: qErr } = await q;
+          if (ctrl.signal.aborted) return;
+          if (qErr) throw new Error(qErr.message);
+
+          const cashLedgerRows: CashLedgerRow[] = (data ?? []).map(
+            (r: any) => ({
+              id: r.id,
+              entry_date: r.entry_date,
+              unit_no: (r.units as { unit_no: string } | null)?.unit_no ?? '—',
+              entry_type: r.entry_type,
+              bill_type: r.bill_type,
+              direction: r.direction,
+              amount: Number(r.amount),
+              notes: r.notes ?? null,
+              paid_by_name: r.paid_by_name,
+            }),
+          );
+
+          setTabData((prev) => ({ ...prev, cash_ledger: { cashLedgerRows } }));
+        } else if (tab === 'electricity') {
+          let q = supabase
+            .from('mescom_bills')
+            .select('id, period, invoice_amount, block_consumption_units')
+            .eq('association_id', associationId)
+            .order('period', { ascending: false });
+          if (!allTime) {
+            if (fromPeriod) q = (q as any).gte('period', fromPeriod);
+            if (toPeriod) q = (q as any).lte('period', toPeriod);
+          }
+
+          const { data, error: qErr } = await q;
+          if (ctrl.signal.aborted) return;
+          if (qErr) throw new Error(qErr.message);
+
+          const mescomRows: MescomRow[] = (data ?? []).map((m: any) => ({
             id: m.id,
             period: m.period,
             invoice_amount: Number(m.invoice_amount),
@@ -209,16 +426,13 @@ export function ReportsClientPage({ account: _account, associationId }: Props) {
               m.block_consumption_units > 0
                 ? Number(m.invoice_amount) / Number(m.block_consumption_units)
                 : null,
-          }),
-        );
+          }));
 
-        setData({
-          collectionRows,
-          outstandingBills,
-          payments,
-          mescomRows,
-          consumptionByPeriod: {},
-        });
+          setTabData((prev) => ({
+            ...prev,
+            electricity: { mescomRows, consumptionByPeriod: {} },
+          }));
+        }
       } catch (err) {
         if (ctrl.signal.aborted) return;
         setError(
@@ -231,51 +445,110 @@ export function ReportsClientPage({ account: _account, associationId }: Props) {
     [supabase, associationId],
   );
 
+  // Fetch current tab whenever it becomes null (after invalidation) or on first load
   useEffect(() => {
-    fetchData(from, to);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from, to]);
-
-  // ── Filter handlers — pure state updates + URL sync, no server round-trip ──
-  const applyPreset = useCallback((key: PresetKey) => {
-    const range = resolvePreset(key);
-    setPreset(key);
-    setFrom(range.from);
-    setTo(range.to);
-    if (key === 'all_time') {
-      syncUrl({ preset: key }, ['from', 'to']);
-    } else {
-      syncUrl({ preset: key, from: range.from, to: range.to });
+    const cached = tabData[activeTab as keyof TabData];
+    if (cached !== null) {
+      setLoading(false);
+      return;
     }
-  }, []);
+    fetchTab(activeTab, from, to, filters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, tabData]);
 
-  const applyCustom = useCallback((customFrom: string, customTo: string) => {
-    setPreset('custom');
-    setFrom(customFrom);
-    setTo(customTo);
-    syncUrl({ preset: 'custom', from: customFrom, to: customTo });
-  }, []);
+  // ── Filter/date handlers ──────────────────────────────────────────────────
+
+  const applyPreset = useCallback(
+    (key: PresetKey) => {
+      const range = resolvePreset(key);
+      setPreset(key);
+      setFrom(range.from);
+      setTo(range.to);
+      invalidateAll();
+      if (key === 'all_time') {
+        syncUrl({ preset: key }, ['from', 'to']);
+      } else {
+        syncUrl({ preset: key, from: range.from, to: range.to });
+      }
+    },
+    [invalidateAll],
+  );
+
+  const applyCustom = useCallback(
+    (customFrom: string, customTo: string) => {
+      setPreset('custom');
+      setFrom(customFrom);
+      setTo(customTo);
+      invalidateAll();
+      syncUrl({ preset: 'custom', from: customFrom, to: customTo });
+    },
+    [invalidateAll],
+  );
 
   const handleTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
     syncUrl({ tab });
   }, []);
 
-  // ── Derived summary for sub-heading ───────────────────────────────────────
-  const totalBilled =
-    data?.collectionRows.reduce((s, r) => s + r.billed, 0) ?? 0;
-  const totalOutstanding =
-    data?.outstandingBills.reduce(
-      (s, b) => s + b.total_amount - b.paid_amount,
-      0,
-    ) ?? 0;
+  const handleFiltersChange = useCallback((patch: Partial<ReportsFilters>) => {
+    setFilters((prev) => {
+      const next = { ...prev, ...patch };
+      // Sync to URL
+      const urlPatch: Record<string, string> = {};
+      const urlRemove: string[] = [];
+      if (next.unitIds.length > 0)
+        urlPatch['units'] = serializeIds(next.unitIds);
+      else urlRemove.push('units');
+      if (next.billTypes.length > 0)
+        urlPatch['types'] = serializeIds(next.billTypes);
+      else urlRemove.push('types');
+      if (next.outstandingStatus !== 'all')
+        urlPatch['status'] = next.outstandingStatus;
+      else urlRemove.push('status');
+      if (next.paymentMode) urlPatch['mode'] = next.paymentMode;
+      else urlRemove.push('mode');
+      syncUrl(urlPatch, urlRemove);
+      return next;
+    });
+    // Invalidate only tabs affected by the changed filter dimensions
+    const changedKeys = Object.keys(patch);
+    setTabData((prev) => {
+      const next = { ...prev };
+      // date-range-independent status filter only affects outstanding client-side — no refetch
+      // unit/billType changes affect: collection, outstanding, payments, cash_ledger
+      if (
+        changedKeys.some((k) =>
+          ['unitIds', 'billTypes', 'paymentMode'].includes(k),
+        )
+      ) {
+        next.collection = null;
+        next.outstanding = null;
+        next.payments = null;
+        next.cash_ledger = null;
+      }
+      return next;
+    });
+  }, []);
+
+  // ── Derived header summary ────────────────────────────────────────────────
+
+  const collectionData = tabData.collection;
+  const collectionRows = collectionData?.collectionRows ?? [];
+  const totalBilled = collectionRows.reduce((s, r) => s + r.billed, 0);
+  // Derive outstanding from the same filtered collection rows rather than the
+  // Outstanding tab — that tab is lazily fetched, so reading it here reported
+  // ₹0 outstanding until the user actually opened it.
+  const totalOutstanding = collectionRows.reduce(
+    (s, r) => s + (r.billed - r.collected),
+    0,
+  );
 
   const periodLabel =
     preset === 'all_time' ? 'all time' : 'the selected period';
   const headerSub = loading
     ? 'Loading…'
-    : data && (data.collectionRows.length > 0 || data.payments.length > 0)
-      ? `₹${(totalBilled / 100000).toFixed(1)}L billed · ₹${(totalOutstanding / 100000).toFixed(1)}L outstanding`
+    : totalBilled > 0
+      ? `${formatAmount(totalBilled)} billed · ${formatAmount(totalOutstanding)} outstanding`
       : `No data for ${periodLabel}`;
 
   if (error) {
@@ -285,13 +558,17 @@ export function ReportsClientPage({ account: _account, associationId }: Props) {
         <p className="text-muted-foreground text-sm">{error}</p>
         <button
           className="text-primary mt-2 text-sm underline"
-          onClick={() => fetchData(from, to)}
+          onClick={() => {
+            invalidateAll();
+          }}
         >
           Try again
         </button>
       </div>
     );
   }
+
+  const currentTabData = tabData[activeTab as keyof TabData];
 
   return (
     <div className="flex flex-col gap-6">
@@ -306,7 +583,7 @@ export function ReportsClientPage({ account: _account, associationId }: Props) {
 
       <p className="text-muted-foreground -mt-3 text-xs">{headerSub}</p>
 
-      {loading ? (
+      {loading || currentTabData === null ? (
         <ReportsSkeleton />
       ) : (
         <ReportsTabs
@@ -315,11 +592,17 @@ export function ReportsClientPage({ account: _account, associationId }: Props) {
           to={to}
           activeTab={activeTab}
           onTabChange={handleTabChange}
-          collectionRows={data?.collectionRows ?? []}
-          outstandingBills={data?.outstandingBills ?? []}
-          payments={data?.payments ?? []}
-          mescomRows={data?.mescomRows ?? []}
-          consumptionByPeriod={data?.consumptionByPeriod ?? {}}
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+          units={units}
+          collectionRows={tabData.collection?.collectionRows ?? []}
+          outstandingBills={tabData.outstanding?.outstandingBills ?? []}
+          payments={
+            tabData.payments?.payments ?? tabData.collection?.payments ?? []
+          }
+          cashLedgerRows={tabData.cash_ledger?.cashLedgerRows ?? []}
+          mescomRows={tabData.electricity?.mescomRows ?? []}
+          consumptionByPeriod={tabData.electricity?.consumptionByPeriod ?? {}}
         />
       )}
     </div>

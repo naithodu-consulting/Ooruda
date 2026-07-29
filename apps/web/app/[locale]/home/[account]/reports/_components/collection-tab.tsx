@@ -30,8 +30,8 @@ import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
 import {
+  billTypeLabel,
   BILL_TYPE_COLORS,
-  BILL_TYPE_LABELS,
   type CollectionRow,
   type PaymentRow,
 } from '../_lib/reports-types';
@@ -46,8 +46,10 @@ interface Props {
 const BILL_TYPES = [
   'maintenance',
   'electricity',
-  'other_charges',
   'sinking_fund',
+  'other_charges',
+  'dg_usage',
+  'water',
 ];
 
 function shortPeriod(p: string) {
@@ -104,7 +106,7 @@ export function CollectionTab({ rows, payments }: Props) {
       byType.set(p.bill_type, (byType.get(p.bill_type) ?? 0) + p.amount);
     }
     return BILL_TYPES.filter((t) => (byType.get(t) ?? 0) > 0).map((t) => ({
-      name: BILL_TYPE_LABELS[t] ?? t,
+      name: billTypeLabel(t),
       value: byType.get(t) ?? 0,
       key: t,
       color: BILL_TYPE_COLORS[t] ?? '#8b5cf6',
@@ -217,6 +219,9 @@ export function CollectionTab({ rows, payments }: Props) {
           <KpiTile
             label="Collected on Raised Bills"
             value={formatINR(raisedTotals.collected)}
+            // Can exceed "Total Received" — a bill settled from the unit's
+            // advance credit counts as collected without cash arriving now.
+            sub="incl. advance applied"
             highlight={
               raisedTotals.billed > 0 &&
               raisedTotals.collected >= raisedTotals.billed
@@ -240,7 +245,7 @@ export function CollectionTab({ rows, payments }: Props) {
               collectionRate === null
                 ? 'No bills raised in period'
                 : activeBillType
-                  ? `Filtered: ${BILL_TYPE_LABELS[activeBillType]}`
+                  ? `Filtered: ${billTypeLabel(activeBillType)}`
                   : 'All bill types'
             }
           />
@@ -280,7 +285,7 @@ export function CollectionTab({ rows, payments }: Props) {
             }
             sub={
               activeBillType
-                ? `Filtered: ${BILL_TYPE_LABELS[activeBillType]}`
+                ? `Filtered: ${billTypeLabel(activeBillType)}`
                 : 'All bill types'
             }
           />
@@ -299,8 +304,8 @@ export function CollectionTab({ rows, payments }: Props) {
             </CardTitle>
             <CardDescription>
               {view === 'received'
-                ? `Cash received each month${activeBillType ? ` · ${BILL_TYPE_LABELS[activeBillType]}` : ''}`
-                : `Billed vs. collected per month${activeBillType ? ` · ${BILL_TYPE_LABELS[activeBillType]}` : ''}`}
+                ? `Cash received each month${activeBillType ? ` · ${billTypeLabel(activeBillType)}` : ''}`
+                : `Billed vs. collected per month${activeBillType ? ` · ${billTypeLabel(activeBillType)}` : ''}`}
             </CardDescription>
           </CardHeader>
           <CardContent>

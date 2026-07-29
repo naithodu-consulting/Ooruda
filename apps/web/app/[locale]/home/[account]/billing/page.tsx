@@ -2,6 +2,7 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
+import { personLabel } from '~/lib/person-label';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
@@ -12,6 +13,12 @@ import {
   type BillRow,
   type PendingElectricityBill,
 } from './_components/bills-section';
+import { UnitBillingTable } from './_components/unit-billing-table';
+import type {
+  UnitBill,
+  UnitDraftItem,
+  UnitSummaryInput,
+} from './_lib/unit-billing-types';
 
 interface Props {
   params: Promise<{ account: string }>;
@@ -20,14 +27,25 @@ interface Props {
     status?: string;
     period?: string;
     bills?: string;
+    unit?: string;
+    filter?: string;
   }>;
 }
 
 export const metadata = { title: 'Billing' };
 
 export default async function BillingPage({ params, searchParams }: Props) {
-  const [{ account }, { duration, status, period, bills: billsParam }] =
-    await Promise.all([params, searchParams]);
+  const [
+    { account },
+    {
+      duration,
+      status,
+      period,
+      bills: billsParam,
+      unit: unitParam,
+      filter: filterParam,
+    },
+  ] = await Promise.all([params, searchParams]);
   const { accountId, role } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
@@ -104,18 +122,21 @@ export default async function BillingPage({ params, searchParams }: Props) {
     pendingChargesResult,
     pendingSinkingChargesResult,
     mescomBillsResult,
+    cashLedgerResult,
   ] = await Promise.all([
     client
       .from('bills')
       .select(
-        'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, gst_amount, units(unit_no), bill_line_items(id, description, payer, gst_applicable, amount, area_sqft, rate_per_sqft)',
+        'id, unit_id, period, bill_no, bill_type, total_amount, paid_amount, advance_applied, status, due_date, gst_amount, pdf_url, units(unit_no), bill_line_items(id, description, payer, gst_applicable, amount, area_sqft, rate_per_sqft)',
       )
       .eq('association_id', association.id)
       .order('period', { ascending: false })
       .order('bill_no'),
     client
       .from('units')
-      .select('id, unit_no')
+      .select(
+        'id, unit_no, floor, owner_id, owner_is_company, owner_company_name',
+      )
       .eq('association_id', association.id)
       .order('unit_no'),
     client
@@ -154,6 +175,13 @@ export default async function BillingPage({ params, searchParams }: Props) {
       )
       .eq('association_id', association.id)
       .order('period', { ascending: false }),
+    // Net cash-ledger position per unit. Fetched as raw entries and summed
+    // here rather than via get_cash_ledger_balance(), which is scoped to a
+    // single unit+bill_type and would mean ~180 round trips for 30 units.
+    client
+      .from('cash_ledger')
+      .select('unit_id, direction, amount')
+      .eq('association_id', association.id),
   ]);
 
   // Only fetch these counts for super admins — they drive the danger-zone
@@ -188,8 +216,39 @@ export default async function BillingPage({ params, searchParams }: Props) {
   const unitRows = (unitsResult.data ?? []) as {
     id: string;
     unit_no: string;
+    floor: number | null;
+    owner_id: string | null;
+    owner_is_company: boolean;
+    owner_company_name: string | null;
   }[];
   const unitNoById = new Map(unitRows.map((u) => [u.id, u.unit_no]));
+
+  // Owner names for the unit-centric table. Individual owners resolve through
+  // `profiles`; company-owned units carry their name on the unit itself.
+  const ownerIds = [
+    ...new Set(
+      unitRows.map((u) => u.owner_id).filter((id): id is string => !!id),
+    ),
+  ];
+
+  let ownerProfiles: Record<
+    string,
+    { full_name: string | null; mobile_number: string | null }
+  > = {};
+
+  if (ownerIds.length > 0) {
+    const { data: profileRows } = await client
+      .from('profiles')
+      .select('id, full_name, mobile_number')
+      .in('id', ownerIds);
+
+    ownerProfiles = Object.fromEntries(
+      (profileRows ?? []).map((p) => [
+        p.id,
+        { full_name: p.full_name, mobile_number: p.mobile_number },
+      ]),
+    );
+  }
 
   const isOtherChargesActive = otherChargesCTResult.data?.is_active ?? false;
   const isSinkingFundActive = sinkingFundCTResult.data?.is_active ?? false;
@@ -269,6 +328,73 @@ export default async function BillingPage({ params, searchParams }: Props) {
     lineItems: b.bill_line_items,
   }));
 
+  // ── Unit-centric view data ─────────────────────────────────────────────────
+  // The table below is keyed on units, not bills: every unit gets a row whether
+  // or not it has been billed, and periods/types unfold inside it.
+
+  // Positive net = the unit is carrying an advance/credit; negative or zero
+  // means nothing to surface, so those are clamped away.
+  const advanceByUnit = new Map<string, number>();
+  for (const entry of cashLedgerResult.data ?? []) {
+    if (!entry.unit_id) continue;
+    const delta =
+      entry.direction === 'credit'
+        ? Number(entry.amount)
+        : -Number(entry.amount);
+    advanceByUnit.set(
+      entry.unit_id,
+      (advanceByUnit.get(entry.unit_id) ?? 0) + delta,
+    );
+  }
+
+  const unitSummaries: UnitSummaryInput[] = unitRows.map((u) => ({
+    id: u.id,
+    unit_no: u.unit_no,
+    floor: u.floor != null ? String(u.floor) : null,
+    owner_name: u.owner_is_company
+      ? (u.owner_company_name ?? null)
+      : u.owner_id
+        ? personLabel(ownerProfiles[u.owner_id])
+        : null,
+    advance_balance: Math.max(0, advanceByUnit.get(u.id) ?? 0),
+  }));
+
+  const unitBills: UnitBill[] = (billsResult.data ?? []).map((b) => ({
+    id: b.id,
+    unit_id: b.unit_id,
+    period: b.period,
+    bill_no: b.bill_no,
+    bill_type: b.bill_type ?? 'maintenance',
+    total_amount: Number(b.total_amount),
+    paid_amount: Number(b.paid_amount),
+    advance_applied: b.advance_applied != null ? Number(b.advance_applied) : 0,
+    gst_amount: b.gst_amount != null ? Number(b.gst_amount) : null,
+    status: b.status,
+    due_date: b.due_date,
+    pdf_url: b.pdf_url ?? null,
+  }));
+
+  const unitDrafts: UnitDraftItem[] = [
+    ...pendingCharges.map((pc) => ({
+      id: pc.id,
+      unit_id: pc.unit_id ?? null,
+      period: pc.period,
+      label: pc.label,
+      amount: Number(pc.amount),
+      due_date: pc.due_date ?? null,
+      kind: 'other_charges' as const,
+    })),
+    ...pendingSinkingCharges.map((pc) => ({
+      id: pc.id,
+      unit_id: pc.unit_id ?? null,
+      period: pc.period,
+      label: pc.label,
+      amount: Number(pc.amount),
+      due_date: pc.due_date ?? null,
+      kind: 'sinking_fund' as const,
+    })),
+  ];
+
   const canManage = role === 'assoc_admin' || role === 'billing_operator';
   const canDelete = role === 'assoc_admin';
 
@@ -284,6 +410,27 @@ export default async function BillingPage({ params, searchParams }: Props) {
 
       <div className="mt-2 space-y-8">
         <BillingOverview bills={billRows} accountSlug={account} />
+
+        <div className="border-t pt-4">
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">Bills by Unit</h2>
+              <p className="text-muted-foreground text-xs">
+                Expand a unit to see its billing periods, charge types, and
+                payment history.
+              </p>
+            </div>
+          </div>
+
+          <UnitBillingTable
+            units={unitSummaries}
+            bills={unitBills}
+            drafts={unitDrafts}
+            initialUnitNo={unitParam}
+            initialFilter={filterParam}
+            accountSlug={account}
+          />
+        </div>
 
         <div className="border-t pt-4">
           <BillsSection

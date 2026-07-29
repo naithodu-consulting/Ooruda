@@ -39,8 +39,8 @@ import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
 import {
+  billTypeLabel,
   BILL_TYPE_COLORS,
-  BILL_TYPE_LABELS,
   type PaymentRow,
 } from '../_lib/reports-types';
 import { TOOLTIP_STYLE } from './chart-tooltip-style';
@@ -150,8 +150,10 @@ export function PaymentsTab({ payments }: Props) {
   const billTypesPresent = [
     'maintenance',
     'electricity',
-    'other_charges',
     'sinking_fund',
+    'other_charges',
+    'dg_usage',
+    'water',
   ].filter((t) => payments.some((p) => p.bill_type === t));
 
   const totalPages = Math.ceil(payments.length / PAGE_SIZE);
@@ -332,12 +334,12 @@ export function PaymentsTab({ payments }: Props) {
                 <Tooltip
                   formatter={(val: any, key: any) => [
                     formatINR(Number(val)),
-                    BILL_TYPE_LABELS[String(key)] ?? String(key),
+                    billTypeLabel(String(key)),
                   ]}
                   {...TOOLTIP_STYLE}
                 />
                 <Legend
-                  formatter={(key) => BILL_TYPE_LABELS[key] ?? key}
+                  formatter={(key) => billTypeLabel(key)}
                   iconType="circle"
                   iconSize={8}
                   wrapperStyle={{ fontSize: 12 }}
@@ -378,6 +380,7 @@ export function PaymentsTab({ payments }: Props) {
                   <TableHead>Type</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Mode</TableHead>
+                  <TableHead>Source</TableHead>
                   <TableHead>Receipt</TableHead>
                 </TableRow>
               </TableHeader>
@@ -392,7 +395,7 @@ export function PaymentsTab({ payments }: Props) {
                       {p.bill_no}
                     </TableCell>
                     <TableCell className="text-xs">
-                      {BILL_TYPE_LABELS[p.bill_type] ?? p.bill_type}
+                      {billTypeLabel(p.bill_type)}
                     </TableCell>
                     <TableCell className="text-right font-semibold tabular-nums">
                       {formatINR(p.amount)}
@@ -400,6 +403,17 @@ export function PaymentsTab({ payments }: Props) {
                     <TableCell>
                       <span className="bg-muted rounded px-1.5 py-0.5 text-[11px]">
                         {p.mode}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                          p.source === 'cash_ledger'
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                            : 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400'
+                        }`}
+                      >
+                        {p.source === 'cash_ledger' ? 'Cash' : 'Online'}
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
