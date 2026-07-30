@@ -16,10 +16,24 @@ export function registerPdfFonts() {
       {
         src: `data:font/ttf;base64,${NOTO_SANS_REGULAR_BASE64}`,
         fontWeight: 'normal',
+        fontStyle: 'normal',
+      },
+      {
+        // No dedicated italic subset bundled — alias regular so react-pdf
+        // resolves fontStyle:'italic' without throwing.
+        src: `data:font/ttf;base64,${NOTO_SANS_REGULAR_BASE64}`,
+        fontWeight: 'normal',
+        fontStyle: 'italic',
       },
       {
         src: `data:font/ttf;base64,${NOTO_SANS_BOLD_BASE64}`,
         fontWeight: 'bold',
+        fontStyle: 'normal',
+      },
+      {
+        src: `data:font/ttf;base64,${NOTO_SANS_BOLD_BASE64}`,
+        fontWeight: 'bold',
+        fontStyle: 'italic',
       },
     ],
   });

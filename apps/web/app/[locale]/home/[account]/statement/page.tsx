@@ -12,7 +12,7 @@ import {
 
 interface Props {
   params: Promise<{ account: string }>;
-  searchParams: Promise<{ fy?: string; type?: string; unit?: string }>;
+  searchParams: Promise<{ fy?: string; type?: string; unit?: string; from?: string; to?: string }>;
 }
 
 export const metadata = { title: 'Statement' };
@@ -23,6 +23,8 @@ export default async function StatementPage({ params, searchParams }: Props) {
     fy: initialFy,
     type: initialType,
     unit: initialUnit,
+    from: initialFrom,
+    to: initialTo,
   } = await searchParams;
   const { accountId, userId } = await requireRole(account, [
     'prop_owner',
@@ -292,6 +294,8 @@ export default async function StatementPage({ params, searchParams }: Props) {
         initialFy={initialFy}
         initialType={initialType}
         initialUnit={initialUnit}
+        initialFrom={initialFrom}
+        initialTo={initialTo}
       />
     </PageBody>
   );

@@ -53,7 +53,7 @@ export function ExportMenu({
     setPdfLoading(true);
     abortRef.current = new AbortController();
 
-    const toastId = toast.loading('Preparing export…');
+    const toastId = toast.loading('Preparing download…');
 
     try {
       const res = await fetch(pdfEndpoint, {
@@ -67,7 +67,7 @@ export function ExportMenu({
         const json = (await res.json().catch(() => null)) as {
           error?: string;
         } | null;
-        throw new Error(json?.error ?? `Export failed (${res.status})`);
+        throw new Error(json?.error ?? `Download failed (${res.status})`);
       }
 
       const blob = await res.blob();
@@ -82,7 +82,7 @@ export function ExportMenu({
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
       toast.dismiss(toastId);
-      toast.error('Export failed — please try again.');
+      toast.error('Download failed — please try again.');
     } finally {
       setPdfLoading(false);
     }
@@ -101,7 +101,7 @@ export function ExportMenu({
       ) : (
         <Download className="size-3.5" />
       )}
-      Export {count > 0 ? `${count} ${noun}` : noun}
+      Download {count > 0 ? `${count} ${noun}` : noun}
     </Button>
   );
 
@@ -109,7 +109,7 @@ export function ExportMenu({
     return (
       <Tooltip>
         <TooltipTrigger render={trigger} />
-        <TooltipContent>Nothing to export</TooltipContent>
+        <TooltipContent>Nothing to download</TooltipContent>
       </Tooltip>
     );
   }

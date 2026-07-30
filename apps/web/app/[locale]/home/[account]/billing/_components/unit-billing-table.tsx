@@ -254,7 +254,7 @@ export function UnitBillingTable({
       });
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        alert(data.error ?? 'Export failed. Please try again.');
+        alert(data.error ?? 'Download failed. Please try again.');
         return;
       }
       const blob = await res.blob();
@@ -269,7 +269,7 @@ export function UnitBillingTable({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      alert('Export failed. Please try again.');
+      alert('Download failed. Please try again.');
     } finally {
       setIsExporting(false);
     }
@@ -365,7 +365,7 @@ export function UnitBillingTable({
             ) : (
               <Download className="h-3 w-3" />
             )}
-            Export PDFs ({selectedUnitIds.size})
+            Download PDFs ({selectedUnitIds.size})
           </Button>
         )}
 

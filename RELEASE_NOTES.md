@@ -2711,3 +2711,32 @@ No new migrations in this phase.
 No new migrations in this phase.
 
 _Last updated: 2026-07-30_
+
+## Statement UX & Terminology (2026-07-30)
+
+### Statement Page — Custom Date Range
+- `statement/_components/statement-table.tsx`: added "Custom range" option to the period selector; selecting it reveals two date inputs (From / To) inline in the filter toolbar
+- Filter, opening balance, and running balance calculations all respect the custom range
+- PDF download and CSV export both pass the custom date bounds; CSV filename reflects the chosen range
+
+### Statement Page — Download Dropdown
+- Replaced the two separate "PDF" and "CSV" buttons with a single "Download ▾" dropdown — cleaner toolbar, same functionality
+
+### Statement Tile Copy — Plain Language
+- "LEDGER BALANCE" → "BALANCE"; "Ledger settled" → "All clear"; "Credit balance" → "In credit"; "Amount owed per ledger" → "You owe"
+- Advance-restriction note rewritten in plain English
+- "TOTAL CREDITS" → "TOTAL PAID IN"; "Advances & payments" → "Payments & advances"
+- "TOTAL DEBITS" → "TOTAL CHARGED"; "Bills raised this period" → "Bills for this period"
+
+### Terminology — Export → Download
+- All user-visible "Export" labels changed to "Download": `ExportMenu` button, bulk bill PDF button in billing table, toast messages, error strings
+- "Export" is reserved for future email-attachment flows
+
+### Bug Fixes (2026-07-30)
+- **PDF download error on Maintenance receipts**: `packages/pdf-templates/src/assets/fonts/register.ts` — added explicit italic font variants (regular-italic, bold-italic) so react-pdf resolves `fontStyle:'italic'` in the cash-ledger receipt template without throwing
+- **Statement PDF ignored custom date range**: `app/api/billing/statement/pdf/route.ts` — now reads `from`/`to` query params; period label and filename reflect the custom window
+- **Statement closing balance wrong in default sort**: `statement-table.tsx` — `closingBalance` now reads the last entry when ascending (was reading first)
+- **Custom date state lost on refresh**: statement page now passes `initialFrom`/`initialTo` from URL search params to `StatementTable`; state is restored correctly on reload
+- **Inverted date range silent zero**: custom range with "from > to" now shows a validation message instead of silently showing 0 rows
+
+_Last updated: 2026-07-30_

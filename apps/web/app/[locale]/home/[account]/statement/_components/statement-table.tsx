@@ -15,6 +15,12 @@ import {
   CardTitle,
 } from '@kit/ui/card';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@kit/ui/dropdown-menu';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -65,6 +71,8 @@ interface Props {
   initialFy?: string;
   initialType?: string;
   initialUnit?: string;
+  initialFrom?: string;
+  initialTo?: string;
 }
 
 function TypeBadge({ entryType }: { entryType: StatementEntry['entry_type'] }) {
@@ -182,6 +190,7 @@ function entryDownloadUrl(entry: StatementEntry): string | null {
 
 const BILL_TYPE_ALL = '__all__';
 const FY_ALL = '__all__';
+const FY_CUSTOM = '__custom__';
 
 function currentFY(): string {
   const now = new Date();
@@ -295,6 +304,8 @@ export function StatementTable({
   initialFy,
   initialType,
   initialUnit,
+  initialFrom,
+  initialTo,
 }: Props) {
   const defaultUnitId = units[0]?.id ?? '';
   const [activeUnitId, setActiveUnitId] = useState<string>(
@@ -304,6 +315,8 @@ export function StatementTable({
     initialType ?? BILL_TYPE_ALL,
   );
   const [fyFilter, setFyFilter] = useState(initialFy ?? currentFY());
+  const [customFrom, setCustomFrom] = useState(initialFrom ?? '');
+  const [customTo, setCustomTo] = useState(initialTo ?? '');
   const [dateSortAsc, setDateSortAsc] = useState(true);
 
   const toggleDateSort = useCallback(() => setDateSortAsc((v) => !v), []);
@@ -322,7 +335,11 @@ export function StatementTable({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `statement-${unit?.unit_no ?? 'unit'}-${fyFilter}.csv`;
+    const suffix =
+      fyFilter === FY_CUSTOM
+        ? `${customFrom || 'start'}-to-${customTo || 'end'}`
+        : fyFilter;
+    a.download = `statement-${unit?.unit_no ?? 'unit'}-${suffix}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -334,7 +351,21 @@ export function StatementTable({
   function handleFyChange(fy: string | null) {
     if (!fy) return;
     setFyFilter(fy);
-    syncUrl({ fy: fy === currentFY() ? null : fy });
+    if (fy === FY_CUSTOM) {
+      syncUrl({ fy: FY_CUSTOM, from: null, to: null });
+    } else {
+      syncUrl({ fy: fy === currentFY() ? null : fy, from: null, to: null });
+    }
+  }
+
+  function handleCustomFrom(v: string) {
+    setCustomFrom(v);
+    syncUrl({ from: v || null });
+  }
+
+  function handleCustomTo(v: string) {
+    setCustomTo(v);
+    syncUrl({ to: v || null });
   }
   function handleTypeChange(type: string | null) {
     if (!type) return;
@@ -401,18 +432,32 @@ export function StatementTable({
     });
   }, [fiscalYears, entries, activeUnitId]);
 
+  const activeRange = useMemo(() => {
+    if (fyFilter === FY_CUSTOM) {
+      if (!customFrom && !customTo) return null;
+      const from = customFrom || '0000-01-01';
+      const to = customTo || '9999-12-31';
+      // Inverted range — no results, return a sentinel that matches nothing
+      if (customFrom && customTo && customFrom > customTo)
+        return { from: customTo, to: customFrom, inverted: true as const };
+      return { from, to };
+    }
+    return fyFilter !== FY_ALL ? fyRange(fyFilter) : null;
+  }, [fyFilter, customFrom, customTo]);
+
   const filtered = useMemo(() => {
-    const range = fyFilter !== FY_ALL ? fyRange(fyFilter) : null;
+    if (activeRange && 'inverted' in activeRange) return [];
     return entries.filter((e) => {
       if (e.unit_id !== activeUnitId) return false;
       if (billTypeFilter !== BILL_TYPE_ALL && e.bill_type !== billTypeFilter)
         return false;
-      if (range) {
-        if (e.entry_date < range.from || e.entry_date > range.to) return false;
+      if (activeRange) {
+        if (e.entry_date < activeRange.from || e.entry_date > activeRange.to)
+          return false;
       }
       return true;
     });
-  }, [entries, activeUnitId, billTypeFilter, fyFilter]);
+  }, [entries, activeUnitId, billTypeFilter, activeRange]);
 
   // Determine if displayed rows span more than one calendar year so the date
   // column can include the year to avoid ambiguity (e.g. "Jul 2025" vs "Jul 2026").
@@ -423,7 +468,7 @@ export function StatementTable({
     return years.size > 1;
   }, [filtered]);
 
-  const showYear = fyFilter === FY_ALL || spansMultipleYears;
+  const showYear = fyFilter === FY_ALL || fyFilter === FY_CUSTOM || spansMultipleYears;
 
   // Effective credit delta for an entry — used by opening balance and running balance.
   // Full reversals (payment_status='reversed') contribute 0: the bill debit already
@@ -439,18 +484,17 @@ export function StatementTable({
 
   // Opening balance: sum of all entries for this unit BEFORE the filtered range.
   const openingBalance = useMemo(() => {
-    const range = fyFilter !== FY_ALL ? fyRange(fyFilter) : null;
-    if (!range) return null;
+    if (!activeRange || 'inverted' in activeRange) return null;
     return entries
       .filter(
         (e) =>
           e.unit_id === activeUnitId &&
           (billTypeFilter === BILL_TYPE_ALL ||
             e.bill_type === billTypeFilter) &&
-          e.entry_date < range.from,
+          e.entry_date < activeRange.from,
       )
       .reduce((sum, e) => sum + effectiveDelta(e), 0);
-  }, [entries, activeUnitId, billTypeFilter, fyFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [entries, activeUnitId, billTypeFilter, activeRange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recompute running balance on filtered slice (entries arrive newest-first from
   // the server). Running balance is always computed oldest→newest, then the
@@ -465,7 +509,10 @@ export function StatementTable({
     return dateSortAsc ? withBal : withBal.reverse();
   }, [filtered, openingBalance, dateSortAsc]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const closingBalance = rows[0]?.runningBalance ?? openingBalance ?? 0;
+  const closingBalance =
+    (dateSortAsc ? rows[rows.length - 1] : rows[0])?.runningBalance ??
+    openingBalance ??
+    0;
 
   const totalCredits = rows.reduce(
     (s, e) =>
@@ -497,7 +544,7 @@ export function StatementTable({
 
   const creditsSubLabel =
     hasAdvances && hasPayments
-      ? 'Advances & payments'
+      ? 'Payments & advances'
       : hasAdvances
         ? 'Advance deposits'
         : 'Payments received';
@@ -517,12 +564,23 @@ export function StatementTable({
 
   const closingBalanceSub =
     closingBalance === 0
-      ? 'Ledger settled'
+      ? 'All clear'
       : closingBalance > 0
-        ? 'Credit balance'
-        : 'Amount owed per ledger';
+        ? 'In credit'
+        : 'You owe';
 
-  const activePeriodLabel = fyFilter === FY_ALL ? 'All time' : `FY ${fyFilter}`;
+  const activePeriodLabel =
+    fyFilter === FY_ALL
+      ? 'All time'
+      : fyFilter === FY_CUSTOM
+        ? customFrom && customTo
+          ? `${customFrom} to ${customTo}`
+          : customFrom
+            ? `From ${customFrom}`
+            : customTo
+              ? `Until ${customTo}`
+              : 'Custom range'
+        : `FY ${fyFilter}`;
 
   const activeBillTypeLabel =
     billTypeFilter === BILL_TYPE_ALL
@@ -565,7 +623,7 @@ export function StatementTable({
         >
           <CardContent className="px-4 py-5">
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-              Ledger balance
+              Balance
             </p>
             <p
               className={`mt-1.5 text-3xl font-bold tabular-nums ${closingBalanceColor}`}
@@ -577,9 +635,9 @@ export function StatementTable({
             </p>
             {hasAdvances && closingBalance < 0 && (
               <p className="text-muted-foreground mt-2 text-[11px] leading-relaxed">
-                Advance credits are type-restricted — e.g. a Maintenance advance
-                cannot offset Electricity dues. See Payments for your exact
-                payable amount.
+                Your advances are earmarked by type — for example, a Maintenance
+                advance can only be used against Maintenance bills. Go to
+                Payments to see what's actually due.
               </p>
             )}
             <div className="mt-2.5">
@@ -597,7 +655,7 @@ export function StatementTable({
         <Card className="border-border">
           <CardContent className="pt-4">
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-              Total credits
+              Total paid in
             </p>
             <p className="mt-1 text-2xl font-bold text-green-600 tabular-nums dark:text-green-400">
               {formatINR(totalCredits)}
@@ -628,20 +686,20 @@ export function StatementTable({
         <Card className="border-border">
           <CardContent className="pt-4">
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-              Total debits
+              Total charged
             </p>
             <p className="text-destructive mt-1 text-2xl font-bold tabular-nums">
               {formatINR(totalDebits)}
             </p>
             <p className="text-muted-foreground mt-0.5 text-xs">
-              Bills raised this period
+              Bills for this period
             </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Filters + table */}
-      <Card>
+      <Card className="pb-0">
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -651,26 +709,33 @@ export function StatementTable({
                 {rows.length !== 1 ? 's' : ''}
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {rows.length > 0 && (
-                <>
-                  <a
-                    href={`/api/billing/statement/pdf?account=${encodeURIComponent(account)}&unit_id=${encodeURIComponent(activeUnitId)}&fy=${encodeURIComponent(fyFilter)}&type=${encodeURIComponent(billTypeFilter)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="border-border text-muted-foreground hover:text-foreground inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors"
-                  >
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="border-border text-muted-foreground hover:text-foreground inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors">
                     <Download className="h-3.5 w-3.5" />
-                    PDF
-                  </a>
-                  <button
-                    onClick={exportCsv}
-                    className="border-border text-muted-foreground hover:text-foreground inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    CSV
-                  </button>
-                </>
+                    Download
+                    <ChevronDown className="h-3 w-3 opacity-60" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        const fy = fyFilter === FY_CUSTOM ? FY_ALL : fyFilter;
+                        let url = `/api/billing/statement/pdf?account=${encodeURIComponent(account)}&unit_id=${encodeURIComponent(activeUnitId)}&fy=${encodeURIComponent(fy)}&type=${encodeURIComponent(billTypeFilter)}`;
+                        if (fyFilter === FY_CUSTOM && customFrom)
+                          url += `&from=${encodeURIComponent(customFrom)}`;
+                        if (fyFilter === FY_CUSTOM && customTo)
+                          url += `&to=${encodeURIComponent(customTo)}`;
+                        window.open(url, '_blank', 'noreferrer');
+                      }}
+                    >
+                      Download PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={exportCsv}>
+                      Download CSV
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
               <Select value={fyFilter} onValueChange={handleFyChange}>
                 <SelectTrigger className="h-8 w-[130px] text-xs">
@@ -684,8 +749,35 @@ export function StatementTable({
                       {count > 0 && fy !== currentFY() ? ` · ${count}` : ''}
                     </SelectItem>
                   ))}
+                  <SelectItem value={FY_CUSTOM}>Custom range</SelectItem>
                 </SelectContent>
               </Select>
+              {fyFilter === FY_CUSTOM && (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={customFrom}
+                      onChange={(e) => handleCustomFrom(e.target.value)}
+                      className="border-input bg-background h-8 rounded-md border px-2 text-xs"
+                      aria-label="From date"
+                    />
+                    <span className="text-muted-foreground text-xs">to</span>
+                    <input
+                      type="date"
+                      value={customTo}
+                      onChange={(e) => handleCustomTo(e.target.value)}
+                      className="border-input bg-background h-8 rounded-md border px-2 text-xs"
+                      aria-label="To date"
+                    />
+                  </div>
+                  {activeRange && 'inverted' in activeRange && (
+                    <p className="text-destructive text-xs">
+                      "From" date must be before "To" date.
+                    </p>
+                  )}
+                </div>
+              )}
               <Select value={billTypeFilter} onValueChange={handleTypeChange}>
                 <SelectTrigger className="h-8 max-w-[160px] text-xs">
                   <SelectValue className="truncate">

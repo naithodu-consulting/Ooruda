@@ -70,6 +70,8 @@ export const GET = enhanceRouteHandler(
     const reqUnitId = searchParams.get('unit_id') ?? '';
     const reqFy = searchParams.get('fy') ?? currentFY();
     const reqType = searchParams.get('type') ?? '';
+    const reqFrom = searchParams.get('from') ?? '';
+    const reqTo = searchParams.get('to') ?? '';
 
     // Resolve account → association
     const { data: account } = await client
@@ -293,8 +295,13 @@ export const GET = enhanceRouteHandler(
       return 0;
     });
 
-    // Apply FY filter
-    const range = reqFy !== FY_ALL ? fyRange(reqFy) : null;
+    // Apply date range filter — FY range takes precedence; custom from/to used when fy=__all__
+    const fyRangeResult = reqFy !== FY_ALL ? fyRange(reqFy) : null;
+    const range: { from: string; to: string } | null =
+      fyRangeResult ??
+      (reqFrom || reqTo
+        ? { from: reqFrom || '0000-01-01', to: reqTo || '9999-12-31' }
+        : null);
     const filtered = range
       ? raw.filter(
           (e) => e.entry_date >= range.from && e.entry_date <= range.to,
@@ -336,7 +343,16 @@ export const GET = enhanceRouteHandler(
     const totalDebit = entries.reduce((s, e) => s + e.debit, 0);
     const totalCredit = entries.reduce((s, e) => s + e.credit, 0);
 
-    const periodLabel = reqFy === FY_ALL ? 'All time' : `FY ${reqFy}`;
+    const periodLabel =
+      reqFy !== FY_ALL
+        ? `FY ${reqFy}`
+        : reqFrom || reqTo
+          ? reqFrom && reqTo
+            ? `${reqFrom} to ${reqTo}`
+            : reqFrom
+              ? `From ${reqFrom}`
+              : `Until ${reqTo}`
+          : 'All time';
 
     type AssocData = {
       id: string;
@@ -400,7 +416,13 @@ export const GET = enhanceRouteHandler(
       );
     }
 
-    const filename = `statement-${activeUnit.unit_no}-${reqFy}.pdf`;
+    const filenameSuffix =
+      reqFy !== FY_ALL
+        ? reqFy
+        : reqFrom || reqTo
+          ? `${reqFrom || 'start'}-to-${reqTo || 'end'}`
+          : 'all-time';
+    const filename = `statement-${activeUnit.unit_no}-${filenameSuffix}.pdf`;
 
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
