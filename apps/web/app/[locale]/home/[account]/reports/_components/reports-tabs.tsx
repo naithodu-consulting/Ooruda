@@ -1,5 +1,7 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@kit/ui/tabs';
 
 import {
@@ -12,9 +14,6 @@ import {
   type UnitConsumptionRow,
   type UnitOption,
 } from '../_lib/reports-types';
-import { CashLedgerTab } from './cash-ledger-tab';
-import { CollectionTab } from './collection-tab';
-import { ElectricityTab } from './electricity-tab';
 import { ExportButton } from './export-button';
 import {
   ActiveFilterChips,
@@ -23,8 +22,46 @@ import {
   StatusFilter,
   UnitFilter,
 } from './filter-bar';
-import { OutstandingTab } from './outstanding-tab';
-import { PaymentsTab } from './payments-tab';
+
+// Recharts is ~250 KB. Lazy-load each chart tab so it is excluded from the
+// initial bundle and only fetched when the Reports route is visited.
+const CollectionTab = dynamic(
+  () => import('./collection-tab').then((m) => ({ default: m.CollectionTab })),
+  {
+    ssr: false,
+    loading: () => <div className="bg-muted h-64 animate-pulse rounded-lg" />,
+  },
+);
+const OutstandingTab = dynamic(
+  () =>
+    import('./outstanding-tab').then((m) => ({ default: m.OutstandingTab })),
+  {
+    ssr: false,
+    loading: () => <div className="bg-muted h-64 animate-pulse rounded-lg" />,
+  },
+);
+const PaymentsTab = dynamic(
+  () => import('./payments-tab').then((m) => ({ default: m.PaymentsTab })),
+  {
+    ssr: false,
+    loading: () => <div className="bg-muted h-64 animate-pulse rounded-lg" />,
+  },
+);
+const CashLedgerTab = dynamic(
+  () => import('./cash-ledger-tab').then((m) => ({ default: m.CashLedgerTab })),
+  {
+    ssr: false,
+    loading: () => <div className="bg-muted h-64 animate-pulse rounded-lg" />,
+  },
+);
+const ElectricityTab = dynamic(
+  () =>
+    import('./electricity-tab').then((m) => ({ default: m.ElectricityTab })),
+  {
+    ssr: false,
+    loading: () => <div className="bg-muted h-64 animate-pulse rounded-lg" />,
+  },
+);
 
 interface Props {
   associationId: string;

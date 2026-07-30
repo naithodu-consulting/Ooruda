@@ -176,6 +176,7 @@ export const GET = enhanceRouteHandler(
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${receiptNo}.pdf"`,
+        'Cache-Control': 'private, no-store',
       },
     });
   },

@@ -52,6 +52,7 @@ export const GET = enhanceRouteHandler(
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${pdf.filename}"`,
+        'Cache-Control': 'private, max-age=3600',
       },
     });
   },

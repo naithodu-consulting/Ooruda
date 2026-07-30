@@ -36,13 +36,15 @@ export default async function UnitsPage({ params }: Props) {
   ]);
 
   const client = getSupabaseServerClient();
-  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
-  const { data: association } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const [{ data: isSuperAdmin }, { data: association }] = await Promise.all([
+    client.rpc('is_super_admin'),
+    client
+      .from('associations')
+      .select('id')
+      .eq('account_id', accountId)
+      .single(),
+  ]);
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');
@@ -60,13 +62,31 @@ export default async function UnitsPage({ params }: Props) {
   const unitRows = (units ?? []) as UnitRow[];
   const unitIds = unitRows.map((u) => u.id);
 
-  const { data: tenancies } = unitIds.length
-    ? await client
-        .from('tenancies')
-        .select('id, unit_id, tenant_id, start_date')
-        .in('unit_id', unitIds)
-        .eq('status', 'active')
-    : { data: [] };
+  const [{ data: tenancies }, { data: openBills }] = await Promise.all([
+    unitIds.length
+      ? client
+          .from('tenancies')
+          .select('id, unit_id, tenant_id, start_date')
+          .in('unit_id', unitIds)
+          .eq('status', 'active')
+      : Promise.resolve({
+          data: [] as {
+            id: string;
+            unit_id: string;
+            tenant_id: string;
+            start_date: string;
+          }[],
+        }),
+    unitIds.length
+      ? client
+          .from('bills')
+          .select(
+            'unit_id, status, due_date, total_amount, paid_amount, advance_applied',
+          )
+          .in('unit_id', unitIds)
+          .in('status', ['Unpaid', 'Partial', 'Overdue'])
+      : Promise.resolve({ data: null }),
+  ]);
 
   const activeTenancies = tenancies ?? [];
   const tenancyByUnit: Record<string, (typeof activeTenancies)[number]> =
@@ -98,16 +118,6 @@ export default async function UnitsPage({ params }: Props) {
       ]),
     );
   }
-
-  const { data: openBills } = unitIds.length
-    ? await client
-        .from('bills')
-        .select(
-          'unit_id, status, due_date, total_amount, paid_amount, advance_applied',
-        )
-        .in('unit_id', unitIds)
-        .in('status', ['Unpaid', 'Partial', 'Overdue'])
-    : { data: [] };
 
   const overdueUnitIds = new Set(
     (openBills ?? [])

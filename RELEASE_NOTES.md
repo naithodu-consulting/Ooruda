@@ -2666,3 +2666,29 @@ _Last updated: 2026-07-30_
 ### Migrations Changelog
 
 No new migrations in this phase.
+
+## Audit Phase 4 — Performance (2026-07-30)
+
+### Query Parallelisation
+- `billing/page.tsx`: `isSuperAdmin` + `association` queries now run in `Promise.all` (saves 1 serial round-trip per billing page load)
+- `units/page.tsx`: same batch 1 parallel, plus `tenancies` + `openBills` run in a second `Promise.all` after `units` resolves (saves 2 serial round-trips)
+- `electricity/page.tsx`: `sub_meters` + `mescom_bills` now in `Promise.all` after units — `bills` only needs `association.id`, not sub-meter data (saves 1 round-trip)
+- `statement/page.tsx`: `billRows` + `advanceRows` (cash ledger) now in `Promise.all` — both need only `unitIds` (saves 1 round-trip)
+- `statement/pdf/route.ts`: same `billRows` + `advanceRows` parallelisation in the PDF route
+
+### Dynamic Recharts Imports (P-08)
+- `reports-tabs.tsx`: all 5 Recharts-heavy tab components (CollectionTab, OutstandingTab, PaymentsTab, CashLedgerTab, ElectricityTab) converted to `next/dynamic` with `ssr: false` — Recharts (~250 KB) is now excluded from the initial bundle and only fetched when the Reports route is visited; a pulse-skeleton loader shows during hydration
+
+### Loading States (P-09)
+- Added `loading.tsx` (GlobalLoader) for 10 routes missing one: billing, payments, reports, electricity, cash-ledger, statement, units, notifications, audit, members — eliminates blank-white flash during server data fetching on navigation
+
+### PDF Response Headers (P-10)
+- Bills, receipts, advance-applications, and cash-ledger-payments PDF routes now return explicit `Cache-Control` headers:
+  - `bills/[billId]/pdf`, `receipts/[paymentId]/pdf`, `cash-ledger-payments/[id]/pdf`: `private, no-store` (bills can be voided, payments reversed — must not cache stale PDFs)
+  - `advance-applications/[voucherNo]/pdf`: `private, max-age=3600` (advance vouchers are immutable once created)
+
+### Migrations Changelog
+
+No new migrations in this phase.
+
+_Last updated: 2026-07-30_

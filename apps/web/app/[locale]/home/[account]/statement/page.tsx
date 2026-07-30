@@ -86,38 +86,39 @@ export default async function StatementPage({ params, searchParams }: Props) {
   const unitIds = allUnits.map((u) => u.id);
   const unitNoMap = new Map(allUnits.map((u) => [u.id, u.unit_no]));
 
-  // ── 1. Bills with nested payments ──────────────────────────────────────────
+  // ── 1 & 2. Bills + cash ledger fetched in parallel (independent queries) ───
   // Bills → debit entries (due raised). Payments nested inside → credit entries.
   // Voided bills are excluded — they carry no outstanding obligation.
-  const { data: billRows } = await client
-    .from('bills')
-    .select(
-      'id, unit_id, bill_type, bill_no, total_amount, generated_at, bill_line_items(description), payments(id, amount, mode, reference_no, paid_at, status, reversed_at, refunded_amount)',
-    )
-    .in('unit_id', unitIds)
-    .eq('association_id', association.id)
-    .neq('status', 'Void')
-    .order('generated_at', { ascending: true });
-
-  // ── 2. Cash ledger — advances and due payments ──────────────────────────────
-  // Includes: advance_payment (deposits), advance_applied (auto-pay drawdowns),
-  // due_payment (cash payments against cash-ledger dues), and legacy due entries.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: advanceRows } = await (client as any)
-    .from('cash_ledger')
-    .select(
-      'id, unit_id, entry_type, bill_type, amount, direction, entry_date, notes, reference_bill_id',
-    )
-    .in('unit_id', unitIds)
-    .eq('association_id', association.id)
-    .in('entry_type', [
-      'due',
-      'advance_payment',
-      'advance_applied',
-      'due_payment',
-    ])
-    .order('entry_date', { ascending: true })
-    .order('created_at', { ascending: true });
+  const [{ data: billRows }, { data: advanceRows }] = await Promise.all([
+    client
+      .from('bills')
+      .select(
+        'id, unit_id, bill_type, bill_no, total_amount, generated_at, bill_line_items(description), payments(id, amount, mode, reference_no, paid_at, status, reversed_at, refunded_amount)',
+      )
+      .in('unit_id', unitIds)
+      .eq('association_id', association.id)
+      .neq('status', 'Void')
+      .order('generated_at', { ascending: true }),
+    // Cash ledger — advances and due payments (advance_payment deposits,
+    // advance_applied drawdowns, due_payment cash credits, legacy due entries).
+    // cash_ledger is a DB view not in generated types — cast required.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (client as any)
+      .from('cash_ledger')
+      .select(
+        'id, unit_id, entry_type, bill_type, amount, direction, entry_date, notes, reference_bill_id',
+      )
+      .in('unit_id', unitIds)
+      .eq('association_id', association.id)
+      .in('entry_type', [
+        'due',
+        'advance_payment',
+        'advance_applied',
+        'due_payment',
+      ])
+      .order('entry_date', { ascending: true })
+      .order('created_at', { ascending: true }),
+  ]);
 
   // Sum of advance_applied amounts per bill — used to compute the remaining
   // bill debit after advance has been partially or fully applied.

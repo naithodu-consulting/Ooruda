@@ -56,13 +56,14 @@ export default async function BillingPage({ params, searchParams }: Props) {
   // isSuperAdmin gates the "Delete all bills" danger-zone action — a super
   // admin viewing an "opened workspace" resolves `role` to 'assoc_admin'
   // too, so this must be checked independently rather than via `role`.
-  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
-
-  const { data: association } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const [{ data: isSuperAdmin }, { data: association }] = await Promise.all([
+    client.rpc('is_super_admin'),
+    client
+      .from('associations')
+      .select('id')
+      .eq('account_id', accountId)
+      .single(),
+  ]);
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');

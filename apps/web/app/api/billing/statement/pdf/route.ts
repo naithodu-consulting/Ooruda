@@ -141,33 +141,35 @@ export const GET = enhanceRouteHandler(
     const unitIds = [activeUnit.id];
     const unitNoMap = new Map([[activeUnit.id, activeUnit.unit_no]]);
 
-    // Fetch bills + cash ledger (same as statement page)
-    const { data: billRows } = await client
-      .from('bills')
-      .select(
-        'id, unit_id, bill_type, bill_no, total_amount, generated_at, bill_line_items(description), payments(id, amount, mode, reference_no, paid_at, status, reversed_at, refunded_amount)',
-      )
-      .in('unit_id', unitIds)
-      .eq('association_id', association.id)
-      .neq('status', 'Void')
-      .order('generated_at', { ascending: true });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: advanceRows } = await (client as any)
-      .from('cash_ledger')
-      .select(
-        'id, unit_id, entry_type, bill_type, amount, direction, entry_date, notes, reference_bill_id',
-      )
-      .in('unit_id', unitIds)
-      .eq('association_id', association.id)
-      .in('entry_type', [
-        'due',
-        'advance_payment',
-        'advance_applied',
-        'due_payment',
-      ])
-      .order('entry_date', { ascending: true })
-      .order('created_at', { ascending: true });
+    // Fetch bills + cash ledger in parallel (independent queries)
+    const [{ data: billRows }, { data: advanceRows }] = await Promise.all([
+      client
+        .from('bills')
+        .select(
+          'id, unit_id, bill_type, bill_no, total_amount, generated_at, bill_line_items(description), payments(id, amount, mode, reference_no, paid_at, status, reversed_at, refunded_amount)',
+        )
+        .in('unit_id', unitIds)
+        .eq('association_id', association.id)
+        .neq('status', 'Void')
+        .order('generated_at', { ascending: true }),
+      // cash_ledger is a DB view not in generated types — cast required.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (client as any)
+        .from('cash_ledger')
+        .select(
+          'id, unit_id, entry_type, bill_type, amount, direction, entry_date, notes, reference_bill_id',
+        )
+        .in('unit_id', unitIds)
+        .eq('association_id', association.id)
+        .in('entry_type', [
+          'due',
+          'advance_payment',
+          'advance_applied',
+          'due_payment',
+        ])
+        .order('entry_date', { ascending: true })
+        .order('created_at', { ascending: true }),
+    ]);
 
     const advanceAppliedByBillId = new Map<string, number>();
     for (const e of (advanceRows ?? []) as {
