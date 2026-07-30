@@ -2691,4 +2691,23 @@ No new migrations in this phase.
 
 No new migrations in this phase.
 
+## Audit Phase 5 — Polish & Accessibility (2026-07-30)
+
+### Loading & Error Boundary Consolidation
+- Replaced 10 per-route `loading.tsx` files (Phase 4) with a single `[account]/loading.tsx` — Next.js propagates it to all child routes automatically; per-route files are only needed for different loaders
+- Replaced 8 per-route `error.tsx` files with a single `[account]/error.tsx` using `Trans` i18n keys (`common.genericError`, `common.genericErrorSubHeading`, `common.tryAgain`) — the account layout remains visible on error; `billing/error.tsx` is kept as the only route-specific override (custom UI with breadcrumbs and billing-scoped i18n keys)
+
+### Accessibility — Icon Button Labels
+- `units/_components/units-table.tsx`: added `aria-label` to the icon-only delete button — screen readers now announce the specific unit being deleted
+
+### Accessibility — Table Column Headers
+- Added `scope="col"` to `TableHead` elements in primary data tables: units table, payments section, bill-payments dialog, statement table, notifications log, audit log — satisfies WCAG 2.1 SC 1.3.1 for data tables
+
+### Accessibility — Sortable Column
+- `statement/_components/statement-table.tsx`: date sort column header now carries `aria-sort="ascending"` / `aria-sort="descending"` reflecting the current sort direction
+
+### Migrations Changelog
+
+No new migrations in this phase.
+
 _Last updated: 2026-07-30_

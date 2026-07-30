@@ -714,7 +714,11 @@ export function StatementTable({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[72px] min-w-[72px] pl-4 whitespace-nowrap">
+                    <TableHead
+                      scope="col"
+                      aria-sort={dateSortAsc ? 'ascending' : 'descending'}
+                      className="w-[72px] min-w-[72px] pl-4 whitespace-nowrap"
+                    >
                       <button
                         onClick={toggleDateSort}
                         className="hover:text-foreground inline-flex items-center gap-1 transition-colors"
@@ -727,17 +731,29 @@ export function StatementTable({
                         )}
                       </button>
                     </TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="hidden text-right whitespace-nowrap sm:table-cell">
+                    <TableHead scope="col">Description</TableHead>
+                    <TableHead
+                      scope="col"
+                      className="hidden text-right whitespace-nowrap sm:table-cell"
+                    >
                       Debit
                     </TableHead>
-                    <TableHead className="hidden text-right whitespace-nowrap sm:table-cell">
+                    <TableHead
+                      scope="col"
+                      className="hidden text-right whitespace-nowrap sm:table-cell"
+                    >
                       Credit
                     </TableHead>
-                    <TableHead className="table-cell text-right whitespace-nowrap sm:hidden">
+                    <TableHead
+                      scope="col"
+                      className="table-cell text-right whitespace-nowrap sm:hidden"
+                    >
                       Amount
                     </TableHead>
-                    <TableHead className="pr-4 text-right whitespace-nowrap">
+                    <TableHead
+                      scope="col"
+                      className="pr-4 text-right whitespace-nowrap"
+                    >
                       Balance
                     </TableHead>
                   </TableRow>

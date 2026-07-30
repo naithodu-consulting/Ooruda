@@ -72,8 +72,6 @@ export interface TenancyInfo {
 
 const areaFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
-// removed duplicate personLabel
-
 export function UnitsTable({
   units,
   people,
@@ -139,16 +137,20 @@ export function UnitsTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Unit</TableHead>
-              <TableHead>Door No</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Floor</TableHead>
-              <TableHead className="text-right">Area (sq.ft)</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Owner</TableHead>
-              <TableHead>Tenant</TableHead>
+              <TableHead scope="col">Unit</TableHead>
+              <TableHead scope="col">Door No</TableHead>
+              <TableHead scope="col">Type</TableHead>
+              <TableHead scope="col">Floor</TableHead>
+              <TableHead scope="col" className="text-right">
+                Area (sq.ft)
+              </TableHead>
+              <TableHead scope="col">Status</TableHead>
+              <TableHead scope="col">Owner</TableHead>
+              <TableHead scope="col">Tenant</TableHead>
               {canManage ? (
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead scope="col" className="text-right">
+                  Actions
+                </TableHead>
               ) : null}
             </TableRow>
           </TableHeader>
@@ -273,6 +275,7 @@ function DeleteUnitButton({
           variant="ghost"
           className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8"
           data-test="delete-unit-trigger"
+          aria-label={`Delete unit ${unit.unit_no}`}
         >
           <Trash2 className="h-4 w-4" />
         </Button>

@@ -63,12 +63,12 @@ export function NotificationsLogCard(props: { rows: NotificationLogRow[] }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Sent</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Recipient</TableHead>
-                  <TableHead>Channel</TableHead>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead scope="col">Sent</TableHead>
+                  <TableHead scope="col">Type</TableHead>
+                  <TableHead scope="col">Recipient</TableHead>
+                  <TableHead scope="col">Channel</TableHead>
+                  <TableHead scope="col">Provider</TableHead>
+                  <TableHead scope="col">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

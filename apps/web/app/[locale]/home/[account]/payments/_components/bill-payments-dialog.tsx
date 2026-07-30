@@ -81,11 +81,15 @@ export function BillPaymentsDialog(props: {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Mode</TableHead>
-                {!props.hidePayerColumn && <TableHead>Paid by</TableHead>}
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Receipt</TableHead>
+                <TableHead scope="col">Date</TableHead>
+                <TableHead scope="col">Mode</TableHead>
+                {!props.hidePayerColumn && (
+                  <TableHead scope="col">Paid by</TableHead>
+                )}
+                <TableHead scope="col" className="text-right">
+                  Amount
+                </TableHead>
+                <TableHead scope="col">Receipt</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

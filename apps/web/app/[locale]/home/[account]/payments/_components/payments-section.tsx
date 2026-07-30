@@ -467,13 +467,19 @@ export function PaymentsSection(props: {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Period</TableHead>
-                  {!props.hideUnitColumn && <TableHead>Unit</TableHead>}
-                  <TableHead>Type</TableHead>
-                  <TableHead>Bill No.</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Outstanding</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead scope="col">Period</TableHead>
+                  {!props.hideUnitColumn && (
+                    <TableHead scope="col">Unit</TableHead>
+                  )}
+                  <TableHead scope="col">Type</TableHead>
+                  <TableHead scope="col">Bill No.</TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Total
+                  </TableHead>
+                  <TableHead scope="col" className="text-right">
+                    Outstanding
+                  </TableHead>
+                  <TableHead scope="col">Status</TableHead>
                   <TableHead className="w-[1%]" />
                   <TableHead className="w-[1%]" />
                   <TableHead className="w-[1%]" />

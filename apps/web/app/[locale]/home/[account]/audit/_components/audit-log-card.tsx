@@ -194,19 +194,34 @@ export function AuditLogCard(props: {
               <Table>
                 <TableHeader>
                   <TableRow className="border-b">
-                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                    <TableHead
+                      scope="col"
+                      className="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
+                    >
                       Event
                     </TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                    <TableHead
+                      scope="col"
+                      className="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
+                    >
                       User
                     </TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                    <TableHead
+                      scope="col"
+                      className="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
+                    >
                       Role
                     </TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                    <TableHead
+                      scope="col"
+                      className="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
+                    >
                       Details
                     </TableHead>
-                    <TableHead className="text-muted-foreground text-right text-xs font-semibold tracking-wider uppercase">
+                    <TableHead
+                      scope="col"
+                      className="text-muted-foreground text-right text-xs font-semibold tracking-wider uppercase"
+                    >
                       Date
                     </TableHead>
                   </TableRow>
