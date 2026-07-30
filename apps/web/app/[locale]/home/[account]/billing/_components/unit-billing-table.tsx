@@ -380,68 +380,72 @@ export function UnitBillingTable({
         </Button>
       </div>
 
-      {/* ── Column headers ─────────────────────────────────────────────── */}
-      <div className="bg-muted/60 text-muted-foreground grid grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px_90px] items-center gap-2 border-b px-3 py-2 text-[10px] font-bold tracking-wider uppercase sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px_100px] sm:px-4">
-        <div className="flex items-center justify-center">
-          <input
-            ref={selectAllRef}
-            type="checkbox"
-            checked={allOnPageSelected}
-            onChange={handleSelectAll}
-            aria-label="Select all units on this page"
-            className="h-3.5 w-3.5 cursor-pointer rounded"
-          />
+      {/* ── Column headers + rows wrapped for horizontal scroll on mobile ─ */}
+      <div className="overflow-x-auto">
+        {/* ── Column headers ─────────────────────────────────────────────── */}
+        <div className="bg-muted/60 text-muted-foreground grid min-w-[640px] grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px_90px] items-center gap-2 border-b px-3 py-2 text-[10px] font-bold tracking-wider uppercase sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px_100px] sm:px-4">
+          <div className="flex items-center justify-center">
+            <input
+              ref={selectAllRef}
+              type="checkbox"
+              checked={allOnPageSelected}
+              onChange={handleSelectAll}
+              aria-label="Select all units on this page"
+              className="h-3.5 w-3.5 cursor-pointer rounded"
+            />
+          </div>
+          <div />
+          <div>Unit</div>
+          <div>Owner</div>
+          <div>Last Period</div>
+          <div className="text-right">Outstanding</div>
+          <div className="text-right">Overdue Bills</div>
+          <div className="text-right">Status</div>
         </div>
-        <div />
-        <div>Unit</div>
-        <div>Owner</div>
-        <div>Last Period</div>
-        <div className="text-right">Outstanding</div>
-        <div className="text-right">Overdue Bills</div>
-        <div className="text-right">Status</div>
-      </div>
 
-      {/* ── Rows ───────────────────────────────────────────────────────── */}
-      {paged.length === 0 ? (
-        <div className="flex flex-col items-center gap-1 py-14">
-          <p className="text-sm font-semibold">No units match</p>
-          <p className="text-muted-foreground text-xs">
-            {search
-              ? `Nothing found for "${search}".`
-              : 'Try a different filter.'}
-          </p>
-          {(search || filter !== 'all') && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2 h-7 text-xs"
-              onClick={() => {
-                setSearch('');
-                setFilter('all');
-              }}
-            >
-              Clear filters
-            </Button>
-          )}
-        </div>
-      ) : (
-        paged.map((node) => (
-          <UnitRow
-            key={node.unit.id}
-            node={node}
-            expanded={expandedUnits.has(node.unit.id)}
-            expandedPeriods={expandedPeriods}
-            expandedBills={expandedBills}
-            detailCache={detailCache}
-            onToggleUnit={onToggleUnit}
-            onTogglePeriod={onTogglePeriod}
-            onToggleBill={onToggleBill}
-            onDetailLoaded={onDetailLoaded}
-            selected={selectedUnitIds.has(node.unit.id)}
-            onToggleSelect={onToggleSelect}
-          />
-        ))
-      )}
+        {/* ── Rows ───────────────────────────────────────────────────────── */}
+        {paged.length === 0 ? (
+          <div className="flex flex-col items-center gap-1 py-14">
+            <p className="text-sm font-semibold">No units match</p>
+            <p className="text-muted-foreground text-xs">
+              {search
+                ? `Nothing found for "${search}".`
+                : 'Try a different filter.'}
+            </p>
+            {(search || filter !== 'all') && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 h-7 text-xs"
+                onClick={() => {
+                  setSearch('');
+                  setFilter('all');
+                }}
+              >
+                Clear filters
+              </Button>
+            )}
+          </div>
+        ) : (
+          paged.map((node) => (
+            <UnitRow
+              key={node.unit.id}
+              node={node}
+              expanded={expandedUnits.has(node.unit.id)}
+              expandedPeriods={expandedPeriods}
+              expandedBills={expandedBills}
+              detailCache={detailCache}
+              onToggleUnit={onToggleUnit}
+              onTogglePeriod={onTogglePeriod}
+              onToggleBill={onToggleBill}
+              onDetailLoaded={onDetailLoaded}
+              selected={selectedUnitIds.has(node.unit.id)}
+              onToggleSelect={onToggleSelect}
+            />
+          ))
+        )}
+      </div>
+      {/* end overflow-x-auto */}
 
       {/* ── Footer ─────────────────────────────────────────────────────── */}
       {filtered.length > 0 && (

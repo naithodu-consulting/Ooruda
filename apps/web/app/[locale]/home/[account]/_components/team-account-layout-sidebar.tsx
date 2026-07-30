@@ -72,10 +72,10 @@ export function TeamAccountLayoutSidebar(props: {
         <TeamAccountLayoutSidebarNavigation config={config} />
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-[#1F2D3D] bg-[#050B14] px-3 py-3">
+      <SidebarFooter className="border-t border-[var(--sidebar-footer-border)] bg-[var(--sidebar-footer-bg)] px-3 py-3">
         {collapsed ? (
           <div className="flex items-center justify-center">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f59e0b] text-sm font-black text-slate-950">
+            <div className="bg-primary text-primary-foreground flex h-8 w-8 items-center justify-center rounded-full text-sm font-black">
               {initials}
             </div>
           </div>
@@ -83,15 +83,15 @@ export function TeamAccountLayoutSidebar(props: {
           <div className="animate-in fade-in slide-in-from-bottom-2 flex items-center justify-between gap-3 duration-200">
             <div className="flex min-w-0 items-center gap-3">
               {/* Initials Circle */}
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f59e0b] text-sm font-black text-slate-950">
+              <div className="bg-primary text-primary-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black">
                 {initials}
               </div>
               {/* User Info */}
               <div className="flex min-w-0 flex-col">
-                <span className="truncate text-xs leading-snug font-bold text-white">
+                <span className="truncate text-xs leading-snug font-bold text-[var(--sidebar-footer-fg)]">
                   {displayName}
                 </span>
-                <span className="truncate text-[10px] font-semibold text-slate-400">
+                <span className="truncate text-[10px] font-semibold text-[var(--sidebar-footer-fg-muted)]">
                   {roleLabel}
                 </span>
               </div>

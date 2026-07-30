@@ -7,26 +7,6 @@ import { CreditCard, IndianRupee, Loader2 } from 'lucide-react';
 import { Button } from '@kit/ui/button';
 import { toast } from '@kit/ui/sonner';
 
-interface RazorpayResponse {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
-}
-
-type RazorpayConstructor = new (options: {
-  key: string;
-  amount: number;
-  currency: string;
-  order_id: string;
-  name?: string;
-  description?: string;
-  theme?: { color?: string };
-  modal?: { ondismiss?: () => void };
-  handler: (response: RazorpayResponse) => void;
-}) => {
-  open(): void;
-};
-
 export interface BillToPayRow {
   id: string;
   billNo: string;
@@ -162,9 +142,7 @@ export function RazorpayCheckoutButton({
           ? `Payment for bill ${bills[0]!.billNo}`
           : `Payment for ${bills.length} bills`;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const RazorpayConstructor = (window as any)
-        .Razorpay as RazorpayConstructor;
+      const RazorpayConstructor = window.Razorpay;
       const rzp = new RazorpayConstructor({
         key: order.keyId,
         amount: order.amount,

@@ -48,14 +48,10 @@ const DEFAULT_PRESET: PresetKey = 'all_time';
 /** Push URL without triggering a Next.js server round-trip. */
 function syncUrl(params: Record<string, string>, remove?: string[]) {
   if (typeof window === 'undefined') return;
-  // Defer to avoid calling replaceState during a React render cycle
-  // (triggers "Cannot update Router while rendering" warning in Next.js dev).
-  setTimeout(() => {
-    const url = new URL(window.location.href);
-    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-    for (const k of remove ?? []) url.searchParams.delete(k);
-    window.history.replaceState(null, '', url.toString());
-  }, 0);
+  const url = new URL(window.location.href);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  for (const k of remove ?? []) url.searchParams.delete(k);
+  window.history.replaceState(null, '', url.toString());
 }
 
 /**
@@ -490,10 +486,13 @@ export function ReportsClientPage({
     syncUrl({ tab });
   }, []);
 
-  const handleFiltersChange = useCallback((patch: Partial<ReportsFilters>) => {
-    setFilters((prev) => {
-      const next = { ...prev, ...patch };
-      // Sync to URL
+  const handleFiltersChange = useCallback(
+    (patch: Partial<ReportsFilters>) => {
+      const next = { ...filters, ...patch };
+      setFilters(next);
+
+      // Compute URL update from the already-known next state — no side effects
+      // inside the setState updater.
       const urlPatch: Record<string, string> = {};
       const urlRemove: string[] = [];
       if (next.unitIds.length > 0)
@@ -508,27 +507,28 @@ export function ReportsClientPage({
       if (next.paymentMode) urlPatch['mode'] = next.paymentMode;
       else urlRemove.push('mode');
       syncUrl(urlPatch, urlRemove);
-      return next;
-    });
-    // Invalidate only tabs affected by the changed filter dimensions
-    const changedKeys = Object.keys(patch);
-    setTabData((prev) => {
-      const next = { ...prev };
-      // date-range-independent status filter only affects outstanding client-side — no refetch
-      // unit/billType changes affect: collection, outstanding, payments, cash_ledger
-      if (
-        changedKeys.some((k) =>
-          ['unitIds', 'billTypes', 'paymentMode'].includes(k),
-        )
-      ) {
-        next.collection = null;
-        next.outstanding = null;
-        next.payments = null;
-        next.cash_ledger = null;
-      }
-      return next;
-    });
-  }, []);
+
+      // Invalidate only tabs affected by the changed filter dimensions
+      const changedKeys = Object.keys(patch);
+      setTabData((prev) => {
+        const next = { ...prev };
+        // date-range-independent status filter only affects outstanding client-side — no refetch
+        // unit/billType changes affect: collection, outstanding, payments, cash_ledger
+        if (
+          changedKeys.some((k) =>
+            ['unitIds', 'billTypes', 'paymentMode'].includes(k),
+          )
+        ) {
+          next.collection = null;
+          next.outstanding = null;
+          next.payments = null;
+          next.cash_ledger = null;
+        }
+        return next;
+      });
+    },
+    [filters],
+  );
 
   // ── Derived header summary ────────────────────────────────────────────────
 

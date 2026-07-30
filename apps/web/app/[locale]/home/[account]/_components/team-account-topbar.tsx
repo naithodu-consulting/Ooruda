@@ -51,7 +51,7 @@ export function TeamAccountTopbar(props: {
   userId: string;
   role: string | null;
   accounts: AccountModel[];
-  user: any;
+  user: { email?: string | null } | null;
 }) {
   const labelKey = useCurrentNavLabel(props.account);
   const { data: personalAccount } = usePersonalAccountData(props.userId);
@@ -103,7 +103,7 @@ export function TeamAccountTopbar(props: {
             render={
               <button
                 type="button"
-                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-[#f59e0b] text-xs font-black text-slate-950 transition-transform hover:scale-105 focus:ring-2 focus:ring-[#f59e0b]/50 focus:outline-none"
+                className="bg-primary text-primary-foreground focus:ring-primary/50 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-xs font-black transition-transform hover:scale-105 focus:ring-2 focus:outline-none"
                 title={`Account options (${displayName})`}
               >
                 {initials}
@@ -164,15 +164,15 @@ function AssociationSwitcher(props: {
           <Button
             variant="outline"
             size="sm"
-            className="flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="border-border bg-background text-foreground hover:bg-accent flex h-9 items-center gap-2 rounded-xl border px-3 text-xs font-bold shadow-sm"
           >
-            <div className="flex h-5 w-5 items-center justify-center rounded bg-[#f59e0b] text-[9px] font-black text-slate-950">
+            <div className="bg-primary text-primary-foreground flex h-5 w-5 items-center justify-center rounded text-[9px] font-black">
               {initials}
             </div>
             <span className="max-w-[140px] truncate" title={currentLabel}>
               {currentLabel}
             </span>
-            <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+            <ChevronDown className="text-muted-foreground h-3.5 w-3.5" />
           </Button>
         }
       />
@@ -192,12 +192,10 @@ function AssociationSwitcher(props: {
               key={acc.value}
               onClick={() => acc.value && switchToTeam(acc.value)}
               className={`flex cursor-pointer items-center gap-2 text-xs ${
-                acc.value === props.selectedAccount
-                  ? 'bg-slate-100 font-bold dark:bg-slate-800'
-                  : ''
+                acc.value === props.selectedAccount ? 'bg-muted font-bold' : ''
               }`}
             >
-              <div className="flex h-5 w-5 items-center justify-center rounded bg-[#f59e0b] text-[9px] font-black text-slate-950">
+              <div className="bg-primary text-primary-foreground flex h-5 w-5 items-center justify-center rounded text-[9px] font-black">
                 {accInitials}
               </div>
               <span>{accLabel}</span>

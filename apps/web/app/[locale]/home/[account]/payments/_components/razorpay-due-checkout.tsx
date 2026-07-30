@@ -127,12 +127,7 @@ export function RazorpayDueCheckoutButton({
 
       setStep('checkout');
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const RazorpayConstructor = (window as any).Razorpay as new (
-        opts: unknown,
-      ) => { open(): void };
-
-      const rzp = new RazorpayConstructor({
+      const rzp = new window.Razorpay({
         key: order.keyId,
         amount: order.amount,
         currency: 'INR',

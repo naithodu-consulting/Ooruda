@@ -46,7 +46,7 @@ interface Props {
  *  110px  110px  100px  ← sm
  */
 const UNIT_GRID =
-  'grid grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px_90px] items-center gap-2 sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px_100px]';
+  'grid min-w-[640px] grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px_90px] items-center gap-2 sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px_100px]';
 
 export function UnitRow({
   node,
@@ -130,7 +130,7 @@ export function UnitRow({
           {unit.advance_balance > 0 && (
             <Badge
               variant="outline"
-              className="shrink-0 border-blue-300 px-1 py-0 text-[9px] text-blue-600 dark:text-blue-400"
+              className="shrink-0 border-[var(--color-info)]/40 px-1 py-0 text-[9px] text-[var(--color-info)]"
               title="Advance credit available for this unit"
             >
               +{formatINR(unit.advance_balance)}
@@ -157,7 +157,7 @@ export function UnitRow({
           className={cn(
             'text-right text-sm font-semibold tabular-nums',
             node.outstanding > 0
-              ? 'text-amber-600 dark:text-amber-400'
+              ? 'text-[var(--color-warning)]'
               : 'text-muted-foreground',
           )}
         >
@@ -167,7 +167,7 @@ export function UnitRow({
         {/* Col 6 — overdue bill COUNT, never an amount, so it can't duplicate col 5 */}
         <div className="flex justify-end">
           {node.overdueCount > 0 ? (
-            <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-red-600 tabular-nums dark:text-red-400">
+            <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-[var(--color-danger)] tabular-nums">
               {node.overdueCount}
               <span className="font-normal opacity-70">
                 {node.overdueCount === 1 ? ' bill' : ' bills'}
@@ -237,7 +237,7 @@ export function UnitRow({
 
 // 7 cols — empty spacer at col 4 lines up the last-3 with UNIT_GRID's last-3.
 const PERIOD_GRID =
-  'grid grid-cols-[20px_minmax(90px,1fr)_minmax(0,0.9fr)_60px_100px_100px_90px] items-center gap-2 sm:grid-cols-[20px_minmax(90px,1fr)_minmax(0,0.9fr)_80px_110px_110px_100px]';
+  'grid min-w-[640px] grid-cols-[20px_minmax(90px,1fr)_minmax(0,0.9fr)_60px_100px_100px_90px] items-center gap-2 sm:grid-cols-[20px_minmax(90px,1fr)_minmax(0,0.9fr)_80px_110px_110px_100px]';
 
 function PeriodRow({
   period,
@@ -292,7 +292,9 @@ function PeriodRow({
             <div
               className={cn(
                 'h-full rounded-full transition-all',
-                period.collectionPct >= 100 ? 'bg-emerald-500' : 'bg-amber-500',
+                period.collectionPct >= 100
+                  ? 'bg-[var(--color-success)]'
+                  : 'bg-[var(--color-warning)]',
               )}
               style={{ width: `${Math.min(100, period.collectionPct)}%` }}
             />
@@ -311,7 +313,7 @@ function PeriodRow({
             className={cn(
               'text-xs tabular-nums',
               period.outstanding > 0
-                ? 'font-semibold text-amber-600 dark:text-amber-400'
+                ? 'font-semibold text-[var(--color-warning)]'
                 : 'text-muted-foreground',
             )}
           >
@@ -362,7 +364,7 @@ function PeriodRow({
 
 // 6 cols — col 3 is a spacer; last 3 match UNIT_GRID cols 5-7 exactly.
 const TYPE_GRID =
-  'grid grid-cols-[18px_minmax(0,1fr)_60px_100px_100px_90px] items-center gap-2 sm:grid-cols-[18px_minmax(0,1fr)_80px_110px_110px_100px]';
+  'grid min-w-[640px] grid-cols-[18px_minmax(0,1fr)_60px_100px_100px_90px] items-center gap-2 sm:grid-cols-[18px_minmax(0,1fr)_80px_110px_110px_100px]';
 
 function BillTypeRow({
   node,
@@ -418,7 +420,7 @@ function BillTypeRow({
               {billTypeLabel(bill.bill_type)}
             </span>
             {daysOverdue > 0 && (
-              <span className="shrink-0 text-[9px] text-red-600 dark:text-red-400">
+              <span className="shrink-0 text-[9px] text-[var(--color-danger)]">
                 {daysOverdue}d past due
               </span>
             )}
@@ -445,8 +447,8 @@ function BillTypeRow({
             className={cn(
               'text-xs tabular-nums',
               outstanding > 0
-                ? 'font-semibold text-amber-600 dark:text-amber-400'
-                : 'text-emerald-600 dark:text-emerald-400',
+                ? 'font-semibold text-[var(--color-warning)]'
+                : 'text-[var(--color-success)]',
             )}
           >
             {outstanding > 0
@@ -522,7 +524,7 @@ function DraftPeriodRow({
           )}
         />
 
-        <span className="flex items-center gap-1.5 truncate text-xs font-semibold text-blue-600 dark:text-blue-400">
+        <span className="flex items-center gap-1.5 truncate text-xs font-semibold text-[var(--color-info)]">
           <Inbox className="h-3 w-3 shrink-0" />
           Pending
         </span>
@@ -534,7 +536,7 @@ function DraftPeriodRow({
         {/* Spacer col */}
         <div />
 
-        <div className="text-right text-xs text-blue-600 tabular-nums dark:text-blue-400">
+        <div className="text-right text-xs text-[var(--color-info)] tabular-nums">
           {formatINR(total)}
         </div>
 
@@ -543,7 +545,7 @@ function DraftPeriodRow({
         <div className="flex justify-end">
           <Badge
             variant="outline"
-            className="border-blue-300 text-[10px] text-blue-600 dark:text-blue-400"
+            className="border-[var(--color-info)]/40 text-[10px] text-[var(--color-info)]"
           >
             Draft
           </Badge>

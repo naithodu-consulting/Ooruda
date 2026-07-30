@@ -77,7 +77,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
 
   if (error) {
     return (
-      <div className="bg-muted/30 flex items-center gap-2 border-b px-4 py-3 pl-20 text-xs text-red-600 dark:text-red-400">
+      <div className="bg-muted/30 flex items-center gap-2 border-b px-4 py-3 pl-20 text-xs text-[var(--color-danger)]">
         <AlertCircle className="h-3.5 w-3.5 shrink-0" />
         <span>{error}</span>
         <button
@@ -104,7 +104,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
           <span
             className={
               new Date(bill.due_date) < new Date()
-                ? 'font-semibold text-red-600 dark:text-red-400'
+                ? 'font-semibold text-[var(--color-danger)]'
                 : 'text-foreground font-medium'
             }
           >
@@ -175,7 +175,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
               )}
 
               {bill.advance_applied > 0 && (
-                <div className="flex items-baseline justify-between gap-4 border-b py-1.5 text-xs text-blue-600 dark:text-blue-400">
+                <div className="flex items-baseline justify-between gap-4 border-b py-1.5 text-xs text-[var(--color-info)]">
                   <span>Advance applied</span>
                   <span className="tabular-nums">
                     −{formatINR(bill.advance_applied)}
@@ -243,7 +243,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
                       {reversed && (
                         <Badge
                           variant="outline"
-                          className="ml-1.5 border-red-300 px-1 py-0 text-[9px] text-red-600 dark:text-red-400"
+                          className="ml-1.5 border-[var(--color-danger)]/40 px-1 py-0 text-[9px] text-[var(--color-danger)]"
                         >
                           Reversed
                         </Badge>
@@ -253,7 +253,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
                       className={`shrink-0 tabular-nums ${
                         reversed
                           ? 'text-muted-foreground line-through'
-                          : 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-[var(--color-success)]'
                       }`}
                     >
                       {formatINR(p.amount)}

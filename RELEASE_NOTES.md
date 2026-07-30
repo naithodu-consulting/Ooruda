@@ -2615,3 +2615,29 @@ The database was never wrong. All 190 bills were verified consistent: no bill is
 | `20260729000002_collection_summary_advance.sql` | `get_collection_summary` counts advance credit as collected, capped at the bill total. Drops and recreates the function; read-only and non-destructive. |
 
 _Last updated: 2026-07-29_
+
+---
+
+## Audit Phase 2 — UI/UX Consistency (2026-07-30)
+
+### Color Token System
+- Added 8 CSS custom properties to `theme.css` (mirrored in `:root` and `.dark`): `--sidebar-footer-bg`, `--sidebar-footer-border`, `--sidebar-footer-fg`, `--sidebar-footer-fg-muted`, and semantic status tokens `--color-success`, `--color-warning`, `--color-danger`, `--color-info`
+- Replaced all hardcoded hex literals (`#f59e0b`, `#050B14`, `#1F2D3D`) and raw Tailwind palette classes (`text-emerald-600`, `text-amber-600`, `text-red-600`, `text-blue-600`) across sidebar, topbar, billing table, bill panel, and KPI tiles with CSS variable tokens
+- Removed all dead `dark:text-*` variants (app is forced light-only)
+
+### Mobile Responsiveness
+- Billing table: added `overflow-x-auto` wrapper around column headers and data rows; `min-w-[640px]` on all three grid templates — fixed-column layout now scrolls horizontally on mobile without breaking the search/filter toolbar
+
+### Bug Fixes
+- `reports-client-page.tsx`: moved `history.replaceState` URL sync out of a `setState` updater (calling side effects inside updaters is a React violation — fires twice in StrictMode); refactored `handleFiltersChange` to compute `next` state before calling `setFilters`
+- Removed `setTimeout(0)` deferral from `syncUrl` — all call sites are event handlers, not render code, so the defer was unnecessary
+
+### Type Safety
+- `team-account-topbar.tsx`: narrowed `user: any` prop to `{ email?: string | null } | null`
+- Created `apps/web/razorpay.d.ts` — shared `declare global Window.Razorpay` type; removed duplicate per-file declarations from both Razorpay checkout components
+
+### Migrations Changelog
+
+No new migrations in this phase.
+
+_Last updated: 2026-07-30_
