@@ -34,8 +34,6 @@ export async function generateMetadata({ params }: Props) {
   };
 }
 
-// removed duplicate personLabel
-
 const areaFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
 export default async function UnitDetailPage({ params }: Props) {

@@ -2641,3 +2641,28 @@ _Last updated: 2026-07-29_
 No new migrations in this phase.
 
 _Last updated: 2026-07-30_
+
+## Audit Phase 3 — Security & Bug Fixes (2026-07-30)
+
+### Console Error Sanitization
+- `billing-actions.ts`: removed `console.error` that leaked unit ID and raw Supabase error on RPC failure (audit log already records the failure)
+- `members-page.loader.ts`: removed bare `console.error(error)` from two throw sites; `profilesError` now logs only `.message` as a warning (phone numbers degrade gracefully to null)
+- `admin/accounts/page.tsx`: downgraded non-fatal `console.error` to `console.warn` with `.message` only
+- `cash-ledger-payments/[id]/pdf/route.ts`, `by-receipt/route.ts`: `console.error` now logs `.message` instead of raw Supabase error object
+
+### Type Safety
+- `payments-actions.ts`: removed `'record_payment' as any` cast — now covered by regenerated database types
+- Regenerated `database.types.ts` from remote Supabase project (`vkxchopjqakvftcnxwie`) — adds `cash_ledger_payments`, `pending_sinking_fund_charges`, `record_payment` RPC, and other previously missing tables/functions
+
+### Route Handler Auth Pattern
+- `statement/pdf/route.ts`: converted from manual `async function GET(req)` + explicit `if (!user) return 401` to `enhanceRouteHandler({ auth: true })` — standard kit pattern; uses injected `user` from handler params (eliminates redundant `getUser()` round-trip and non-null assertion crash path); merged duplicate `@kit/pdf-templates` imports; added structured `getLogger()` error logging in the PDF render catch block
+
+### Reliability
+- `billing-actions.ts`: wrapped success `logAuditEvent` call in try/catch — a logging failure can no longer shadow successfully committed bills or trigger a duplicate-generation retry
+
+### Code Cleanup
+- `units/[unitId]/page.tsx`: removed stale `// removed duplicate personLabel` comment
+
+### Migrations Changelog
+
+No new migrations in this phase.

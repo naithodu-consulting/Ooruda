@@ -57,7 +57,7 @@ export async function recordPaymentAction(
   const { amount, mode, paid_by_role, reference_no } = parsed.data;
   const client = getSupabaseServerClient();
 
-  const { data: paymentId, error } = await client.rpc('record_payment' as any, {
+  const { data: paymentId, error } = await client.rpc('record_payment', {
     p_bill_id: billId,
     p_association_id: associationId,
     p_amount: amount,

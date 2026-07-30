@@ -75,9 +75,9 @@ async function AccountsPage(props: AdminAccountsPageProps) {
   );
 
   if (testAssocError)
-    console.error('Failed to load test associations', testAssocError);
+    console.warn('Failed to load test associations:', testAssocError.message);
   if (testProfilesError)
-    console.error('Failed to load test profiles', testProfilesError);
+    console.warn('Failed to load test profiles:', testProfilesError.message);
 
   const testAccountIds = new Set([
     ...(testAssociations ?? []).map((r) => r.account_id),

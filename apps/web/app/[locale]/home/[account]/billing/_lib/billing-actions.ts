@@ -571,10 +571,6 @@ export async function generateBillsAction(
             .returns<string>();
 
           if (rpcError) {
-            console.error(
-              `Error generating ${type} bill for unit ${unit.id}:`,
-              rpcError,
-            );
             await logAuditEvent({
               associationId,
               action: 'bills.generation.failed',
@@ -783,12 +779,16 @@ export async function generateBillsAction(
       { month: 'long' },
     );
     const [periodYear] = period.split('-');
-    await logAuditEvent({
-      associationId,
-      action: 'bills.generated',
-      entityType: 'bill',
-      summary: `Generated ${created} bill${created === 1 ? '' : 's'} for ${monthName} ${periodYear}`,
-    });
+    try {
+      await logAuditEvent({
+        associationId,
+        action: 'bills.generated',
+        entityType: 'bill',
+        summary: `Generated ${created} bill${created === 1 ? '' : 's'} for ${monthName} ${periodYear}`,
+      });
+    } catch {
+      // non-fatal: bills are committed; audit log failure must not shadow the result
+    }
   }
 
   revalidatePath(BILLING_PATH, 'page');

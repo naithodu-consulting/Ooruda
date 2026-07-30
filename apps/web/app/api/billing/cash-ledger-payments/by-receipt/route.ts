@@ -49,7 +49,10 @@ export const GET = enhanceRouteHandler(
       .maybeSingle();
 
     if (queryError) {
-      console.error('[cash-ledger-by-receipt] query error', queryError);
+      console.error(
+        '[cash-ledger-by-receipt] query error:',
+        queryError.message,
+      );
       return NextResponse.json(
         { error: 'Failed to load payment.' },
         { status: 500 },
