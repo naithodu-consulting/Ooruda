@@ -265,7 +265,7 @@ function BillTypeRow({
         }}
         className={cn(
           TYPE_GRID,
-          'hover:bg-muted/30 bg-muted/5 cursor-pointer border-b py-2 pr-3 pl-12 text-sm transition-colors sm:pr-4 sm:pl-20',
+          'hover:bg-muted/30 cursor-pointer border-b py-2 pr-3 pl-12 text-sm transition-colors sm:pr-4 sm:pl-20',
           expanded && 'bg-muted/40',
         )}
       >
