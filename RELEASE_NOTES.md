@@ -2740,3 +2740,56 @@ _Last updated: 2026-07-30_
 - **Inverted date range silent zero**: custom range with "from > to" now shows a validation message instead of silently showing 0 rows
 
 _Last updated: 2026-07-30_
+
+## Plain-English Wording Audit (2026-07-31)
+
+Comprehensive wording pass across all user-facing pages to remove accounting jargon and replace it with plain, simple language.
+
+### Terminology Changes
+
+- **"Void" / "Voided"** → **"Cancelled"** — bill status throughout billing tree (`unit-billing-types.ts`, `unit-row.tsx`)
+- **"Reversed"** (badge) → **"Refunded"** — payment history in `bill-detail-panel.tsx` and `statement-table.tsx`
+- **"Advance applied"** → **"Advance deducted"** (`bill-detail-panel.tsx`), **"Advance used"** (type badge and CSV label in `statement-table.tsx`, `cash-ledger-tab.tsx`, `cash-ledger-section.tsx`)
+- **"Opening balance"** → **"Starting balance"** — statement table and CSV export
+- **CR / DR suffixes** → **↑ / ↓** — running balance in statement, cash ledger section, and cash ledger reports tab
+- **"Debit" / "Credit"** columns → **"Charged" / "Paid In"** — statement table and CSV headers
+- **"Advance deposits"** → **"Advances paid"** — statement summary line
+- **"% collected"** → **"% received"** — billing overview KPI tile
+
+### Navigation & Labels
+
+- **Nav: "Cash Ledger"** → **"Advances & Dues"** (i18n `association.json`)
+- **Nav: "Audit Log"** → **"Activity Log"** (i18n `association.json`)
+- **Role: "Billing Operator"** → **"Billing Manager"** (i18n `association.json`, `common.json`)
+- **Reports tab: "Cash Ledger"** → **"Advances & Dues"** (`reports-tabs.tsx`)
+- **Settings: "Workspace Features"** → **"Optional Features"** (`workspace-features-card.tsx`)
+- **Settings: "Cash Ledger" feature toggle** → **"Advances & Dues"** label and description
+- **"Danger Zone"** → **"Permanent Actions"** (i18n `association.json`)
+
+### Reports / Charts
+
+- **"Ageing Buckets"** → **"Overdue by Age"** (`outstanding-tab.tsx`)
+- **"Top Defaulters"** → **"Highest Outstanding"** (`outstanding-tab.tsx`)
+- **KPI tiles: "Total Credits"** → **"Total Received"**, **"Total Debits"** → **"Total Charged"**, **"Net Movement"** → **"Net Balance"** (`cash-ledger-tab.tsx`)
+- **"Monthly Cash Flow"** → **"Monthly Activity"** (`cash-ledger-tab.tsx`)
+- **"Credits by Charge Type"** → **"Received by Charge Type"** (`cash-ledger-tab.tsx`)
+- **Table column "Entry Type"** → **"Type"**, **"Dir."** → **"In / Out"** (`cash-ledger-tab.tsx`)
+- **"incl. advance applied"** → **"incl. advance credit used"** (`collection-tab.tsx`)
+
+### Forms & Dialogs
+
+- **"Add Cash Ledger Entry"** dialog title → **"Record a Due" / "Record an Advance Payment"** (context-aware, `add-cash-ledger-entry-dialog.tsx`)
+- **Form field "Mode"** → **"Payment Method"** (`record-payment-dialog.tsx`)
+- **Form field "Reference No"** → **"Transaction Reference"** (`record-payment-dialog.tsx`)
+- **Confirm button "Confirm Generation"** → **"Yes, Generate Bills"** (`bills-section.tsx`)
+- **Toast: "Cash Ledger enabled/disabled for this workspace"** → plain message (`workspace-features-card.tsx`)
+
+### Payments Table
+
+- **Column header "Outstanding"** → **"Amount Owed"** (`payments-section.tsx`)
+
+### FY Filter
+
+- **"FY 2024-25"** format → **"Apr 2024 – Mar 2025"** — statement FY dropdown and active period label (`statement-table.tsx`)
+
+_Last updated: 2026-07-31_

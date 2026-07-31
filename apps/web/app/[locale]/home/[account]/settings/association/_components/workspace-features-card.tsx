@@ -35,8 +35,8 @@ export function WorkspaceFeaturesCard({
       if (result.success) {
         toast.success(
           enabled
-            ? 'Cash Ledger enabled for this workspace.'
-            : 'Cash Ledger disabled for this workspace.',
+            ? 'Advances & Dues tracking is now on.'
+            : 'Advances & Dues tracking is now off.',
         );
       } else {
         toast.error(result.error ?? 'Could not update the feature setting.');
@@ -47,10 +47,10 @@ export function WorkspaceFeaturesCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Workspace Features</CardTitle>
+        <CardTitle className="text-base">Optional Features</CardTitle>
         <CardDescription>
-          Enable or disable optional features for this association workspace.
-          Changes take effect immediately.
+          Turn optional features on or off for this association. Changes take
+          effect immediately.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -60,7 +60,7 @@ export function WorkspaceFeaturesCard({
             <div>
               <Label className="text-sm font-medium">Cash Ledger</Label>
               <p className="text-muted-foreground text-xs">
-                Per-unit advance payments and dues tracking ledger
+                Track advance payments and outstanding dues per unit
               </p>
             </div>
           </div>
@@ -68,7 +68,7 @@ export function WorkspaceFeaturesCard({
             checked={cashLedgerEnabled}
             onCheckedChange={handleCashLedgerToggle}
             disabled={isPending}
-            aria-label="Toggle Cash Ledger"
+            aria-label="Toggle Advances & Dues tracking"
           />
         </div>
       </CardContent>

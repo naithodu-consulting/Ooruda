@@ -15,7 +15,7 @@
     "admin": "Admin",
     "members": "Members",
     "settings": "Billing settings",
-    "audit": "Audit Log"
+    "audit": "Activity Log"
   },
   "label": "Association",
   "labelPlural": "Associations",
@@ -26,7 +26,7 @@
   "noAssociations": "No associations found",
   "settings": {
     "pageTitle": "Association Settings",
-    "pageDescription": "Manage your association profile and configuration",
+    "pageDescription": "Manage your association details and settings",
     "logo": "Association Logo",
     "logoDescription": "Upload your association logo for branding on bills and portal",
     "name": "Association Name",
@@ -34,7 +34,7 @@
     "brandColour": "Brand Colour",
     "brandColourDescription": "Primary accent colour used on bills and the portal header",
     "dangerZone": "Danger Zone",
-    "dangerZoneDescription": "Irreversible actions for this association"
+    "dangerZoneDescription": "These actions permanently delete data which cannot be undone"
   },
   "roles": {
     "super_admin": "Super Admin",

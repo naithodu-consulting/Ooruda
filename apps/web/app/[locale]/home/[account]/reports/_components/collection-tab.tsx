@@ -221,7 +221,7 @@ export function CollectionTab({ rows, payments }: Props) {
             value={formatINR(raisedTotals.collected)}
             // Can exceed "Total Received" — a bill settled from the unit's
             // advance credit counts as collected without cash arriving now.
-            sub="incl. advance applied"
+            sub="incl. advance credit used"
             highlight={
               raisedTotals.billed > 0 &&
               raisedTotals.collected >= raisedTotals.billed

@@ -477,7 +477,7 @@ export function PaymentsSection(props: {
                     Total
                   </TableHead>
                   <TableHead scope="col" className="text-right">
-                    Outstanding
+                    Amount Owed
                   </TableHead>
                   <TableHead scope="col">Status</TableHead>
                   <TableHead className="w-[1%]" />

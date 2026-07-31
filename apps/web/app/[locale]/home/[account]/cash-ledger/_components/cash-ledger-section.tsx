@@ -46,7 +46,7 @@ const BILL_TYPE_OPTIONS = [
 const ENTRY_TYPE_LABELS: Record<string, string> = {
   due: 'Due',
   advance_payment: 'Advance',
-  advance_applied: 'Advance Applied',
+  advance_applied: 'Advance Used',
   due_payment: 'Payment',
 };
 
@@ -508,7 +508,7 @@ function AllUnitsSummary({
           label="Units in Advance"
           count={summary.advanceUnits}
           amount={summary.advanceTotal}
-          suffix="CR"
+          suffix="↑"
           variant="credit"
         />
       )}
@@ -517,7 +517,7 @@ function AllUnitsSummary({
           label="Units with Dues"
           count={summary.dueUnits}
           amount={summary.dueTotal}
-          suffix="DR"
+          suffix="↓"
           variant="debit"
         />
       )}
@@ -589,7 +589,7 @@ function SingleUnitBalance({ balance }: { balance: number }) {
         label="Advance Balance"
         count={0}
         amount={balance}
-        suffix="CR"
+        suffix="↑"
         variant="credit"
       />
     );
@@ -600,7 +600,7 @@ function SingleUnitBalance({ balance }: { balance: number }) {
         label="Outstanding Dues"
         count={0}
         amount={Math.abs(balance)}
-        suffix="DR"
+        suffix="↓"
         variant="debit"
       />
     );
@@ -641,14 +641,14 @@ function BalanceCell({ value }: { value: number }) {
     return (
       <span className="font-semibold text-green-600 dark:text-green-400">
         {formatINR(value)}{' '}
-        <span className="text-[10px] font-normal opacity-50">CR</span>
+        <span className="text-[10px] font-normal opacity-50">↑</span>
       </span>
     );
   if (value < 0)
     return (
       <span className="font-semibold text-red-600 dark:text-red-400">
         {formatINR(Math.abs(value))}{' '}
-        <span className="text-[10px] font-normal opacity-50">DR</span>
+        <span className="text-[10px] font-normal opacity-50">↓</span>
       </span>
     );
   return <span className="text-muted-foreground text-xs">Settled</span>;

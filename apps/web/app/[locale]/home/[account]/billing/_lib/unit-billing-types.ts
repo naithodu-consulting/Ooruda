@@ -78,7 +78,7 @@ export type UnitStatus = 'no_bills' | 'all_paid' | 'partial' | 'overdue';
 
 export interface BillTypeNode {
   bill: UnitBill;
-  /** 'Paid' | 'Partial' | 'Unpaid' | 'Overdue' | 'Void' — amount-derived. */
+  /** 'Paid' | 'Partial' | 'Unpaid' | 'Overdue' | 'Cancelled' — amount-derived. */
   displayStatus: string;
   outstanding: number;
   daysOverdue: number;
@@ -116,7 +116,7 @@ export interface UnitNode {
 
 // ── Tree construction ─────────────────────────────────────────────────────────
 
-const VOID_STATUSES = new Set(['Void', 'Voided', 'Reversed']);
+const VOID_STATUSES = new Set(['Cancelled', 'Cancelled', 'Reversed']);
 
 export function isVoid(bill: { status: string }): boolean {
   return VOID_STATUSES.has(bill.status);
@@ -130,7 +130,7 @@ function daysPastDue(dueDate: string): number {
 }
 
 function rollUpStatus(nodes: BillTypeNode[]): UnitStatus {
-  const live = nodes.filter((n) => n.displayStatus !== 'Void');
+  const live = nodes.filter((n) => n.displayStatus !== 'Cancelled');
   if (live.length === 0) return 'no_bills';
   if (live.some((n) => n.displayStatus === 'Overdue')) return 'overdue';
   if (live.every((n) => n.displayStatus === 'Paid')) return 'all_paid';
@@ -181,7 +181,7 @@ export function buildUnitTree(
         const nodes: BillTypeNode[] = periodBills
           .map((bill) => {
             const voided = isVoid(bill);
-            const displayStatus = voided ? 'Void' : displayBillStatus(bill);
+            const displayStatus = voided ? 'Cancelled' : displayBillStatus(bill);
             const outstanding = voided ? 0 : billOutstanding(bill);
             return {
               bill,
@@ -197,7 +197,7 @@ export function buildUnitTree(
             ),
           );
 
-        const live = nodes.filter((n) => n.displayStatus !== 'Void');
+        const live = nodes.filter((n) => n.displayStatus !== 'Cancelled');
         const billed = live.reduce((s, n) => s + n.bill.total_amount, 0);
         // Derive collected from outstanding so `billed = collected + outstanding`
         // always holds. Summing the settled amount directly would exceed the
@@ -222,7 +222,7 @@ export function buildUnitTree(
       });
 
     const allNodes = periods.flatMap((p) => p.bills);
-    const live = allNodes.filter((n) => n.displayStatus !== 'Void');
+    const live = allNodes.filter((n) => n.displayStatus !== 'Cancelled');
 
     return {
       unit,

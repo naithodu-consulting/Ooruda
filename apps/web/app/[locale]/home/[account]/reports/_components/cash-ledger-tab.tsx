@@ -52,7 +52,7 @@ function shortDate(iso: string) {
 
 const ENTRY_TYPE_LABELS: Record<string, string> = {
   due_payment: 'Payment received',
-  advance_applied: 'Advance applied',
+  advance_applied: 'Advance used',
   advance_received: 'Advance received',
   advance_refund: 'Advance refund',
   other: 'Other',
@@ -99,9 +99,9 @@ export function CashLedgerTab({ rows }: Props) {
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 py-16">
-        <p className="text-lg font-semibold">No cash ledger entries</p>
+        <p className="text-lg font-semibold">No transactions found</p>
         <p className="text-muted-foreground text-sm">
-          No entries found for the selected period and filters.
+          No records found for the selected period and filters.
         </p>
       </div>
     );
@@ -112,25 +112,25 @@ export function CashLedgerTab({ rows }: Props) {
       {/* KPI tiles */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiTile
-          label="Total Credits"
+          label="Total Received"
           value={formatINR(totalCredits)}
           highlight="green"
-          sub={`${credits.length} entr${credits.length !== 1 ? 'ies' : 'y'}`}
+          sub={`${credits.length} transaction${credits.length !== 1 ? 's' : ''}`}
         />
         <KpiTile
           label="Total Debits"
           value={formatINR(totalDebits)}
           highlight={totalDebits > 0 ? 'amber' : undefined}
-          sub={`${debits.length} entr${debits.length !== 1 ? 'ies' : 'y'}`}
+          sub={`${debits.length} transaction${debits.length !== 1 ? 's' : ''}`}
         />
         <KpiTile
-          label="Net Movement"
+          label="Net Balance"
           value={formatINR(Math.abs(net))}
           highlight={net >= 0 ? 'green' : 'red'}
           sub={net >= 0 ? 'Net credit' : 'Net debit'}
         />
         <KpiTile
-          label="Total Entries"
+          label="Total Transactions"
           value={String(rows.length)}
           sub="across all types"
         />
@@ -219,9 +219,9 @@ export function CashLedgerTab({ rows }: Props) {
       {byBillType.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Credits by Charge Type</CardTitle>
+            <CardTitle className="text-base">Received by Charge Type</CardTitle>
             <CardDescription>
-              How much was received per bill type
+              Amount received per charge type
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -254,9 +254,9 @@ export function CashLedgerTab({ rows }: Props) {
       {/* Transaction table */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">All Entries</CardTitle>
+          <CardTitle className="text-base">All Transactions</CardTitle>
           <CardDescription>
-            {rows.length} ledger entr{rows.length !== 1 ? 'ies' : 'y'}
+            {rows.length} transaction{rows.length !== 1 ? 's' : ''}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -266,10 +266,10 @@ export function CashLedgerTab({ rows }: Props) {
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Unit</TableHead>
-                  <TableHead>Entry Type</TableHead>
-                  <TableHead>Bill Type</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Charge</TableHead>
                   <TableHead>Paid By</TableHead>
-                  <TableHead>Dir.</TableHead>
+                  <TableHead>In / Out</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Notes</TableHead>
                 </TableRow>
@@ -296,7 +296,7 @@ export function CashLedgerTab({ rows }: Props) {
                             : 'text-amber-600 dark:text-amber-400'
                         }`}
                       >
-                        {r.direction === 'credit' ? '↑ CR' : '↓ DR'}
+                        {r.direction === 'credit' ? '↑' : '↓'}
                       </span>
                     </TableCell>
                     <TableCell className="text-right font-semibold tabular-nums">

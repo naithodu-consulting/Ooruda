@@ -211,8 +211,8 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
         {/* Ageing buckets */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Ageing Buckets</CardTitle>
-            <CardDescription>Outstanding amount by overdue age</CardDescription>
+            <CardTitle className="text-base">Overdue by Age</CardTitle>
+            <CardDescription>Outstanding amount by how long it's been overdue</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
@@ -262,9 +262,9 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
         {/* Top defaulters */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Top Defaulters</CardTitle>
+            <CardTitle className="text-base">Highest Outstanding</CardTitle>
             <CardDescription>
-              Units with highest outstanding balance
+              Units with the most unpaid balance
             </CardDescription>
           </CardHeader>
           <CardContent>

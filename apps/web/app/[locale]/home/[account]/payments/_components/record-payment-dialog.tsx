@@ -148,7 +148,7 @@ function RecordPaymentForm(props: {
           name="mode"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Mode</FormLabel>
+              <FormLabel>Payment Method</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger>
@@ -174,7 +174,7 @@ function RecordPaymentForm(props: {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Reference No{' '}
+                  Transaction Reference{' '}
                   <span className="text-muted-foreground font-normal">
                     (optional)
                   </span>

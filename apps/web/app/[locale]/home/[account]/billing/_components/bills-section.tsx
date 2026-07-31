@@ -1330,7 +1330,7 @@ function GenerateBillsForm(props: {
             data-test="generate-bills-confirm"
           >
             {isPending && <Spinner className="mr-2 h-4 w-4" />}
-            Confirm Generation
+            Yes, Generate Bills
           </Button>
         </div>
       </div>

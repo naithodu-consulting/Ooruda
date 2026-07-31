@@ -84,7 +84,7 @@ export function BillingOverview(props: {
           label="This Month Billed"
           value={formatINR(kpis.thisMonthBilled)}
           sublabel={
-            thisMonthPct !== null ? `${thisMonthPct}% collected` : undefined
+            thisMonthPct !== null ? `${thisMonthPct}% received` : undefined
           }
           variant="blue"
         />

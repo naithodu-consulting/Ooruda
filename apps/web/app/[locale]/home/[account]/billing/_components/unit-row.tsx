@@ -380,7 +380,7 @@ function BillTypeRow({
   onDetailLoaded: (billId: string, detail: BillDetail) => void;
 }) {
   const { bill, displayStatus, outstanding, daysOverdue } = node;
-  const isVoided = displayStatus === 'Void';
+  const isVoided = displayStatus === 'Cancelled';
 
   return (
     <>

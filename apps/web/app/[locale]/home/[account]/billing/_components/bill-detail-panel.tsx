@@ -176,7 +176,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
 
               {bill.advance_applied > 0 && (
                 <div className="flex items-baseline justify-between gap-4 border-b py-1.5 text-xs text-[var(--color-info)]">
-                  <span>Advance applied</span>
+                  <span>Advance deducted</span>
                   <span className="tabular-nums">
                     −{formatINR(bill.advance_applied)}
                   </span>
@@ -245,7 +245,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
                           variant="outline"
                           className="ml-1.5 border-[var(--color-danger)]/40 px-1 py-0 text-[9px] text-[var(--color-danger)]"
                         >
-                          Reversed
+                          Refunded
                         </Badge>
                       )}
                     </div>

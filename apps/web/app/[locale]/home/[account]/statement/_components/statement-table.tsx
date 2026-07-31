@@ -98,13 +98,13 @@ function TypeBadge({ entryType }: { entryType: StatementEntry['entry_type'] }) {
     case 'advance_applied':
       return (
         <span className="inline-flex shrink-0 items-center rounded bg-purple-50 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-purple-700 dark:bg-purple-500/10 dark:text-purple-400">
-          Applied
+          Advance used
         </span>
       );
     case 'reversal':
       return (
         <span className="inline-flex shrink-0 items-center rounded bg-orange-50 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-400">
-          Reversal
+          Refunded
         </span>
       );
   }
@@ -114,15 +114,15 @@ function entryDescription(entry: StatementEntry): string {
   const bt = entry.charge_name ?? billTypeLabel(entry.bill_type);
   switch (entry.entry_type) {
     case 'due':
-      return `${bt} bill raised`;
+      return `${bt} bill`;
     case 'advance_payment':
-      return `Advance deposited — ${bt}`;
+      return `Advance paid — ${bt}`;
     case 'advance_applied':
-      return `Advance applied — ${bt}`;
+      return `Advance used — ${bt}`;
     case 'due_payment':
       return `${bt} paid`;
     case 'reversal':
-      return `${bt} payment reversed`;
+      return `${bt} payment refunded`;
   }
 }
 
@@ -144,7 +144,7 @@ function entrySubtext(entry: StatementEntry): string | null {
     const base = modeLabel ? `Paid ${modeLabel}` : null;
     if (base && receiptNo) return `${base} · Receipt: ${receiptNo}`;
     if (base) return base;
-    return entry.notes ?? 'Applied to outstanding balance';
+    return entry.notes ?? 'Payment received';
   }
   if (entry.entry_type === 'reversal') {
     return entry.notes ?? 'Refunded by Razorpay';
@@ -255,7 +255,7 @@ function OpeningBalanceRow({
         {formatINR(Math.abs(balance))}
         {balance !== 0 && (
           <span className="ml-1 text-[10px] font-normal opacity-60">
-            {balance > 0 ? 'CR' : 'DR'}
+            {balance > 0 ? '↑' : '↓'}
           </span>
         )}
       </TableCell>
@@ -271,6 +271,13 @@ function toCsv(
 ): string {
   const esc = (v: string | number) =>
     typeof v === 'string' && v.includes(',') ? `"${v}"` : String(v);
+  const typeLabel: Record<string, string> = {
+    due: 'Bill',
+    due_payment: 'Payment',
+    advance_payment: 'Advance paid',
+    advance_applied: 'Advance used',
+    reversal: 'Refunded',
+  };
   const header = [
     'Date',
     'Description',
@@ -282,7 +289,7 @@ function toCsv(
   const dataRows = [...rows].map((e) => [
     e.entry_date,
     esc(entryDescription(e)),
-    e.entry_type,
+    esc(typeLabel[e.entry_type] ?? e.entry_type),
     e.direction === 'debit' ? e.amount : '',
     e.direction === 'credit' ? e.amount : '',
     e.runningBalance,
@@ -546,7 +553,7 @@ export function StatementTable({
     hasAdvances && hasPayments
       ? 'Payments & advances'
       : hasAdvances
-        ? 'Advance deposits'
+        ? 'Advances paid'
         : 'Payments received';
 
   const showOpeningRow = openingBalance !== null && openingBalance !== 0;
@@ -635,9 +642,9 @@ export function StatementTable({
             </p>
             {hasAdvances && closingBalance < 0 && (
               <p className="text-muted-foreground mt-2 text-[11px] leading-relaxed">
-                Your advances are earmarked by type — for example, a Maintenance
-                advance can only be used against Maintenance bills. Go to
-                Payments to see what's actually due.
+                Note: Your advance payments are specific for a charge type.
+                For example, a Maintenance advance only covers Maintenance bills. Check
+                Payments to see exactly what you owe.
               </p>
             )}
             <div className="mt-2.5">
@@ -828,13 +835,13 @@ export function StatementTable({
                       scope="col"
                       className="hidden text-right whitespace-nowrap sm:table-cell"
                     >
-                      Debit
+                      Charged
                     </TableHead>
                     <TableHead
                       scope="col"
                       className="hidden text-right whitespace-nowrap sm:table-cell"
                     >
-                      Credit
+                      Paid In
                     </TableHead>
                     <TableHead
                       scope="col"
@@ -896,7 +903,7 @@ export function StatementTable({
                               </span>
                               {e.payment_status === 'reversed' && (
                                 <span className="border-destructive/30 bg-destructive/10 text-destructive inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
-                                  Reversed
+                                  Refunded
                                 </span>
                               )}
                               {e.payment_status === 'partial_refund' &&
@@ -949,7 +956,7 @@ export function StatementTable({
                           {formatINR(Math.abs(e.runningBalance))}
                           {e.runningBalance !== 0 && (
                             <span className="ml-1 text-[10px] font-normal opacity-60">
-                              {e.runningBalance > 0 ? 'CR' : 'DR'}
+                              {e.runningBalance > 0 ? '↑' : '↓'}
                             </span>
                           )}
                         </TableCell>
