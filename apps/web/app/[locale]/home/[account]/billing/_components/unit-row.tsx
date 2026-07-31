@@ -79,7 +79,9 @@ export function UnitRow({ node, href, selected, onToggleSelect }: Props) {
             )}
             aria-hidden
           />
-          <span className="truncate text-base font-semibold">{unit.unit_no}</span>
+          <span className="truncate text-base font-semibold">
+            {unit.unit_no}
+          </span>
         </div>
 
         <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-sm">

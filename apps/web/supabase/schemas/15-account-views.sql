@@ -90,6 +90,8 @@ returns table (
     subscription_status public.subscription_status,
     permissions public.app_permissions[]
 )
+language plpgsql
+stable
 set search_path to ''
 as $$
 begin
@@ -119,7 +121,7 @@ begin
         subscriptions.status,
         roles.hierarchy_level;
 end;
-$$ language plpgsql;
+$$;
 
 grant
 execute on function public.team_account_workspace (text) to authenticated,

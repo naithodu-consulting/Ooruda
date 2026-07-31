@@ -228,7 +228,7 @@ export default async function BillingDraftsPage({ params }: Props) {
           Back to Billing
         </Link>
 
-        <div className="rounded-xl border p-4">
+        <div className="bg-card rounded-xl border p-4">
           <DraftBillsTab
             associationId={association.id}
             maintenancePending={maintenancePending}

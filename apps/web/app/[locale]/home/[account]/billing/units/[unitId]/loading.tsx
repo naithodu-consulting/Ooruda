@@ -6,7 +6,7 @@ export default function Loading() {
     <PageBody>
       <div className="mt-2 flex flex-col gap-4">
         <Skeleton className="h-5 w-44" />
-        <div className="flex flex-wrap gap-6 rounded-xl border px-4 py-3">
+        <div className="bg-card flex flex-wrap gap-6 rounded-xl border px-4 py-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex flex-col gap-1.5">
               <Skeleton className="h-2.5 w-16" />
@@ -14,7 +14,7 @@ export default function Loading() {
             </div>
           ))}
         </div>
-        <div className="flex flex-col overflow-hidden rounded-xl border">
+        <div className="bg-card flex flex-col overflow-hidden rounded-xl border">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="flex items-center gap-4 border-b px-4 py-3">
               <Skeleton className="h-4 w-28" />

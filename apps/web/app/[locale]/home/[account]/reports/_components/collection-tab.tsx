@@ -195,11 +195,6 @@ export function CollectionTab({ rows, payments }: Props) {
             Bills Raised
           </button>
         </div>
-        <p className="text-muted-foreground text-xs">
-          {view === 'received'
-            ? 'Cash actually received in the selected period'
-            : 'Bills issued in the selected period and their collection status'}
-        </p>
       </div>
 
       {/* KPI tiles */}

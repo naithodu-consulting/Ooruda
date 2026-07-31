@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useWatch } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -107,10 +107,11 @@ export function OtherChargesDialog(props: Props) {
         render={
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             data-test="other-charges-dialog-trigger"
           >
-            + Other Charges
+            <Plus className="h-4 w-4" />
+            Other Charges
           </Button>
         }
       />

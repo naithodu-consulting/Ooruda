@@ -233,7 +233,7 @@ export default async function UnitBillingPage({ params }: Props) {
           </Badge>
         </div>
 
-        <div className="overflow-hidden rounded-xl border">
+        <div className="bg-card overflow-hidden rounded-xl border">
           <UnitBillingDetail periods={node.periods} drafts={node.drafts} />
         </div>
       </div>

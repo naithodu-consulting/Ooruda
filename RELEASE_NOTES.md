@@ -4,6 +4,60 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Bug Fixes & UX Polish — 2026-07-31 (batch 3)
+
+### Reports — PDF filter disclosure & tab-aware title
+
+When a PDF is exported with unit or bill-type filters active, a "FILTERS APPLIED" info box now appears at the top of the PDF listing the exact units and charge types included — making the document auditable and unambiguous.
+
+- Added `appliedFilters: { unitNos, billTypes }` to `ReportPdfData` and populated it server-side by resolving unit IDs to unit numbers (via RLS-scoped `units` table query) and mapping bill type slugs to human-readable labels.
+- Applied to all tabs: Collection, Outstanding, Payments, and Electricity.
+- The PDF title is now tab-specific when a single section is exported ("Collection Summary", "Payments Received", etc.) rather than always "Financial Report".
+- Section numbers in multi-section PDFs are computed dynamically based on which sections are present — a two-section export like Collection + Electricity correctly shows "1." and "2." rather than "1." and "4.".
+
+### Billing — Filter bar UX overhaul
+
+- **Toolbar restructured**: Filter controls (search, selects, status pills) are on the first row; summary tiles (Units / Bills / Outstanding / Overdue) and the Download button are on a second row, shown only when results exist.
+- **Active pill contrast**: Active filter pills now use `bg-primary text-primary-foreground` (solid fill) for guaranteed legibility.
+- **Inactive pill border**: Non-active pills now show a visible `border-input` border instead of the previous transparent border.
+- **Download count accuracy**: The export (`exportBills`) now applies the same status filter (`outstanding` / `overdue` / `all_paid`) as the displayed list, so the download count matches the visible row count.
+- **Summary tiles restored**: Stats shown in `bg-muted/50` tile boxes, matching the Payments page visual language.
+
+### Code quality — Type safety improvements
+
+- `TabKey` extracted to `reports-types.ts` as a shared type, imported by both `export-button.tsx` and `reports-client-page.tsx`.
+- `activeTab` state is now typed as `TabKey` end-to-end, eliminating `as TabKey` casts.
+- `elecBillsRes.error` guard added to electricity consumption fetch — prevents silent zero-charge display when the bills query fails.
+
+---
+
+## Bug Fixes & UX Polish — 2026-07-31 (batch 2)
+
+### Reports — Export PDF & CSV now tab-scoped
+
+Export PDF and Export CSV now generate content based on the **currently active tab**, not a full multi-section summary report.
+
+- **PDF**: Passes the active tab to the server action, which only fetches and renders the relevant section (Collection, Outstanding, Payments, or Electricity). Unused sections are suppressed in the PDF template via the new optional `activeSections` field on `ReportPdfData`.
+- **CSV**: Was already tab-scoped; no change needed.
+- Export button description updated from "Full summary report" to "Current tab · applies active filters".
+
+### Reports — Unit-wise Consumption now populated
+
+The "Unit-wise Consumption" section on the Electricity tab previously always showed "No meter readings found for this period" because `consumptionByPeriod` was hardcoded to `{}`.
+
+- Now fetches `meter_readings` (joined through `sub_meters → units`) for the mescom bill IDs loaded in the electricity tab.
+- Also fetches `bills` where `bill_type = 'electricity'` for those periods to populate the "Charged" column.
+- Filters to `meter_type = 'Unit'` only (excludes common-area sub-meters).
+- Rows with zero consumption are excluded from the chart/table.
+
+### Billing — Filter pill active state contrast fixed
+
+Active/selected status filter pills (All Units / Outstanding / Overdue / All Paid) used `bg-primary/10 text-primary` — a 10% opacity tint that caused illegible text in many themes.
+
+Changed to `bg-primary text-primary-foreground border-primary` for solid, guaranteed contrast regardless of theme.
+
+---
+
 ## Foundation — Week 0 (Jun 13–18, 2026)
 
 Initial project setup on top of Makerkit v3.4.1. This phase established the core domain schema, authentication model, and role system.
@@ -2917,5 +2971,96 @@ All font sizes in billing pages increased by 2 px for improved legibility. Subsc
 ### Bug fix — Retry button in Bill Detail Panel
 
 Retry after a network error now actually re-fetches (previously it cleared the error but the `useEffect` deps didn't change, leaving a blank panel). Fixed with a `retryCount` counter dep. Added `type="button"` to prevent accidental form submission.
+
+_Last updated: 2026-07-31_
+
+---
+
+## Database Query Performance (2026-07-31)
+
+Three confirmed bottlenecks from `pg_stat_statements` analysis — all fixed in a single migration (`20260731000000_query_performance.sql`).
+
+### Fix 1 — `is_aal2()` and `is_super_admin()` marked STABLE
+
+Both functions were `VOLATILE` by default (the plpgsql default), causing PostgreSQL to re-evaluate them on every row during RLS policy checks. Both functions only read `auth.jwt()`, which is constant within a transaction — making them `STABLE` by definition. Added `STABLE` + `SECURITY DEFINER` to both. This eliminates per-row JWT parsing overhead across every RLS-gated table in the app. `is_super_admin()` alone was called **33,310 times** in the pg_stat_statements window, contributing ~7 seconds of cumulative DB time.
+
+### Fix 2 — Missing index on `bill_line_items(bill_id)`
+
+PostgreSQL FK constraints do not auto-create indexes on the referencing column. Every bills-with-line-items fetch was performing a sequential scan on `bill_line_items` filtered by `bill_id`. Supabase's index advisor confirmed this, projecting a **3× cost reduction** (startup cost 622 → 211). Added `idx_bill_line_items_bill_id`.
+
+### Fix 3 — `team_account_workspace()` marked STABLE
+
+The function is a pure read (no writes) and was `VOLATILE` by default. Marked `STABLE` to allow the planner to fold repeated invocations. This function is called ~6,000 times per pg_stat_statements window (once per workspace page load).
+
+### Migrations Changelog
+
+| Migration | Description |
+|-----------|-------------|
+| `20260731000000_query_performance.sql` | Mark `is_aal2`, `is_super_admin`, `team_account_workspace` as STABLE; add `idx_bill_line_items_bill_id` |
+
+_Last updated: 2026-07-31_
+
+---
+
+## Bug Fix — Bulk Invite: Existing Users Not Added to New Association (2026-07-31)
+
+### Root cause
+
+`bulkInviteMembersAction` ran in three phases: (1) validate rows, (2) create any new users, (3) insert memberships. Phase 2 had two defects:
+
+1. **Silent RPC error swallow** — the initial batch lookup (`find_users_by_phones_or_emails`) destructured only `data`, discarding `error`. If the RPC failed, all users appeared new to the code.
+
+2. **No recovery on createUser conflict** — if the initial lookup missed an existing user (RPC error, phone-format mismatch, race condition), Phase 2 called `auth.admin.createUser`, which failed with "already been registered". The code put that phone into `createFailures` and Phase 3 then **skipped** the user — they never got their membership in the new association.
+
+### Fix (`packages/features/admin/src/lib/server/admin-server-actions.ts`)
+
+- **RPC error now logged** — `lookupError` extracted and emitted so failures appear in production logs. Import continues; Phase 2 acts as the safety net.
+- **Recovery on createUser conflict** — when `createUser` returns an "already registered" error, a targeted `find_users_by_phones_or_emails` call is made for just that phone/email. If found, the user is added to `existingUserByPhone` (bypassing `createFailures`) so Phase 3 inserts their membership normally.
+
+No schema changes. No migration needed.
+
+_Last updated: 2026-07-31_
+
+## Billing: White Surfaces + GST & Due Date Fixes (2026-07-31)
+
+### Root cause of the "gray background" on billing pages
+
+The billing containers (`rounded-xl border`) carried **no background fill**, so the global
+canvas token showed through them. That token is `--background: #fffdf5` — a warm cream, not
+white. Earlier passes chased `bg-muted/*` utilities, which were never the cause.
+
+Fixed by giving every billing surface `bg-card` (`--card: #ffffff`, true white), so white
+content cards now sit on the cream canvas:
+
+- Bills by Unit table container
+- Unit detail bill tree container
+- Draft Bills outer card and each inner section card
+- Overview page nav cards (Bills by Unit / Drafts) — hover moved to `bg-accent/40`
+- All four loading skeletons
+- Download PDF button in the bill detail panel (`bg-background` → `bg-card`)
+
+Dialogs already used `bg-popover` (`#ffffff`) and needed no change. Retained `bg-muted` only
+where it is a chip, hover state, expanded-row indicator, or progress-bar track.
+
+### Bug fix — due date shown in red on fully paid bills
+
+`BillDetailPanel` coloured the due date red whenever the date was in the past, regardless of
+whether the bill was settled, so a paid bill read as alarming. The date is now red only when
+the bill has an outstanding balance **and** is past due, via the shared `billOutstanding()`
+helper. The comparison also moved from `new Date(due_date) < new Date()` — which parses the
+date column as UTC midnight and drifts against local time — to an ISO string comparison
+against `todayInBillingZone()`, matching `displayBillStatus()`.
+
+### Bug fix — spurious GST badge and PDF column on non-GST bills
+
+`gst_applicable` is a property of the **charge type** ("taxable if this association is
+GST-registered"), not proof that tax was charged; GST is only levied when the association has
+`gstEnabled && gstRate > 0`. Bills from non-GST associations carried the flag but no tax, so:
+
+- The screen showed a `GST` badge on line items of a bill with no GST (e.g. 500 sq.ft × ₹3 =
+  ₹1,500 exactly). The badge is now gated on `bill.gst_amount > 0`.
+- The bill PDF printed a `GST` column reading "Yes" per line item on bills with no tax. That
+  column is now conditional on the existing `showGst` flag, following the same pattern as
+  `hasAreaColumns`. The description column absorbs the freed width (`flexGrow: 1`).
 
 _Last updated: 2026-07-31_

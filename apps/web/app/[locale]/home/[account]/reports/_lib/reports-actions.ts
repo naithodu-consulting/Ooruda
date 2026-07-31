@@ -404,6 +404,7 @@ export async function downloadPdfAction(
   associationId: string,
   from: string,
   to: string,
+  tab: TabKey | 'all',
   filters: Partial<ReportsFilters> = {},
 ): Promise<ActionResult<{ base64: string; filename: string }>> {
   const { client, association } = await resolveAssociation(associationId);
@@ -413,6 +414,25 @@ export async function downloadPdfAction(
   const toPeriod_ = toPeriod(to);
   const { unitIds = [], billTypes = [] } = filters;
 
+  // Determine which sections to include based on the active tab
+  const sectionMap: Record<
+    string,
+    ('collection' | 'outstanding' | 'payments' | 'electricity')[]
+  > = {
+    collection: ['collection'],
+    outstanding: ['outstanding'],
+    payments: ['payments'],
+    cash_ledger: ['collection', 'outstanding', 'payments', 'electricity'],
+    electricity: ['electricity'],
+    all: ['collection', 'outstanding', 'payments', 'electricity'],
+  };
+  const activeSections = sectionMap[tab] ?? [
+    'collection',
+    'outstanding',
+    'payments',
+    'electricity',
+  ];
+
   const rpcParams: Record<string, unknown> = {
     p_association_id: associationId,
   };
@@ -420,6 +440,13 @@ export async function downloadPdfAction(
   if (toPeriod_) rpcParams['p_to_period'] = toPeriod_;
   if (unitIds.length > 0) rpcParams['p_unit_ids'] = unitIds;
   if (billTypes.length > 0) rpcParams['p_bill_types'] = billTypes;
+
+  const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+  // Only fetch data for sections we will render
+  const collectionPromise = activeSections.includes('collection')
+    ? (client as any).rpc('get_collection_summary', rpcParams)
+    : Promise.resolve({ data: [], error: null });
 
   let billsQ = client
     .from('bills')
@@ -435,8 +462,10 @@ export async function downloadPdfAction(
   if (toPeriod_) billsQ = (billsQ as any).lte('period', toPeriod_);
   if (unitIds.length > 0) billsQ = (billsQ as any).in('unit_id', unitIds);
   if (billTypes.length > 0) billsQ = (billsQ as any).in('bill_type', billTypes);
+  const outstandingPromise = activeSections.includes('outstanding')
+    ? billsQ
+    : Promise.resolve({ data: [], error: null });
 
-  const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
   let paymentsQ = (client as any)
     .from('payments')
     .select('amount, mode, paid_at, bills(bill_no, unit_id, units(unit_no))')
@@ -452,6 +481,9 @@ export async function downloadPdfAction(
       'in',
       `(${unitIds.join(',')})`,
     );
+  const paymentsPromise = activeSections.includes('payments')
+    ? paymentsQ
+    : Promise.resolve({ data: [], error: null });
 
   let elecQ = client
     .from('mescom_bills')
@@ -460,6 +492,15 @@ export async function downloadPdfAction(
     .order('period', { ascending: false });
   if (fromPeriod) elecQ = (elecQ as any).gte('period', fromPeriod);
   if (toPeriod_) elecQ = (elecQ as any).lte('period', toPeriod_);
+  const electricityPromise = activeSections.includes('electricity')
+    ? elecQ
+    : Promise.resolve({ data: [], error: null });
+
+  // Fetch unit numbers for the selected unit IDs so the PDF can disclose them
+  const unitNosPromise =
+    unitIds.length > 0
+      ? client.from('units').select('unit_no').in('id', unitIds)
+      : Promise.resolve({ data: [] as { unit_no: string }[], error: null });
 
   const [
     collectionRes,
@@ -467,12 +508,14 @@ export async function downloadPdfAction(
     paymentsRes,
     electricityRes,
     profileRes,
+    unitNosRes,
   ] = await Promise.all([
-    (client as any).rpc('get_collection_summary', rpcParams),
-    billsQ,
-    paymentsQ,
-    elecQ,
+    collectionPromise,
+    outstandingPromise,
+    paymentsPromise,
+    electricityPromise,
     client.from('profiles').select('full_name').maybeSingle(),
+    unitNosPromise,
   ]);
 
   if (collectionRes.error) {
@@ -601,6 +644,17 @@ export async function downloadPdfAction(
             ? Number(r.invoice_amount) / Number(r.block_consumption_units)
             : null,
       })),
+    },
+    activeSections,
+    appliedFilters: {
+      unitNos:
+        (unitNosRes.data ?? []).length > 0
+          ? (unitNosRes.data ?? []).map((u: { unit_no: string }) => u.unit_no)
+          : undefined,
+      billTypes:
+        billTypes.length > 0
+          ? billTypes.map((bt) => billTypeLabel(bt))
+          : undefined,
     },
   };
 

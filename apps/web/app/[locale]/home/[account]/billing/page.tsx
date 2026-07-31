@@ -218,7 +218,7 @@ function NavCard({
   return (
     <Link
       href={href}
-      className="hover:bg-muted/40 focus-visible:ring-ring group flex items-center justify-between gap-4 rounded-xl border px-4 py-3.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      className="bg-card hover:bg-accent/40 focus-visible:ring-ring group flex items-center justify-between gap-4 rounded-xl border px-4 py-3.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
     >
       <div className="min-w-0">
         <div className="flex items-center gap-2">

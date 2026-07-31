@@ -545,7 +545,7 @@ function DraftSection(props: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border p-4">
+    <div className="bg-card rounded-lg border p-4">
       <div className="mb-3 flex items-center gap-2">
         <span className="text-muted-foreground">{props.icon}</span>
         <span className="text-base font-semibold">{props.title}</span>

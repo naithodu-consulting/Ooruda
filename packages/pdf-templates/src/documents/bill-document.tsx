@@ -191,7 +191,9 @@ export function BillDocument({
                 </Text>
               </>
             ) : null}
-            <Text style={[styles.colGst, styles.tableHeaderText]}>GST</Text>
+            {showGst ? (
+              <Text style={[styles.colGst, styles.tableHeaderText]}>GST</Text>
+            ) : null}
             <Text style={[styles.colAmount, styles.tableHeaderText]}>
               Amount
             </Text>
@@ -216,9 +218,11 @@ export function BillDocument({
                   </Text>
                 </>
               ) : null}
-              <Text style={[styles.colGst, { textAlign: 'center' }]}>
-                {item.gstApplicable ? 'Yes' : '—'}
-              </Text>
+              {showGst ? (
+                <Text style={[styles.colGst, { textAlign: 'center' }]}>
+                  {item.gstApplicable ? 'Yes' : '—'}
+                </Text>
+              ) : null}
               <Text style={[styles.colAmount, { textAlign: 'right' }]}>
                 {formatINR(item.amount)}
               </Text>

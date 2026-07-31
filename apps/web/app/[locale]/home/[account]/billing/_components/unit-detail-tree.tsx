@@ -188,9 +188,7 @@ function PeriodRow({
             {period.outstanding > 0 ? formatINR(period.outstanding) : '—'}
           </div>
           {period.outstanding > 0 && (
-            <div className="text-muted-foreground/50 text-xs">
-              outstanding
-            </div>
+            <div className="text-muted-foreground/50 text-xs">outstanding</div>
           )}
         </div>
 

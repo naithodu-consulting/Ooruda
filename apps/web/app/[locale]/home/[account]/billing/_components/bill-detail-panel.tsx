@@ -7,6 +7,8 @@ import { AlertCircle, Download, RotateCw } from 'lucide-react';
 import { Badge } from '@kit/ui/badge';
 import { Skeleton } from '@kit/ui/skeleton';
 
+import { billOutstanding } from '~/lib/bill-status';
+import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatDateDMY } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 
@@ -83,7 +85,10 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
         <span>{error}</span>
         <button
           type="button"
-          onClick={() => { setError(null); setRetryCount((c) => c + 1); }}
+          onClick={() => {
+            setError(null);
+            setRetryCount((c) => c + 1);
+          }}
           className="inline-flex items-center gap-1 underline underline-offset-2"
         >
           <RotateCw className="h-3 w-3" />
@@ -96,6 +101,20 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
   const lineItems = detail?.lineItems ?? [];
   const baseTotal = lineItems.reduce((s, li) => s + li.amount, 0);
 
+  // A settled bill's due date is history, not a warning — only an unpaid bill
+  // that has run past its date earns the alarm colour. Compare ISO date strings
+  // in the billing zone rather than `new Date(…) < new Date()`, which parses the
+  // date column as UTC midnight and drifts against local time.
+  const isSettled = billOutstanding(bill) === 0;
+  const isPastDue = bill.due_date < todayInBillingZone();
+  const overdue = isPastDue && !isSettled;
+
+  // `gst_applicable` is a property of the charge type — "taxable if this
+  // association is GST-registered" — not proof that tax was charged. Bills issued
+  // by a non-GST association carry the flag but no tax, so key the badge off the
+  // amount actually levied.
+  const gstCharged = bill.gst_amount != null && bill.gst_amount > 0;
+
   return (
     <div className="border-b px-4 py-4 pl-20">
       {/* Action bar: due date + download */}
@@ -104,7 +123,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
           Due{' '}
           <span
             className={
-              new Date(bill.due_date) < new Date()
+              overdue
                 ? 'font-semibold text-[var(--color-danger)]'
                 : 'text-foreground font-medium'
             }
@@ -116,7 +135,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
           href={`/api/billing/bills/${bill.id}/pdf`}
           target="_blank"
           rel="noopener noreferrer"
-          className="border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors"
+          className="border-input bg-card hover:bg-accent hover:text-accent-foreground inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors"
         >
           <Download className="h-3 w-3" />
           Download PDF
@@ -148,7 +167,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
                         {li.area_sqft} sqft @ ₹{li.rate_per_sqft}
                       </span>
                     )}
-                    {li.gst_applicable && (
+                    {gstCharged && li.gst_applicable && (
                       <Badge
                         variant="outline"
                         className="ml-1.5 px-1 py-0 text-[11px]"

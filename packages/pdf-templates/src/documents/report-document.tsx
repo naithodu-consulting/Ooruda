@@ -165,6 +165,18 @@ export interface ReportPdfData {
       rate: number | null;
     }[];
   };
+  /** When set, only these sections are rendered in the PDF. */
+  activeSections?: (
+    | 'collection'
+    | 'outstanding'
+    | 'payments'
+    | 'electricity'
+  )[];
+  /** Applied filters to disclose in the PDF header. */
+  appliedFilters?: {
+    unitNos?: string[];   // human-readable unit numbers
+    billTypes?: string[]; // human-readable bill type labels
+  };
 }
 
 function formatPeriodLabel(p: string) {
@@ -183,7 +195,44 @@ function formatDate(iso: string) {
   });
 }
 
+const TAB_TITLES: Record<string, string> = {
+  collection: 'Collection Summary',
+  outstanding: 'Outstanding Dues',
+  payments: 'Payments Received',
+  electricity: 'Electricity Summary',
+};
+
 export function ReportDocument({ data }: { data: ReportPdfData }) {
+  const showSection = (
+    s: 'collection' | 'outstanding' | 'payments' | 'electricity',
+  ) => activeSections.includes(s);
+
+  // When scoped to a single tab, use that tab's title; otherwise generic
+  const activeSections = data.activeSections ?? [
+    'collection',
+    'outstanding',
+    'payments',
+    'electricity',
+  ];
+  const isSingleSection = activeSections.length === 1;
+  const reportTitle = isSingleSection
+    ? (TAB_TITLES[activeSections[0]!] ?? 'Financial Report')
+    : 'Financial Report';
+
+  // Compute 1-based ordinal for each section based on which sections are shown
+  const sectionIndex = (
+    s: 'collection' | 'outstanding' | 'payments' | 'electricity',
+  ) => activeSections.indexOf(s) + 1;
+
+  const sectionLabel = (
+    s: 'collection' | 'outstanding' | 'payments' | 'electricity',
+    name: string,
+  ) => (isSingleSection ? name : `${sectionIndex(s)}. ${name}`);
+
+  const hasFilters =
+    (data.appliedFilters?.unitNos?.length ?? 0) > 0 ||
+    (data.appliedFilters?.billTypes?.length ?? 0) > 0;
+
   const collectionPct =
     data.collection.totalBilled > 0
       ? Math.round(
@@ -197,157 +246,222 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
         {/* Header */}
         <DocumentHeader association={data.association} />
 
-        <Text style={rStyles.reportTitle}>Financial Report</Text>
+        <Text style={rStyles.reportTitle}>{reportTitle}</Text>
         <Text style={rStyles.reportSubtitle}>Period: {data.periodLabel}</Text>
 
-        {/* ── Section 1: Collection Summary ── */}
-        <Text style={rStyles.sectionTitle}>1. Collection Summary</Text>
-        <View style={rStyles.kpiRow}>
-          <View style={rStyles.kpiBox}>
-            <Text style={rStyles.kpiLabel}>Total Billed</Text>
-            <Text style={rStyles.kpiValue}>
-              {formatINR(data.collection.totalBilled)}
-            </Text>
-          </View>
-          <View style={rStyles.kpiBox}>
-            <Text style={rStyles.kpiLabel}>Total Collected</Text>
-            <Text style={rStyles.kpiValue}>
-              {formatINR(data.collection.totalCollected)}
-            </Text>
-          </View>
-          <View style={rStyles.kpiBox}>
-            <Text style={rStyles.kpiLabel}>Outstanding</Text>
-            <Text style={rStyles.kpiValue}>
-              {formatINR(
-                data.collection.totalBilled - data.collection.totalCollected,
-              )}
-            </Text>
-          </View>
-          <View style={rStyles.kpiBox}>
-            <Text style={rStyles.kpiLabel}>Collection Rate</Text>
-            <Text style={rStyles.kpiValue}>{collectionPct}%</Text>
-          </View>
-        </View>
-
-        <View style={rStyles.table}>
-          <View style={rStyles.thead}>
-            <Text style={[rStyles.theadCell, { flex: 2 }]}>Period</Text>
-            <Text style={rStyles.theadCellRight}>Bills</Text>
-            <Text style={rStyles.theadCellRight}>Billed</Text>
-            <Text style={rStyles.theadCellRight}>Collected</Text>
-            <Text style={rStyles.theadCellRight}>Outstanding</Text>
-          </View>
-          {data.collection.byPeriod.slice(0, 18).map((r, i) => (
-            <View
-              key={r.period}
-              style={i % 2 === 0 ? rStyles.row : rStyles.rowAlt}
+        {/* ── Applied-filter disclosure ── */}
+        {hasFilters && (
+          <View
+            style={{
+              marginBottom: 12,
+              padding: '6 10',
+              backgroundColor: '#f0f4ff',
+              borderRadius: 4,
+              borderWidth: 1,
+              borderColor: '#c7d6f7',
+            }}
+          >
+            <Text
+              style={{ fontSize: 7.5, fontWeight: 'bold', color: '#1e3a8a', marginBottom: 3 }}
             >
-              <Text style={[rStyles.cell, { flex: 2 }]}>
-                {formatPeriodLabel(r.period)}
+              FILTERS APPLIED
+            </Text>
+            {(data.appliedFilters?.unitNos?.length ?? 0) > 0 && (
+              <Text style={{ fontSize: 8, color: '#1e40af' }}>
+                Units:{' '}
+                {data.appliedFilters!.unitNos!.join(', ')}
               </Text>
-              <Text style={rStyles.cellRight}>{r.bill_count}</Text>
-              <Text style={rStyles.cellRight}>{formatINR(r.billed)}</Text>
-              <Text style={rStyles.cellRight}>{formatINR(r.collected)}</Text>
-              <Text style={rStyles.cellRight}>
-                {formatINR(r.billed - r.collected)}
+            )}
+            {(data.appliedFilters?.billTypes?.length ?? 0) > 0 && (
+              <Text style={{ fontSize: 8, color: '#1e40af', marginTop: 2 }}>
+                Charge types:{' '}
+                {data.appliedFilters!.billTypes!.join(', ')}
               </Text>
+            )}
+            <Text
+              style={{ fontSize: 7, color: '#3b5fc0', marginTop: 3 }}
+            >
+              This report covers the selected units/types only — not the full association.
+            </Text>
+          </View>
+        )}
+
+        {/* ── Section: Collection Summary ── */}
+        {showSection('collection') && (
+          <>
+            <Text style={rStyles.sectionTitle}>
+              {sectionLabel('collection', 'Collection Summary')}
+            </Text>
+            <View style={rStyles.kpiRow}>
+              <View style={rStyles.kpiBox}>
+                <Text style={rStyles.kpiLabel}>Total Billed</Text>
+                <Text style={rStyles.kpiValue}>
+                  {formatINR(data.collection.totalBilled)}
+                </Text>
+              </View>
+              <View style={rStyles.kpiBox}>
+                <Text style={rStyles.kpiLabel}>Total Collected</Text>
+                <Text style={rStyles.kpiValue}>
+                  {formatINR(data.collection.totalCollected)}
+                </Text>
+              </View>
+              <View style={rStyles.kpiBox}>
+                <Text style={rStyles.kpiLabel}>Outstanding</Text>
+                <Text style={rStyles.kpiValue}>
+                  {formatINR(
+                    data.collection.totalBilled -
+                      data.collection.totalCollected,
+                  )}
+                </Text>
+              </View>
+              <View style={rStyles.kpiBox}>
+                <Text style={rStyles.kpiLabel}>Collection Rate</Text>
+                <Text style={rStyles.kpiValue}>{collectionPct}%</Text>
+              </View>
             </View>
-          ))}
-        </View>
+
+            <View style={rStyles.table}>
+              <View style={rStyles.thead}>
+                <Text style={[rStyles.theadCell, { flex: 2 }]}>Period</Text>
+                <Text style={rStyles.theadCellRight}>Bills</Text>
+                <Text style={rStyles.theadCellRight}>Billed</Text>
+                <Text style={rStyles.theadCellRight}>Collected</Text>
+                <Text style={rStyles.theadCellRight}>Outstanding</Text>
+              </View>
+              {data.collection.byPeriod.slice(0, 18).map((r, i) => (
+                <View
+                  key={r.period}
+                  style={i % 2 === 0 ? rStyles.row : rStyles.rowAlt}
+                >
+                  <Text style={[rStyles.cell, { flex: 2 }]}>
+                    {formatPeriodLabel(r.period)}
+                  </Text>
+                  <Text style={rStyles.cellRight}>{r.bill_count}</Text>
+                  <Text style={rStyles.cellRight}>{formatINR(r.billed)}</Text>
+                  <Text style={rStyles.cellRight}>
+                    {formatINR(r.collected)}
+                  </Text>
+                  <Text style={rStyles.cellRight}>
+                    {formatINR(r.billed - r.collected)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
 
         {/* ── Section 2: Outstanding Dues ── */}
-        <Text style={rStyles.sectionTitle}>2. Outstanding Dues</Text>
-        <View style={rStyles.kpiRow}>
-          <View style={rStyles.kpiBox}>
-            <Text style={rStyles.kpiLabel}>Total Outstanding</Text>
-            <Text style={rStyles.kpiValue}>
-              {formatINR(data.outstanding.totalOutstanding)}
+        {showSection('outstanding') && (
+          <>
+            <Text style={rStyles.sectionTitle}>
+              {sectionLabel('outstanding', 'Outstanding Dues')}
             </Text>
-          </View>
-          <View style={rStyles.kpiBox}>
-            <Text style={rStyles.kpiLabel}>Overdue Bills</Text>
-            <Text style={rStyles.kpiValue}>
-              {data.outstanding.overdueCount}
-            </Text>
-          </View>
-        </View>
-
-        {data.outstanding.topBills.length > 0 && (
-          <View style={rStyles.table}>
-            <View style={rStyles.thead}>
-              <Text style={rStyles.theadCell}>Unit</Text>
-              <Text style={rStyles.theadCell}>Bill No.</Text>
-              <Text style={rStyles.theadCell}>Type</Text>
-              <Text style={rStyles.theadCell}>Period</Text>
-              <Text style={rStyles.theadCellRight}>Outstanding</Text>
-              <Text style={rStyles.theadCell}>Due Date</Text>
-            </View>
-            {data.outstanding.topBills.slice(0, 20).map((b, i) => (
-              <View
-                key={b.bill_no}
-                style={i % 2 === 0 ? rStyles.row : rStyles.rowAlt}
-              >
-                <Text style={rStyles.cell}>{b.unit_no}</Text>
-                <Text style={rStyles.cell}>{b.bill_no}</Text>
-                <Text style={rStyles.cell}>
-                  {BILL_TYPE_LABELS[b.bill_type] ?? b.bill_type}
+            <View style={rStyles.kpiRow}>
+              <View style={rStyles.kpiBox}>
+                <Text style={rStyles.kpiLabel}>Total Outstanding</Text>
+                <Text style={rStyles.kpiValue}>
+                  {formatINR(data.outstanding.totalOutstanding)}
                 </Text>
-                <Text style={rStyles.cell}>{formatPeriodLabel(b.period)}</Text>
-                <Text style={rStyles.cellRight}>
-                  {formatINR(b.outstanding)}
-                </Text>
-                <Text style={rStyles.cell}>{formatDate(b.due_date)}</Text>
               </View>
-            ))}
-          </View>
+              <View style={rStyles.kpiBox}>
+                <Text style={rStyles.kpiLabel}>Overdue Bills</Text>
+                <Text style={rStyles.kpiValue}>
+                  {data.outstanding.overdueCount}
+                </Text>
+              </View>
+            </View>
+
+            {data.outstanding.topBills.length > 0 && (
+              <View style={rStyles.table}>
+                <View style={rStyles.thead}>
+                  <Text style={rStyles.theadCell}>Unit</Text>
+                  <Text style={rStyles.theadCell}>Bill No.</Text>
+                  <Text style={rStyles.theadCell}>Type</Text>
+                  <Text style={rStyles.theadCell}>Period</Text>
+                  <Text style={rStyles.theadCellRight}>Outstanding</Text>
+                  <Text style={rStyles.theadCell}>Due Date</Text>
+                </View>
+                {data.outstanding.topBills.slice(0, 20).map((b, i) => (
+                  <View
+                    key={b.bill_no}
+                    style={i % 2 === 0 ? rStyles.row : rStyles.rowAlt}
+                  >
+                    <Text style={rStyles.cell}>{b.unit_no}</Text>
+                    <Text style={rStyles.cell}>{b.bill_no}</Text>
+                    <Text style={rStyles.cell}>
+                      {BILL_TYPE_LABELS[b.bill_type] ?? b.bill_type}
+                    </Text>
+                    <Text style={rStyles.cell}>
+                      {formatPeriodLabel(b.period)}
+                    </Text>
+                    <Text style={rStyles.cellRight}>
+                      {formatINR(b.outstanding)}
+                    </Text>
+                    <Text style={rStyles.cell}>{formatDate(b.due_date)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
         )}
 
         {/* ── Section 3: Payments ── */}
-        <Text style={rStyles.sectionTitle}>3. Payments Received</Text>
-        <View style={rStyles.kpiRow}>
-          <View style={rStyles.kpiBox}>
-            <Text style={rStyles.kpiLabel}>Total Collected</Text>
-            <Text style={rStyles.kpiValue}>
-              {formatINR(data.payments.total)}
+        {showSection('payments') && (
+          <>
+            <Text style={rStyles.sectionTitle}>
+              {sectionLabel('payments', 'Payments Received')}
             </Text>
-          </View>
-          <View style={rStyles.kpiBox}>
-            <Text style={rStyles.kpiLabel}>Transactions</Text>
-            <Text style={rStyles.kpiValue}>{data.payments.count}</Text>
-          </View>
-          {data.payments.byMode.slice(0, 3).map((m) => (
-            <View key={m.mode} style={rStyles.kpiBox}>
-              <Text style={rStyles.kpiLabel}>{m.mode}</Text>
-              <Text style={rStyles.kpiValue}>{formatINR(m.amount)}</Text>
-            </View>
-          ))}
-        </View>
-
-        {data.payments.recentPayments.length > 0 && (
-          <View style={rStyles.table}>
-            <View style={rStyles.thead}>
-              <Text style={rStyles.theadCell}>Date</Text>
-              <Text style={rStyles.theadCell}>Unit</Text>
-              <Text style={rStyles.theadCell}>Bill No.</Text>
-              <Text style={rStyles.theadCellRight}>Amount</Text>
-              <Text style={rStyles.theadCell}>Mode</Text>
-            </View>
-            {data.payments.recentPayments.slice(0, 20).map((p, i) => (
-              <View key={i} style={i % 2 === 0 ? rStyles.row : rStyles.rowAlt}>
-                <Text style={rStyles.cell}>{formatDate(p.paid_at)}</Text>
-                <Text style={rStyles.cell}>{p.unit_no}</Text>
-                <Text style={rStyles.cell}>{p.bill_no}</Text>
-                <Text style={rStyles.cellRight}>{formatINR(p.amount)}</Text>
-                <Text style={rStyles.cell}>{p.mode}</Text>
+            <View style={rStyles.kpiRow}>
+              <View style={rStyles.kpiBox}>
+                <Text style={rStyles.kpiLabel}>Total Collected</Text>
+                <Text style={rStyles.kpiValue}>
+                  {formatINR(data.payments.total)}
+                </Text>
               </View>
-            ))}
-          </View>
+              <View style={rStyles.kpiBox}>
+                <Text style={rStyles.kpiLabel}>Transactions</Text>
+                <Text style={rStyles.kpiValue}>{data.payments.count}</Text>
+              </View>
+              {data.payments.byMode.slice(0, 3).map((m) => (
+                <View key={m.mode} style={rStyles.kpiBox}>
+                  <Text style={rStyles.kpiLabel}>{m.mode}</Text>
+                  <Text style={rStyles.kpiValue}>{formatINR(m.amount)}</Text>
+                </View>
+              ))}
+            </View>
+
+            {data.payments.recentPayments.length > 0 && (
+              <View style={rStyles.table}>
+                <View style={rStyles.thead}>
+                  <Text style={rStyles.theadCell}>Date</Text>
+                  <Text style={rStyles.theadCell}>Unit</Text>
+                  <Text style={rStyles.theadCell}>Bill No.</Text>
+                  <Text style={rStyles.theadCellRight}>Amount</Text>
+                  <Text style={rStyles.theadCell}>Mode</Text>
+                </View>
+                {data.payments.recentPayments.slice(0, 20).map((p, i) => (
+                  <View
+                    key={i}
+                    style={i % 2 === 0 ? rStyles.row : rStyles.rowAlt}
+                  >
+                    <Text style={rStyles.cell}>{formatDate(p.paid_at)}</Text>
+                    <Text style={rStyles.cell}>{p.unit_no}</Text>
+                    <Text style={rStyles.cell}>{p.bill_no}</Text>
+                    <Text style={rStyles.cellRight}>{formatINR(p.amount)}</Text>
+                    <Text style={rStyles.cell}>{p.mode}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
         )}
 
         {/* ── Section 4: Electricity ── */}
-        {data.electricity.byPeriod.length > 0 && (
+        {showSection('electricity') && data.electricity.byPeriod.length > 0 && (
           <>
-            <Text style={rStyles.sectionTitle}>4. Electricity Summary</Text>
+            <Text style={rStyles.sectionTitle}>
+              {sectionLabel('electricity', 'Electricity Summary')}
+            </Text>
             <View style={rStyles.kpiRow}>
               <View style={rStyles.kpiBox}>
                 <Text style={rStyles.kpiLabel}>Total Cost</Text>

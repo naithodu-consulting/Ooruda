@@ -625,10 +625,16 @@ export async function bulkInviteMembersAction(
       .filter((e): e is string => Boolean(e));
 
     if (batchPhones.length > 0 || batchEmails.length > 0) {
-      const { data: foundUsers } = await adminClient.rpc(
+      const { data: foundUsers, error: lookupError } = await adminClient.rpc(
         'find_users_by_phones_or_emails',
         { p_phones: batchPhones, p_emails: batchEmails },
       );
+      if (lookupError) {
+        logger.error(
+          { error: lookupError },
+          'bulkInvite: initial user lookup failed — will fall back to per-phone recovery in Phase 2',
+        );
+      }
       for (const u of foundUsers ?? []) {
         if (u.phone) existingUserByPhone.set(u.phone, u.id);
         if (u.email) existingUserByEmail.set(u.email, u.id);
@@ -743,6 +749,36 @@ export async function bulkInviteMembersAction(
           await adminClient.auth.admin.createUser(createPayload);
 
         if (createError) {
+          // If the phone (or email) is already registered, the initial batch
+          // lookup missed this user (e.g. RPC error, format mismatch, or race
+          // condition). Recover by doing a targeted lookup so Phase 3 can still
+          // insert the membership for the new association instead of skipping.
+          const msg = createError.message.toLowerCase();
+          const isAlreadyRegistered =
+            msg.includes('already been registered') ||
+            msg.includes('already in use') ||
+            (msg.includes('phone') && msg.includes('exists')) ||
+            (msg.includes('email') && msg.includes('exists'));
+
+          if (isAlreadyRegistered) {
+            const recoveryEmails = row.email
+              ? [row.email.trim().toLowerCase()]
+              : [];
+            const { data: recoveryData } = await adminClient.rpc(
+              'find_users_by_phones_or_emails',
+              { p_phones: [normalised], p_emails: recoveryEmails },
+            );
+            const recovered = recoveryData?.[0];
+            if (recovered?.id) {
+              existingUserByPhone.set(normalised, recovered.id);
+              logger.info(
+                { phone: normalised, userId: recovered.id },
+                'bulkInvite: recovered existing user after createUser conflict',
+              );
+              return; // Phase 3 will insert the membership
+            }
+          }
+
           createFailures.set(
             normalised,
             friendlyAuthError(createError.message),

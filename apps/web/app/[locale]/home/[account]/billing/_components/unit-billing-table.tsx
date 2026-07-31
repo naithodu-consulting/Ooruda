@@ -189,11 +189,27 @@ export function UnitBillingTable({
   );
 
   // Export acts on exactly what is on screen: the bills of every unit the
-  // current filters leave visible, not just the current page.
+  // current filters leave visible, respecting both the charge-type/period
+  // and the status pill filter so the download count always matches.
   const exportBills = useMemo(() => {
     const visible = new Set(filtered.map((n) => n.unit.id));
-    return billRows.filter((b) => visible.has(b.unit_id) && billMatches(b));
-  }, [billRows, filtered, billMatches]);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return billRows.filter((b) => {
+      if (!visible.has(b.unit_id) || !billMatches(b)) return false;
+      if (filter === 'outstanding')
+        return b.status !== 'Paid' && b.status !== 'Reversed';
+      if (filter === 'overdue')
+        return (
+          b.status !== 'Paid' &&
+          b.status !== 'Reversed' &&
+          new Date(b.due_date) < today
+        );
+      if (filter === 'all_paid')
+        return b.status === 'Paid' || b.status === 'Reversed';
+      return true;
+    });
+  }, [billRows, filtered, billMatches, filter]);
 
   const allOnPageSelected =
     paged.length > 0 && paged.every((n) => selectedUnitIds.has(n.unit.id));
@@ -294,95 +310,99 @@ export function UnitBillingTable({
   );
 
   return (
-    <div className="overflow-hidden rounded-xl border">
+    <div className="bg-card overflow-hidden rounded-xl border">
       {/* ── Toolbar ────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2.5 sm:px-4">
-        <div className="relative min-w-[160px] flex-1">
-          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search unit no or owner…"
-            aria-label="Search units"
-            className="h-8 pr-8 pl-8 text-base"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              aria-label="Clear search"
-              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
+      <div className="border-b">
+        {/* Row 1: filters + export */}
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
+          <div className="relative min-w-[160px] flex-1">
+            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search unit no or owner…"
+              aria-label="Search units"
+              className="h-8 pr-8 pl-8 text-base"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                aria-label="Clear search"
+                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
 
-        {/* `items` is what lets Base UI's SelectValue render the label rather
-            than the raw value — these filters have value ≠ label. */}
-        <Select
-          items={BILL_TYPE_FILTER_ITEMS}
-          value={typeFilter}
-          onValueChange={(v) => setTypeFilter(v ?? 'all')}
-        >
-          <SelectTrigger
-            className="bg-background h-8 w-[140px] text-sm"
-            aria-label="Charge type"
-            data-test="unit-billing-type-filter"
+          {/* `items` is what lets Base UI's SelectValue render the label rather
+              than the raw value — these filters have value ≠ label. */}
+          <Select
+            items={BILL_TYPE_FILTER_ITEMS}
+            value={typeFilter}
+            onValueChange={(v) => setTypeFilter(v ?? 'all')}
           >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(BILL_TYPE_FILTER_ITEMS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          items={DURATION_ITEMS}
-          value={duration}
-          onValueChange={(v) => setDuration(v ?? 'all')}
-        >
-          <SelectTrigger
-            className="bg-background h-8 w-[150px] text-sm"
-            aria-label="Period"
-            data-test="unit-billing-duration-filter"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(DURATION_ITEMS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              aria-pressed={filter === f.key}
-              className={cn(
-                'rounded-full border px-2.5 py-1 text-sm transition-colors',
-                filter === f.key
-                  ? 'border-primary bg-primary/10 text-primary font-semibold'
-                  : 'text-muted-foreground hover:bg-muted',
-              )}
+            <SelectTrigger
+              className="bg-background h-8 w-[140px] text-sm"
+              aria-label="Charge type"
+              data-test="unit-billing-type-filter"
             >
-              {f.label}
-              <span className="ml-1 opacity-60">({counts[f.key]})</span>
-            </button>
-          ))}
-        </div>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(BILL_TYPE_FILTER_ITEMS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        {/* Live metrics chips — same pattern as Payments page */}
-        {filtered.length > 0 && (
+          <Select
+            items={DURATION_ITEMS}
+            value={duration}
+            onValueChange={(v) => setDuration(v ?? 'all')}
+          >
+            <SelectTrigger
+              className="bg-background h-8 w-[150px] text-sm"
+              aria-label="Period"
+              data-test="unit-billing-duration-filter"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(DURATION_ITEMS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <div className="flex flex-wrap items-center gap-1.5">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                aria-pressed={filter === f.key}
+                className={cn(
+                  'rounded-full border px-2.5 py-1 text-sm transition-colors',
+                  filter === f.key
+                    ? 'bg-primary text-primary-foreground border-primary font-semibold'
+                    : 'border-input text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {f.label}
+                <span className="ml-1 opacity-60">({counts[f.key]})</span>
+              </button>
+            ))}
+          </div>
+
+        </div>
+
+        {/* Row 2: live summary tiles + export actions */}
+        {filtered.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t px-3 py-2 sm:px-4">
             {[
               { label: 'Units', value: String(metrics.units) },
               { label: 'Billed', value: formatINR(metrics.billed) },
@@ -411,36 +431,36 @@ export function UnitBillingTable({
                 </span>
               </div>
             ))}
+
+            <div className="ml-auto flex items-center gap-2">
+              {selectedUnitIds.size > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleZipExport}
+                  disabled={isExporting}
+                  className="h-8 gap-1.5 text-sm"
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Download className="h-3 w-3" />
+                  )}
+                  Download PDFs ({selectedUnitIds.size})
+                </Button>
+              )}
+
+              <ExportMenu
+                ids={exportBills.map((b) => b.id)}
+                count={exportBills.length}
+                noun="bills"
+                onCsvExport={() => exportBillsCsv(exportBills)}
+                pdfEndpoint="/api/billing/bills/export/pdf"
+                pdfFilename="bills.pdf"
+              />
+            </div>
           </div>
         )}
-
-        <div className="ml-auto flex items-center gap-2">
-          {selectedUnitIds.size > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleZipExport}
-              disabled={isExporting}
-              className="h-8 gap-1.5 text-sm"
-            >
-              {isExporting ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Download className="h-3 w-3" />
-              )}
-              Download PDFs ({selectedUnitIds.size})
-            </Button>
-          )}
-
-          <ExportMenu
-            ids={exportBills.map((b) => b.id)}
-            count={exportBills.length}
-            noun="bills"
-            onCsvExport={() => exportBillsCsv(exportBills)}
-            pdfEndpoint="/api/billing/bills/export/pdf"
-            pdfFilename="bills.pdf"
-          />
-        </div>
       </div>
 
       {/* ── Column headers + rows wrapped for horizontal scroll on mobile ─ */}

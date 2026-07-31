@@ -9,6 +9,13 @@ export interface DateRange {
 
 // ── Filter state ──────────────────────────────────────────────────────────────
 
+export type TabKey =
+  | 'collection'
+  | 'outstanding'
+  | 'payments'
+  | 'cash_ledger'
+  | 'electricity';
+
 export type OutstandingStatus = 'all' | 'overdue' | 'partial' | 'unpaid';
 
 export interface ReportsFilters {

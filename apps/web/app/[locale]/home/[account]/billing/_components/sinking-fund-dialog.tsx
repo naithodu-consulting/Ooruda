@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -103,10 +103,11 @@ export function SinkingFundDialog(props: Props) {
         render={
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             data-test="sinking-fund-dialog-trigger"
           >
-            + Sinking Fund
+            <Plus className="h-4 w-4" />
+            Sinking Fund
           </Button>
         }
       />

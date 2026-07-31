@@ -17,20 +17,13 @@ import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 
 import { downloadCsvAction, downloadPdfAction } from '../_lib/reports-actions';
-import type { ReportsFilters } from '../_lib/reports-types';
-
-type TabKey =
-  | 'collection'
-  | 'outstanding'
-  | 'payments'
-  | 'cash_ledger'
-  | 'electricity';
+import type { ReportsFilters, TabKey } from '../_lib/reports-types';
 
 interface Props {
   associationId: string;
   from: string;
   to: string;
-  activeTab: string;
+  activeTab: TabKey;
   filters: ReportsFilters;
 }
 
@@ -57,7 +50,7 @@ export function ExportButton({
         associationId,
         from,
         to,
-        activeTab as TabKey,
+        activeTab,
         filters,
       );
       setExportType(null);
@@ -78,7 +71,13 @@ export function ExportButton({
   const handlePdf = () => {
     setExportType('pdf');
     startTransition(async () => {
-      const result = await downloadPdfAction(associationId, from, to, filters);
+      const result = await downloadPdfAction(
+        associationId,
+        from,
+        to,
+        activeTab,
+        filters,
+      );
       setExportType(null);
       if (!result.success) {
         toast.error(result.error ?? 'Could not generate PDF.');
@@ -115,8 +114,8 @@ export function ExportButton({
           {isPending
             ? loadingLabel
             : hasFilters
-              ? 'Export (filtered)'
-              : 'Export'}
+              ? 'Download - with filters'
+              : 'Download'}
         </span>
         <span className="sm:hidden">{isPending ? '…' : 'Export'}</span>
       </DropdownMenuTrigger>
@@ -157,8 +156,8 @@ export function ExportButton({
             <div className="flex flex-col">
               <span className="font-medium">Export PDF</span>
               <span className="text-muted-foreground text-xs">
-                Full summary report ·{' '}
-                {hasFilters ? 'applies unit & type filters' : 'all data'}
+                Current tab ·{' '}
+                {hasFilters ? 'applies active filters' : 'all data'}
               </span>
             </div>
           </DropdownMenuItem>

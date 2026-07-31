@@ -15,6 +15,7 @@ import {
   type PaymentRow,
   type PresetKey,
   type ReportsFilters,
+  type TabKey,
   type UnitConsumptionRow,
   type UnitOption,
   dateToPeriod,
@@ -87,8 +88,8 @@ export function ReportsClientPage({
     searchParams.get('from') ?? initResolved.from,
   );
   const [to, setTo] = useState(searchParams.get('to') ?? initResolved.to);
-  const [activeTab, setActiveTab] = useState(
-    searchParams.get('tab') ?? 'collection',
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    (searchParams.get('tab') as TabKey | null) ?? 'collection',
   );
 
   // Filter state — all dimensions
@@ -424,9 +425,67 @@ export function ReportsClientPage({
                 : null,
           }));
 
+          // Fetch unit-level meter readings and electricity bill charges
+          let consumptionByPeriod: Record<string, UnitConsumptionRow[]> = {};
+          const mescomBillIds = mescomRows.map((m) => m.id);
+          if (mescomBillIds.length > 0) {
+            const periods = mescomRows.map((m) => m.period);
+            const [mrRes, elecBillsRes] = await Promise.all([
+              (supabase as any)
+                .from('meter_readings')
+                .select(
+                  'period, consumed_units, previous_reading, current_reading, sub_meters(meter_type, unit_id, units(unit_no))',
+                )
+                .in('mescom_bill_id', mescomBillIds),
+              (supabase as any)
+                .from('bills')
+                .select('period, unit_id, total_amount')
+                .eq('association_id', associationId)
+                .eq('bill_type', 'electricity')
+                .in('period', periods),
+            ]);
+
+            if (!ctrl.signal.aborted && !mrRes.error && !elecBillsRes.error) {
+              const chargeMap = new Map<string, number>();
+              for (const b of (elecBillsRes.data ?? []) as any[]) {
+                chargeMap.set(
+                  `${b.unit_id}:${b.period}`,
+                  Number(b.total_amount),
+                );
+              }
+
+              for (const r of (mrRes.data ?? []) as any[]) {
+                const sm = r.sub_meters as {
+                  meter_type: string;
+                  unit_id: string;
+                  units: { unit_no: string } | null;
+                } | null;
+                if (!sm || sm.meter_type !== 'Unit' || !sm.units) continue;
+                const consumedUnits = Number(r.consumed_units);
+                if (consumedUnits <= 0) continue;
+                const period = r.period as string;
+                if (!consumptionByPeriod[period])
+                  consumptionByPeriod[period] = [];
+                consumptionByPeriod[period]!.push({
+                  unit_no: sm.units.unit_no,
+                  consumed_units: consumedUnits,
+                  charged_amount: chargeMap.get(`${sm.unit_id}:${period}`) ?? 0,
+                  prev_reading:
+                    r.previous_reading !== null
+                      ? Number(r.previous_reading)
+                      : null,
+                  curr_reading:
+                    r.current_reading !== null
+                      ? Number(r.current_reading)
+                      : null,
+                });
+              }
+            }
+          }
+
           setTabData((prev) => ({
             ...prev,
-            electricity: { mescomRows, consumptionByPeriod: {} },
+            electricity: { mescomRows, consumptionByPeriod },
           }));
         }
       } catch (err) {
@@ -443,7 +502,7 @@ export function ReportsClientPage({
 
   // Fetch current tab whenever it becomes null (after invalidation) or on first load
   useEffect(() => {
-    const cached = tabData[activeTab as keyof TabData];
+    const cached = tabData[activeTab];
     if (cached !== null) {
       setLoading(false);
       return;
@@ -568,7 +627,7 @@ export function ReportsClientPage({
     );
   }
 
-  const currentTabData = tabData[activeTab as keyof TabData];
+  const currentTabData = tabData[activeTab];
 
   return (
     <div className="flex flex-col gap-6">
