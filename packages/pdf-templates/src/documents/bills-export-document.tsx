@@ -15,13 +15,13 @@ import { formatINR } from '../lib/format';
 const COL = {
   billNo: 2.8, // "TPC/26-27/MNT/000001"
   period: 1.2, // "Jul 2026"
-  unit: 0.8, // "101"
-  type: 1.5, // "Maintenance"
-  total: 1.4, // "₹19,860"
-  paid: 1.4,
-  outstanding: 1.4,
-  status: 1.0, // "Overdue"
-  dueDate: 1.5, // "20 Jul 2026"
+  unit: 0.7, // "101"
+  type: 1.4, // "Maintenance"
+  total: 1.3, // "₹19,860"
+  paid: 1.3,
+  outstanding: 1.3,
+  status: 1.1, // "Overdue"
+  dueDate: 1.4, // "20 Jul 2026"
 };
 
 const s = StyleSheet.create({
@@ -65,29 +65,33 @@ const s = StyleSheet.create({
   kpiValue: { fontSize: 10, fontWeight: 'bold', color: NAVY },
   thead: {
     flexDirection: 'row',
+    gap: 4,
     backgroundColor: NAVY,
     paddingVertical: 4,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     borderRadius: 2,
     marginTop: 4,
   },
   row: {
     flexDirection: 'row',
+    gap: 4,
     paddingVertical: 3,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
   },
   rowAlt: {
     flexDirection: 'row',
+    gap: 4,
     paddingVertical: 3,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     backgroundColor: CREAM,
   },
   totalRow: {
     flexDirection: 'row',
+    gap: 4,
     paddingVertical: 4,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     backgroundColor: '#f1f5f9',
     borderTopWidth: 1,
     borderTopColor: NAVY,
@@ -263,39 +267,63 @@ export function BillsExportDocument({ data }: { data: BillsExportPdfData }) {
           </C>
         </View>
 
-        {data.bills.map((b, i) => (
-          <View key={b.bill_no + i} style={i % 2 === 0 ? s.row : s.rowAlt}>
-            <C flex={COL.billNo}>
-              <Text style={s.cellBold}>{b.bill_no}</Text>
-            </C>
-            <C flex={COL.period}>
-              <Text style={s.cell}>{fmtPeriod(b.period)}</Text>
-            </C>
-            <C flex={COL.unit}>
-              <Text style={s.cell}>{b.unit_no}</Text>
-            </C>
-            <C flex={COL.type}>
-              <Text style={s.cell}>
-                {BILL_TYPE_LABELS[b.bill_type] ?? b.bill_type}
-              </Text>
-            </C>
-            <C flex={COL.total} right>
-              <Text style={s.cellR}>{formatINR(b.total_amount)}</Text>
-            </C>
-            <C flex={COL.paid} right>
-              <Text style={s.cellR}>{formatINR(b.paid_amount)}</Text>
-            </C>
-            <C flex={COL.outstanding} right>
-              <Text style={s.cellR}>{formatINR(b.outstanding)}</Text>
-            </C>
-            <C flex={COL.status}>
-              <Text style={s.cell}>{b.status}</Text>
-            </C>
-            <C flex={COL.dueDate}>
-              <Text style={s.cell}>{fmtDate(b.due_date)}</Text>
-            </C>
-          </View>
-        ))}
+        {data.bills.map((b, i) => {
+          const isOverdue = b.status === 'Overdue';
+          const rowStyle = isOverdue
+            ? { ...s.row, backgroundColor: '#fff5f5' }
+            : i % 2 === 0
+              ? s.row
+              : s.rowAlt;
+          return (
+            <View key={b.bill_no + i} style={rowStyle}>
+              <C flex={COL.billNo}>
+                <Text style={s.cellBold}>{b.bill_no}</Text>
+              </C>
+              <C flex={COL.period}>
+                <Text style={s.cell}>{fmtPeriod(b.period)}</Text>
+              </C>
+              <C flex={COL.unit}>
+                <Text style={s.cell}>{b.unit_no}</Text>
+              </C>
+              <C flex={COL.type}>
+                <Text style={s.cell}>
+                  {BILL_TYPE_LABELS[b.bill_type] ?? b.bill_type}
+                </Text>
+              </C>
+              <C flex={COL.total} right>
+                <Text style={s.cellR}>{formatINR(b.total_amount)}</Text>
+              </C>
+              <C flex={COL.paid} right>
+                <Text style={s.cellR}>
+                  {b.paid_amount > 0 ? formatINR(b.paid_amount) : '—'}
+                </Text>
+              </C>
+              <C flex={COL.outstanding} right>
+                <Text
+                  style={isOverdue ? { ...s.cellR, color: '#dc2626' } : s.cellR}
+                >
+                  {b.outstanding > 0 ? formatINR(b.outstanding) : '—'}
+                </Text>
+              </C>
+              <C flex={COL.status}>
+                <Text
+                  style={
+                    isOverdue
+                      ? { ...s.cell, color: '#dc2626', fontWeight: 'bold' }
+                      : b.status === 'Paid'
+                        ? { ...s.cell, color: '#16a34a' }
+                        : s.cell
+                  }
+                >
+                  {b.status}
+                </Text>
+              </C>
+              <C flex={COL.dueDate}>
+                <Text style={s.cell}>{fmtDate(b.due_date)}</Text>
+              </C>
+            </View>
+          );
+        })}
 
         {/* Totals row */}
         <View style={s.totalRow}>

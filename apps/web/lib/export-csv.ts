@@ -3,10 +3,10 @@
  * so we serialize the already-filtered rows directly — no server round-trip.
  */
 
-import type { BillRow } from '~/home/[account]/billing/_components/bills-section';
+import type { BillRow } from '~/home/[account]/billing/_lib/billing-queries';
 import type { BillPaymentRow } from '~/home/[account]/payments/_components/payments-section';
 
-import { displayBillStatus } from './bill-status';
+import { billOutstanding, displayBillStatus } from './bill-status';
 
 /** Escapes a CSV cell value per RFC 4180 (wraps in quotes if needed). */
 function cell(value: string | number | null | undefined): string {
@@ -60,7 +60,9 @@ export function exportBillsCsv(
       b.bill_type,
       b.total_amount,
       b.paid_amount,
-      Math.max(0, b.total_amount - b.paid_amount),
+      // Advance credit applied to a bill is real settlement — omitting it here
+      // reported bills as owing money they had already been settled for.
+      billOutstanding(b),
       b.gst_amount ?? '',
       displayBillStatus(b),
       b.due_date,

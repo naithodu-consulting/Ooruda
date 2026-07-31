@@ -13,11 +13,28 @@ import {
 
 import { Button } from '@kit/ui/button';
 import { Input } from '@kit/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@kit/ui/select';
+import { toast } from '@kit/ui/sonner';
 import { cn } from '@kit/ui/utils';
 
+import { ExportMenu } from '~/components/export-menu';
+import {
+  BILL_TYPE_FILTER_ITEMS,
+  getDurationItems,
+} from '~/lib/bill-filter-items';
+import { getPeriodsForDuration } from '~/lib/bill-period-filter';
+import { exportBillsCsv } from '~/lib/export-csv';
+import { formatINR } from '~/lib/format-inr';
+
+import type { BillRow } from '../_lib/billing-queries';
 import {
   buildUnitTree,
-  type BillDetail,
   type UnitBill,
   type UnitDraftItem,
   type UnitNode,
@@ -28,10 +45,12 @@ import { UnitRow } from './unit-row';
 interface Props {
   units: UnitSummaryInput[];
   bills: UnitBill[];
+  /** Same bills, flattened with `unit_no` — used only for CSV/PDF export. */
+  billRows: BillRow[];
   drafts: UnitDraftItem[];
-  /** Deep-link target from ?unit= — auto-expands that unit on mount. */
-  initialUnitNo?: string;
   initialFilter?: string;
+  initialType?: string;
+  initialDuration?: string;
   accountSlug: string;
 }
 
@@ -45,6 +64,8 @@ const FILTERS: { key: StatusFilter; label: string }[] = [
 ];
 
 const PAGE_SIZE = 25;
+
+const DURATION_ITEMS = getDurationItems();
 
 function matchesFilter(node: UnitNode, filter: StatusFilter): boolean {
   switch (filter) {
@@ -60,25 +81,27 @@ function matchesFilter(node: UnitNode, filter: StatusFilter): boolean {
 }
 
 /**
- * The unit-centric billing table.
+ * Level 1 of the billing drill-down: one row per unit.
  *
  * The row count always equals the unit count — an association with 30 units
- * shows 30 rows, every time, regardless of how many bills exist. Detail unfolds
- * in place: unit → period → bill type → line items & payments.
+ * shows 30 rows, every time, regardless of how many bills exist. Opening a unit
+ * navigates to its own page rather than expanding in place, so this list never
+ * needs per-bill detail.
  *
- * The unit/period/type tree is built entirely from data the server already
- * sent, so expanding and collapsing never hits the network. Only the innermost
- * level (line items + payment history) is fetched on demand.
+ * The charge-type and duration filters narrow the bill set *before* the tree is
+ * built, so the Outstanding and Overdue columns always describe the same slice
+ * the filters describe.
  */
 export function UnitBillingTable({
   units,
   bills,
+  billRows,
   drafts,
-  initialUnitNo,
   initialFilter,
+  initialType,
+  initialDuration,
   accountSlug,
 }: Props) {
-  const tableRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
   const [search, setSearch] = useState('');
@@ -87,26 +110,52 @@ export function UnitBillingTable({
       ? (initialFilter as StatusFilter)
       : 'all',
   );
+  const [typeFilter, setTypeFilter] = useState(
+    initialType && initialType in BILL_TYPE_FILTER_ITEMS ? initialType : 'all',
+  );
+  const [duration, setDuration] = useState(
+    initialDuration && initialDuration in DURATION_ITEMS
+      ? initialDuration
+      : 'all',
+  );
   const [page, setPage] = useState(1);
-
-  const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set());
-  const [expandedPeriods, setExpandedPeriods] = useState<Set<string>>(
-    new Set(),
-  );
-  const [expandedBills, setExpandedBills] = useState<Set<string>>(new Set());
-  const [detailCache, setDetailCache] = useState<Map<string, BillDetail>>(
-    new Map(),
-  );
 
   const [selectedUnitIds, setSelectedUnitIds] = useState<Set<string>>(
     new Set(),
   );
   const [isExporting, setIsExporting] = useState(false);
 
-  const tree = useMemo(
-    () => buildUnitTree(units, bills, drafts),
-    [units, bills, drafts],
+  // Charge type and period narrow the bills themselves; the status pills and
+  // search below narrow the resulting units.
+  const periodsAllowed = useMemo(
+    () => getPeriodsForDuration(duration),
+    [duration],
   );
+
+  const billMatches = useCallback(
+    (b: { bill_type: string; period: string }) => {
+      if (typeFilter !== 'all' && b.bill_type !== typeFilter) return false;
+      if (periodsAllowed && !periodsAllowed.includes(b.period)) return false;
+      return true;
+    },
+    [typeFilter, periodsAllowed],
+  );
+
+  const scopedBills = useMemo(
+    () => bills.filter(billMatches),
+    [bills, billMatches],
+  );
+
+  const isNarrowed = typeFilter !== 'all' || duration !== 'all';
+
+  const tree = useMemo(() => {
+    const full = buildUnitTree(units, scopedBills, drafts);
+    // Unfiltered, every unit gets a row even with no bills — that is the point
+    // of a unit-centric list. But once a charge type or period is chosen,
+    // "Electricity" showing 25 units reading "No bills yet" is noise, so units
+    // outside the chosen slice drop out.
+    return isNarrowed ? full.filter((n) => n.billCount > 0) : full;
+  }, [units, scopedBills, drafts, isNarrowed]);
 
   // Counts are computed over the whole tree, not the filtered view, so the
   // pills always show how many units each filter would actually reveal.
@@ -139,12 +188,17 @@ export function UnitBillingTable({
     safePage * PAGE_SIZE,
   );
 
-  // Selection derived state
+  // Export acts on exactly what is on screen: the bills of every unit the
+  // current filters leave visible, not just the current page.
+  const exportBills = useMemo(() => {
+    const visible = new Set(filtered.map((n) => n.unit.id));
+    return billRows.filter((b) => visible.has(b.unit_id) && billMatches(b));
+  }, [billRows, filtered, billMatches]);
+
   const allOnPageSelected =
     paged.length > 0 && paged.every((n) => selectedUnitIds.has(n.unit.id));
   const someOnPageSelected = paged.some((n) => selectedUnitIds.has(n.unit.id));
 
-  // Sync indeterminate state on the select-all checkbox
   useEffect(() => {
     if (selectAllRef.current) {
       selectAllRef.current.indeterminate =
@@ -156,65 +210,22 @@ export function UnitBillingTable({
   // staying on page 3 of a 1-page result set reads as an empty table.
   useEffect(() => {
     setPage(1);
-  }, [search, filter]);
+  }, [search, filter, typeFilter, duration]);
 
-  // Deep link: ?unit=101 opens that unit (and its newest period) on arrival.
+  // Keep the view shareable without a Next.js navigation (which would refetch
+  // and lose scroll). Only these three keys are touched — any other param on
+  // the URL is left exactly as it was.
   useEffect(() => {
-    if (!initialUnitNo) return;
-    const match = tree.find(
-      (n) => n.unit.unit_no.toLowerCase() === initialUnitNo.toLowerCase(),
-    );
-    if (!match) return;
-    setExpandedUnits(new Set([match.unit.id]));
-    const newest = match.periods[0];
-    if (newest) {
-      setExpandedPeriods(new Set([`${match.unit.id}::${newest.period}`]));
-    }
-    // Only runs for the initial deep link, not on every tree rebuild.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialUnitNo]);
-
-  // When the page loads with a pre-set filter (e.g. from clicking an Overview
-  // tile), scroll the table into view so the user sees the filtered result
-  // without having to manually scroll past the period summary above.
-  useEffect(() => {
-    if (initialFilter && initialFilter !== 'all' && tableRef.current) {
-      setTimeout(() => {
-        tableRef.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-        });
-      }, 150);
-    }
-    // Intentionally only on mount — we don't re-scroll on filter changes the
-    // user makes themselves.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const toggle = useCallback(
-    (setter: React.Dispatch<React.SetStateAction<Set<string>>>) =>
-      (key: string) => {
-        setter((prev) => {
-          const next = new Set(prev);
-          if (next.has(key)) next.delete(key);
-          else next.add(key);
-          return next;
-        });
-      },
-    [],
-  );
-
-  const onToggleUnit = useMemo(() => toggle(setExpandedUnits), [toggle]);
-  const onTogglePeriod = useMemo(() => toggle(setExpandedPeriods), [toggle]);
-  const onToggleBill = useMemo(() => toggle(setExpandedBills), [toggle]);
-
-  const onDetailLoaded = useCallback((billId: string, detail: BillDetail) => {
-    setDetailCache((prev) => {
-      const next = new Map(prev);
-      next.set(billId, detail);
-      return next;
-    });
-  }, []);
+    const url = new URL(window.location.href);
+    const sync = (key: string, value: string) => {
+      if (value === 'all') url.searchParams.delete(key);
+      else url.searchParams.set(key, value);
+    };
+    sync('filter', filter);
+    sync('type', typeFilter);
+    sync('duration', duration);
+    window.history.replaceState(null, '', url.toString());
+  }, [filter, typeFilter, duration]);
 
   const onToggleSelect = useCallback((unitId: string) => {
     setSelectedUnitIds((prev) => {
@@ -226,37 +237,31 @@ export function UnitBillingTable({
   }, []);
 
   const handleSelectAll = () => {
-    if (allOnPageSelected) {
-      setSelectedUnitIds((prev) => {
-        const next = new Set(prev);
-        paged.forEach((n) => next.delete(n.unit.id));
-        return next;
+    setSelectedUnitIds((prev) => {
+      const next = new Set(prev);
+      paged.forEach((n) => {
+        if (allOnPageSelected) next.delete(n.unit.id);
+        else next.add(n.unit.id);
       });
-    } else {
-      setSelectedUnitIds((prev) => {
-        const next = new Set(prev);
-        paged.forEach((n) => next.add(n.unit.id));
-        return next;
-      });
-    }
+      return next;
+    });
   };
 
-  const handleExport = async () => {
+  const handleZipExport = async () => {
     setIsExporting(true);
     try {
       const res = await fetch('/api/billing/bills/export/zip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          unitIds: [...selectedUnitIds],
-          accountSlug,
-        }),
+        body: JSON.stringify({ unitIds: [...selectedUnitIds], accountSlug }),
       });
+
       if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        alert(data.error ?? 'Download failed. Please try again.');
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(data.error ?? 'Download failed. Please try again.');
         return;
       }
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -269,50 +274,29 @@ export function UnitBillingTable({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      alert('Download failed. Please try again.');
+      toast.error('Download failed. Please try again.');
     } finally {
       setIsExporting(false);
     }
   };
 
-  // Keep ?unit= and ?filter= in the URL so a particular view is shareable,
-  // without a Next.js navigation (which would refetch and lose scroll).
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (filter === 'all') params.delete('filter');
-    else params.set('filter', filter);
-    const qs = params.toString();
-    window.history.replaceState(
-      null,
-      '',
-      qs ? `${window.location.pathname}?${qs}` : window.location.pathname,
-    );
-  }, [filter]);
+  const hasActiveFilter =
+    !!search || filter !== 'all' || typeFilter !== 'all' || duration !== 'all';
 
-  const allExpanded =
-    paged.length > 0 && paged.every((n) => expandedUnits.has(n.unit.id));
-
-  const toggleAll = () => {
-    if (allExpanded) {
-      setExpandedUnits(new Set());
-      setExpandedPeriods(new Set());
-    } else {
-      setExpandedUnits(new Set(paged.map((n) => n.unit.id)));
-      // Auto-open each unit's newest period so content is immediately visible.
-      setExpandedPeriods(
-        new Set(
-          paged
-            .filter((n) => n.periods.length > 0)
-            .map((n) => `${n.unit.id}::${n.periods[0]!.period}`),
-        ),
-      );
-    }
-  };
+  const metrics = useMemo(
+    () => ({
+      units: filtered.length,
+      billed: filtered.reduce((s, n) => s + n.billed, 0),
+      outstanding: filtered.reduce((s, n) => s + n.outstanding, 0),
+      overdueUnits: filtered.filter((n) => n.overdue > 0).length,
+    }),
+    [filtered],
+  );
 
   return (
-    <div ref={tableRef} className="overflow-hidden rounded-xl border">
+    <div className="overflow-hidden rounded-xl border">
       {/* ── Toolbar ────────────────────────────────────────────────────── */}
-      <div className="bg-muted/40 flex flex-wrap items-center gap-2 border-b px-3 py-2.5 sm:px-4">
+      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2.5 sm:px-4">
         <div className="relative min-w-[160px] flex-1">
           <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
           <Input
@@ -320,7 +304,7 @@ export function UnitBillingTable({
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search unit no or owner…"
             aria-label="Search units"
-            className="h-8 pr-8 pl-8 text-sm"
+            className="h-8 pr-8 pl-8 text-base"
           />
           {search && (
             <button
@@ -333,6 +317,50 @@ export function UnitBillingTable({
           )}
         </div>
 
+        {/* `items` is what lets Base UI's SelectValue render the label rather
+            than the raw value — these filters have value ≠ label. */}
+        <Select
+          items={BILL_TYPE_FILTER_ITEMS}
+          value={typeFilter}
+          onValueChange={(v) => setTypeFilter(v ?? 'all')}
+        >
+          <SelectTrigger
+            className="bg-background h-8 w-[140px] text-sm"
+            aria-label="Charge type"
+            data-test="unit-billing-type-filter"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(BILL_TYPE_FILTER_ITEMS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          items={DURATION_ITEMS}
+          value={duration}
+          onValueChange={(v) => setDuration(v ?? 'all')}
+        >
+          <SelectTrigger
+            className="bg-background h-8 w-[150px] text-sm"
+            aria-label="Period"
+            data-test="unit-billing-duration-filter"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(DURATION_ITEMS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <div className="flex flex-wrap items-center gap-1.5">
           {FILTERS.map((f) => (
             <button
@@ -340,7 +368,7 @@ export function UnitBillingTable({
               onClick={() => setFilter(f.key)}
               aria-pressed={filter === f.key}
               className={cn(
-                'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                'rounded-full border px-2.5 py-1 text-sm transition-colors',
                 filter === f.key
                   ? 'border-primary bg-primary/10 text-primary font-semibold'
                   : 'text-muted-foreground hover:bg-muted',
@@ -352,38 +380,72 @@ export function UnitBillingTable({
           ))}
         </div>
 
-        {selectedUnitIds.size > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExport}
-            disabled={isExporting}
-            className="h-8 gap-1.5 text-xs"
-          >
-            {isExporting ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Download className="h-3 w-3" />
-            )}
-            Download PDFs ({selectedUnitIds.size})
-          </Button>
+        {/* Live metrics chips — same pattern as Payments page */}
+        {filtered.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {[
+              { label: 'Units', value: String(metrics.units) },
+              { label: 'Billed', value: formatINR(metrics.billed) },
+              {
+                label: 'Outstanding',
+                value: formatINR(metrics.outstanding),
+                highlight: metrics.outstanding > 0,
+              },
+              {
+                label: 'Overdue',
+                value: String(metrics.overdueUnits),
+                highlight: metrics.overdueUnits > 0,
+              },
+            ].map(({ label, value, highlight }) => (
+              <div
+                key={label}
+                className="bg-muted/50 flex flex-col items-center rounded-md px-2.5 py-1.5 text-center"
+              >
+                <span
+                  className={`text-base font-semibold tabular-nums ${highlight ? 'text-destructive' : 'text-foreground'}`}
+                >
+                  {value}
+                </span>
+                <span className="text-muted-foreground text-[13px] font-medium">
+                  {label}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={toggleAll}
-          disabled={paged.length === 0}
-          className="ml-auto h-8 text-xs"
-        >
-          {allExpanded ? 'Collapse all' : 'Expand all'}
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          {selectedUnitIds.size > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleZipExport}
+              disabled={isExporting}
+              className="h-8 gap-1.5 text-sm"
+            >
+              {isExporting ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Download className="h-3 w-3" />
+              )}
+              Download PDFs ({selectedUnitIds.size})
+            </Button>
+          )}
+
+          <ExportMenu
+            ids={exportBills.map((b) => b.id)}
+            count={exportBills.length}
+            noun="bills"
+            onCsvExport={() => exportBillsCsv(exportBills)}
+            pdfEndpoint="/api/billing/bills/export/pdf"
+            pdfFilename="bills.pdf"
+          />
+        </div>
       </div>
 
       {/* ── Column headers + rows wrapped for horizontal scroll on mobile ─ */}
       <div className="overflow-x-auto">
-        {/* ── Column headers ─────────────────────────────────────────────── */}
-        <div className="bg-muted/60 text-muted-foreground grid min-w-[640px] grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px_90px] items-center gap-2 border-b px-3 py-2 text-[10px] font-bold tracking-wider uppercase sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px_100px] sm:px-4">
+        <div className="bg-muted/40 text-muted-foreground grid min-w-[640px] grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px_90px] items-center gap-2 border-b px-3 py-2 text-[13px] font-bold tracking-wider uppercase sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px_100px] sm:px-4">
           <div className="flex items-center justify-center">
             <input
               ref={selectAllRef}
@@ -403,23 +465,24 @@ export function UnitBillingTable({
           <div className="text-right">Status</div>
         </div>
 
-        {/* ── Rows ───────────────────────────────────────────────────────── */}
         {paged.length === 0 ? (
           <div className="flex flex-col items-center gap-1 py-14">
-            <p className="text-sm font-semibold">No units match</p>
-            <p className="text-muted-foreground text-xs">
+            <p className="text-base font-semibold">No units match</p>
+            <p className="text-muted-foreground text-sm">
               {search
                 ? `Nothing found for "${search}".`
                 : 'Try a different filter.'}
             </p>
-            {(search || filter !== 'all') && (
+            {hasActiveFilter && (
               <Button
                 variant="outline"
                 size="sm"
-                className="mt-2 h-7 text-xs"
+                className="mt-2 h-7 text-sm"
                 onClick={() => {
                   setSearch('');
                   setFilter('all');
+                  setTypeFilter('all');
+                  setDuration('all');
                 }}
               >
                 Clear filters
@@ -431,25 +494,17 @@ export function UnitBillingTable({
             <UnitRow
               key={node.unit.id}
               node={node}
-              expanded={expandedUnits.has(node.unit.id)}
-              expandedPeriods={expandedPeriods}
-              expandedBills={expandedBills}
-              detailCache={detailCache}
-              onToggleUnit={onToggleUnit}
-              onTogglePeriod={onTogglePeriod}
-              onToggleBill={onToggleBill}
-              onDetailLoaded={onDetailLoaded}
+              href={`/home/${accountSlug}/billing/units/${node.unit.id}`}
               selected={selectedUnitIds.has(node.unit.id)}
               onToggleSelect={onToggleSelect}
             />
           ))
         )}
       </div>
-      {/* end overflow-x-auto */}
 
       {/* ── Footer ─────────────────────────────────────────────────────── */}
       {filtered.length > 0 && (
-        <div className="bg-muted/40 flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-xs sm:px-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-sm sm:px-4">
           <span className="text-muted-foreground">
             Showing {paged.length} of {filtered.length} unit
             {filtered.length !== 1 ? 's' : ''}

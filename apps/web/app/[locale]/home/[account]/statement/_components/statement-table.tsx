@@ -475,7 +475,8 @@ export function StatementTable({
     return years.size > 1;
   }, [filtered]);
 
-  const showYear = fyFilter === FY_ALL || fyFilter === FY_CUSTOM || spansMultipleYears;
+  const showYear =
+    fyFilter === FY_ALL || fyFilter === FY_CUSTOM || spansMultipleYears;
 
   // Effective credit delta for an entry — used by opening balance and running balance.
   // Full reversals (payment_status='reversed') contribute 0: the bill debit already
@@ -642,9 +643,9 @@ export function StatementTable({
             </p>
             {hasAdvances && closingBalance < 0 && (
               <p className="text-muted-foreground mt-2 text-[11px] leading-relaxed">
-                Note: Your advance payments are specific for a charge type.
-                For example, a Maintenance advance only covers Maintenance bills. Check
-                Payments to see exactly what you owe.
+                Note: Your advance payments are specific for a charge type. For
+                example, a Maintenance advance only covers Maintenance bills.
+                Check Payments to see exactly what you owe.
               </p>
             )}
             <div className="mt-2.5">

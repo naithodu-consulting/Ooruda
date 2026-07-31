@@ -212,7 +212,9 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Overdue by Age</CardTitle>
-            <CardDescription>Outstanding amount by how long it's been overdue</CardDescription>
+            <CardDescription>
+              Outstanding amount by how long it's been overdue
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>

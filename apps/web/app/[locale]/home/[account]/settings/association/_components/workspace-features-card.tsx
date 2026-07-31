@@ -34,9 +34,7 @@ export function WorkspaceFeaturesCard({
       );
       if (result.success) {
         toast.success(
-          enabled
-            ? 'Advances & Dues tracking is now on.'
-            : 'Advances & Dues tracking is now off.',
+          enabled ? 'Cash Ledger is now on.' : 'Cash Ledger is now off.',
         );
       } else {
         toast.error(result.error ?? 'Could not update the feature setting.');
@@ -68,7 +66,7 @@ export function WorkspaceFeaturesCard({
             checked={cashLedgerEnabled}
             onCheckedChange={handleCashLedgerToggle}
             disabled={isPending}
-            aria-label="Toggle Advances & Dues tracking"
+            aria-label="Toggle Cash Ledger"
           />
         </div>
       </CardContent>

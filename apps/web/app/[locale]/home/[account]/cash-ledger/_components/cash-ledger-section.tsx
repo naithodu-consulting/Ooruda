@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { CheckCircle2, Plus, Upload } from 'lucide-react';
 
 import { Badge } from '@kit/ui/badge';
@@ -33,6 +34,8 @@ import {
 } from '../_lib/cash-ledger-actions';
 import { AddCashLedgerEntryDialog } from './add-cash-ledger-entry-dialog';
 import { ImportCashLedgerDialog } from './import-cash-ledger-dialog';
+
+const PAGE_SIZE = 50;
 
 const BILL_TYPE_OPTIONS = [
   { value: 'all', label: 'All Types' },
@@ -104,6 +107,7 @@ export function CashLedgerSection({
   );
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   const unitMap = useMemo(
     () => new Map(units.map((u) => [u.id, u.unit_no])),
@@ -112,6 +116,7 @@ export function CashLedgerSection({
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
+    setPage(1);
     const result = await getCashLedgerEntriesAction(
       associationId,
       selectedUnitId,
@@ -162,6 +167,13 @@ export function CashLedgerSection({
   const netBalance = isAllUnits
     ? null
     : (runningEntries.at(-1)?.runningBalance ?? 0);
+
+  const totalPages = Math.max(1, Math.ceil(runningEntries.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedEntries = runningEntries.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE,
+  );
 
   const allUnitsSummary = useMemo(() => {
     if (!isAllUnits) return null;
@@ -384,7 +396,7 @@ export function CashLedgerSection({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  runningEntries.map((e) => (
+                  pagedEntries.map((e) => (
                     <TableRow
                       key={e.id}
                       className="hover:bg-muted/30 transition-colors"
@@ -431,6 +443,36 @@ export function CashLedgerSection({
               </TableBody>
             </Table>
           </div>
+          {totalPages > 1 && (
+            <div className="bg-muted/40 flex items-center justify-between border-t px-5 py-2.5 text-xs">
+              <span className="text-muted-foreground tabular-nums">
+                {(safePage - 1) * PAGE_SIZE + 1}–
+                {Math.min(safePage * PAGE_SIZE, runningEntries.length)} of{' '}
+                {runningEntries.length} entries
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  className="border-input bg-background hover:bg-accent inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <span className="text-muted-foreground px-2 tabular-nums">
+                  {safePage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  className="border-input bg-background hover:bg-accent inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

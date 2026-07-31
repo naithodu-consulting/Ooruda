@@ -206,8 +206,8 @@ export function ImportOtherChargesDialog(props: Props) {
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
           {/* Step 1: Billing Period */}
           <div className="bg-muted/20 flex flex-col gap-2 rounded-lg border p-3.5">
-            <h4 className="text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase">
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] text-white">
+            <h4 className="text-muted-foreground flex items-center gap-1.5 text-sm font-bold tracking-wider uppercase">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-xs text-white">
                 1
               </span>
               Select Target Billing Period
@@ -235,8 +235,8 @@ export function ImportOtherChargesDialog(props: Props) {
           {/* Step 2: Upload CSV */}
           <div className="bg-muted/20 flex flex-col gap-2 rounded-lg border p-3.5">
             <div className="flex items-center justify-between">
-              <h4 className="text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase">
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] text-white">
+              <h4 className="text-muted-foreground flex items-center gap-1.5 text-sm font-bold tracking-wider uppercase">
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-xs text-white">
                   2
                 </span>
                 Upload File
@@ -244,7 +244,7 @@ export function ImportOtherChargesDialog(props: Props) {
               <button
                 type="button"
                 onClick={downloadTemplate}
-                className="text-xs font-semibold text-blue-600 hover:underline"
+                className="text-sm font-semibold text-blue-600 hover:underline"
               >
                 Download Template
               </button>
@@ -263,12 +263,12 @@ export function ImportOtherChargesDialog(props: Props) {
                 className="border-muted-foreground/30 hover:bg-muted/10 flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed py-8 text-center transition-colors"
               >
                 <Upload className="text-muted-foreground/60 mb-2 h-8 w-8" />
-                <span className="text-sm font-medium">
+                <span className="text-base font-medium">
                   {fileName
                     ? fileName
                     : 'Drop CSV or Excel here, or click to browse'}
                 </span>
-                <span className="text-muted-foreground mt-1 text-xs">
+                <span className="text-muted-foreground mt-1 text-sm">
                   Required columns: unit_no, label, amount
                 </span>
               </label>
@@ -278,9 +278,9 @@ export function ImportOtherChargesDialog(props: Props) {
           {/* Step 3: Review Rows */}
           {rows.length > 0 && (
             <div className="flex min-h-[200px] flex-1 flex-col gap-2 rounded-lg border p-3.5">
-              <h4 className="text-muted-foreground flex items-center justify-between text-xs font-bold tracking-wider uppercase">
+              <h4 className="text-muted-foreground flex items-center justify-between text-sm font-bold tracking-wider uppercase">
                 <span className="flex items-center gap-1.5">
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] text-white">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-xs text-white">
                     3
                   </span>
                   Review Import Rows ({rows.length})
@@ -316,7 +316,7 @@ export function ImportOtherChargesDialog(props: Props) {
                           row._error ? 'bg-red-50/50 dark:bg-red-950/20' : ''
                         }
                       >
-                        <TableCell className="font-mono text-xs">
+                        <TableCell className="font-mono text-sm">
                           {row._row}
                         </TableCell>
                         <TableCell className="font-bold">
@@ -328,12 +328,12 @@ export function ImportOtherChargesDialog(props: Props) {
                         </TableCell>
                         <TableCell>
                           {row._error ? (
-                            <span className="flex items-center gap-1 text-xs font-medium text-red-600">
+                            <span className="flex items-center gap-1 text-sm font-medium text-red-600">
                               <AlertCircle className="h-3 w-3 shrink-0" />{' '}
                               {row._error}
                             </span>
                           ) : (
-                            <span className="flex items-center gap-1 text-xs font-medium text-green-600">
+                            <span className="flex items-center gap-1 text-sm font-medium text-green-600">
                               <CheckCircle2 className="h-3 w-3 shrink-0" />{' '}
                               Ready
                             </span>

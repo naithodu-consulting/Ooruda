@@ -8,6 +8,7 @@ import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { billOutstanding, displayBillStatus } from '~/lib/bill-status';
 import { sanitizeLogoUrl } from '~/lib/server/sanitize-logo-url';
 
 const MAX_IDS = 300;
@@ -37,7 +38,7 @@ export const POST = enhanceRouteHandler(
     const { data: bills, error } = await client
       .from('bills')
       .select(
-        'id, association_id, bill_no, period, bill_type, total_amount, paid_amount, gst_amount, status, due_date, units(unit_no)',
+        'id, association_id, bill_no, period, bill_type, total_amount, paid_amount, advance_applied, gst_amount, status, due_date, units(unit_no)',
       )
       .in('id', body.ids);
 
@@ -90,22 +91,35 @@ export const POST = enhanceRouteHandler(
     const accountName = assocData.accounts?.name ?? 'Association';
     const rawLogoUrl = assocData.accounts?.picture_url ?? null;
 
-    const exportRows: BillsExportRow[] = bills.map((b) => ({
-      bill_no: b.bill_no,
-      period: b.period,
-      unit_no:
-        (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
-      bill_type: b.bill_type ?? 'maintenance',
-      total_amount: Number(b.total_amount),
-      paid_amount: Number(b.paid_amount),
-      outstanding: Math.max(0, Number(b.total_amount) - Number(b.paid_amount)),
-      gst_amount: b.gst_amount != null ? Number(b.gst_amount) : null,
-      status: b.status,
-      due_date: b.due_date,
-    }));
+    const exportRows: BillsExportRow[] = bills.map((b) => {
+      const billData = {
+        status: b.status,
+        due_date: b.due_date,
+        total_amount: Number(b.total_amount),
+        paid_amount: Number(b.paid_amount),
+        advance_applied:
+          b.advance_applied != null ? Number(b.advance_applied) : 0,
+      };
+      return {
+        bill_no: b.bill_no,
+        period: b.period,
+        unit_no:
+          (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
+        bill_type: b.bill_type ?? 'maintenance',
+        total_amount: billData.total_amount,
+        paid_amount: billData.paid_amount,
+        outstanding: billOutstanding(billData),
+        gst_amount: b.gst_amount != null ? Number(b.gst_amount) : null,
+        status: displayBillStatus(billData),
+        due_date: b.due_date,
+      };
+    });
 
     const totalBilled = exportRows.reduce((s, r) => s + r.total_amount, 0);
-    const totalCollected = exportRows.reduce((s, r) => s + r.paid_amount, 0);
+    const totalCollected = exportRows.reduce(
+      (s, r) => s + r.total_amount - r.outstanding,
+      0,
+    );
 
     const generatedAt = new Date().toLocaleDateString('en-IN', {
       day: 'numeric',

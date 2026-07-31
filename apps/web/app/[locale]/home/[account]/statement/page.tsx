@@ -12,7 +12,13 @@ import {
 
 interface Props {
   params: Promise<{ account: string }>;
-  searchParams: Promise<{ fy?: string; type?: string; unit?: string; from?: string; to?: string }>;
+  searchParams: Promise<{
+    fy?: string;
+    type?: string;
+    unit?: string;
+    from?: string;
+    to?: string;
+  }>;
 }
 
 export const metadata = { title: 'Statement' };

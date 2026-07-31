@@ -146,7 +146,7 @@ export function AdminOverviewPanel({
       {/* Metric cards */}
       <div className="grid grid-cols-1 gap-3.5 min-[480px]:grid-cols-2 lg:grid-cols-4">
         <Link
-          href={`/home/${account}/billing?duration=${activeDuration}`}
+          href={`/home/${account}/billing/units?duration=${activeDuration}`}
           className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-blue-300 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none dark:hover:ring-blue-700"
         >
           <MetricCard
@@ -176,7 +176,7 @@ export function AdminOverviewPanel({
           />
         </Link>
         <Link
-          href={`/home/${account}/billing?duration=${activeDuration}&status=unpaid`}
+          href={`/home/${account}/billing/units?duration=${activeDuration}&filter=outstanding`}
           className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-amber-300 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none dark:hover:ring-amber-700"
         >
           <MetricCard
@@ -189,7 +189,7 @@ export function AdminOverviewPanel({
           />
         </Link>
         <Link
-          href={`/home/${account}/billing?duration=${activeDuration}&status=overdue`}
+          href={`/home/${account}/billing/units?duration=${activeDuration}&filter=overdue`}
           className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-red-300 focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:outline-none dark:hover:ring-red-700"
         >
           <MetricCard

@@ -45,10 +45,9 @@ export interface UnitSummaryInput {
   unit_no: string;
   floor: string | null;
   owner_name: string | null;
-  advance_balance: number;
 }
 
-/** Line item + payment detail for one bill, fetched lazily on expand. */
+/** Line item detail for one bill, fetched lazily on expand. */
 export interface BillDetail {
   lineItems: {
     id: string;
@@ -58,17 +57,6 @@ export interface BillDetail {
     amount: number;
     area_sqft: number | null;
     rate_per_sqft: number | null;
-  }[];
-  payments: {
-    id: string;
-    amount: number;
-    mode: string;
-    paid_at: string;
-    reference_no: string | null;
-    paid_by_role: string | null;
-    status: string;
-    reversed_at: string | null;
-    receipt_no: string | null;
   }[];
 }
 
@@ -116,7 +104,17 @@ export interface UnitNode {
 
 // ── Tree construction ─────────────────────────────────────────────────────────
 
-const VOID_STATUSES = new Set(['Cancelled', 'Cancelled', 'Reversed']);
+/**
+ * Values stored in `bills.status` that mean the bill is no longer live.
+ *
+ * These are database values, NOT display text — the UI labels them "Cancelled"
+ * via `displayStatus` below. Renaming what the user sees must never touch this
+ * set: matching on the label instead of the stored value silently reclassifies
+ * every voided bill as live, inflating billed, collected and outstanding.
+ * `.neq('status', 'Void')` in `statement/page.tsx` and the statement/zip PDF
+ * routes relies on the same stored value.
+ */
+const VOID_STATUSES = new Set(['Void', 'Voided', 'Reversed']);
 
 export function isVoid(bill: { status: string }): boolean {
   return VOID_STATUSES.has(bill.status);
@@ -181,7 +179,9 @@ export function buildUnitTree(
         const nodes: BillTypeNode[] = periodBills
           .map((bill) => {
             const voided = isVoid(bill);
-            const displayStatus = voided ? 'Cancelled' : displayBillStatus(bill);
+            const displayStatus = voided
+              ? 'Cancelled'
+              : displayBillStatus(bill);
             const outstanding = voided ? 0 : billOutstanding(bill);
             return {
               bill,

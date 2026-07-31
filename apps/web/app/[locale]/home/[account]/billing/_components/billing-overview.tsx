@@ -1,8 +1,4 @@
-'use client';
-
-import { useMemo } from 'react';
-
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 import {
   AlertTriangle,
@@ -13,143 +9,143 @@ import {
 
 import { MetricCard } from '@kit/ui/metric-card';
 
-import { displayBillStatus } from '~/lib/bill-status';
+import { billOutstanding, displayBillStatus } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
 
-import type { BillRow } from './bills-section';
+/**
+ * Narrow bill shape the tiles need — see `BILL_AMOUNTS_SELECT`.
+ *
+ * `advance_applied` is required rather than optional on purpose. This component
+ * previously received a row type that omitted it, so `displayBillStatus` saw
+ * every advance-settled bill as unpaid (and overdue once past its due date),
+ * and the Outstanding tile double-counted credit that had already been applied.
+ */
+export interface BillKpiRow {
+  total_amount: number;
+  paid_amount: number;
+  advance_applied: number;
+  status: string;
+  due_date: string;
+  period: string;
+}
 
-export function BillingOverview(props: {
-  bills: BillRow[];
+/**
+ * Server component: the KPI row on the Billing landing page.
+ *
+ * Deliberately has no `'use client'`. The KPIs are derived here on the server
+ * and only the rendered tiles cross the wire, so the bill set itself is never
+ * serialised into the client payload. Each tile is a plain link into the
+ * unit list, pre-filtered to the slice it represents.
+ */
+export function BillingOverview({
+  bills,
+  accountSlug,
+  currentPeriod,
+}: {
+  bills: BillKpiRow[];
   accountSlug: string;
+  currentPeriod: string;
 }) {
-  const router = useRouter();
+  const unitsHref = `/home/${accountSlug}/billing/units`;
 
-  const currentPeriod = useMemo(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  }, []);
-
-  const kpis = useMemo(() => {
-    const thisMonth = props.bills.filter((b) => b.period === currentPeriod);
-    const overdue = props.bills.filter(
-      (b) => displayBillStatus(b) === 'Overdue',
-    );
-    const paid = props.bills.filter((b) => displayBillStatus(b) === 'Paid');
-    return {
-      thisMonthBilled: thisMonth.reduce((s, b) => s + b.total_amount, 0),
-      thisMonthCollected: thisMonth.reduce((s, b) => s + b.paid_amount, 0),
-      outstanding: props.bills.reduce(
-        (s, b) => s + Math.max(0, b.total_amount - b.paid_amount),
-        0,
-      ),
-      overdueCount: overdue.length,
-      overdueAmount: overdue.reduce(
-        (s, b) => s + Math.max(0, b.total_amount - b.paid_amount),
-        0,
-      ),
-      paidCount: paid.length,
-      paidAmount: paid.reduce((s, b) => s + b.total_amount, 0),
-      totalBills: props.bills.length,
-    };
-  }, [props.bills, currentPeriod]);
-
+  const thisMonth = bills.filter((b) => b.period === currentPeriod);
+  const thisMonthBilled = thisMonth.reduce((s, b) => s + b.total_amount, 0);
+  // Settled, not just paid — advance credit applied to a bill is real
+  // collection, and is what the unit list reports in its Outstanding column.
+  const thisMonthCollected = thisMonth.reduce(
+    (s, b) => s + Math.min(b.paid_amount + b.advance_applied, b.total_amount),
+    0,
+  );
   const thisMonthPct =
-    kpis.thisMonthBilled > 0
-      ? Math.round((kpis.thisMonthCollected / kpis.thisMonthBilled) * 100)
+    thisMonthBilled > 0
+      ? Math.round((thisMonthCollected / thisMonthBilled) * 100)
       : null;
 
-  function handleTileClick(
-    tile: 'this-month' | 'outstanding' | 'overdue' | 'fully-paid',
-  ) {
-    if (tile === 'this-month') {
-      router.push(`/home/${props.accountSlug}/billing?period=${currentPeriod}`);
-    } else if (tile === 'outstanding') {
-      router.push(`/home/${props.accountSlug}/billing?filter=outstanding`);
-    } else if (tile === 'overdue') {
-      router.push(`/home/${props.accountSlug}/billing?filter=overdue`);
-    } else if (tile === 'fully-paid') {
-      router.push(`/home/${props.accountSlug}/billing?filter=all_paid`);
-    }
-  }
+  const outstanding = bills.reduce((s, b) => s + billOutstanding(b), 0);
+
+  const overdue = bills.filter((b) => displayBillStatus(b) === 'Overdue');
+  const overdueAmount = overdue.reduce((s, b) => s + billOutstanding(b), 0);
+
+  const paid = bills.filter((b) => displayBillStatus(b) === 'Paid');
+  const paidAmount = paid.reduce((s, b) => s + b.total_amount, 0);
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <TileButton
-        onClick={() => handleTileClick('this-month')}
-        tooltip="View this month's bill breakdown"
+      <Tile
+        href={`${unitsHref}?duration=current_month`}
+        tooltip="View this month's bills by unit"
         data-test="tile-this-month"
       >
         <MetricCard
           icon={TrendingUp}
           label="This Month Billed"
-          value={formatINR(kpis.thisMonthBilled)}
+          value={formatINR(thisMonthBilled)}
           sublabel={
             thisMonthPct !== null ? `${thisMonthPct}% received` : undefined
           }
           variant="blue"
         />
-      </TileButton>
+      </Tile>
 
-      <TileButton
-        onClick={() => handleTileClick('outstanding')}
-        tooltip="Show units with outstanding balances"
+      <Tile
+        href={`${unitsHref}?filter=outstanding`}
+        tooltip="Show units with an outstanding balance"
         data-test="tile-outstanding"
       >
         <MetricCard
           icon={FileText}
           label="Outstanding"
-          value={formatINR(kpis.outstanding)}
-          sublabel={`${kpis.totalBills - kpis.paidCount} unpaid bills`}
+          value={formatINR(outstanding)}
+          sublabel={`${bills.length - paid.length} unpaid bills`}
           variant="amber"
         />
-      </TileButton>
+      </Tile>
 
-      <TileButton
-        onClick={() => handleTileClick('overdue')}
+      <Tile
+        href={`${unitsHref}?filter=overdue`}
         tooltip="Show units with overdue bills"
         data-test="tile-overdue"
       >
         <MetricCard
           icon={AlertTriangle}
           label="Overdue"
-          value={formatINR(kpis.overdueAmount)}
-          sublabel={`${kpis.overdueCount} bill${kpis.overdueCount !== 1 ? 's' : ''}`}
-          variant={kpis.overdueCount > 0 ? 'red' : 'green'}
+          value={formatINR(overdueAmount)}
+          sublabel={`${overdue.length} bill${overdue.length !== 1 ? 's' : ''}`}
+          variant={overdue.length > 0 ? 'red' : 'green'}
         />
-      </TileButton>
+      </Tile>
 
-      <TileButton
-        onClick={() => handleTileClick('fully-paid')}
+      <Tile
+        href={`${unitsHref}?filter=all_paid`}
         tooltip="Show fully paid units"
         data-test="tile-fully-paid"
       >
         <MetricCard
           icon={CheckCircle2}
           label="Fully Paid"
-          value={formatINR(kpis.paidAmount)}
-          sublabel={`${kpis.paidCount} of ${kpis.totalBills} bills`}
+          value={formatINR(paidAmount)}
+          sublabel={`${paid.length} of ${bills.length} bills`}
           variant="green"
         />
-      </TileButton>
+      </Tile>
     </div>
   );
 }
 
-function TileButton(props: {
+function Tile(props: {
   children: React.ReactNode;
-  onClick: () => void;
+  href: string;
   tooltip: string;
   'data-test'?: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={props.onClick}
+    <Link
+      href={props.href}
       title={props.tooltip}
       data-test={props['data-test']}
-      className="focus-visible:ring-ring block w-full cursor-pointer rounded-2xl text-left transition-all duration-150 hover:scale-[1.02] hover:shadow-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.99]"
+      className="focus-visible:ring-ring block w-full rounded-2xl text-left transition-all duration-150 hover:scale-[1.02] hover:shadow-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.99]"
     >
       {props.children}
-    </button>
+    </Link>
   );
 }

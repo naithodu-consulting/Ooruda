@@ -2758,13 +2758,11 @@ Comprehensive wording pass across all user-facing pages to remove accounting jar
 
 ### Navigation & Labels
 
-- **Nav: "Cash Ledger"** → **"Advances & Dues"** (i18n `association.json`)
 - **Nav: "Audit Log"** → **"Activity Log"** (i18n `association.json`)
-- **Role: "Billing Operator"** → **"Billing Manager"** (i18n `association.json`, `common.json`)
-- **Reports tab: "Cash Ledger"** → **"Advances & Dues"** (`reports-tabs.tsx`)
 - **Settings: "Workspace Features"** → **"Optional Features"** (`workspace-features-card.tsx`)
-- **Settings: "Cash Ledger" feature toggle** → **"Advances & Dues"** label and description
-- **"Danger Zone"** → **"Permanent Actions"** (i18n `association.json`)
+- **Settings danger-zone description** → "These actions permanently delete data which cannot be undone" (i18n `association.json`)
+
+Reviewed and deliberately kept as-is: **"Cash Ledger"** (nav, Reports tab, Settings toggle), **"Billing Operator"**, and **"Danger Zone"**. These terms are established for this audience, so the proposed renames were rolled back.
 
 ### Reports / Charts
 
@@ -2791,5 +2789,133 @@ Comprehensive wording pass across all user-facing pages to remove accounting jar
 ### FY Filter
 
 - **"FY 2024-25"** format → **"Apr 2024 – Mar 2025"** — statement FY dropdown and active period label (`statement-table.tsx`)
+
+_Last updated: 2026-07-31_
+
+## Billing: Layered Restructure & Performance Pass (2026-07-31)
+
+Billing moves from one page rendering everything to a tiles-first drill-down across four routes, each fetching only what it renders.
+
+### New structure
+
+| Route | Shows |
+|---|---|
+| `/billing` | KPI tiles + links to the two jobs below |
+| `/billing/units` | Bills by Unit — one row per unit, with charge-type and period filters |
+| `/billing/units/[unitId]` | One unit: period → charge type → line items & payments |
+| `/billing/drafts` | Pending charges, unbilled electricity/maintenance, Generate Bills |
+
+Sidebar keeps a single "Billing" item; drill-down uses back links, matching the `units/[unitId]` convention.
+
+### Removed
+
+- **"Generated Bills" tab deleted** (~420 lines). It duplicated Bills by Unit — same bills, flat instead of grouped, with a second filter/pagination/status pipeline. Its two genuinely useful capabilities (charge-type + period filters, CSV/PDF export of the filtered set) moved onto the unit list.
+- **`bills-section.tsx`, `billing-period-detail.tsx`, `billing-unit-sheet.tsx` deleted.** The `?period=` drill-down is superseded by the period-filtered unit list.
+
+### Regression fix — voided bills counted as live (introduced in `a9cd5cba`)
+
+The previous wording pass renamed the "Void" bill status to "Cancelled" with a blanket find-and-replace, which also rewrote `VOID_STATUSES` in `unit-billing-types.ts` — the set of **database** `bills.status` values used to *detect* voided bills. It became `['Cancelled', 'Cancelled', 'Reversed']`, which no bill in the database matches.
+
+Effect: every voided bill was treated as live on the Billing screen, inflating billed, collected, outstanding and overdue totals, and losing its strikethrough styling. `'Void'` is confirmed as the stored value by `.neq('status', 'Void')` in `statement/page.tsx`, the statement PDF route and the bulk ZIP route.
+
+Restored to `['Void', 'Voided', 'Reversed']`, with a comment marking these as stored values that must not track UI labels. The `displayStatus` sentinel stays "Cancelled" — that one is internal and used consistently.
+
+### Three further correctness bugs fixed — all the same root cause
+
+`advance_applied` (bill settled from a unit's advance credit) was missing from the row type used by three surfaces, so `billSettledAmount()` saw those bills as unpaid:
+
+- **Outstanding tile overstated** — computed `total − paid`, ignoring advance credit already applied
+- **Overdue tile overcounted** — `displayBillStatus()` classified advance-settled bills as Unpaid, then Overdue once past due
+- **CSV export wrong** — `outstanding` column had the same omission (`export-csv.ts`)
+
+All three now use the shared `billOutstanding()` from `~/lib/bill-status`.
+
+### Performance
+
+- **Dropped the `bill_line_items` join** from list queries. Line items were fetched for every bill on every page load despite only being rendered on expand — `fetchBillDetailAction` already loads them lazily.
+- **Bill set no longer serialised three times.** `BillingOverview` is now a server component, so `/billing` ships zero bill data to the client.
+- **Whole `cash_ledger` table fetch replaced** with the existing `get_association_cash_ledger_balances` RPC, which aggregates in Postgres (already used by the payments page).
+- **Level 3 queries scoped by `unit_id`** instead of loading every bill for the association.
+- **`loading.tsx` added** to each route so child navigations stream a skeleton.
+- **New `_lib/billing-queries.ts`** holds the shared select shapes. Each route previously declared its own select string, which is how the line-items join drifted into a query whose own type comment says line items are excluded.
+
+### UX / consistency
+
+- Unit rows navigate instead of expanding; charge-type and period filters narrow the unit list, and units outside the chosen slice drop out rather than showing 25 rows of "No bills yet"
+- Export acts on every unit the current filters leave visible, not just the current page
+- `alert()` replaced with `toast` in the bulk PDF download path
+- URL sync no longer rewrites the whole query string — it touches only `filter`, `type` and `duration`
+- Legacy URLs redirect rather than silently dropping their filter: `?filter=`, `?status=`, `?duration=`, `?period=`, `?bills=draft` and `?unit=` (which now resolves the unit number to its detail page). Dashboard tiles updated to link directly.
+
+_Last updated: 2026-07-31_
+
+---
+
+## Billing: Content Boundary, UX Polish & PDF Fixes (2026-07-31)
+
+### Content boundary — billing pages now contain only billing data
+
+Payment History and Cash Ledger data were removed from all billing surfaces so each module owns its own domain:
+
+- **`BillDetailPanel`** — removed the Payment History section (moved to the Payments module) and the "Advance deducted" line item row (advances belong in Cash Ledger)
+- **`unit-row.tsx`** — removed the advance credit chip ("+₹X" badge next to owner name)
+- **`units/page.tsx` and `units/[unitId]/page.tsx`** — removed `get_association_cash_ledger_balances` RPC query and `advanceByUnitFromBalances` usage; `UnitSummaryInput` no longer carries `advance_balance`
+- **`units/[unitId]/page.tsx`** — removed the "Advance Credit" stat from the unit summary strip
+- **`unit-billing-actions.ts`** — payments parallel query removed; `fetchBillDetailAction` now returns only `{ lineItems }`, matching the updated `BillDetail` interface
+
+### PDF export fixes
+
+- **"OutstandingStatus" merged column** — fixed by adding `gap: 4` to all row/header flex containers in `bills-export-document.tsx`
+- **Outstanding ignoring `advance_applied`** — route now uses `billOutstanding()` (shared function that accounts for advance credit)
+- **Raw DB status values in PDF** — route now uses `displayBillStatus()` for all status cells
+- **`totalCollected` understated** — fixed by computing as `totalBilled − totalOutstanding` (advance credit now counted)
+- **Overdue rows** — highlighted with `#fff5f5` background; outstanding amount in red, status bold red
+
+### Page header fix
+
+`TeamAccountLayoutPageHeader` was accepting a `title` prop but never forwarding it to `PageHeader`. Every billing sub-page showed "Billing" in the header regardless of route. Fixed — sub-pages now show "Bills by Unit", "Unit 101", "Draft Bills" etc.
+
+### Draft Bills button placement
+
+"Other Charges" and "Sinking Fund" buttons moved from a standalone block above the table to the section card headers where their charges appear. "Generate Bills" moved to the top filter bar. Actions are now contextually adjacent to the data they affect.
+
+### Cash Ledger pagination
+
+`cash-ledger-section.tsx` gained client-side pagination (50 entries per page) with a prev/next footer row showing the current range and total entries.
+
+### UX micro-improvements
+
+- Unit row `ChevronRight` nudges right on hover to reinforce navigation affordance
+- Row padding increased (`py-2.5 → py-3`) for better touch targets
+- Status badge `text-[10px] → text-xs` on unit rows and unit detail page
+- **Metrics chips added to Bills by Unit table** — Units, Billed, Outstanding, Overdue counts shown inline in the filter bar, matching the Payments page chip pattern (`bg-muted/50 rounded-md`)
+- **Unit detail summary strip** now uses the same chip style (`bg-muted/50 rounded-md`) as the Payments page instead of bare `flex-col` labels
+- **`₹0 paid` bug fixed** — when a bill is fully settled by advance credit (`advance_applied`), the "paid" column now shows `paid_amount + advance_applied` instead of `₹0` in green
+- **Draft Bills page redesigned** — summary bar replaced with metric chips (Items pending, Electricity months·total, Other Charges count·total, Sinking Fund count·total); redundant info paragraph removed; section ordering changed to Maintenance → Electricity → Other Charges → Sinking Fund; "0 charges" badges removed from empty sections; dialog trigger buttons now read "+ Other Charges" / "+ Sinking Fund" for clear affordance
+- **Column header font** `text-[10px] → text-[11px]` on the unit billing table
+- **Bill-type row chevron** `h-3 w-3 → h-3.5 w-3.5`; status badge `text-[10px] → text-xs`; sub-labels `text-[9px] → text-[10px]` in the unit detail tree
+
+_Last updated: 2026-07-31_
+
+## Billing: Color, Typography & Bug Fixes (2026-07-31)
+
+### Background color clean-up
+
+Replaced the amber-tinted muted wash on billing surfaces with targeted, purposeful use:
+
+- **Toolbar strip** (`bg-muted/40` removed) — now white; border-b is sufficient separation
+- **Column header row** (`bg-muted/60 → bg-muted/40`) — lighter tint, still clearly distinguishable from data rows
+- **Pagination footer** (`bg-muted/40` removed) — matches the clean white toolbar
+- **Bill-type rows** — resting `bg-muted/10` removed; replaced with `bg-muted/5` to preserve touch affordance without the brown wash; hover remains `bg-muted/30`
+- **Draft Bills total rows** — `bg-muted/40 → bg-muted/20` for a lighter summary stripe
+- Metric chips, expanded bill detail, and period hover/expanded states all retained for visual hierarchy
+
+### Typography — global +2 px font-size bump across all billing components
+
+All font sizes in billing pages increased by 2 px for improved legibility. Subscription/Stripe dialogs excluded. All `text-[12px]` inline values normalised to canonical `text-xs`.
+
+### Bug fix — Retry button in Bill Detail Panel
+
+Retry after a network error now actually re-fetches (previously it cleared the error but the `useEffect` deps didn't change, leaving a blank panel). Fixed with a `retryCount` counter dep. Added `type="button"` to prevent accidental form submission.
 
 _Last updated: 2026-07-31_

@@ -19,6 +19,7 @@ export async function TeamAccountLayoutPageHeader(
 
   return (
     <PageHeader
+      title={props.title}
       description={props.description}
       displaySidebarTrigger={displaySidebarTrigger}
     >

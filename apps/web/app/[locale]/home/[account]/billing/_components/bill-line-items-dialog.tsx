@@ -64,10 +64,10 @@ export function BillLineItemsDialog(props: {
             Bill {props.billNo} for {formatPeriod(props.period)}
           </DialogDescription>
           <div className="flex flex-col gap-0.5">
-            <span className="text-foreground text-sm font-medium">
+            <span className="text-foreground text-base font-medium">
               {formatPeriod(props.period)}
             </span>
-            <span className="text-muted-foreground text-xs">
+            <span className="text-muted-foreground text-sm">
               #{props.billNo}
             </span>
           </div>
@@ -113,7 +113,7 @@ export function BillLineItemsDialog(props: {
         {/* Compact GST summary — only shown when GST was applied */}
         {gst > 0 && (
           <div className="border-t pt-3">
-            <div className="text-muted-foreground flex flex-col gap-1 text-xs">
+            <div className="text-muted-foreground flex flex-col gap-1 text-sm">
               <div className="flex justify-between">
                 <span>Subtotal</span>
                 <span className="tabular-nums">{formatINR(subtotal)}</span>
@@ -125,7 +125,7 @@ export function BillLineItemsDialog(props: {
                 </span>
               </div>
             </div>
-            <div className="mt-2 flex justify-between text-sm font-semibold">
+            <div className="mt-2 flex justify-between text-base font-semibold">
               <span>Total (GST inclusive)</span>
               <span className="tabular-nums">{formatINR(total)}</span>
             </div>

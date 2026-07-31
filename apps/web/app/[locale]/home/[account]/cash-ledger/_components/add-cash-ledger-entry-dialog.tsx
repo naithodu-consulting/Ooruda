@@ -223,7 +223,9 @@ export function AddCashLedgerEntryDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isDue ? 'Record a Due' : 'Record an Advance Payment'}</DialogTitle>
+          <DialogTitle>
+            {isDue ? 'Record a Due' : 'Record an Advance Payment'}
+          </DialogTitle>
           <DialogDescription>
             {isDue
               ? 'Record an amount owed by a unit — no payment has been made yet.'

@@ -220,9 +220,7 @@ export function CashLedgerTab({ rows }: Props) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Received by Charge Type</CardTitle>
-            <CardDescription>
-              Amount received per charge type
-            </CardDescription>
+            <CardDescription>Amount received per charge type</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-2">
