@@ -68,7 +68,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
 
   if (loading) {
     return (
-      <div className="bg-muted/30 space-y-2 border-b px-4 py-3 pl-20">
+      <div className="space-y-2 border-b px-4 py-3 pl-20">
         <Skeleton className="h-3 w-32" />
         <Skeleton className="h-3 w-full" />
         <Skeleton className="h-3 w-3/4" />
@@ -78,7 +78,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
 
   if (error) {
     return (
-      <div className="bg-muted/30 flex items-center gap-2 border-b px-4 py-3 pl-20 text-sm text-[var(--color-danger)]">
+      <div className="flex items-center gap-2 border-b px-4 py-3 pl-20 text-sm text-[var(--color-danger)]">
         <AlertCircle className="h-3.5 w-3.5 shrink-0" />
         <span>{error}</span>
         <button
@@ -97,7 +97,7 @@ export function BillDetailPanel({ bill, detail, onLoaded }: Props) {
   const baseTotal = lineItems.reduce((s, li) => s + li.amount, 0);
 
   return (
-    <div className="bg-muted/30 border-b px-4 py-4 pl-20">
+    <div className="border-b px-4 py-4 pl-20">
       {/* Action bar: due date + download */}
       <div className="mb-4 flex items-center justify-between">
         <span className="text-muted-foreground text-sm">

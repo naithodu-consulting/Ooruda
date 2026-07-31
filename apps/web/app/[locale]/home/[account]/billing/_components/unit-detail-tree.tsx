@@ -418,7 +418,7 @@ function DraftPeriodRow({
       </div>
 
       {expanded && (
-        <div className="bg-muted/10 border-t px-3 py-2 pl-12 sm:pl-20">
+        <div className="border-t px-3 py-2 pl-12 sm:pl-20">
           {drafts.map((d) => (
             <div
               key={d.id}

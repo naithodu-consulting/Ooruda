@@ -418,7 +418,7 @@ export function DraftBillsTab(props: {
                     </TableCell>
                   </TableRow>
                 ))}
-                <TableRow className="bg-muted/20 font-semibold">
+                <TableRow className="font-semibold">
                   <TableCell colSpan={3} className="text-base">
                     Total
                   </TableCell>
@@ -507,7 +507,7 @@ export function DraftBillsTab(props: {
                     </TableCell>
                   </TableRow>
                 ))}
-                <TableRow className="bg-muted/20 font-semibold">
+                <TableRow className="font-semibold">
                   <TableCell colSpan={3} className="text-base">
                     Total
                   </TableCell>

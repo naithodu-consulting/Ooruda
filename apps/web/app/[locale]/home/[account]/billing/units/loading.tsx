@@ -7,7 +7,7 @@ export default function Loading() {
       <div className="mt-2 flex flex-col gap-4">
         <Skeleton className="h-5 w-36" />
         <div className="overflow-hidden rounded-xl border">
-          <div className="bg-muted/40 flex items-center gap-2 border-b px-4 py-2.5">
+          <div className="flex items-center gap-2 border-b px-4 py-2.5">
             <Skeleton className="h-8 flex-1" />
             <Skeleton className="h-8 w-[140px]" />
             <Skeleton className="h-8 w-[150px]" />
