@@ -143,7 +143,7 @@ function Tile(props: {
       href={props.href}
       title={props.tooltip}
       data-test={props['data-test']}
-      className="focus-visible:ring-ring block w-full rounded-2xl text-left transition-all duration-150 hover:scale-[1.02] hover:shadow-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.99]"
+      className="focus-visible:ring-ring block h-full w-full rounded-2xl text-left transition-all duration-150 hover:scale-[1.02] hover:shadow-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.99]"
     >
       {props.children}
     </Link>

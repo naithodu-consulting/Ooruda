@@ -11,7 +11,14 @@ import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole } from '~/lib/rbac';
 
 import { getCashLedgerBalance } from '../../cash-ledger/_lib/cash-ledger-service';
-import { type GenerateBillsInput, GenerateBillsSchema } from './billing-schema';
+import {
+  type GenerateBillsInput,
+  GenerateBillsSchema,
+  type VoidBillInput,
+  VoidBillSchema,
+  type VoidBillsBulkInput,
+  VoidBillsBulkSchema,
+} from './billing-schema';
 import { preRenderBillPdf } from './server/pdf-generation';
 
 const BILLING_PATH = '/home/[account]/billing';
@@ -29,6 +36,18 @@ async function requireBillingAccess(
 
   if (role !== 'assoc_admin' && role !== 'billing_operator') {
     return 'Only an association admin or billing operator can do that.';
+  }
+
+  return null;
+}
+
+async function requireAdminAccess(
+  associationId: string,
+): Promise<string | null> {
+  const role = await getAssociationRole(associationId);
+
+  if (role !== 'assoc_admin') {
+    return 'Only an association admin can do that.';
   }
 
   return null;
@@ -111,7 +130,8 @@ export async function generateBillsAction(
       .from('bills')
       .select('unit_id, bill_no')
       .eq('association_id', associationId)
-      .eq('period', period),
+      .eq('period', period)
+      .neq('status', 'Void'),
   ]);
 
   const activeChargeTypes = chargeTypes ?? [];
@@ -1220,4 +1240,93 @@ export async function deleteAllBillsAction(associationId: string): Promise<
     deletedPayments: data.deleted_payments,
     deletedReceipts: data.deleted_receipts,
   };
+}
+
+// ── Void bill ─────────────────────────────────────────────────────────────────
+
+export async function voidBillAction(
+  associationId: string,
+  input: VoidBillInput,
+): Promise<ActionResult> {
+  const roleError = await requireAdminAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  const parsed = VoidBillSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Please check the form.',
+    };
+  }
+
+  const { billId, reason } = parsed.data;
+  const client = getSupabaseServerClient();
+
+  const { error } = await client.rpc('void_bill', {
+    p_bill_id: billId,
+    p_reason: reason,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  after(() =>
+    logAuditEvent({
+      associationId,
+      action: 'bill.voided',
+      entityType: 'bill',
+      entityId: billId,
+      summary: `Bill cancelled. Reason: ${reason}`,
+    }),
+  );
+
+  revalidatePath(BILLING_PATH, 'page');
+
+  return { success: true };
+}
+
+export async function voidBillsBulkAction(
+  associationId: string,
+  input: VoidBillsBulkInput,
+): Promise<ActionResult & { voided?: number }> {
+  const roleError = await requireAdminAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  const parsed = VoidBillsBulkSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Please check the form.',
+    };
+  }
+
+  const { period, billType, reason } = parsed.data;
+  const client = getSupabaseServerClient();
+
+  const { data, error } = await client.rpc('void_bills_bulk', {
+    p_association_id: associationId,
+    p_period: period,
+    p_bill_type: billType,
+    p_reason: reason,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const voided = data as unknown as number;
+
+  after(() =>
+    logAuditEvent({
+      associationId,
+      action: 'bill.bulk_voided',
+      entityType: 'bill',
+      summary: `Bulk cancelled ${voided} bills for ${period} (type: ${billType}). Reason: ${reason}`,
+    }),
+  );
+
+  revalidatePath(BILLING_PATH, 'page');
+
+  return { success: true, voided };
 }

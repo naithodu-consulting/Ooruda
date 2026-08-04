@@ -243,6 +243,7 @@ export function ReportsClientPage({
             .eq('association_id', associationId)
             .neq('status', 'Paid')
             .neq('status', 'Reversed')
+            .neq('status', 'Void')
             .order('due_date');
           if (!allTime) {
             if (fromPeriod) q = (q as any).gte('period', fromPeriod);
@@ -540,7 +541,7 @@ export function ReportsClientPage({
     [invalidateAll],
   );
 
-  const handleTabChange = useCallback((tab: string) => {
+  const handleTabChange = useCallback((tab: TabKey) => {
     setActiveTab(tab);
     syncUrl({ tab });
   }, []);

@@ -172,6 +172,7 @@ export async function downloadCsvAction(
       .eq('association_id', associationId)
       .neq('status', 'Paid')
       .neq('status', 'Reversed')
+      .neq('status', 'Void')
       .order('due_date');
 
     if (fromPeriod) q = (q as any).gte('period', fromPeriod);
@@ -456,6 +457,7 @@ export async function downloadPdfAction(
     .eq('association_id', associationId)
     .neq('status', 'Paid')
     .neq('status', 'Reversed')
+    .neq('status', 'Void')
     .order('due_date')
     .limit(200);
   if (fromPeriod) billsQ = (billsQ as any).gte('period', fromPeriod);

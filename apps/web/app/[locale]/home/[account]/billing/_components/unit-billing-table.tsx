@@ -397,7 +397,6 @@ export function UnitBillingTable({
               </button>
             ))}
           </div>
-
         </div>
 
         {/* Row 2: live summary tiles + export actions */}

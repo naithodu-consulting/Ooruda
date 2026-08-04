@@ -4,6 +4,64 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4 — Void Bills + Billing UX Polish — 2026-08-03
+
+### UX Polish — Billing Dashboard & Drafts (batch 2)
+
+**Screenshot 1 — Billing dashboard tiles:**
+- All four KPI tiles now render at equal height. Added `h-full` to the `Tile` link wrapper and to `MetricCard`, so the tile with no sublabel (e.g. "This Month Billed" when percent is unavailable) no longer appears shorter than its neighbours.
+
+**Screenshot 2 — Drafts page:**
+- **Draft count fix:** Maintenance pending was counted as 1 item in both the "Items pending" summary chip and the Billing dashboard badge. Maintenance is not a stageable/quantifiable item — it has no amount until generation. Both counts now reflect only actual billable items (electricity invoices + other charges + sinking fund charges).
+- **Maintenance chip:** Replaced the period-only chip with "August 2026 · Not yet generated" using a muted treatment so it reads as informational rather than a number to act on.
+- **Maintenance section redesign:** Replaced the `DraftSection` card (which visually mimicked the electricity data table) with a distinct blue info banner, making it clear this is a notification about future generation rather than a list of staged items.
+- **Page-level total:** Added a highlighted "Total charges" chip showing the sum of all quantified pending amounts (electricity + other charges + sinking fund) — giving an admin a single number when deciding whether to generate now or wait.
+- **Button cursor:** Added a global CSS rule (`button:not(:disabled) { cursor: pointer }`) so all clickable buttons show the hand cursor on hover.
+
+**Unit billing detail (Screenshot 3 — 7 fixes):**
+- Bulk void button hidden on fully-paid periods.
+- Bulk void button given a visible danger outline and "Void" text label.
+- Void Bill button icon changed from XCircle → Ban (correct semantic icon for voiding).
+- "Overdue Bills" stat tile hidden when overdueCount is 0 (reduces visual noise on healthy units).
+- "Status:" label added before the unit status badge for clarity.
+- Due date shows amber warning when bill is due within 7 days, with a "Nd left" countdown.
+- Period label added above the due date in the bill detail panel.
+
+### Feature: Cancel Bills
+
+Administrators can now cancel (void) bills that were generated incorrectly, without deleting them. This preserves the full audit trail while allowing corrected bills to be re-generated for the same period.
+
+**Key design decisions:**
+- Only `assoc_admin` can cancel bills. Billing operators cannot.
+- Bills with any payments or advance credit applied are blocked from cancellation — the admin must reverse those transactions first.
+- A cancellation reason is mandatory.
+- Bill numbers are permanently retired. Even after cancellation, the bill row stays in the database with its unique bill number, so the same number is never assigned to a new bill.
+- After cancellation, new bills can be generated for the same unit/period/charge type — the generation logic skips void bills when checking for duplicates.
+
+**Changes:**
+
+**Database migration (`20260803000000_void_bill.sql`):**
+- Added `'Void'` to the `bills.status` check constraint.
+- Added `void_reason`, `voided_at`, `voided_by` audit columns to `bills`.
+- Patched `sync_bill_payment_status()` trigger to skip status updates on already-voided bills (prevents payment aggregation from overwriting the Void status).
+- Created `void_bill(bill_id, reason)` SECURITY DEFINER function — validates role, checks for payments, then marks the bill Void.
+- Created `void_bills_bulk(association_id, period, bill_type, reason)` SECURITY DEFINER function — voids all eligible bills for a period, silently skipping any that have payments attached. Returns count of bills voided.
+
+**Bill generation:** Added `.neq('status', 'Void')` to the existing bills check so voided bills are invisible to the duplicate-detection logic.
+
+**UI — Single bill cancel:**
+- A "Cancel Bill" button appears in the bill detail panel for `assoc_admin` users on bills with no payments.
+- Clicking opens a confirmation dialog with a required reason field and a warning about irreversibility.
+- Cancelled bills show a strikethrough label and no longer display a PDF download link.
+
+**UI — Bulk cancel (period-level):**
+- A trash icon appears next to the bill count in each period row for `assoc_admin` users.
+- Opens a bulk cancel dialog showing the bill count for the period. Bills with payments are automatically skipped (not errored).
+
+**Reports:** Outstanding bills queries in `reports-actions.ts` and `reports-client-page.tsx` now exclude `status = 'Void'` so cancelled bills don't inflate outstanding balances.
+
+---
+
 ## Bug Fixes & UX Polish — 2026-07-31 (batch 3)
 
 ### Reports — PDF filter disclosure & tab-aware title
@@ -3064,3 +3122,13 @@ GST-registered"), not proof that tax was charged; GST is only levied when the as
   `hasAreaColumns`. The description column absorbs the freed width (`flexGrow: 1`).
 
 _Last updated: 2026-07-31_
+
+---
+
+## Migrations Changelog — v1.4
+
+| Migration | Description |
+|---|---|
+| `20260803000000_void_bill.sql` | Add `'Void'` status, `void_reason/voided_at/voided_by` columns, guard `sync_bill_payment_status` trigger, `void_bill()` and `void_bills_bulk()` SECURITY DEFINER functions |
+
+_Last updated: 2026-08-03_

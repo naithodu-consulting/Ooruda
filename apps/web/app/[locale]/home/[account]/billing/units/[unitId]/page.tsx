@@ -57,7 +57,7 @@ export async function generateMetadata({ params }: Props) {
  */
 export default async function UnitBillingPage({ params }: Props) {
   const { account, unitId } = await params;
-  const { accountId } = await requireRole(account, [
+  const { accountId, role } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
   ]);
@@ -212,29 +212,39 @@ export default async function UnitBillingPage({ params }: Props) {
             value={node.outstanding > 0 ? formatINR(node.outstanding) : '—'}
             tone={node.outstanding > 0 ? 'warning' : undefined}
           />
-          <Stat
-            label="Overdue Bills"
-            value={node.overdueCount > 0 ? String(node.overdueCount) : '—'}
-            tone={node.overdueCount > 0 ? 'danger' : undefined}
-          />
-          <Badge
-            variant="outline"
-            className={`ml-auto text-sm ${
-              node.status === 'all_paid'
-                ? (billStatusBadgeClassName('Paid') ?? '')
-                : node.status === 'partial'
-                  ? (billStatusBadgeClassName('Partial') ?? '')
-                  : node.status === 'overdue'
-                    ? (billStatusBadgeClassName('Overdue') ?? '')
-                    : 'border-muted-foreground/30 text-muted-foreground'
-            }`}
-          >
-            {UNIT_STATUS_LABEL[node.status]}
-          </Badge>
+          {node.overdueCount > 0 && (
+            <Stat
+              label="Overdue Bills"
+              value={String(node.overdueCount)}
+              tone="danger"
+            />
+          )}
+          <div className="ml-auto flex items-center gap-1.5">
+            <span className="text-muted-foreground text-sm">Status:</span>
+            <Badge
+              variant="outline"
+              className={`text-sm ${
+                node.status === 'all_paid'
+                  ? (billStatusBadgeClassName('Paid') ?? '')
+                  : node.status === 'partial'
+                    ? (billStatusBadgeClassName('Partial') ?? '')
+                    : node.status === 'overdue'
+                      ? (billStatusBadgeClassName('Overdue') ?? '')
+                      : 'border-muted-foreground/30 text-muted-foreground'
+              }`}
+            >
+              {UNIT_STATUS_LABEL[node.status]}
+            </Badge>
+          </div>
         </div>
 
         <div className="bg-card overflow-hidden rounded-xl border">
-          <UnitBillingDetail periods={node.periods} drafts={node.drafts} />
+          <UnitBillingDetail
+            periods={node.periods}
+            drafts={node.drafts}
+            canVoid={role === 'assoc_admin'}
+            associationId={association.id}
+          />
         </div>
       </div>
     </PageBody>

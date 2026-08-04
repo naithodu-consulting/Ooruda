@@ -31,7 +31,7 @@ export function MetricCard({
   return (
     <div
       className={cn(
-        'relative min-w-0 overflow-hidden rounded-2xl border p-4 sm:p-5',
+        'relative h-full min-w-0 overflow-hidden rounded-2xl border p-4 sm:p-5',
         variantClasses[variant],
         className,
       )}
