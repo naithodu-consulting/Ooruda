@@ -179,9 +179,7 @@ export function buildUnitTree(
         const nodes: BillTypeNode[] = periodBills
           .map((bill) => {
             const voided = isVoid(bill);
-            const displayStatus = voided
-              ? 'Void'
-              : displayBillStatus(bill);
+            const displayStatus = voided ? 'Void' : displayBillStatus(bill);
             const outstanding = voided ? 0 : billOutstanding(bill);
             return {
               bill,

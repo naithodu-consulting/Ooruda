@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@kit/ui/button';
-import { cn } from '@kit/ui/utils';
 import {
   Select,
   SelectContent,
@@ -29,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@kit/ui/table';
+import { cn } from '@kit/ui/utils';
 
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
@@ -315,8 +315,8 @@ export function DraftBillsTab(props: {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-                Maintenance bills for{' '}
-                {formatPeriod(props.currentPeriod)} — not yet generated
+                Maintenance bills for {formatPeriod(props.currentPeriod)} — not
+                yet generated
               </p>
               <p className="mt-0.5 text-sm text-blue-700 dark:text-blue-400">
                 All active units will receive a maintenance bill when you click{' '}
@@ -544,13 +544,21 @@ function Chip({
     <div
       className={cn(
         'flex flex-col items-center rounded-md px-3 py-1.5 text-center',
-        highlight ? 'bg-primary/10 ring-primary/30 ring-1' : muted ? 'bg-muted/30' : 'bg-muted/50',
+        highlight
+          ? 'bg-primary/10 ring-primary/30 ring-1'
+          : muted
+            ? 'bg-muted/30'
+            : 'bg-muted/50',
       )}
     >
       <span
         className={cn(
           'text-base font-semibold tabular-nums',
-          highlight ? 'text-primary' : muted ? 'text-muted-foreground' : 'text-foreground',
+          highlight
+            ? 'text-primary'
+            : muted
+              ? 'text-muted-foreground'
+              : 'text-foreground',
         )}
       >
         {value}

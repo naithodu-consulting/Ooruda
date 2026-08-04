@@ -158,7 +158,10 @@ function PeriodRow({
           periodLabel={formatPeriod(period.period)}
           billCount={liveBillCount}
           onClose={() => setBulkVoidOpen(false)}
-          onVoided={() => { setBulkVoidOpen(false); router.refresh(); }}
+          onVoided={() => {
+            setBulkVoidOpen(false);
+            router.refresh();
+          }}
         />
       )}
       <div

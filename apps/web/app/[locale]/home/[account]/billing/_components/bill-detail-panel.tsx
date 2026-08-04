@@ -129,13 +129,14 @@ export function BillDetailPanel({
   const overdue = isPastDue && !isSettled;
 
   // Warn when an unpaid bill is due within 7 days but not yet past due.
-  const daysUntilDue = !isSettled && !isPastDue
-    ? Math.ceil(
-        (new Date(bill.due_date + 'T00:00:00').getTime() -
-          new Date(today + 'T00:00:00').getTime()) /
-          86400000,
-      )
-    : null;
+  const daysUntilDue =
+    !isSettled && !isPastDue
+      ? Math.ceil(
+          (new Date(bill.due_date + 'T00:00:00').getTime() -
+            new Date(today + 'T00:00:00').getTime()) /
+            86400000,
+        )
+      : null;
   const dueSoon = daysUntilDue !== null && daysUntilDue <= 7;
 
   const showVoidButton =

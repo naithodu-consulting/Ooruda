@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { LayoutDashboard, Users } from 'lucide-react';
+import { LayoutDashboard, Send, Users } from 'lucide-react';
 
 import { usePersonalAccountData } from '@kit/accounts/hooks/use-personal-account-data';
 import { useUser } from '@kit/supabase/hooks/use-user';
@@ -82,6 +82,21 @@ export function AdminSidebar() {
                   </Link>
                 }
               />
+
+              {process.env.NEXT_PUBLIC_ENABLE_BILL_DISPATCH === 'true' && (
+                <SidebarMenuButton
+                  isActive={path.includes('/admin/bill-dispatch')}
+                  render={
+                    <Link
+                      className={'flex size-full gap-2.5'}
+                      href={'/admin/bill-dispatch'}
+                    >
+                      <Send className={'h-4'} />
+                      <span>Bill Dispatch</span>
+                    </Link>
+                  }
+                />
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

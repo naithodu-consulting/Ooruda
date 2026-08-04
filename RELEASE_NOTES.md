@@ -4,6 +4,36 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4 — Bill Dispatch Tool + Security Hardening — 2026-08-04
+
+### Feature: Bulk Bill & Receipt Email Dispatch (internal, non-prod only)
+
+A temporary super-admin tool at `/admin/bill-dispatch` for manually sending generated bills and payment receipts to unit owners via email. Gated by `NEXT_PUBLIC_ENABLE_BILL_DISPATCH=true` — must not be set in production.
+
+**How it works:**
+- Select an association, billing period, and bill type (All / Maintenance / Electricity / Other Charges / Sinking Fund).
+- Toggle between **Bills** mode (any status) and **Receipts** mode (paid-only).
+- Results capped at 50 records. Units with no owner email on file are flagged and skipped.
+- Confirmation dialog before sending (irreversible). Results summary shown after dispatch.
+- Emails sent via Resend with the PDF bill or receipt attached (downloaded from Supabase storage).
+
+**Email templates (`packages/email-templates`):**
+- Two new react-email templates: `BillEmail` (amber amount-due box) and `ReceiptEmail` (green amount-paid box).
+- Branding matches existing Ooruda OTP email — amber header bar, "ooruda" wordmark, warm-grey detail table.
+- Added to `src/index.ts` and `src/registry.ts`.
+
+**Security:**
+- All server functions (`fetchAssociationsForDispatch`, `fetchBillsForDispatch`, `sendBillEmailsAction`) guarded with `isSuperAdmin()` — throws if caller is not a super admin.
+- `billType` validated against a server-side whitelist (`VALID_BILL_TYPES`) before interpolation into PostgREST `.or()` filter — prevents filter injection.
+- `RESEND_API_KEY` throws explicitly if undefined (no silent empty-string fallback).
+- Resend HTTP errors are sanitized to `Email delivery failed (HTTP <status>)` — raw response body is not surfaced to the client.
+- Both server files marked `import 'server-only'`.
+- Dispatch events logged via `getLogger()` for audit trail.
+
+**Shared config (`dispatch-config.ts`):** `DISPATCH_SENDER_EMAIL` and `VALID_BILL_TYPES` constants are shared between server and client to keep values in one place.
+
+---
+
 ## v1.4 — Void Bills + Billing UX Polish — 2026-08-03
 
 ### UX Polish — Billing Dashboard & Drafts (batch 2)
