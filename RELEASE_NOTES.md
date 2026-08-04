@@ -3125,10 +3125,35 @@ _Last updated: 2026-07-31_
 
 ---
 
-## Migrations Changelog — v1.4
+## Infrastructure: Three-Environment Setup — 2026-08-04
+
+### Overview
+
+Separated the single Supabase project into three distinct environments — local Docker, Ooruda Development (staging), and Ooruda Production — to eliminate the risk of feature development affecting live data.
+
+### Environments
+
+| Environment | Supabase Project | Branch | Deployment |
+|---|---|---|---|
+| Local | Docker (local) | any | `pnpm supabase:web:start` |
+| Dev/Staging | Ooruda Development (`bcdosjrbkkemsqowhigj`) | `release` | ooruda.vercel.app |
+| Production | Ooruda Production (`vkxchopjqakvftcnxwie`) | `main` | ooruda.com |
+
+### Changes
+
+- **Schema reconciliation migration** (`20260804093956_reconcile_schema_drift.sql`): Dropped two orphaned functions (`get_user_id_by_email`, `get_user_id_by_phone`), fixed `account_image` storage policy WITH CHECK clause, revoked all anon table grants and blocked future grants via ALTER DEFAULT PRIVILEGES.
+- **Ooruda Development project** created on Supabase with all 112 migrations applied, storage buckets configured, edge functions deployed, auth hooks wired, and SMS secrets added to match production.
+- **Dev database seeded** with production data backup then scrubbed of all real association data — only 3 test associations and test users remain.
+- **`.env.local`** restructured with active/inactive blocks for easy environment switching.
+- **`scripts/db-push.sh`** — guardrail script added to prevent accidental migration pushes to production. Blocks `supabase db push --linked` unless `--production` flag is explicitly passed with a "yes" confirmation. Deployed to all active branches (`main`, `release`, `bugfixes`, `bugfixes_main`, `v1.4`).
+- **AGENTS.md** updated to document the 3-environment workflow and standard migration end-to-end steps.
+
+### Migrations Changelog — v1.4
 
 | Migration | Description |
 |---|---|
 | `20260803000000_void_bill.sql` | Add `'Void'` status, `void_reason/voided_at/voided_by` columns, guard `sync_bill_payment_status` trigger, `void_bill()` and `void_bills_bulk()` SECURITY DEFINER functions |
+| `20260728000002_cash_ledger_bill_numbering.sql` | Patched to enable RLS on `cash_ledger_sequences` (missed in original migration) |
+| `20260804093956_reconcile_schema_drift.sql` | Drop orphaned functions, fix `account_image` storage policy, revoke anon grants |
 
-_Last updated: 2026-08-03_
+_Last updated: 2026-08-04_
