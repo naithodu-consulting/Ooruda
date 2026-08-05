@@ -4,24 +4,19 @@ import * as z from 'zod';
 
 import { enhanceRouteHandler } from '@kit/next/routes';
 import { billTypeLabel, renderReceiptPdf } from '@kit/pdf-templates';
+import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 export const GET = enhanceRouteHandler(
-  async function ({ params }) {
+  async function ({ params, user }) {
     const { id } = z.object({ id: z.string().uuid() }).parse(params);
 
     // Use the regular (authenticated) client — cash_ledger_payments has
     // REVOKE ALL FROM service_role, so the admin client cannot query it.
     // The authenticated role has SELECT granted, and the clp_read RLS policy
     // allows any association member to read, so this is safe.
+    // user is injected by enhanceRouteHandler (auth: true) — no extra getUser() call.
     const client = getSupabaseServerClient();
-
-    const {
-      data: { user },
-    } = await client.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const { data: payment, error: queryError } = await client
       .from('cash_ledger_payments')
@@ -39,7 +34,8 @@ export const GET = enhanceRouteHandler(
       .maybeSingle();
 
     if (queryError) {
-      console.error('[cash-ledger-pdf] query error:', queryError.message);
+      const logger = await getLogger();
+      logger.error({ id, error: queryError.message }, '[cash-ledger-pdf] query error');
       return NextResponse.json(
         { error: 'Failed to load payment.' },
         { status: 500 },
@@ -165,7 +161,8 @@ export const GET = enhanceRouteHandler(
         },
       });
     } catch (err) {
-      console.error('[cash-ledger-pdf] render error', err);
+      const logger = await getLogger();
+      logger.error({ id, error: err }, '[cash-ledger-pdf] render error');
       return NextResponse.json(
         { error: 'Could not generate receipt PDF.' },
         { status: 500 },

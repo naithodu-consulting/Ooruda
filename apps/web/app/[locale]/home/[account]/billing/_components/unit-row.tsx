@@ -1,5 +1,7 @@
 'use client';
 
+import { memo } from 'react';
+
 import Link from 'next/link';
 
 import { ChevronRight } from 'lucide-react';
@@ -39,7 +41,7 @@ export const UNIT_GRID =
  * That keeps this list's query free of per-bill detail — the periods, charge
  * types and line items are fetched only for the unit actually opened.
  */
-export function UnitRow({ node, href, selected, onToggleSelect }: Props) {
+function UnitRowInner({ node, href, selected, onToggleSelect }: Props) {
   const { unit } = node;
 
   return (
@@ -152,3 +154,5 @@ export function UnitRow({ node, href, selected, onToggleSelect }: Props) {
     </div>
   );
 }
+
+export const UnitRow = memo(UnitRowInner);

@@ -75,7 +75,7 @@ export default async function BillingUnitsPage({
     client
       .from('units')
       .select(
-        'id, unit_no, floor, owner_id, owner_is_company, owner_company_name',
+        'id, unit_no, floor, owner_id, owner_is_company, owner_company_name, profiles(full_name, mobile_number)',
       )
       .eq('association_id', association.id)
       .order('unit_no'),
@@ -95,44 +95,20 @@ export default async function BillingUnitsPage({
   const unitRows = unitsResult.data ?? [];
   const unitNoById = new Map(unitRows.map((u) => [u.id, u.unit_no]));
 
-  // Deliberately scoped to the owners actually on screen. This costs one extra
-  // round trip because it depends on the units result, but selecting `profiles`
-  // unscoped would read far more rows than this page has any business seeing.
-  const ownerIds = [
-    ...new Set(
-      unitRows.map((u) => u.owner_id).filter((id): id is string => !!id),
-    ),
-  ];
-
-  let ownerProfiles: Record<
-    string,
-    { full_name: string | null; mobile_number: string | null }
-  > = {};
-
-  if (ownerIds.length > 0) {
-    const { data: profileRows } = await client
-      .from('profiles')
-      .select('id, full_name, mobile_number')
-      .in('id', ownerIds);
-
-    ownerProfiles = Object.fromEntries(
-      (profileRows ?? []).map((p) => [
-        p.id,
-        { full_name: p.full_name, mobile_number: p.mobile_number },
-      ]),
-    );
-  }
-
-  const unitSummaries: UnitSummaryInput[] = unitRows.map((u) => ({
-    id: u.id,
-    unit_no: u.unit_no,
-    floor: u.floor != null ? String(u.floor) : null,
-    owner_name: u.owner_is_company
-      ? (u.owner_company_name ?? null)
-      : u.owner_id
-        ? personLabel(ownerProfiles[u.owner_id])
-        : null,
-  }));
+  // profiles joined into the units query — no extra round trip.
+  const unitSummaries: UnitSummaryInput[] = unitRows.map((u) => {
+    const profile = (u as unknown as { profiles: { full_name: string | null; mobile_number: string | null } | null }).profiles;
+    return {
+      id: u.id,
+      unit_no: u.unit_no,
+      floor: u.floor != null ? String(u.floor) : null,
+      owner_name: u.owner_is_company
+        ? (u.owner_company_name ?? null)
+        : u.owner_id
+          ? personLabel(profile ?? null)
+          : null,
+    };
+  });
 
   const rawBills = billsResult.data ?? [];
 

@@ -43,14 +43,12 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
   const slug = (await params).account;
 
   const [
-    members,
-    invitations,
-    canAddMember,
-    { user, account },
-    assocPermissions,
-  ] = await loadMembersPageData(client, slug);
-
-  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+    [members, invitations, canAddMember, { user, account }, assocPermissions],
+    { data: isSuperAdmin },
+  ] = await Promise.all([
+    loadMembersPageData(client, slug),
+    client.rpc('is_super_admin'),
+  ]);
 
   const canManageRoles =
     !!isSuperAdmin || account.permissions.includes('roles.manage');

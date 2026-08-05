@@ -108,51 +108,6 @@ export async function fetchBillsForDispatch(params: {
   if (!bills || bills.length === 0) return [];
 
   const billIds = bills.map((b) => b.id);
-
-  // receipts → payments → bills (two-hop). Fetch payments ordered newest-first
-  // so that for bills with multiple partial payments the most-recent payment
-  // wins consistently in both paymentIdByBill and receiptByBill.
-  const { data: paymentsData } = await client
-    .from('payments')
-    .select('id, bill_id')
-    .in('bill_id', billIds)
-    .order('paid_at', { ascending: false });
-
-  const paymentIds = (paymentsData ?? []).map((p) => p.id);
-  const paymentBillMap = new Map<string, string>(
-    (paymentsData ?? []).map((p) => [p.id, p.bill_id]),
-  );
-
-  const receiptByBill = new Map<
-    string,
-    { id: string; payment_id: string; pdf_url: string | null }
-  >();
-  if (paymentIds.length > 0) {
-    const { data: receiptsData } = await client
-      .from('receipts')
-      .select('id, payment_id, pdf_url')
-      .in('payment_id', paymentIds);
-
-    for (const r of receiptsData ?? []) {
-      const billId = paymentBillMap.get(r.payment_id);
-      if (billId && !receiptByBill.has(billId)) {
-        receiptByBill.set(billId, {
-          id: r.id,
-          payment_id: r.payment_id,
-          pdf_url: r.pdf_url,
-        });
-      }
-    }
-  }
-
-  // Derive paymentIdByBill from receiptByBill so both always reference the
-  // same payment row — prevents paymentId/receiptId pointing to different payments.
-  const paymentIdByBill = new Map<string, string>();
-  for (const [billId, receipt] of receiptByBill) {
-    paymentIdByBill.set(billId, receipt.payment_id);
-  }
-
-  // Collect owner_ids to batch-resolve profile emails
   const unitIds = bills.map((b) => b.unit_id);
   const ownerIds = [
     ...new Set(
@@ -168,18 +123,53 @@ export async function fetchBillsForDispatch(params: {
     ),
   ];
 
-  // Fetch active tenancies for these units
-  const tenancyMap = new Map<string, string>(); // unit_id → tenant_id
-  if (unitIds.length > 0) {
-    const { data: tenancies } = await client
-      .from('tenancies')
-      .select('unit_id, tenant_id')
-      .in('unit_id', unitIds)
-      .eq('status', 'active')
-      .is('end_date', null);
-    for (const t of tenancies ?? []) {
-      tenancyMap.set(t.unit_id, t.tenant_id);
+  // Collapse bills→payments→receipts chain + tenancies + profiles into
+  // 3 parallel queries instead of 4 sequential ones.
+  const [paymentsWithReceiptsResult, tenancyResult] = await Promise.all([
+    // Single join: payments + nested receipts eliminates a serial hop.
+    client
+      .from('payments')
+      .select('id, bill_id, receipts(id, pdf_url)')
+      .in('bill_id', billIds)
+      .order('paid_at', { ascending: false }),
+    unitIds.length > 0
+      ? client
+          .from('tenancies')
+          .select('unit_id, tenant_id')
+          .in('unit_id', unitIds)
+          .eq('status', 'active')
+          .is('end_date', null)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  type PaymentWithReceipt = {
+    id: string;
+    bill_id: string;
+    receipts: { id: string; pdf_url: string | null }[];
+  };
+
+  const receiptByBill = new Map<
+    string,
+    { id: string; payment_id: string; pdf_url: string | null }
+  >();
+  const paymentIdByBill = new Map<string, string>();
+  for (const p of (paymentsWithReceiptsResult.data ?? []) as unknown as PaymentWithReceipt[]) {
+    if (!receiptByBill.has(p.bill_id) && p.receipts?.length) {
+      const r = p.receipts[0]!;
+      receiptByBill.set(p.bill_id, {
+        id: r.id,
+        payment_id: p.id,
+        pdf_url: r.pdf_url,
+      });
     }
+    if (!paymentIdByBill.has(p.bill_id)) {
+      paymentIdByBill.set(p.bill_id, p.id);
+    }
+  }
+
+  const tenancyMap = new Map<string, string>();
+  for (const t of (tenancyResult.data ?? []) as { unit_id: string; tenant_id: string }[]) {
+    tenancyMap.set(t.unit_id, t.tenant_id);
   }
 
   const tenantIds = [...new Set([...tenancyMap.values()])];

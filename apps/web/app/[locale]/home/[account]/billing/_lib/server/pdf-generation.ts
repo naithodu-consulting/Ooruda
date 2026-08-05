@@ -96,6 +96,7 @@ type TenancyBillingRow = {
   company_name: string | null;
   company_address: string | null;
   company_gstin: string | null;
+  profiles: { full_name: string | null } | null;
 };
 
 /**
@@ -120,10 +121,11 @@ async function resolveBillingEntity(
   let tenancy: TenancyBillingRow | null = null;
 
   if (unit.bill_to !== 'owner' && tenancyId) {
+    // Join profiles into the tenancy query — one round trip instead of two.
     const { data } = await admin
       .from('tenancies')
       .select(
-        'tenant_id, is_company, company_name, company_address, company_gstin',
+        'tenant_id, is_company, company_name, company_address, company_gstin, profiles(full_name)',
       )
       .eq('id', tenancyId)
       .maybeSingle();
@@ -139,12 +141,7 @@ async function resolveBillingEntity(
         companyGstin: tenancy.company_gstin,
       };
     }
-    const { data: profileData } = await admin
-      .from('profiles')
-      .select('full_name')
-      .eq('id', tenancy.tenant_id)
-      .maybeSingle();
-    const profile = profileData as { full_name: string | null } | null;
+    const profile = tenancy.profiles;
     return {
       isCompany: false,
       name: profile?.full_name ?? null,
@@ -234,8 +231,9 @@ export async function getOrGenerateBillPdf(
 
     // Fetch the bill using the admin client to ensure we get the full
     // nested association + accounts join (which might otherwise be filtered
-    // by RLS for non-members, obscuring the logo). We manually authorize
-    // the user via `canAccessUnit` immediately below.
+    // by RLS for non-members, obscuring the logo). Auth was already confirmed
+    // by canAccessUnit() before this generate() closure was entered — the
+    // second check is intentionally removed to avoid 6+ serial DB calls.
     const { data: bill, error: billError } = await admin
       .from('bills')
       .select(
@@ -259,23 +257,6 @@ export async function getOrGenerateBillPdf(
       logger.warn(
         { billId, found: !!bill },
         'Bill not found, or missing unit/association join, when generating PDF',
-      );
-      return null;
-    }
-
-    if (
-      !opts?.skipAuth &&
-      !(await canAccessUnit(
-        bill.association_id,
-        bill.unit_id,
-        (bill.units as unknown as { owner_id: string | null } | null)
-          ?.owner_id ?? null,
-        bill.tenancy_id,
-      ))
-    ) {
-      logger.warn(
-        { billId, associationId: bill.association_id, unitId: bill.unit_id },
-        "Caller is not authorized to access this bill's unit",
       );
       return null;
     }

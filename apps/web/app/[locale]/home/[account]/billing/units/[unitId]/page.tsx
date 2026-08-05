@@ -79,7 +79,7 @@ export default async function UnitBillingPage({ params }: Props) {
   const { data: unit } = await client
     .from('units')
     .select(
-      'id, unit_no, floor, owner_id, owner_is_company, owner_company_name',
+      'id, unit_no, floor, owner_id, owner_is_company, owner_company_name, profiles(full_name, mobile_number)',
     )
     .eq('id', unitId)
     .eq('association_id', association.id)
@@ -111,18 +111,13 @@ export default async function UnitBillingPage({ params }: Props) {
         .eq('billed', false),
     ]);
 
-  let ownerName: string | null = unit.owner_is_company
+  // profiles joined into the units query above — no extra round trip.
+  const unitProfile = (unit as unknown as { profiles: { full_name: string | null; mobile_number: string | null } | null }).profiles;
+  const ownerName: string | null = unit.owner_is_company
     ? (unit.owner_company_name ?? null)
-    : null;
-
-  if (!unit.owner_is_company && unit.owner_id) {
-    const { data: profile } = await client
-      .from('profiles')
-      .select('full_name, mobile_number')
-      .eq('id', unit.owner_id)
-      .maybeSingle();
-    ownerName = personLabel(profile ?? undefined);
-  }
+    : unit.owner_id
+      ? personLabel(unitProfile ?? undefined)
+      : null;
 
   const bills: UnitBill[] = (billsResult.data ?? []).map((b) => ({
     id: b.id,

@@ -4,6 +4,45 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4 — Comprehensive performance audit & optimisation — 2026-08-05
+
+Full end-to-end audit of 72 confirmed bottlenecks across DB queries, API routes, server-side data fetching, and client-side rendering. All high-impact items resolved.
+
+### Database (migration `20260805000002_missing_fk_indexes.sql`)
+- **8 missing FK indexes** added with `CREATE INDEX CONCURRENTLY` — highest-impact: `payments(association_id)` was causing 2-3 s full-table scans on Payments/Billing pages.
+- **GIN trigram indexes** on `profiles.full_name` and `audit_logs.action` for sub-millisecond `ILIKE '%…%'` search.
+- **New `get_unit_ledger_balances()` RPC** — replaces full-table `cash_ledger` fetch + client-side JS reduce with a single DB-side `SUM … GROUP BY`, eliminating thousands of extra rows sent over the wire.
+
+### API routes — serial round-trip elimination
+- **Cash ledger aggregation** (`lib/cash-ledger-aggregation.ts`) — switched to new RPC; eliminates full table scan and JS aggregation.
+- **Bill dispatch** (`admin/bill-dispatch/_lib/dispatch-queries.ts`) — 4-serial-hop bills→payments→receipts→tenancies→profiles collapsed to 2 parallel queries.
+- **Billing units page** — `profiles` join added to units SELECT, eliminating a 5th serial round-trip.
+- **Unit detail page** — same profile join fix; removes a conditional sequential `profiles` fetch.
+- **PDF generation** (`billing/_lib/server/pdf-generation.ts`) — removed duplicate `canAccessUnit()` inside `generate()` closure (was called twice per cache miss); added profiles join to tenancy query.
+- **Razorpay `verify-due` and `create-order-due` routes** — gateway fetch added to the existing `Promise.all`, removing a sequential hop after auth checks.
+- **Statement PDF route** — collapsed `accounts → associations` two-hop serial into a single join query (`accounts!inner`).
+
+### API routes — auth & caching fixes
+- **`cash-ledger-payments/[id]/pdf` and `by-receipt`** — removed redundant `auth.getUser()` calls (already injected by `enhanceRouteHandler`); replaced `console.error` with structured `logger.error`.
+- **`Cache-Control: private, no-store`** added to all on-demand PDF responses (bills export, payments export, cash-ledger PDFs) so Next.js Edge Cache never stores user-specific documents.
+
+### Server-side page data fetching
+- **Members page** — `is_super_admin()` RPC now runs in `Promise.all` alongside `loadMembersPageData()`.
+- **Reports actions** — eliminated duplicate `profiles` fetch in `downloadPdfAction` (was already fetched by `resolveAssociation()`).
+- **Electricity page** — O(bills × readings) nested loop replaced with O(bills + readings) pre-index + backwards scan per bill.
+
+### Client-side rendering
+- **Statement table** — 6 separate `rows.reduce/some` passes replaced with single `useMemo` pass, saving 5 redundant array traversals on every filter change.
+- **Unit billing table counts** — 3 separate `tree.filter` calls merged into one pass per filter change.
+- **Unit billing table metrics** — 3 separate `filtered.reduce/filter` calls merged into one pass.
+- **`UnitRow`** wrapped in `React.memo` — prevents all 25+ unit rows from re-rendering on every filter keystroke.
+- **Electricity page** `meter_readings` query bounded to one period before the oldest visible MESCOM bill — eliminates loading all-time readings history on every page load.
+- **Reports payments tab** `bill_type` filter now applied to Razorpay payments at DB level (was only applied to cash-ledger payments; Razorpay rows were returned unfiltered then discarded client-side).
+- **`/billing/` root `loading.tsx`** added — Next.js now shows the global loader skeleton during server-render of the billing overview instead of a blank page flash.
+- **ZIP export N+1 eliminated** (`api/billing/bills/export/zip`) — `pdf_url` added to initial SELECT; all cached PDFs are now batch-signed in one `createSignedUrls` Storage API call and fetched fully in parallel. Previously: N DB queries + N signed URL calls + N sequential HTTP fetches (batched 5). Now: 0 extra DB queries + 1 batch Storage call + all HTTP fetches in parallel. Saves 4–20 s on typical 10–25 unit exports.
+
+---
+
 ## v1.4 — Kaleyra SMS/WhatsApp integration — 2026-08-05
 
 ### SMS provider replaced: MSG91/2Factor → Kaleyra
@@ -3330,5 +3369,6 @@ Separated the single Supabase project into three distinct environments — local
 | `20260803000000_void_bill.sql` | Add `'Void'` status, `void_reason/voided_at/voided_by` columns, guard `sync_bill_payment_status` trigger, `void_bill()` and `void_bills_bulk()` SECURITY DEFINER functions |
 | `20260728000002_cash_ledger_bill_numbering.sql` | Patched to enable RLS on `cash_ledger_sequences` (missed in original migration) |
 | `20260804093956_reconcile_schema_drift.sql` | Drop orphaned functions, fix `account_image` storage policy, revoke anon grants |
+| `20260805000002_missing_fk_indexes.sql` | 8 missing FK indexes (CONCURRENTLY), GIN trigram indexes on `profiles.full_name` and `audit_logs.action`, new `get_unit_ledger_balances()` RPC for DB-side aggregation |
 
-_Last updated: 2026-08-05_  <!-- Kaleyra SMS integration -->
+_Last updated: 2026-08-05_  <!-- Performance audit Phase 1-9 -->

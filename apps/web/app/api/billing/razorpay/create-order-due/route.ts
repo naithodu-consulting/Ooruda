@@ -47,8 +47,9 @@ export async function POST(req: NextRequest) {
       { status: 404 },
     );
 
-  // Now that the caller is authenticated: membership + unit ownership.
-  const [{ data: membership }, unitAllowedResult] = await Promise.all([
+  // Membership, unit ownership, and gateway all fetched in parallel.
+  // associationId is known from the request body so gateway can be included here.
+  const [{ data: membership }, unitAllowedResult, { data: gateway }] = await Promise.all([
     client
       .from('accounts_memberships')
       .select('account_role')
@@ -72,6 +73,11 @@ export async function POST(req: NextRequest) {
         .eq('status', 'active')
         .maybeSingle(),
     ]),
+    admin
+      .from('association_payment_gateways')
+      .select('key_id, key_secret, is_active')
+      .eq('association_id', associationId)
+      .maybeSingle(),
   ]);
 
   const role = membership?.account_role;
@@ -114,13 +120,6 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-
-  // Gateway credentials — fetched only now that the request is fully authorized.
-  const { data: gateway } = await admin
-    .from('association_payment_gateways')
-    .select('key_id, key_secret, is_active')
-    .eq('association_id', associationId)
-    .maybeSingle();
 
   if (!gateway?.is_active) {
     return NextResponse.json(

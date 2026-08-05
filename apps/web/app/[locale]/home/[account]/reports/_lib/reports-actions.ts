@@ -242,6 +242,8 @@ export async function downloadCsvAction(
     if (to && ISO_DATE.test(to)) rpQ = rpQ.lte('paid_at', `${to}T23:59:59.999`);
     if (unitIds.length > 0)
       rpQ = rpQ.filter('bills.unit_id', 'in', `(${unitIds.join(',')})`);
+    if (billTypes.length > 0)
+      rpQ = rpQ.filter('bills.bill_type', 'in', `(${billTypes.join(',')})`);
     if (paymentMode) rpQ = rpQ.eq('mode', paymentMode);
 
     // Cash ledger payments (manual entries)
@@ -408,7 +410,7 @@ export async function downloadPdfAction(
   tab: TabKey | 'all',
   filters: Partial<ReportsFilters> = {},
 ): Promise<ActionResult<{ base64: string; filename: string }>> {
-  const { client, association } = await resolveAssociation(associationId);
+  const { client, association, profile: resolvedProfile } = await resolveAssociation(associationId);
   if (!association) return { success: false, error: 'Access denied.' };
 
   const fromPeriod = toPeriod(from);
@@ -509,16 +511,15 @@ export async function downloadPdfAction(
     outstandingRes,
     paymentsRes,
     electricityRes,
-    profileRes,
     unitNosRes,
   ] = await Promise.all([
     collectionPromise,
     outstandingPromise,
     paymentsPromise,
     electricityPromise,
-    client.from('profiles').select('full_name').maybeSingle(),
     unitNosPromise,
   ]);
+  const profileRes = { data: resolvedProfile };
 
   if (collectionRes.error) {
     return {
