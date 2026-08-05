@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { PageBody } from '@kit/ui/page';
 
+import { personLabel } from '~/lib/person-label';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../../_components/team-account-layout-page-header';
@@ -94,11 +95,40 @@ export default async function BillingUnitsPage({
   const unitRows = unitsResult.data ?? [];
   const unitNoById = new Map(unitRows.map((u) => [u.id, u.unit_no]));
 
+  const ownerIds = [
+    ...new Set(
+      unitRows.map((u) => u.owner_id).filter((id): id is string => !!id),
+    ),
+  ];
+
+  let ownerProfiles: Record<
+    string,
+    { full_name: string | null; mobile_number: string | null }
+  > = {};
+
+  if (ownerIds.length > 0) {
+    const { data: profileRows } = await client
+      .from('profiles')
+      .select('id, full_name, mobile_number')
+      .in('id', ownerIds);
+
+    ownerProfiles = Object.fromEntries(
+      (profileRows ?? []).map((p) => [
+        p.id,
+        { full_name: p.full_name, mobile_number: p.mobile_number },
+      ]),
+    );
+  }
+
   const unitSummaries: UnitSummaryInput[] = unitRows.map((u) => ({
     id: u.id,
     unit_no: u.unit_no,
     floor: u.floor != null ? String(u.floor) : null,
-    owner_name: u.owner_is_company ? (u.owner_company_name ?? null) : null,
+    owner_name: u.owner_is_company
+      ? (u.owner_company_name ?? null)
+      : u.owner_id
+        ? personLabel(ownerProfiles[u.owner_id])
+        : null,
   }));
 
   const rawBills = billsResult.data ?? [];

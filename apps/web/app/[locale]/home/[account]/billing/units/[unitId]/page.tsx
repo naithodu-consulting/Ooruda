@@ -9,6 +9,7 @@ import { PageBody } from '@kit/ui/page';
 
 import { billStatusBadgeClassName } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
+import { personLabel } from '~/lib/person-label';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../../../_components/team-account-layout-page-header';
@@ -110,9 +111,18 @@ export default async function UnitBillingPage({ params }: Props) {
         .eq('billed', false),
     ]);
 
-  const ownerName: string | null = unit.owner_is_company
+  let ownerName: string | null = unit.owner_is_company
     ? (unit.owner_company_name ?? null)
     : null;
+
+  if (!unit.owner_is_company && unit.owner_id) {
+    const { data: profile } = await client
+      .from('profiles')
+      .select('full_name, mobile_number')
+      .eq('id', unit.owner_id)
+      .maybeSingle();
+    ownerName = personLabel(profile ?? undefined);
+  }
 
   const bills: UnitBill[] = (billsResult.data ?? []).map((b) => ({
     id: b.id,

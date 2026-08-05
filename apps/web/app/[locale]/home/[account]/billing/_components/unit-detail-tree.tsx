@@ -283,9 +283,9 @@ function PeriodRow({
 
 // ── Level 3: Bill type ───────────────────────────────────────────────────────
 
-// 6 cols — col 3 is a spacer; last 3 match UNIT_GRID cols 5-7 exactly.
+// 5 cols — col 3 is a spacer; last 2 match UNIT_GRID cols 5-6 exactly.
 const TYPE_GRID =
-  'grid min-w-[640px] grid-cols-[18px_minmax(0,1fr)_60px_100px_100px_90px] items-center gap-2 sm:grid-cols-[18px_minmax(0,1fr)_80px_110px_110px_100px]';
+  'grid min-w-[640px] grid-cols-[18px_minmax(0,1fr)_60px_100px_100px] items-center gap-2 sm:grid-cols-[18px_minmax(0,1fr)_80px_110px_110px]';
 
 function BillTypeRow({
   node,
@@ -386,15 +386,6 @@ function BillTypeRow({
           </div>
         </div>
 
-        {/* Col 6 — status badge (aligns with "Status" header) */}
-        <div className="flex justify-end">
-          <Badge
-            variant="outline"
-            className={cn('text-sm', billStatusBadgeClassName(displayStatus))}
-          >
-            {displayStatus}
-          </Badge>
-        </div>
       </div>
 
       {expanded && (
