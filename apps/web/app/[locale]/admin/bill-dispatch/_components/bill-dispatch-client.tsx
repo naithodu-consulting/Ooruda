@@ -5,6 +5,9 @@ import { useCallback, useState, useTransition } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  ChevronsUpDown,
   FileText,
   Info,
   Mail,
@@ -126,6 +129,8 @@ export function BillDispatchClient({ associations }: Props) {
   const [billType, setBillType] = useState<string>('All');
 
   const [rows, setRows] = useState<DispatchBillRow[]>([]);
+  const [sortKey, setSortKey] = useState<'unitNo' | 'ownerName' | 'tenantName' | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Per-row email target: 'owner' (default) or 'tenant'
   const [emailTargets, setEmailTargets] = useState<
@@ -213,17 +218,31 @@ export function BillDispatchClient({ associations }: Props) {
     });
   };
 
-  const selectedRows = rows.filter((r) => selectedIds.has(r.billId));
-  const sendableRows = rows.filter(
+  const sortedRows = sortKey
+    ? [...rows].sort((a, b) => {
+        const av = (sortKey === 'tenantName' ? (a.tenantName ?? '') : a[sortKey]).toLowerCase();
+        const bv = (sortKey === 'tenantName' ? (b.tenantName ?? '') : b[sortKey]).toLowerCase();
+        const cmp = av.localeCompare(bv, 'en-IN');
+        return sortDir === 'asc' ? cmp : -cmp;
+      })
+    : rows;
+
+  const toggleSort = (key: typeof sortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(key); setSortDir('asc'); }
+  };
+
+  const selectedRows = sortedRows.filter((r) => selectedIds.has(r.billId));
+  const sendableRows = sortedRows.filter(
     (r) => !blockReason(r, mode, getTarget(r.billId)),
   );
-  const missingEmailRows = rows.filter(
+  const missingEmailRows = sortedRows.filter(
     (r) => blockReason(r, mode, getTarget(r.billId)) === 'no-email',
   );
-  const missingReceiptRows = rows.filter(
+  const missingReceiptRows = sortedRows.filter(
     (r) => blockReason(r, mode, getTarget(r.billId)) === 'advance-credit',
   );
-  const noPdfRows = rows.filter(
+  const noPdfRows = sortedRows.filter(
     (r) => !blockReason(r, mode, getTarget(r.billId)) && !hasPdf(r, mode),
   );
   const allSendableSelected =
@@ -508,9 +527,31 @@ export function BillDispatchClient({ associations }: Props) {
                           onCheckedChange={toggleAll}
                         />
                       </th>
-                      <th className="px-4 py-3 text-left">Unit</th>
-                      <th className="px-4 py-3 text-left">Owner</th>
-                      <th className="px-4 py-3 text-left">Tenant</th>
+                      {(
+                        [
+                          ['unitNo', 'Unit'],
+                          ['ownerName', 'Owner'],
+                          ['tenantName', 'Tenant'],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <th key={key} className="px-4 py-3 text-left">
+                          <button
+                            onClick={() => toggleSort(key)}
+                            className="flex items-center gap-1 uppercase tracking-wide hover:text-foreground transition-colors"
+                          >
+                            {label}
+                            {sortKey === key ? (
+                              sortDir === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )
+                            ) : (
+                              <ChevronsUpDown className="h-3 w-3 opacity-40" />
+                            )}
+                          </button>
+                        </th>
+                      ))}
                       <th className="px-4 py-3 text-left">Email</th>
                       <th className="px-4 py-3 text-left">Bill No</th>
                       <th className="px-4 py-3 text-left">Type</th>
@@ -519,7 +560,7 @@ export function BillDispatchClient({ associations }: Props) {
                     </tr>
                   </thead>
                   <tbody className="divide-border divide-y bg-white">
-                    {rows.map((row) => {
+                    {sortedRows.map((row) => {
                       const blocked = blockReason(
                         row,
                         mode,

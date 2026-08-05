@@ -70,7 +70,7 @@ export function TeamAccountTopbar(props: {
 
   return (
     <div className="bg-background sticky top-0 z-40 flex h-14 flex-shrink-0 items-center justify-between border-b px-4">
-      <div className="flex min-w-0 items-center gap-4">
+      <div className="flex shrink-0 items-center gap-3">
         <Button
           variant="outline"
           size="icon-sm"
@@ -80,7 +80,7 @@ export function TeamAccountTopbar(props: {
           <Menu className="h-5 w-5" />
           <span className="sr-only">Toggle Sidebar</span>
         </Button>
-        <span className="truncate text-sm font-bold tracking-tight">
+        <span className="hidden truncate text-sm font-bold tracking-tight lg:block">
           <Trans i18nKey={labelKey} />
         </span>
       </div>
@@ -169,7 +169,7 @@ function AssociationSwitcher(props: {
             <div className="bg-primary text-primary-foreground flex h-5 w-5 items-center justify-center rounded text-[9px] font-black">
               {initials}
             </div>
-            <span className="max-w-[140px] truncate" title={currentLabel}>
+            <span className="max-w-[90px] truncate sm:max-w-[140px]" title={currentLabel}>
               {currentLabel}
             </span>
             <ChevronDown className="text-muted-foreground h-3.5 w-3.5" />

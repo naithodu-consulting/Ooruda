@@ -4,6 +4,77 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4 — Admin Accounts page overhaul + test-phone auto-tagging — 2026-08-05
+
+### Admin accounts page — full UI/UX redesign
+- **Removed "All" tab** — replaced with two concrete tabs: Associations and Users, each showing only relevant columns.
+- **Tab counts** — tabs now show record totals: "Associations (3)" / "Users (63)".
+- **Tab-contextual columns** — Associations tab: Name, Created, Actions. Users tab: Name, Phone, Email, Roles, Created, Actions. The redundant Type column and low-value Updated At column are removed.
+- **Role chips** — roles are now displayed as readable `bg-muted` chips instead of comma-joined plain text. Multi-role users show one chip per role with flex-wrap.
+- **Date-only timestamps** — Created column shows date only (e.g. "14 Jun 2026"); hovering shows the full date+time tooltip.
+- **Tab-contextual Create buttons** — "Create Association" and "Create User" buttons appear inline in the filter row, contextual to the active tab. Abbreviated labels on mobile ("+ Assoc" / "+ User").
+- **Instant client-side tab switching** — all data is fetched once on server load and filtered in-memory on the client. Tab switches and search are instantaneous with no server round-trip. (Previous approach used `router.push` + server prefetch; replaced with local state + client filter since the dataset is small.)
+- **Debounced live search** — search triggers after 200ms of typing; a visible Search button also submits. Placeholder text adapts to the active tab.
+- **Empty state** — friendly empty state with icon and message when no records match a query.
+- **Name/Email truncation** — long names and emails truncate with `…` and show full value on hover.
+- **Table responsive** — Users table sets min-width for horizontal scroll on mobile instead of compressing columns.
+- **Test badge compact** — Test badge is a small `text-[10px]` inline pill that never breaks the name row layout.
+- **Actions menu fixes** — "Delete Personal Account" → "Delete User"; "Send Reset Password link" → "Send Reset Password Link".
+
+### Admin login redirect
+- Super admin landing page (`/admin`) now redirects immediately to `/admin/accounts`. The Dashboard page had no usable content.
+- Dashboard removed from the admin sidebar and mobile nav dropdown.
+
+### Auto-tagging test users by phone prefix
+- Users with a phone number starting with `+9199110000` or `+9199999999` are automatically tagged as test users (`profiles.is_test = true`).
+- A database trigger (`trg_auto_tag_test_phone`) ensures all future users with these prefixes are auto-tagged on insert/update of phone number. Correcting a test phone to a real number un-tags the user.
+- The accounts page also detects test phones in real-time as a fallback (for records created before the migration runs on remote).
+- Backfill covers rows where `is_test IS NOT TRUE` (handles both `false` and `NULL`).
+
+---
+
+## v1.4 — Mobile nav fixes: Bill Dispatch in admin, hamburger always visible — 2026-08-05
+
+### Admin mobile nav — Bill Dispatch missing
+- Bill Dispatch was present in the desktop sidebar but omitted from the admin topbar's mobile dropdown. Added it (gated by the same `NEXT_PUBLIC_ENABLE_BILL_DISPATCH` env flag).
+
+### Team account topbar — hamburger button collapsing on narrow screens
+- The left flex container used `min-w-0`, allowing it to shrink to zero on narrow phones (360–375px) and hide the Menu/hamburger button behind the AssociationSwitcher. Fixed by making the left container `shrink-0` so the button is always guaranteed space.
+- Page label hidden on mobile (`hidden lg:block`) — it wasn't visible at narrow widths anyway and was competing for space.
+- AssociationSwitcher label capped at `max-w-[90px]` on phones (`max-w-[140px]` on sm+) so the name and hamburger coexist on 360px screens.
+
+---
+
+## v1.4 — UX fixes: Edit Unit dialog, billing banner, admin Cancel, sidebar icons — 2026-08-05
+
+### Edit Unit dialog
+- Added **Cancel** button next to Save details — dialog was previously only dismissible via the X icon.
+- Dialog content is now scrollable (`overflow-y-auto`, `max-h-[90vh]`) so the full form is accessible on small screens.
+- **Bill to** option labels shortened and clarified: "Auto (tenant if occupied, else owner)" → "Auto — tenant if occupied, else owner"; added "Always bill owner / Always bill tenant" for clarity.
+- Added form description for the Bill to field: "Controls whose name appears on bills for this unit."
+
+### Maintenance bills callout
+- Removed duplicate icons — the callout was showing both a Wrench and an Info icon side by side. Now shows only the Wrench.
+- Reworded body copy: "Click **Generate Bills** above to create maintenance bills for all active units. The bill amount is calculated based on each unit's area at generation time." — clearer action prompt.
+
+### Admin Edit User — Cancel button
+- Cancel button was a no-op when the dialog was opened from the account detail page (no `onOpenChange` prop passed). Dialog now tracks its own `internalOpen` state and supports both controlled and uncontrolled usage.
+
+### Sidebar nav icons on mobile
+- Nav icons defined with only `w-4` (no `h-4`) caused aspect-ratio mismatches on some mobile browsers where the SVG height defaulted to the lucide size attribute (24px) while width was clamped to 16px. Fixed: icon class is now `w-4 h-4 shrink-0` in both team and personal account navigation configs.
+
+### Bill dispatch — sortable columns
+- Unit, Owner, and Tenant columns in the dispatch table are now sortable. Click a column header to sort ascending; click again to flip to descending. An inactive sort indicator (⇅) is shown on unsorted columns. Locale-aware sort via `localeCompare('en-IN')`.
+
+---
+
+## v1.4 — Bill Dispatch: UX polish, correctness fixes & PDF auto-generation — 2026-08-05
+
+### Sortable columns
+- Unit, Owner, and Tenant columns in the dispatch table are now sortable. Click a column header to sort ascending; click again to flip to descending. An inactive sort indicator (⇅) is shown on unsorted columns. Locale-aware sort via `localeCompare('en-IN')`.
+
+---
+
 ## v1.4 — Bill Dispatch: UX polish, correctness fixes & PDF auto-generation — 2026-08-05
 
 ### Owner / Tenant email toggle
@@ -802,6 +873,12 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 | `20260707132123_sync_test_user_account_names.sql` | Jul 7 | Sync `accounts.name` from `profiles.full_name` for all test users (display name fix) |
 | `20260708000001_unit_status_self_occupied_rented.sql` | Jul 8 | Drop `Occupied` CHECK; migrate existing rows; add CHECK for `Self Occupied`, `Rented`, `Vacant` |
 | `20260709000001_meter_readings_load_kva.sql` | Jul 9 | Add nullable `load_kva` column to `meter_readings` for per-reading tracking |
+| `20260729000002_collection_summary_advance.sql` | Jul 29 | Advance credit support in collection summary |
+| `20260731000000_query_performance.sql` | Jul 31 | Query performance indexes |
+| `20260803000000_void_bill.sql` | Aug 3 | Void bill support |
+| `20260804093956_reconcile_schema_drift.sql` | Aug 4 | Reconcile schema drift |
+| `20260804143333_smoke_test_push_workflow.sql` | Aug 4 | Smoke test migration for push workflow verification |
+| `20260805000001_auto_tag_test_phone_users.sql` | Aug 5 | Auto-tag `profiles.is_test = true` for phones starting with `+91991100` or `+9199999`; trigger for new users |
 
 ---
 

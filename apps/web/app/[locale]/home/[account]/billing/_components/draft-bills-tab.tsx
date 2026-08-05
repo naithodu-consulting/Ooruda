@@ -5,7 +5,6 @@ import { useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
-  Info,
   PiggyBank,
   Receipt,
   Wrench,
@@ -309,19 +308,16 @@ export function DraftBillsTab(props: {
         {/* Pending Maintenance — shown as an info callout, not a data section */}
         {showMaintenance && (
           <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3.5 dark:border-blue-800/40 dark:bg-blue-900/20">
-            <div className="flex shrink-0 items-center gap-2 pt-0.5 text-blue-700 dark:text-blue-400">
-              <Wrench className="h-4 w-4" />
-              <Info className="h-4 w-4" />
-            </div>
+            <Wrench className="mt-0.5 h-4 w-4 shrink-0 text-blue-700 dark:text-blue-400" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
                 Maintenance bills for {formatPeriod(props.currentPeriod)} — not
                 yet generated
               </p>
               <p className="mt-0.5 text-sm text-blue-700 dark:text-blue-400">
-                All active units will receive a maintenance bill when you click{' '}
-                <span className="font-medium">Generate Bills</span>. The amount
-                is calculated at generation time based on each unit's area.
+                Click <span className="font-semibold">Generate Bills</span> above
+                to create maintenance bills for all active units. The bill amount
+                is calculated based on each unit&apos;s area at generation time.
               </p>
             </div>
           </div>
