@@ -5,7 +5,6 @@ import { ArrowLeft } from 'lucide-react';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { PageBody } from '@kit/ui/page';
 
-import { personLabel } from '~/lib/person-label';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../../_components/team-account-layout-page-header';
@@ -75,7 +74,7 @@ export default async function BillingUnitsPage({
     client
       .from('units')
       .select(
-        'id, unit_no, floor, owner_id, owner_is_company, owner_company_name, profiles(full_name, mobile_number)',
+        'id, unit_no, floor, owner_id, owner_is_company, owner_company_name',
       )
       .eq('association_id', association.id)
       .order('unit_no'),
@@ -95,20 +94,12 @@ export default async function BillingUnitsPage({
   const unitRows = unitsResult.data ?? [];
   const unitNoById = new Map(unitRows.map((u) => [u.id, u.unit_no]));
 
-  // profiles joined into the units query — no extra round trip.
-  const unitSummaries: UnitSummaryInput[] = unitRows.map((u) => {
-    const profile = (u as unknown as { profiles: { full_name: string | null; mobile_number: string | null } | null }).profiles;
-    return {
-      id: u.id,
-      unit_no: u.unit_no,
-      floor: u.floor != null ? String(u.floor) : null,
-      owner_name: u.owner_is_company
-        ? (u.owner_company_name ?? null)
-        : u.owner_id
-          ? personLabel(profile ?? null)
-          : null,
-    };
-  });
+  const unitSummaries: UnitSummaryInput[] = unitRows.map((u) => ({
+    id: u.id,
+    unit_no: u.unit_no,
+    floor: u.floor != null ? String(u.floor) : null,
+    owner_name: u.owner_is_company ? (u.owner_company_name ?? null) : null,
+  }));
 
   const rawBills = billsResult.data ?? [];
 

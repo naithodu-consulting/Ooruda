@@ -9,7 +9,6 @@ import { PageBody } from '@kit/ui/page';
 
 import { billStatusBadgeClassName } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
-import { personLabel } from '~/lib/person-label';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../../../_components/team-account-layout-page-header';
@@ -79,7 +78,7 @@ export default async function UnitBillingPage({ params }: Props) {
   const { data: unit } = await client
     .from('units')
     .select(
-      'id, unit_no, floor, owner_id, owner_is_company, owner_company_name, profiles(full_name, mobile_number)',
+      'id, unit_no, floor, owner_id, owner_is_company, owner_company_name',
     )
     .eq('id', unitId)
     .eq('association_id', association.id)
@@ -111,13 +110,9 @@ export default async function UnitBillingPage({ params }: Props) {
         .eq('billed', false),
     ]);
 
-  // profiles joined into the units query above — no extra round trip.
-  const unitProfile = (unit as unknown as { profiles: { full_name: string | null; mobile_number: string | null } | null }).profiles;
   const ownerName: string | null = unit.owner_is_company
     ? (unit.owner_company_name ?? null)
-    : unit.owner_id
-      ? personLabel(unitProfile ?? undefined)
-      : null;
+    : null;
 
   const bills: UnitBill[] = (billsResult.data ?? []).map((b) => ({
     id: b.id,
