@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   FileText,
+  Info,
   Mail,
   Search,
   Send,
@@ -70,6 +71,7 @@ function formatDueDate(date: string) {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    timeZone: 'Asia/Kolkata',
   });
 }
 
@@ -81,24 +83,29 @@ function formatBillType(t: string) {
     .join(' ');
 }
 
-// Use inline styles to avoid Tailwind purge issues with dynamic class names
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, { bg: string; color: string }> = {
-    paid: { bg: '#dcfce7', color: '#15803d' },
-    outstanding: { bg: '#fef3c7', color: '#b45309' },
-    overdue: { bg: '#fee2e2', color: '#b91c1c' },
-    partial: { bg: '#dbeafe', color: '#1d4ed8' },
-    voided: { bg: '#f3f4f6', color: '#6b7280' },
-  };
-  const s = styles[status.toLowerCase()] ?? { bg: '#f3f4f6', color: '#6b7280' };
-  return (
-    <span
-      style={{ backgroundColor: s.bg, color: s.color }}
-      className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold capitalize"
-    >
-      {status}
-    </span>
-  );
+// Every email claims a PDF is attached, so a row without one cannot be sent.
+// Receipts mode requires an actual receipt PDF — never the bill PDF.
+function hasPdf(row: DispatchBillRow, mode: 'bills' | 'receipts') {
+  return Boolean(mode === 'bills' ? row.pdfUrl : row.receiptPdfUrl);
+}
+
+type EmailTarget = 'owner' | 'tenant';
+
+function resolvedEmail(row: DispatchBillRow, target: EmailTarget) {
+  return target === 'owner' ? row.ownerEmail : row.tenantEmail;
+}
+
+// Why a row can't be sent, or null when it is sendable.
+// Note: missing PDFs are no longer a block — dispatch auto-generates them.
+function blockReason(
+  row: DispatchBillRow,
+  mode: 'bills' | 'receipts',
+  emailTarget: EmailTarget,
+): 'no-email' | 'advance-credit' | null {
+  if (!resolvedEmail(row, emailTarget)) return 'no-email';
+  // Bills paid via advance credit have no payments row — receipt dispatch not yet supported.
+  if (mode === 'receipts' && !row.paymentId) return 'advance-credit';
+  return null;
 }
 
 interface DispatchResult {
@@ -120,6 +127,10 @@ export function BillDispatchClient({ associations }: Props) {
 
   const [rows, setRows] = useState<DispatchBillRow[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Per-row email target: 'owner' (default) or 'tenant'
+  const [emailTargets, setEmailTargets] = useState<
+    Record<string, EmailTarget>
+  >({});
   const [hasSearched, setHasSearched] = useState(false);
 
   const [isFetching, startFetch] = useTransition();
@@ -143,9 +154,24 @@ export function BillDispatchClient({ associations }: Props) {
         periods: [period],
         billType,
       });
+      // Default to 'owner'; switch to 'tenant' when unit has a tenant but no owner email
+      const defaultTargets: Record<string, EmailTarget> = Object.fromEntries(
+        data.map((r) => [
+          r.billId,
+          !r.ownerEmail && r.tenantEmail ? 'tenant' : 'owner',
+        ]),
+      );
       setRows(data);
+      setEmailTargets(defaultTargets);
       setSelectedIds(
-        new Set(data.filter((r) => r.ownerEmail).map((r) => r.billId)),
+        new Set(
+          data
+            .filter(
+              (r) =>
+                !blockReason(r, mode, defaultTargets[r.billId] ?? 'owner'),
+            )
+            .map((r) => r.billId),
+        ),
       );
       setHasSearched(true);
       setDispatchResult(null);
@@ -162,17 +188,47 @@ export function BillDispatchClient({ associations }: Props) {
   };
 
   const toggleAll = () => {
-    const emailRows = rows.filter((r) => r.ownerEmail);
-    const allSelected = emailRows.every((r) => selectedIds.has(r.billId));
-    if (allSelected) setSelectedIds(new Set());
-    else setSelectedIds(new Set(emailRows.map((r) => r.billId)));
+    const allSelected = sendableRows.every((r) => selectedIds.has(r.billId));
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sendableRows.map((r) => r.billId)));
+    }
+  };
+
+  const getTarget = (billId: string): EmailTarget =>
+    emailTargets[billId] ?? 'owner';
+
+  const setTarget = (billId: string, target: EmailTarget) => {
+    setEmailTargets((prev) => ({ ...prev, [billId]: target }));
+    // If switching target makes the row unblocked/blocked, update selection accordingly
+    setSelectedIds((prev) => {
+      const row = rows.find((r) => r.billId === billId);
+      if (!row) return prev;
+      const blocked = blockReason(row, mode, target);
+      const next = new Set(prev);
+      if (blocked) next.delete(billId);
+      else next.add(billId);
+      return next;
+    });
   };
 
   const selectedRows = rows.filter((r) => selectedIds.has(r.billId));
-  const emailRows = rows.filter((r) => r.ownerEmail);
-  const missingEmailRows = rows.filter((r) => !r.ownerEmail);
-  const allEmailSelected =
-    emailRows.length > 0 && emailRows.every((r) => selectedIds.has(r.billId));
+  const sendableRows = rows.filter(
+    (r) => !blockReason(r, mode, getTarget(r.billId)),
+  );
+  const missingEmailRows = rows.filter(
+    (r) => blockReason(r, mode, getTarget(r.billId)) === 'no-email',
+  );
+  const missingReceiptRows = rows.filter(
+    (r) => blockReason(r, mode, getTarget(r.billId)) === 'advance-credit',
+  );
+  const noPdfRows = rows.filter(
+    (r) => !blockReason(r, mode, getTarget(r.billId)) && !hasPdf(r, mode),
+  );
+  const allSendableSelected =
+    sendableRows.length > 0 &&
+    sendableRows.every((r) => selectedIds.has(r.billId));
 
   const handleSend = () => {
     if (selectedRows.length === 0) return;
@@ -185,21 +241,28 @@ export function BillDispatchClient({ associations }: Props) {
       const result = await sendBillEmailsAction({
         associationName,
         mode,
-        items: selectedRows.map((r) => ({
-          billId: r.billId,
-          receiptId: r.receiptId,
-          unitNo: r.unitNo,
-          ownerName: r.ownerName,
-          ownerEmail: r.ownerEmail!,
-          period: r.period,
-          billNo: r.billNo,
-          billType: r.billType,
-          totalAmount: r.totalAmount,
-          paidAmount: r.paidAmount,
-          dueDate: r.dueDate,
-          pdfUrl: r.pdfUrl,
-          receiptPdfUrl: r.receiptPdfUrl,
-        })),
+        items: selectedRows.map((r) => {
+          const target = getTarget(r.billId);
+          const email = resolvedEmail(r, target)!;
+          const name =
+            target === 'tenant' && r.tenantName ? r.tenantName : r.ownerName;
+          return {
+            billId: r.billId,
+            paymentId: r.paymentId,
+            receiptId: r.receiptId,
+            unitNo: r.unitNo,
+            recipientName: name,
+            recipientEmail: email,
+            period: r.period,
+            billNo: r.billNo,
+            billType: r.billType,
+            totalAmount: r.totalAmount,
+            paidAmount: r.paidAmount,
+            dueDate: r.dueDate,
+            pdfUrl: r.pdfUrl,
+            receiptPdfUrl: r.receiptPdfUrl,
+          };
+        }),
       });
       setDispatchResult(result);
       if (result.failed.length === 0) {
@@ -388,6 +451,29 @@ export function BillDispatchClient({ associations }: Props) {
                       will be skipped
                     </span>
                   )}
+                  {missingReceiptRows.length > 0 && (
+                    <span
+                      className="flex items-center gap-1 text-xs"
+                      style={{ color: '#9ca3af' }}
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                      {missingReceiptRows.length} unit
+                      {missingReceiptRows.length !== 1 ? 's' : ''} paid via
+                      advance credit — skipped
+                    </span>
+                  )}
+                  {noPdfRows.length > 0 && (
+                    <span
+                      className="flex items-center gap-1 text-xs"
+                      style={{ color: '#6b7280' }}
+                      title="PDFs will be auto-generated at send time"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      {noPdfRows.length} PDF
+                      {noPdfRows.length !== 1 ? 's' : ''} will be generated on
+                      send
+                    </span>
+                  )}
                   <span className="text-muted-foreground text-xs">
                     Sender: <strong>{DISPATCH_SENDER_EMAIL}</strong>
                   </span>
@@ -418,23 +504,28 @@ export function BillDispatchClient({ associations }: Props) {
                     <tr>
                       <th className="w-10 px-4 py-3 text-left">
                         <Checkbox
-                          checked={allEmailSelected}
+                          checked={allSendableSelected}
                           onCheckedChange={toggleAll}
                         />
                       </th>
                       <th className="px-4 py-3 text-left">Unit</th>
                       <th className="px-4 py-3 text-left">Owner</th>
+                      <th className="px-4 py-3 text-left">Tenant</th>
                       <th className="px-4 py-3 text-left">Email</th>
                       <th className="px-4 py-3 text-left">Bill No</th>
                       <th className="px-4 py-3 text-left">Type</th>
                       <th className="px-4 py-3 text-right">Amount</th>
                       <th className="px-4 py-3 text-left">Due Date</th>
-                      <th className="px-4 py-3 text-left">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-border divide-y bg-white">
                     {rows.map((row) => {
-                      const missing = !row.ownerEmail;
+                      const blocked = blockReason(
+                        row,
+                        mode,
+                        getTarget(row.billId),
+                      );
+                      const missing = blocked !== null;
                       const checked = selectedIds.has(row.billId);
                       return (
                         <tr
@@ -477,27 +568,92 @@ export function BillDispatchClient({ associations }: Props) {
                           <td className="px-4 py-3" style={{ color: '#444' }}>
                             {row.ownerName}
                           </td>
-                          <td className="px-4 py-3">
-                            {missing ? (
-                              <span
-                                className="flex items-center gap-1 text-xs font-medium"
-                                style={{ color: '#b45309' }}
-                              >
-                                <AlertTriangle className="h-3 w-3" />
-                                No email
-                              </span>
-                            ) : (
-                              <span
-                                className="flex items-center gap-1 text-xs"
-                                style={{ color: '#555' }}
-                              >
-                                <Mail
-                                  className="h-3 w-3 shrink-0"
-                                  style={{ color: '#999' }}
-                                />
-                                {row.ownerEmail}
-                              </span>
+                          <td className="px-4 py-3" style={{ color: '#444' }}>
+                            {row.tenantName ?? (
+                              <span style={{ color: '#bbb' }}>—</span>
                             )}
+                          </td>
+                          <td
+                            className="px-4 py-3"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {(() => {
+                              const target = getTarget(row.billId);
+                              const email = resolvedEmail(row, target);
+                              const hasOwnerEmail = Boolean(row.ownerEmail);
+                              const hasTenantEmail = Boolean(row.tenantEmail);
+                              const showToggle =
+                                hasOwnerEmail || hasTenantEmail;
+                              return (
+                                <div className="space-y-1.5">
+                                  {showToggle && (
+                                    <div
+                                      className="inline-flex w-[116px] overflow-hidden rounded text-[10px] font-semibold"
+                                      style={{ border: '1px solid #e5e7eb' }}
+                                    >
+                                      {(
+                                        ['owner', 'tenant'] as EmailTarget[]
+                                      ).map((t, i) => {
+                                        const hasEmail =
+                                          t === 'owner'
+                                            ? hasOwnerEmail
+                                            : hasTenantEmail;
+                                        const isActive = target === t;
+                                        return (
+                                          <button
+                                            key={t}
+                                            onClick={() =>
+                                              hasEmail &&
+                                              setTarget(row.billId, t)
+                                            }
+                                            disabled={!hasEmail}
+                                            style={
+                                              i === 0
+                                                ? {
+                                                    borderRight:
+                                                      '1px solid #e5e7eb',
+                                                  }
+                                                : {}
+                                            }
+                                            className={`w-[58px] py-0.5 text-center transition-colors ${
+                                              isActive
+                                                ? 'bg-[#1a1a1a] text-white'
+                                                : hasEmail
+                                                  ? 'bg-white text-[#888] hover:bg-gray-50'
+                                                  : 'cursor-not-allowed bg-white text-[#ccc]'
+                                            }`}
+                                          >
+                                            {t === 'owner' ? 'Owner' : 'Tenant'}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                  {blocked === 'no-email' ? (
+                                    <span
+                                      className="flex items-center gap-1 text-xs font-medium"
+                                      style={{ color: '#b45309' }}
+                                    >
+                                      <AlertTriangle className="h-3 w-3" />
+                                      No email
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="flex items-center gap-1 text-xs"
+                                      style={{ color: '#555' }}
+                                    >
+                                      <Mail
+                                        className="h-3 w-3 shrink-0"
+                                        style={{ color: '#999' }}
+                                      />
+                                      <span className="max-w-[160px] truncate">
+                                        {email}
+                                      </span>
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td
                             className="px-4 py-3 font-mono text-xs"
@@ -509,6 +665,26 @@ export function BillDispatchClient({ associations }: Props) {
                             >
                               {row.billNo}
                             </span>
+                            {!hasPdf(row, mode) && !blocked && (
+                              <span
+                                className="mt-0.5 flex items-center gap-1 font-sans text-[10px]"
+                                style={{ color: '#9ca3af' }}
+                                title="PDF will be auto-generated when sending"
+                              >
+                                <FileText className="h-2.5 w-2.5" />
+                                Auto-generate on send
+                              </span>
+                            )}
+                            {blocked === 'advance-credit' && (
+                              <span
+                                className="mt-1 flex items-center gap-1 font-sans text-xs"
+                                style={{ color: '#9ca3af' }}
+                                title="Paid via advance credit — receipt dispatch not yet supported"
+                              >
+                                <Info className="h-2.5 w-2.5" />
+                                Advance credit
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3" style={{ color: '#444' }}>
                             {formatBillType(row.billType)}
@@ -524,9 +700,6 @@ export function BillDispatchClient({ associations }: Props) {
                             style={{ color: '#666' }}
                           >
                             {formatDueDate(row.dueDate)}
-                          </td>
-                          <td className="px-4 py-3">
-                            <StatusBadge status={row.status} />
                           </td>
                         </tr>
                       );
@@ -624,28 +797,47 @@ export function BillDispatchClient({ associations }: Props) {
 
             {/* Recipient list */}
             <div className="max-h-52 divide-y overflow-y-auto rounded border text-xs">
-              {selectedRows.map((r) => (
-                <div
-                  key={r.billId}
-                  className="flex items-start justify-between gap-3 px-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <div className="font-semibold" style={{ color: '#1a1a1a' }}>
-                      Unit {r.unitNo}
+              {selectedRows.map((r) => {
+                const target = getTarget(r.billId);
+                const email = resolvedEmail(r, target);
+                const name =
+                  target === 'tenant' && r.tenantName
+                    ? r.tenantName
+                    : r.ownerName;
+                return (
+                  <div
+                    key={r.billId}
+                    className="flex items-start justify-between gap-3 px-3 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <div
+                        className="font-semibold"
+                        style={{ color: '#1a1a1a' }}
+                      >
+                        Unit {r.unitNo}
+                      </div>
+                      <div className="text-muted-foreground truncate">
+                        {name}
+                        {target === 'tenant' && (
+                          <span
+                            className="ml-1 text-[10px]"
+                            style={{ color: '#1d4ed8' }}
+                          >
+                            (tenant)
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-muted-foreground truncate">
-                      {r.ownerName}
+                    <div className="shrink-0 text-right">
+                      <div style={{ color: '#444' }}>{email}</div>
+                      <div className="text-muted-foreground tabular-nums">
+                        {formatBillType(r.billType)} ·{' '}
+                        {formatCurrency(r.totalAmount)}
+                      </div>
                     </div>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <div style={{ color: '#444' }}>{r.ownerEmail}</div>
-                    <div className="text-muted-foreground tabular-nums">
-                      {formatBillType(r.billType)} ·{' '}
-                      {formatCurrency(r.totalAmount)}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <p

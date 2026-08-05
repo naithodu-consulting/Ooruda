@@ -615,27 +615,30 @@ export async function preRenderBillPdf(billId: string): Promise<void> {
  */
 export async function getOrGenerateReceiptPdf(
   paymentId: string,
+  opts?: { skipAuth?: boolean },
 ): Promise<GeneratedPdf | null> {
   // Auth pre-check before the dedup map — see getOrGenerateBillPdf for rationale.
-  const authClient = getSupabaseServerClient();
-  const { data: paymentMeta } = await authClient
-    .from('payments')
-    .select('association_id, bills(unit_id, tenancy_id, units(owner_id))')
-    .eq('id', paymentId)
-    .maybeSingle();
-  if (!paymentMeta?.bills) return null;
-  const bill = paymentMeta.bills as unknown as {
-    unit_id: string;
-    tenancy_id: string | null;
-    units: { owner_id: string | null } | null;
-  };
-  const authorized = await canAccessUnit(
-    paymentMeta.association_id,
-    bill.unit_id,
-    bill.units?.owner_id ?? null,
-    bill.tenancy_id,
-  );
-  if (!authorized) return null;
+  if (!opts?.skipAuth) {
+    const authClient = getSupabaseServerClient();
+    const { data: paymentMeta } = await authClient
+      .from('payments')
+      .select('association_id, bills(unit_id, tenancy_id, units(owner_id))')
+      .eq('id', paymentId)
+      .maybeSingle();
+    if (!paymentMeta?.bills) return null;
+    const bill = paymentMeta.bills as unknown as {
+      unit_id: string;
+      tenancy_id: string | null;
+      units: { owner_id: string | null } | null;
+    };
+    const authorized = await canAccessUnit(
+      paymentMeta.association_id,
+      bill.unit_id,
+      bill.units?.owner_id ?? null,
+      bill.tenancy_id,
+    );
+    if (!authorized) return null;
+  }
 
   const cacheKey = `receipt_${paymentId}`;
   if (pendingPdfGenerations.has(cacheKey)) {
@@ -685,6 +688,7 @@ export async function getOrGenerateReceiptPdf(
     }
 
     if (
+      !opts?.skipAuth &&
       !(await canAccessUnit(
         payment.association_id,
         payment.bills.unit_id,

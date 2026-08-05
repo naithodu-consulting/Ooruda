@@ -1,13 +1,13 @@
 import {
   Body,
+  Column,
   Head,
-  Hr,
   Html,
   Preview,
   Row,
   Section,
-  Text,
   Tailwind,
+  Text,
   render,
 } from 'react-email';
 
@@ -17,6 +17,8 @@ import { EmailFooter } from '../components/footer';
 import { EmailHeader } from '../components/header';
 import { EmailHeading } from '../components/heading';
 import { EmailWrapper } from '../components/wrapper';
+
+const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('en-IN', {
@@ -33,6 +35,18 @@ function formatPeriod(period: string) {
     month: 'long',
     year: 'numeric',
   });
+}
+
+/**
+ * The DB stores bill_type as lowercase_underscore ("other_charges"), so the
+ * raw value must never reach a subject line or heading.
+ */
+function formatBillType(type: string) {
+  return type
+    .split('_')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
 }
 
 interface BillEmailProps {
@@ -56,129 +70,203 @@ interface ReceiptEmailProps {
   associationName: string;
 }
 
-const cellStyle = {
-  fontSize: '13px',
-  color: '#6b6b5e',
-  padding: '7px 0',
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-};
-
-const valueStyle = {
-  fontSize: '13px',
-  color: '#1d1e20',
-  fontWeight: '600' as const,
-  padding: '7px 0',
-  textAlign: 'right' as const,
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-};
-
 const bodyStyle = {
-  fontSize: '14px',
-  lineHeight: '22px',
+  fontSize: '15px',
+  lineHeight: '24px',
   color: '#4a4a4a',
-  margin: '0 0 24px',
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  margin: '0 0 16px',
+  fontFamily: FONT,
 };
+
+/**
+ * Tells Apple Mail, iOS Mail and Outlook not to auto-invert this email.
+ * Gmail's Android app force-inverts regardless, so the palette is also chosen
+ * to stay legible when inverted.
+ */
+function ColorScheme() {
+  return (
+    <>
+      <meta name="color-scheme" content="light" />
+      <meta name="supported-color-schemes" content="light" />
+      <style>
+        {`:root { color-scheme: light; supported-color-schemes: light; }`}
+      </style>
+    </>
+  );
+}
+
+/**
+ * One label/value line of the detail table.
+ *
+ * Must be Row + Column: react-email's Row renders a <tr>, so a <Text> (a <p>)
+ * placed directly inside it is invalid HTML — mail clients hoist it out of the
+ * table and stack the label and value on separate lines. Fixed column widths
+ * keep values aligned across rows.
+ */
+function DetailRow({
+  label,
+  value,
+  last = false,
+  emphasis = false,
+}: {
+  label: string;
+  value: string;
+  last?: boolean;
+  emphasis?: boolean;
+}) {
+  const cell = {
+    padding: '11px 0',
+    borderBottom: last ? 'none' : '1px solid #ede9df',
+    fontFamily: FONT,
+    verticalAlign: 'middle' as const,
+  };
+
+  return (
+    <Row>
+      <Column
+        style={{
+          ...cell,
+          width: '42%',
+          fontSize: '13px',
+          color: '#6b6b5e',
+          textAlign: 'left' as const,
+        }}
+      >
+        {label}
+      </Column>
+      <Column
+        style={{
+          ...cell,
+          width: '58%',
+          fontSize: '14px',
+          fontWeight: 600,
+          color: emphasis ? '#b45309' : '#1d1e20',
+          textAlign: 'right' as const,
+        }}
+      >
+        {value}
+      </Column>
+    </Row>
+  );
+}
+
+function AmountBox({
+  label,
+  amount,
+  tone,
+}: {
+  label: string;
+  amount: number;
+  tone: 'bill' | 'receipt';
+}) {
+  const isBill = tone === 'bill';
+
+  return (
+    <Section
+      style={{
+        backgroundColor: isBill ? '#FCD469' : '#d1fae5',
+        borderRadius: '10px',
+        padding: '18px 24px',
+        textAlign: 'center' as const,
+        margin: '0 0 24px',
+      }}
+    >
+      <Text
+        style={{
+          margin: '0 0 6px',
+          fontSize: '11px',
+          fontWeight: 700,
+          letterSpacing: '0.12em',
+          color: isBill ? '#5a4a10' : '#065f46',
+          textTransform: 'uppercase' as const,
+          fontFamily: FONT,
+        }}
+      >
+        {label}
+      </Text>
+      <Text
+        style={{
+          margin: '0',
+          fontSize: '30px',
+          lineHeight: '36px',
+          fontWeight: 800,
+          color: isBill ? '#1d1e20' : '#064e3b',
+          fontFamily: FONT,
+        }}
+      >
+        {formatCurrency(amount)}
+      </Text>
+    </Section>
+  );
+}
+
+function DetailTable({ children }: React.PropsWithChildren) {
+  return (
+    <Section
+      style={{
+        backgroundColor: '#f9f7f2',
+        borderRadius: '8px',
+        padding: '2px 20px',
+        margin: '0',
+      }}
+    >
+      {children}
+    </Section>
+  );
+}
 
 function BillEmail(props: BillEmailProps) {
   const periodLabel = formatPeriod(props.period);
+  const typeLabel = formatBillType(props.billType);
   const dueDateLabel = new Date(props.dueDate).toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    timeZone: 'Asia/Kolkata',
   });
 
   return (
     <Html>
       <Head>
+        <ColorScheme />
         <BodyStyle />
       </Head>
       <Preview>
-        Your {props.billType} bill for {periodLabel} – {props.associationName}
+        {typeLabel} bill for {periodLabel} — {formatCurrency(props.totalAmount)}{' '}
+        due {dueDateLabel}
       </Preview>
       <Tailwind>
         <Body>
           <EmailWrapper>
             <EmailHeader>
-              <EmailHeading>Your {props.billType} Bill</EmailHeading>
+              <EmailHeading>Your {typeLabel} Bill</EmailHeading>
             </EmailHeader>
 
             <EmailContent>
               <Text style={bodyStyle}>Dear {props.ownerName},</Text>
               <Text style={bodyStyle}>
-                Please find your <strong>{props.billType}</strong> bill for{' '}
-                <strong>{periodLabel}</strong> attached to this email.
+                Your {typeLabel.toLowerCase()} bill for{' '}
+                <strong>{periodLabel}</strong> at {props.associationName} is
+                ready. The full invoice is attached to this email as a PDF.
               </Text>
 
-              {/* Amount highlight — amber OTP-style box */}
-              <Section
-                style={{
-                  backgroundColor: '#FCD469',
-                  borderRadius: '10px',
-                  padding: '16px 24px',
-                  textAlign: 'center' as const,
-                  margin: '0 0 24px',
-                }}
-              >
-                <Text
-                  style={{
-                    margin: '0 0 4px',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    letterSpacing: '0.12em',
-                    color: '#5a4a10',
-                    textTransform: 'uppercase' as const,
-                    fontFamily:
-                      "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-                  }}
-                >
-                  Amount Due
-                </Text>
-                <Text
-                  style={{
-                    margin: '0',
-                    fontSize: '30px',
-                    fontWeight: '800',
-                    color: '#1d1e20',
-                    fontFamily:
-                      "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-                  }}
-                >
-                  {formatCurrency(props.totalAmount)}
-                </Text>
-              </Section>
+              <AmountBox
+                label="Amount Due"
+                amount={props.totalAmount}
+                tone="bill"
+              />
 
-              {/* Details table */}
-              <Section
-                style={{
-                  backgroundColor: '#f9f7f2',
-                  borderRadius: '8px',
-                  padding: '4px 20px',
-                  margin: '0 0 20px',
-                }}
-              >
-                <Row>
-                  <Text style={cellStyle}>Bill Number</Text>
-                  <Text style={valueStyle}>{props.billNo}</Text>
-                </Row>
-                <Hr style={{ borderColor: '#ede9df', margin: '0' }} />
-                <Row>
-                  <Text style={cellStyle}>Unit</Text>
-                  <Text style={valueStyle}>{props.unitNo}</Text>
-                </Row>
-                <Hr style={{ borderColor: '#ede9df', margin: '0' }} />
-                <Row>
-                  <Text style={cellStyle}>Period</Text>
-                  <Text style={valueStyle}>{periodLabel}</Text>
-                </Row>
-                <Hr style={{ borderColor: '#ede9df', margin: '0' }} />
-                <Row>
-                  <Text style={cellStyle}>Due Date</Text>
-                  <Text style={{ ...valueStyle, color: '#b45309' }}>
-                    {dueDateLabel}
-                  </Text>
-                </Row>
-              </Section>
+              <DetailTable>
+                <DetailRow label="Bill Number" value={props.billNo} />
+                <DetailRow label="Unit" value={props.unitNo} />
+                <DetailRow label="Period" value={periodLabel} />
+                <DetailRow
+                  label="Due Date"
+                  value={dueDateLabel}
+                  emphasis
+                  last
+                />
+              </DetailTable>
             </EmailContent>
 
             <EmailFooter>{props.associationName}</EmailFooter>
@@ -191,15 +279,17 @@ function BillEmail(props: BillEmailProps) {
 
 function ReceiptEmail(props: ReceiptEmailProps) {
   const periodLabel = formatPeriod(props.period);
+  const typeLabel = formatBillType(props.billType);
 
   return (
     <Html>
       <Head>
+        <ColorScheme />
         <BodyStyle />
       </Head>
       <Preview>
-        Payment Receipt – {props.billType} ({periodLabel}) –{' '}
-        {props.associationName}
+        Payment of {formatCurrency(props.paidAmount)} received — {typeLabel}{' '}
+        {periodLabel}
       </Preview>
       <Tailwind>
         <Body>
@@ -211,85 +301,23 @@ function ReceiptEmail(props: ReceiptEmailProps) {
             <EmailContent>
               <Text style={bodyStyle}>Dear {props.ownerName},</Text>
               <Text style={bodyStyle}>
-                Thank you for your payment. Your receipt for the{' '}
-                <strong>{props.billType}</strong> bill ({periodLabel}) is
-                attached.
+                Thank you — we have received your payment for the{' '}
+                {typeLabel.toLowerCase()} bill for{' '}
+                <strong>{periodLabel}</strong> at {props.associationName}. Your
+                receipt is attached to this email as a PDF.
               </Text>
 
-              {/* Amount highlight — green tint for receipt */}
-              <Section
-                style={{
-                  backgroundColor: '#d1fae5',
-                  borderRadius: '10px',
-                  padding: '16px 24px',
-                  textAlign: 'center' as const,
-                  margin: '0 0 24px',
-                }}
-              >
-                <Text
-                  style={{
-                    margin: '0 0 4px',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    letterSpacing: '0.12em',
-                    color: '#065f46',
-                    textTransform: 'uppercase' as const,
-                    fontFamily:
-                      "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-                  }}
-                >
-                  Amount Paid
-                </Text>
-                <Text
-                  style={{
-                    margin: '0',
-                    fontSize: '30px',
-                    fontWeight: '800',
-                    color: '#064e3b',
-                    fontFamily:
-                      "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-                  }}
-                >
-                  {formatCurrency(props.paidAmount)}
-                </Text>
-              </Section>
+              <AmountBox
+                label="Amount Paid"
+                amount={props.paidAmount}
+                tone="receipt"
+              />
 
-              {/* Details table */}
-              <Section
-                style={{
-                  backgroundColor: '#f9f7f2',
-                  borderRadius: '8px',
-                  padding: '4px 20px',
-                  margin: '0 0 20px',
-                }}
-              >
-                <Row>
-                  <Text style={cellStyle}>Bill Number</Text>
-                  <Text style={valueStyle}>{props.billNo}</Text>
-                </Row>
-                <Hr style={{ borderColor: '#ede9df', margin: '0' }} />
-                <Row>
-                  <Text style={cellStyle}>Unit</Text>
-                  <Text style={valueStyle}>{props.unitNo}</Text>
-                </Row>
-                <Hr style={{ borderColor: '#ede9df', margin: '0' }} />
-                <Row>
-                  <Text style={cellStyle}>Period</Text>
-                  <Text style={valueStyle}>{periodLabel}</Text>
-                </Row>
-              </Section>
-
-              <Text
-                style={{
-                  fontSize: '13px',
-                  color: '#9a9a8a',
-                  margin: '0',
-                  fontFamily:
-                    "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-                }}
-              >
-                Thank you for your prompt payment.
-              </Text>
+              <DetailTable>
+                <DetailRow label="Bill Number" value={props.billNo} />
+                <DetailRow label="Unit" value={props.unitNo} />
+                <DetailRow label="Period" value={periodLabel} last />
+              </DetailTable>
             </EmailContent>
 
             <EmailFooter>{props.associationName}</EmailFooter>
@@ -302,16 +330,18 @@ function ReceiptEmail(props: ReceiptEmailProps) {
 
 export async function renderBillDispatchEmail(props: BillEmailProps) {
   const html = await render(<BillEmail {...props} />);
+
   return {
     html,
-    subject: `Your ${props.billType} Bill for ${formatPeriod(props.period)} – ${props.associationName}`,
+    subject: `Your ${formatBillType(props.billType)} Bill for ${formatPeriod(props.period)} – ${props.associationName}`,
   };
 }
 
 export async function renderReceiptDispatchEmail(props: ReceiptEmailProps) {
   const html = await render(<ReceiptEmail {...props} />);
+
   return {
     html,
-    subject: `Payment Receipt – ${props.billType} (${formatPeriod(props.period)}) – ${props.associationName}`,
+    subject: `Payment Receipt – ${formatBillType(props.billType)} (${formatPeriod(props.period)}) – ${props.associationName}`,
   };
 }

@@ -4,6 +4,62 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4 — Bill Dispatch: UX polish, correctness fixes & PDF auto-generation — 2026-08-05
+
+### Owner / Tenant email toggle
+- Each dispatch row now has an **Owner / Tenant** toggle so the operator can choose who receives the email. Defaults to Owner; switches to Tenant when only the tenant has an email on file.
+- Added **Tenant Name** column. Removed Status column (payment status doesn't belong in a dispatch view).
+- Toggle buttons have equal fixed widths (`58px` each). Unavailable side is greyed out with `cursor-not-allowed`.
+
+### PDF auto-generation on send
+- Bills or receipts with no cached PDF (`pdf_url = null`) no longer block dispatch. The server now calls `getOrGenerateBillPdf` / `getOrGenerateReceiptPdf` with `skipAuth: true` at send time, generating and attaching the PDF on-the-fly.
+- "No PDF" warning replaced with a muted grey "Auto-generate on send" hint — not a blocker.
+- Storage-miss retry: if the cached storage object was deleted after the snapshot, the server nulls `pdf_url` and regenerates rather than failing silently.
+- Summary bar shows an informational chip ("N PDFs will be generated on send") rather than a warning.
+
+### Receipts mode — advance credit bills
+- Bills fully paid via advance credit (no `payments` row) now display a grey **"Advance credit"** label in receipts mode instead of an alarming "No receipt" warning. They are skipped cleanly with an info chip in the summary bar.
+
+### Correctness fixes
+- **Receipts mode was empty:** `.eq('status', 'paid')` matched zero rows — DB stores `'Paid'` (Title Case). Fixed.
+- **Bill status filter:** replaced `.neq('status', 'Void')` blocklist with `.in('status', ['Unpaid', 'Partial', 'Paid', 'Overdue'])` allowlist.
+- **`paymentIdByBill` / `receiptByBill` mismatch:** for bills with multiple partial payments, the two maps could point to different payment rows. Fixed by deriving `paymentIdByBill` from `receiptByBill` after adding `ORDER BY paid_at DESC`.
+- **Receipt fallback storage path:** was queried by `receiptId`; now uses `payment_id` to match the PDF generation call.
+- **Timezone off-by-one:** due dates rendered one day early when ISO strings are parsed as UTC midnight. Added `timeZone: 'Asia/Kolkata'` to both the dispatch client (`formatDueDate`) and the email template (`dueDateLabel`).
+- **`recipientEmail` rename:** `SendBillEmailsInput.items` field was `ownerEmail`; renamed to `recipientEmail` to reflect that it may be the tenant's address.
+- **`downloadFromStorage` type:** parameter changed from `client: any` to `client: SupabaseClient` with a proper import.
+- **`emailTargets` state:** changed from `Map<string, EmailTarget>` (non-idiomatic in React) to `Record<string, EmailTarget>` with spread updates.
+- **`skipAuth` added to `getOrGenerateReceiptPdf`:** mirrors existing bill pattern; outer pre-check and inner `canAccessUnit` call are both bypassed when `skipAuth: true`.
+
+---
+
+## v1.4 — Bill Dispatch Bug Fixes — 2026-08-05
+
+### Email template — layout, dark mode & copy
+
+- **Detail table rendered as stacked lines with large gaps.** The label/value rows used `<Row>` with `<Text>` children — react-email's `Row` renders a `<tr>`, so a `<Text>` (a `<p>`) inside it is invalid HTML and mail clients hoisted it out of the table, stacking label and value on separate lines. Rebuilt with `Row` + `Column` (proper `<td>` cells) and fixed 42/58 column widths so values align across all rows.
+- **Dark mode:** added `color-scheme` / `supported-color-schemes` meta tags so Apple Mail, iOS Mail and Outlook no longer auto-invert the email. Gmail's Android app force-inverts regardless of these hints — the palette stays legible when it does, but full control is not possible there.
+- **Bill type case:** subjects and headings showed the raw DB value ("Your maintenance Bill"). Now title-cased via `formatBillType()`, so `other_charges` renders as "Other Charges".
+- **Copy:** removed the duplicated bill-type wording between heading and body, added the association name to the body, and made the preview text useful (amount + due date rather than a repeat of the subject).
+- Spacing tightened throughout; body text raised to 15px/24px.
+
+### Attachments
+
+- **Missing attachment sent silently.** `fetchPdfAsBase64` returned `null` on failure and the email was sent anyway — delivering a bill that claims "attached to this email" with nothing attached. It now throws, and the item is reported as failed instead of being sent.
+- **Invalid attachment filenames.** Bill numbers contain slashes (`DT/26-27/MNT/000006`), which are path separators; Gmail showed truncated names. Added `toSafeFilename()` → `Bill_DT-26-27-MNT-000006_2026-08.pdf`.
+- **Receipts mode no longer falls back to the bill PDF.** Previously a paid bill with no receipt PDF would send a "Payment Receipt" email with the *invoice* attached. Receipts now require an actual receipt PDF.
+
+### Bill Dispatch screen
+
+- Rows with no PDF are now flagged ("No PDF" under the bill number), excluded from auto-selection, and counted in a warning chip — matching the existing "no email" treatment. Previously these rows looked sendable and failed silently at send time.
+- Page heading aligned with the content below it (`PageHeader` lacks the `lg:px-4` that `PageBody` carries).
+
+### Diagnostics
+
+- Each failed dispatch now logs at `error` level with the unit, bill number and full stack. The audit log previously recorded only counts, so the cause of a failure was unrecoverable. The client still receives only the sanitized message.
+
+---
+
 ## v1.4 — Bill Dispatch Tool + Security Hardening — 2026-08-04
 
 ### Feature: Bulk Bill & Receipt Email Dispatch (internal, non-prod only)
@@ -3186,4 +3242,4 @@ Separated the single Supabase project into three distinct environments — local
 | `20260728000002_cash_ledger_bill_numbering.sql` | Patched to enable RLS on `cash_ledger_sequences` (missed in original migration) |
 | `20260804093956_reconcile_schema_drift.sql` | Drop orphaned functions, fix `account_image` storage policy, revoke anon grants |
 
-_Last updated: 2026-08-04_
+_Last updated: 2026-08-05_

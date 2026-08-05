@@ -21,6 +21,8 @@ async function BillDispatchPage() {
       <PageHeader
         title="Bill Dispatch"
         description="Send generated bills and receipts to unit owners via email."
+        // align with PageBody, which carries lg:px-4
+        className="lg:px-4"
       >
         <AppBreadcrumbs
           values={{
