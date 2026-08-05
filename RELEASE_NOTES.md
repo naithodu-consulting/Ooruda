@@ -4,6 +4,18 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4 — Kaleyra SMS/WhatsApp integration — 2026-08-05
+
+### SMS provider replaced: MSG91/2Factor → Kaleyra
+- **New provider `KaleyraProvider`** in `@kit/sms` — supports SMS OTP and WhatsApp OTP via Kaleyra's v1/v2 REST APIs.
+- **Supabase Edge Function updated** — `custom-sms-hook` now dispatches OTP via Kaleyra when `SMS_PROVIDER=kaleyra`.
+- **DLT template wired up** — sender ID `HABSOL`, template ID `1077123750020216799` ("Ooruda OTP template Habbaa"), region `IN`.
+- **WhatsApp channel ready** — switchable via `KALEYRA_CHANNEL=whatsapp` with per-template copy-code button support (`KALEYRA_WA_HAS_COPY_BUTTON`).
+- **Kaleyra email API documented** as backup to Resend (no mailer adapter change; Resend remains primary).
+- Legacy MSG91 and 2Factor providers retained as fallback options.
+
+---
+
 ## v1.4 — Admin Accounts page overhaul + test-phone auto-tagging — 2026-08-05
 
 ### Admin accounts page — full UI/UX redesign
@@ -3319,4 +3331,4 @@ Separated the single Supabase project into three distinct environments — local
 | `20260728000002_cash_ledger_bill_numbering.sql` | Patched to enable RLS on `cash_ledger_sequences` (missed in original migration) |
 | `20260804093956_reconcile_schema_drift.sql` | Drop orphaned functions, fix `account_image` storage policy, revoke anon grants |
 
-_Last updated: 2026-08-05_
+_Last updated: 2026-08-05_  <!-- Kaleyra SMS integration -->
