@@ -171,13 +171,14 @@ async function sendViaKaleyra(phone: string, otp: string) {
     const templateId = Deno.env.get('KALEYRA_SMS_TEMPLATE_ID') ?? '';
 
     const url = `https://${host}/v1/${sid}/messages`;
-    const body = new URLSearchParams({
-      to,
-      type: 'OTP',
-      sender: senderId,
-      body: `${otp} is your login verification code for Ooruda. Do not share it with anyone. Valid for 10 minutes.\r\n\r\n - Habbaa Solutions`,
-    });
-    if (templateId) body.set('template_id', templateId);
+    const body = new URLSearchParams({ to, type: 'OTP', sender: senderId });
+    if (templateId) {
+      // Use template_id + template_data — Kaleyra substitutes {#num#} server-side.
+      body.set('template_id', templateId);
+      body.set('template_data', JSON.stringify({ num: otp }));
+    } else {
+      body.set('body', `${otp} is your login verification code for Ooruda. Do not share it with anyone. Valid for 10 minutes.`);
+    }
 
     const res = await fetch(url, {
       method: 'POST',

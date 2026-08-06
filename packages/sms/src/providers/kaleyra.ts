@@ -70,11 +70,16 @@ export class KaleyraProvider implements ISmsProvider {
       to: normalizePhone(phone),
       type: 'OTP',
       sender: this.senderId,
-      body: `${otp} is your login verification code for Ooruda. Do not share it with anyone. Valid for 10 minutes.\r\n\r\n - Habbaa Solutions`,
     });
 
     if (this.smsTemplateId) {
+      // Use template_id + template_data — Kaleyra substitutes {#num#} server-side.
+      // Never send both body and template_id together; body takes priority and must
+      // match the DLT-registered content exactly, which is fragile.
       body.set('template_id', this.smsTemplateId);
+      body.set('template_data', JSON.stringify({ num: otp }));
+    } else {
+      body.set('body', `${otp} is your login verification code for Ooruda. Do not share it with anyone. Valid for 10 minutes.`);
     }
 
     const res = await fetch(url, {
