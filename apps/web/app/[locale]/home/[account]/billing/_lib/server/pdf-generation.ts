@@ -96,7 +96,6 @@ type TenancyBillingRow = {
   company_name: string | null;
   company_address: string | null;
   company_gstin: string | null;
-  profiles: { full_name: string | null } | null;
 };
 
 /**
@@ -121,11 +120,10 @@ async function resolveBillingEntity(
   let tenancy: TenancyBillingRow | null = null;
 
   if (unit.bill_to !== 'owner' && tenancyId) {
-    // Join profiles into the tenancy query — one round trip instead of two.
     const { data } = await admin
       .from('tenancies')
       .select(
-        'tenant_id, is_company, company_name, company_address, company_gstin, profiles(full_name)',
+        'tenant_id, is_company, company_name, company_address, company_gstin',
       )
       .eq('id', tenancyId)
       .maybeSingle();
@@ -141,10 +139,16 @@ async function resolveBillingEntity(
         companyGstin: tenancy.company_gstin,
       };
     }
-    const profile = tenancy.profiles;
+    // tenancies.tenant_id → auth.users(id), not profiles.id — PostgREST cannot
+    // resolve profiles() as an embedded join from tenancies. Fetch separately.
+    const { data: profileData } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', tenancy.tenant_id)
+      .maybeSingle();
     return {
       isCompany: false,
-      name: profile?.full_name ?? null,
+      name: profileData?.full_name ?? null,
       companyAddress: null,
       companyGstin: null,
     };
