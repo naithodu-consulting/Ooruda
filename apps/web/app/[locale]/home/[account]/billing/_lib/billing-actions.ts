@@ -216,10 +216,8 @@ export async function generateBillsAction(
           .eq('period', period)
           .eq('billed', false)
       : Promise.resolve({ data: [] as PendingRow[] }),
-    // pending_sinking_fund_charges is not yet in generated types — cast to any.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     sinkingFundCT
-      ? (client as any)
+      ? client
           .from('pending_sinking_fund_charges')
           .select('id, unit_id, label, amount, split_mode, due_date')
           .eq('association_id', associationId)
@@ -795,8 +793,7 @@ export async function generateBillsAction(
   }
   if (shouldGenSinking && sinkingCreated > 0 && pendingSinkingRows.length > 0) {
     const sinkingIds = pendingSinkingRows.map((r) => r.id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (client as any)
+    await client
       .from('pending_sinking_fund_charges')
       .update({ billed: true })
       .in('id', sinkingIds);
@@ -1151,18 +1148,15 @@ export async function addSinkingFundChargeToUnitAction(
   if (unitError || !unit)
     return { success: false, error: 'Unit not found in this association.' };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (client as any)
-    .from('pending_sinking_fund_charges')
-    .insert({
-      association_id: associationId,
-      unit_id: input.unit_id,
-      period: input.period,
-      label: input.label.trim(),
-      amount: input.amount,
-      split_mode: null,
-      due_date: input.due_date ?? null,
-    });
+  const { error } = await client.from('pending_sinking_fund_charges').insert({
+    association_id: associationId,
+    unit_id: input.unit_id,
+    period: input.period,
+    label: input.label.trim(),
+    amount: input.amount,
+    split_mode: null,
+    due_date: input.due_date ?? null,
+  });
 
   if (error) return { success: false, error: error.message };
   revalidatePath(BILLING_PATH, 'page');
@@ -1190,18 +1184,15 @@ export async function bulkAddSinkingFundChargeAction(
     return { success: false, error: 'Amount must be positive.' };
 
   const client = getSupabaseServerClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (client as any)
-    .from('pending_sinking_fund_charges')
-    .insert({
-      association_id: associationId,
-      unit_id: null,
-      period: input.period,
-      label: input.label.trim(),
-      amount: input.amount,
-      split_mode: input.split_mode,
-      due_date: input.due_date ?? null,
-    });
+  const { error } = await client.from('pending_sinking_fund_charges').insert({
+    association_id: associationId,
+    unit_id: null,
+    period: input.period,
+    label: input.label.trim(),
+    amount: input.amount,
+    split_mode: input.split_mode,
+    due_date: input.due_date ?? null,
+  });
 
   if (error) return { success: false, error: error.message };
   revalidatePath(BILLING_PATH, 'page');
@@ -1217,8 +1208,7 @@ export async function removePendingSinkingFundChargeAction(
 
   const client = getSupabaseServerClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: charge } = await (client as any)
+  const { data: charge } = await client
     .from('pending_sinking_fund_charges')
     .select('billed')
     .eq('id', chargeId)
@@ -1232,8 +1222,7 @@ export async function removePendingSinkingFundChargeAction(
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (client as any)
+  const { error } = await client
     .from('pending_sinking_fund_charges')
     .delete()
     .eq('id', chargeId)
@@ -1356,6 +1345,7 @@ export async function voidBillAction(
   );
 
   revalidatePath(BILLING_PATH, 'page');
+  revalidatePath('/home/[account]/payments', 'page');
 
   return { success: true };
 }
@@ -1401,6 +1391,7 @@ export async function voidBillsBulkAction(
   );
 
   revalidatePath(BILLING_PATH, 'page');
+  revalidatePath('/home/[account]/payments', 'page');
 
   return { success: true, voided };
 }
