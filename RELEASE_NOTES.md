@@ -59,6 +59,23 @@ This document covers all feature work, enhancements, and notable changes built o
 - `packages/next/src/routes/index.ts`: useless try/catch wrapper removed (oxlint `no-useless-catch`).
 - Migration `20260806000001`: `CREATE POLICY` statements now idempotent (guarded with `DROP POLICY IF EXISTS`).
 
+### send-reminders Edge Function — Fixes (2026-08-07)
+- **Associations query fixed**: `select('id, name, ...')` → `accounts!inner(name, slug)` — `name` column does not exist on `associations`; name lives on the linked `accounts` row.
+- **Status filter fixed**: `.eq('is_active', true)` → `.in('status', ['Active'])` — `is_active` column does not exist; correct column is `status` with value `'Active'`.
+- **Test mode**: allows `status = 'Setup'` associations when `test_association_id` is passed, so demo/staging associations can be tested without being fully activated.
+- **Tenancies relation normalised**: Supabase returns the embedded `tenancies` relation as a single object (not an array) when there is exactly one row. Added `Array.isArray` normalisation guard to prevent `TypeError: .find is not a function`.
+- **Deno `.catch()` incompatibility fixed**: all 5 `supabase.from(...).insert(...).catch(() => null)` patterns replaced with `try { await } catch {}` — Deno's Supabase client does not expose `.catch()` on insert promises.
+- **₹0 outstanding guard**: bills with `outstanding === 0` (fully settled but not yet stamped `Paid`) are now skipped — previously sent spurious reminders.
+- **Overdue detection in test mode**: `targetEntry` is never found when using `test_unit_id` (due-date filter is skipped), so `isOverdue` fell back to `false` for all bills. Now falls back to `new Date(bill.due_date) < today` date comparison.
+- **Email formatting**: raw `bill_type` (`other_charges`, `electricity`), `period` (`2026-07`), and `due_date` (`2026-07-10`) are now formatted as human-readable strings (`Other Charges`, `July 2026`, `10th July 2026`) in both the email body and in-app notification copy.
+- **Amount formatting**: standardised to `Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })` throughout (was mixing `toLocaleString` and `Intl.NumberFormat`).
+- **Subject line redesign**:
+  - Overdue: `Overdue Bill: Immediate Action Required` (no bill type, no date, no association name)
+  - Other Charges reminder: `Payment Reminder: Bill Due on 10th July 2026` (type omitted — "Other Charges" is confusing to residents)
+  - Maintenance / Electricity reminder: `Payment Reminder: Maintenance Bill Due on 10th June 2026`
+- **Date format**: all dates now use ordinal day + full month name (`10th July 2026`) instead of ISO strings.
+- **Bill Type row added** to email details table so recipients can identify the bill type within the email body even when the subject omits it.
+
 ### Migrations in This Release
 
 | File | Description |
