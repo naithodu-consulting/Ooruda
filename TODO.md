@@ -28,23 +28,38 @@ Pending migrations:
 
 ### Step 2 — Register auth-events-hook in Supabase Dashboard
 
-After migrations are applied:
+⚠️ **Blocked — Supabase free/pro plan limitation.**  
+The Auth Hooks page only exposes: Send Email hook, JWT Claims hook, Before User Created hook. A generic post-auth-event webhook (needed to log login/logout/OTP to `audit_logs`) requires **Team or Enterprise plan**. The `auth-events-hook` Edge Function is deployed and ready — registration is blocked by plan tier.
 
+**When upgraded to Team plan:**
 1. Go to Supabase Dashboard → **Authentication → Hooks**
-2. Add a new **HTTP** hook
+2. Add a new **HTTP** hook for auth events
 3. URL: `https://bcdosjrbkkemsqowhigj.supabase.co/functions/v1/auth-events-hook`
-4. Events to subscribe: Login, Logout, Signup, User Created, Password Recovery, Token Refreshed
-5. Set `AUTH_HOOK_SECRET` environment variable in the Edge Function's secrets (Dashboard → Edge Functions → auth-events-hook → Secrets) and configure the same value as the hook secret in the Dashboard hook setup
+4. Set `AUTH_HOOK_SECRET` in Dashboard → Edge Functions → auth-events-hook → Secrets
 
-### Step 3 — Verify cron job registered
+### Step 3 — Wire send-reminders scheduling (blocked — migrate to Vercel cron)
 
-After migration `20260806000002` is applied, confirm in SQL Editor:
+⚠️ **Blocked — Supabase free/pro plan restriction.**  
+The `send-reminders` pg_cron job calls the Edge Function via `pg_net`, which requires `app.supabase_project_url` and `app.supabase_service_key` to be set via `alter database postgres set …`. This requires superuser, which Supabase never exposes on hosted projects (free or pro). Both the SQL Editor and `supabase db query --linked` return `42501: permission denied`.
 
-```sql
-select jobname, schedule, command from cron.job;
+The `overdue-recompute` pg_cron job works fine (pure SQL, no secrets).
+
+**Recommended fix: move `send-reminders` trigger to a Vercel cron job.**
+
+1. Add to `apps/web/vercel.json`:
+```json
+{
+  "crons": [{
+    "path": "/api/cron/send-reminders",
+    "schedule": "30 3 * * *"
+  }]
+}
 ```
+2. Create `apps/web/app/api/cron/send-reminders/route.ts` — verify `Authorization: Bearer $CRON_SECRET` header, then call the `send-reminders` Edge Function (or inline the reminder logic directly).
+3. Set `CRON_SECRET` in Vercel env vars.
+4. Remove the `send-reminders` pg_cron job from `20260806000002` (or unschedule via SQL).
 
-Should show a `send-reminders` job scheduled for `0 3 * * *` (9 AM IST = 3:30 AM UTC, approximately).
+The `overdue-recompute` job can remain in pg_cron — it needs no secrets.
 
 ### Step 4 — Smoke-test auth events
 
