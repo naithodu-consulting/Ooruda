@@ -95,6 +95,7 @@ export function TeamAccountTopbar(props: {
           <TeamAccountNotifications
             userId={props.userId}
             accountId={props.accountId}
+            accountSlug={props.account}
           />
         ) : null}
 
@@ -169,7 +170,10 @@ function AssociationSwitcher(props: {
             <div className="bg-primary text-primary-foreground flex h-5 w-5 items-center justify-center rounded text-[9px] font-black">
               {initials}
             </div>
-            <span className="max-w-[90px] truncate sm:max-w-[140px]" title={currentLabel}>
+            <span
+              className="max-w-[90px] truncate sm:max-w-[140px]"
+              title={currentLabel}
+            >
               {currentLabel}
             </span>
             <ChevronDown className="text-muted-foreground h-3.5 w-3.5" />

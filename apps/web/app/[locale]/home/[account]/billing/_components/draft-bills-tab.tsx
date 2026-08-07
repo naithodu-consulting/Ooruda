@@ -315,9 +315,10 @@ export function DraftBillsTab(props: {
                 yet generated
               </p>
               <p className="mt-0.5 text-sm text-blue-700 dark:text-blue-400">
-                Click <span className="font-semibold">Generate Bills</span> above
-                to create maintenance bills for all active units. The bill amount
-                is calculated based on each unit&apos;s area at generation time.
+                Click <span className="font-semibold">Generate Bills</span>{' '}
+                above to create maintenance bills for all active units. The bill
+                amount is calculated based on each unit&apos;s area at
+                generation time.
               </p>
             </div>
           </div>

@@ -430,30 +430,57 @@ export type Database = {
           actor_user_id: string | null
           association_id: string | null
           created_at: string
+          duration_ms: number | null
           entity_id: string | null
           entity_type: string
+          error_code: string | null
+          event_type: string
+          http_method: string | null
           id: string
+          ip_address: string | null
+          metadata: Json | null
+          path: string | null
+          status_code: number | null
           summary: string | null
+          user_agent: string | null
         }
         Insert: {
           action: string
           actor_user_id?: string | null
           association_id?: string | null
           created_at?: string
+          duration_ms?: number | null
           entity_id?: string | null
           entity_type: string
+          error_code?: string | null
+          event_type?: string
+          http_method?: string | null
           id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          path?: string | null
+          status_code?: number | null
           summary?: string | null
+          user_agent?: string | null
         }
         Update: {
           action?: string
           actor_user_id?: string | null
           association_id?: string | null
           created_at?: string
+          duration_ms?: number | null
           entity_id?: string | null
           entity_type?: string
+          error_code?: string | null
+          event_type?: string
+          http_method?: string | null
           id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          path?: string | null
+          status_code?: number | null
           summary?: string | null
+          user_agent?: string | null
         }
         Relationships: [
           {
@@ -979,6 +1006,47 @@ export type Database = {
           enable_team_accounts?: boolean
         }
         Relationships: []
+      }
+      in_app_notifications: {
+        Row: {
+          association_id: string | null
+          body: string
+          created_at: string
+          id: string
+          link_to: string | null
+          read_at: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          association_id?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          link_to?: string | null
+          read_at?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          association_id?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          link_to?: string | null
+          read_at?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "in_app_notifications_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       invitations: {
         Row: {
@@ -2346,6 +2414,14 @@ export type Database = {
       }
       get_config: { Args: never; Returns: Json }
       get_nonce_status: { Args: { p_id: string }; Returns: Json }
+      get_unit_ledger_balances: {
+        Args: { p_association_id: string; p_unit_ids: string[] }
+        Returns: {
+          bill_type: string
+          net: number
+          unit_id: string
+        }[]
+      }
       get_upper_system_role: { Args: never; Returns: string }
       has_active_subscription: {
         Args: { target_account_id: string }
@@ -2461,6 +2537,8 @@ export type Database = {
         Args: { p_id: string; p_reason?: string }
         Returns: boolean
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       super_admin_delete_all_bills: {
         Args: { p_association_id: string }
         Returns: {

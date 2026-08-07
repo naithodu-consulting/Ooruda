@@ -46,8 +46,7 @@ export async function loadUnitLedgerBalances(
     bill_type: string;
     net: number;
   }[]) {
-    if (!perUnitType.has(row.unit_id))
-      perUnitType.set(row.unit_id, new Map());
+    if (!perUnitType.has(row.unit_id)) perUnitType.set(row.unit_id, new Map());
     perUnitType.get(row.unit_id)!.set(row.bill_type, Number(row.net));
   }
 

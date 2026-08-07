@@ -176,7 +176,11 @@ export default async function MescomPage({ params }: Props) {
   >();
   for (const r of allReadings) {
     const list = readingsByMeter.get(r.sub_meter_id) ?? [];
-    list.push({ period: r.period, current_reading: r.current_reading, minimum_charge: r.minimum_charge ?? 0 });
+    list.push({
+      period: r.period,
+      current_reading: r.current_reading,
+      minimum_charge: r.minimum_charge ?? 0,
+    });
     readingsByMeter.set(r.sub_meter_id, list);
   }
   for (const bill of billRows) {
@@ -186,8 +190,10 @@ export default async function MescomPage({ params }: Props) {
       // mReadings is sorted asc by period; walk backwards to find latest < bill.period
       for (let i = mReadings.length - 1; i >= 0; i--) {
         if (mReadings[i]!.period < bill.period) {
-          lastReadingBeforePeriodByBill[bill.id]![meterId] = mReadings[i]!.current_reading;
-          lastMinChargeBeforePeriodByBill[bill.id]![meterId] = mReadings[i]!.minimum_charge;
+          lastReadingBeforePeriodByBill[bill.id]![meterId] =
+            mReadings[i]!.current_reading;
+          lastMinChargeBeforePeriodByBill[bill.id]![meterId] =
+            mReadings[i]!.minimum_charge;
           break;
         }
       }

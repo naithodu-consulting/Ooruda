@@ -35,7 +35,10 @@ export const GET = enhanceRouteHandler(
 
     if (queryError) {
       const logger = await getLogger();
-      logger.error({ id, error: queryError.message }, '[cash-ledger-pdf] query error');
+      logger.error(
+        { id, error: queryError.message },
+        '[cash-ledger-pdf] query error',
+      );
       return NextResponse.json(
         { error: 'Failed to load payment.' },
         { status: 500 },

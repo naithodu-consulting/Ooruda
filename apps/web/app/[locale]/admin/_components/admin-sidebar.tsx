@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { Send, Users } from 'lucide-react';
+import { Activity, Bell, Send, Users } from 'lucide-react';
 
 import { usePersonalAccountData } from '@kit/accounts/hooks/use-personal-account-data';
 import { useUser } from '@kit/supabase/hooks/use-user';
@@ -71,6 +71,35 @@ export function AdminSidebar() {
                   >
                     <Users className={'h-4 w-4 shrink-0'} />
                     <span>Accounts</span>
+                  </Link>
+                }
+              />
+
+              {process.env.NEXT_PUBLIC_ENABLE_SMS_EMAIL_NOTIFICATIONS ===
+                'true' && (
+                <SidebarMenuButton
+                  isActive={path.includes('/admin/channels')}
+                  render={
+                    <Link
+                      className={'flex size-full gap-2.5'}
+                      href={'/admin/channels'}
+                    >
+                      <Bell className={'h-4 w-4 shrink-0'} />
+                      <span>Channels</span>
+                    </Link>
+                  }
+                />
+              )}
+
+              <SidebarMenuButton
+                isActive={path.includes('/admin/activity')}
+                render={
+                  <Link
+                    className={'flex size-full gap-2.5'}
+                    href={'/admin/activity'}
+                  >
+                    <Activity className={'h-4 w-4 shrink-0'} />
+                    <span>Activity Log</span>
                   </Link>
                 }
               />

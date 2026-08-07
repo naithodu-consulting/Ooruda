@@ -1,13 +1,14 @@
 'use server';
 
 import 'server-only';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import { isSuperAdmin } from '@kit/admin';
 import {
   renderBillDispatchEmail,
   renderReceiptDispatchEmail,
 } from '@kit/email-templates';
 import { getLogger } from '@kit/shared/logger';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
@@ -15,6 +16,7 @@ import {
   getOrGenerateBillPdf,
   getOrGenerateReceiptPdf,
 } from '~/home/[account]/billing/_lib/server/pdf-generation';
+import { logAuditEvent } from '~/lib/audit-log';
 
 import { DISPATCH_SENDER_EMAIL } from './dispatch-config';
 
@@ -266,6 +268,19 @@ export async function sendBillEmailsAction(
         `Bill dispatch failed for unit ${item.unitNo}: ${reason}`,
       );
 
+      void logAuditEvent({
+        action: 'bill_dispatch.item.failed',
+        entityType: 'bill',
+        eventType: 'error',
+        summary: `Bill dispatch failed for unit ${item.unitNo} (${input.associationName}): ${reason}`,
+        metadata: {
+          unitNo: item.unitNo,
+          billNo: item.billNo,
+          mode: input.mode,
+        },
+        useAdminClient: true,
+      });
+
       failed.push({ unitNo: item.unitNo, reason });
     }
   }
@@ -282,6 +297,20 @@ export async function sendBillEmailsAction(
     },
     'Bill dispatch completed',
   );
+
+  void logAuditEvent({
+    action: 'bill_dispatch.completed',
+    entityType: 'bill',
+    eventType: failed.length > 0 ? 'error' : 'user_action',
+    summary: `Dispatched ${sent}/${input.items.length} ${input.mode} emails for ${input.associationName}`,
+    metadata: {
+      mode: input.mode,
+      sent,
+      failed: failed.length,
+      associationName: input.associationName,
+    },
+    useAdminClient: true,
+  });
 
   return { sent, failed };
 }

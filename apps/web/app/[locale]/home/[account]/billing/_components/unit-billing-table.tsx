@@ -160,7 +160,9 @@ export function UnitBillingTable({
   // Counts are computed over the whole tree, not the filtered view, so the
   // pills always show how many units each filter would actually reveal.
   const counts = useMemo(() => {
-    let outstanding = 0, overdue = 0, all_paid = 0;
+    let outstanding = 0,
+      overdue = 0,
+      all_paid = 0;
     for (const n of tree) {
       if (n.outstanding > 0) outstanding++;
       if (n.overdue > 0) overdue++;
@@ -300,7 +302,9 @@ export function UnitBillingTable({
     !!search || filter !== 'all' || typeFilter !== 'all' || duration !== 'all';
 
   const metrics = useMemo(() => {
-    let billed = 0, outstanding = 0, overdueUnits = 0;
+    let billed = 0,
+      outstanding = 0,
+      overdueUnits = 0;
     for (const n of filtered) {
       billed += n.billed;
       outstanding += n.outstanding;

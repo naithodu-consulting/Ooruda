@@ -10,7 +10,6 @@ import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import { cn } from '@kit/ui/utils';
 
-import { billStatusBadgeClassName } from '~/lib/bill-status';
 import { formatDateDMY } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
@@ -385,7 +384,6 @@ function BillTypeRow({
             {outstanding > 0 ? 'owed' : 'paid'}
           </div>
         </div>
-
       </div>
 
       {expanded && (

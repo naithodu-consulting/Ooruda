@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 
+import { logAuditEvent } from '~/lib/audit-log';
+
 import crypto from 'crypto';
 
 interface PaymentEntity {
@@ -135,7 +137,14 @@ export async function POST(req: NextRequest) {
     // Return 200 on bad signature — same as the "not found" path — so
     // unauthenticated callers cannot distinguish a valid payment_id from an
     // unknown one (information oracle eliminated).
-    if (expectedSig !== signature) {
+    // Use timingSafeEqual to prevent HMAC timing attacks.
+    const signaturesMatch =
+      expectedSig.length === signature.length &&
+      crypto.timingSafeEqual(
+        Buffer.from(expectedSig, 'hex'),
+        Buffer.from(signature, 'hex'),
+      );
+    if (!signaturesMatch) {
       return new Response('OK', { status: 200 });
     }
 
@@ -150,8 +159,24 @@ export async function POST(req: NextRequest) {
     });
 
     if (error) {
+      void logAuditEvent({
+        action: 'razorpay.refund.failed',
+        entityType: 'payment',
+        eventType: 'error',
+        summary: `Razorpay refund webhook RPC failed: ${error.message}`,
+        metadata: { razorpayPaymentId },
+        useAdminClient: true,
+      });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    void logAuditEvent({
+      action: 'razorpay.refund.processed',
+      entityType: 'payment',
+      summary: `Razorpay refund processed for payment ${razorpayPaymentId}`,
+      metadata: { razorpayPaymentId, refundAmount: refundEntity.amount / 100 },
+      useAdminClient: true,
+    });
 
     return new Response('OK', { status: 200 });
   }
@@ -211,7 +236,13 @@ export async function POST(req: NextRequest) {
     .update(rawBody)
     .digest('hex');
 
-  if (expectedSig !== signature) {
+  const signaturesMatch =
+    expectedSig.length === signature.length &&
+    crypto.timingSafeEqual(
+      Buffer.from(expectedSig, 'hex'),
+      Buffer.from(signature, 'hex'),
+    );
+  if (!signaturesMatch) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
@@ -252,8 +283,26 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       if (error.code === '23505') return new Response('OK', { status: 200 });
+      void logAuditEvent({
+        associationId,
+        action: 'razorpay.due_payment.failed',
+        entityType: 'payment',
+        eventType: 'error',
+        summary: `Razorpay due-payment webhook failed: ${error.message}`,
+        metadata: { razorpayPaymentId, dueUnitId, dueBillType },
+        useAdminClient: true,
+      });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    void logAuditEvent({
+      associationId,
+      action: 'razorpay.payment.captured',
+      entityType: 'payment',
+      summary: `Razorpay due-payment captured via webhook`,
+      metadata: { razorpayPaymentId, dueUnitId, dueBillType },
+      useAdminClient: true,
+    });
 
     return new Response('OK', { status: 200 });
   }
@@ -287,9 +336,27 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       if (error.code === '23505') continue;
+      void logAuditEvent({
+        associationId,
+        action: 'razorpay.payment.failed',
+        entityType: 'payment',
+        eventType: 'error',
+        summary: `Razorpay webhook payment recording failed for bill ${bill.id}: ${error.message}`,
+        metadata: { razorpayPaymentId, razorpayOrderId, billId: bill.id },
+        useAdminClient: true,
+      });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
   }
+
+  void logAuditEvent({
+    associationId,
+    action: 'razorpay.payment.captured',
+    entityType: 'payment',
+    summary: `Razorpay payment captured via webhook (${billIds.length} bill${billIds.length === 1 ? '' : 's'})`,
+    metadata: { razorpayPaymentId, razorpayOrderId, billCount: billIds.length },
+    useAdminClient: true,
+  });
 
   return new Response('OK', { status: 200 });
 }

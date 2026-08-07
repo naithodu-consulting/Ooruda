@@ -95,7 +95,9 @@ export function AdminAccountsTable(props: {
   const personalCount = props.users.length;
   const showCounts = !query;
 
-  const assocLabel = showCounts ? `Associations (${teamCount})` : 'Associations';
+  const assocLabel = showCounts
+    ? `Associations (${teamCount})`
+    : 'Associations';
   const usersLabel = showCounts ? `Users (${personalCount})` : 'Users';
 
   const columns = getColumns(
@@ -158,7 +160,12 @@ export function AdminAccountsTable(props: {
                 )}
               />
 
-              <Button type="button" variant="outline" size="icon" onClick={() => setQuery(form.getValues('query'))}>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setQuery(form.getValues('query'))}
+              >
                 <Search className="h-4 w-4" />
                 <span className="sr-only">Search</span>
               </Button>
@@ -225,7 +232,9 @@ function EmptyState(props: { type: 'team' | 'personal'; query?: string }) {
           <p className="font-medium">
             No {label} match &ldquo;{props.query}&rdquo;
           </p>
-          <p className="mt-1 text-xs opacity-70">Try a different search term.</p>
+          <p className="mt-1 text-xs opacity-70">
+            Try a different search term.
+          </p>
         </>
       ) : (
         <p className="font-medium">No {label} yet.</p>
@@ -254,7 +263,7 @@ function getColumns(
         <div className="flex min-w-0 items-center gap-1.5">
           {isTest && (
             <Badge
-              className="shrink-0 whitespace-nowrap border-amber-400 bg-amber-50 px-1.5 py-0 text-[10px] text-amber-700"
+              className="shrink-0 border-amber-400 bg-amber-50 px-1.5 py-0 text-[10px] whitespace-nowrap text-amber-700"
               variant="outline"
             >
               Test
@@ -273,7 +282,7 @@ function getColumns(
           {isSA && (
             <Badge
               variant="outline"
-              className="shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px]"
+              className="shrink-0 px-1.5 py-0 text-[10px] whitespace-nowrap"
             >
               Super Admin
             </Badge>
@@ -289,18 +298,24 @@ function getColumns(
     enableSorting: true,
     accessorFn: (row) => row.created_at ?? '',
     cell: ({ row }) => {
-      const full = new Date(row.original.created_at!).toLocaleDateString('en-IN', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      const short = new Date(row.original.created_at!).toLocaleDateString('en-IN', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
+      const full = new Date(row.original.created_at!).toLocaleDateString(
+        'en-IN',
+        {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        },
+      );
+      const short = new Date(row.original.created_at!).toLocaleDateString(
+        'en-IN',
+        {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        },
+      );
       return (
         <span title={full} className="cursor-default">
           {short}
@@ -330,7 +345,9 @@ function getColumns(
         header: 'Phone',
         cell: ({ row }) => {
           const phone = formatPhoneNumber(phoneByAccountId[row.original.id]);
-          return phone || <span className="text-muted-foreground text-xs">—</span>;
+          return (
+            phone || <span className="text-muted-foreground text-xs">—</span>
+          );
         },
       },
       {
@@ -339,7 +356,10 @@ function getColumns(
         cell: ({ row }) => {
           const email = row.original.email?.trim();
           return email ? (
-            <span className="block max-w-[180px] truncate sm:max-w-[240px]" title={email}>
+            <span
+              className="block max-w-[180px] truncate sm:max-w-[240px]"
+              title={email}
+            >
               {email}
             </span>
           ) : (
@@ -415,7 +435,10 @@ function ActionsCell({
 
             <DropdownMenuItem
               render={
-                <Link className="h-full w-full" href={`/admin/accounts/${account.id}`}>
+                <Link
+                  className="h-full w-full"
+                  href={`/admin/accounts/${account.id}`}
+                >
                   View
                 </Link>
               }

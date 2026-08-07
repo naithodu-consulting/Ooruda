@@ -107,7 +107,8 @@ function normalizePhone(phone: string): string {
 async function sendViaKaleyra(phone: string, otp: string) {
   const apiKey = Deno.env.get('KALEYRA_API_KEY') ?? '';
   const sid = Deno.env.get('KALEYRA_SID') ?? '';
-  if (!apiKey || !sid) throw new Error('KALEYRA_API_KEY or KALEYRA_SID missing');
+  if (!apiKey || !sid)
+    throw new Error('KALEYRA_API_KEY or KALEYRA_SID missing');
 
   const region = (Deno.env.get('KALEYRA_REGION') ?? 'IN').toUpperCase();
   const channel = (Deno.env.get('KALEYRA_CHANNEL') ?? 'sms').toLowerCase();
@@ -177,7 +178,10 @@ async function sendViaKaleyra(phone: string, otp: string) {
       body.set('template_id', templateId);
       body.set('template_data', JSON.stringify({ num: otp }));
     } else {
-      body.set('body', `${otp} is your login verification code for Ooruda. Do not share it with anyone. Valid for 10 minutes.`);
+      body.set(
+        'body',
+        `${otp} is your login verification code for Ooruda. Do not share it with anyone. Valid for 10 minutes.`,
+      );
     }
 
     const res = await fetch(url, {

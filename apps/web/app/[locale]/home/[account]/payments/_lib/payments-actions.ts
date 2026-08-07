@@ -1,12 +1,14 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
 import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
+import { sendPaymentConfirmedNotification } from '~/lib/notify';
 import { getAssociationRole } from '~/lib/rbac';
 
 import {
@@ -78,6 +80,7 @@ export async function recordPaymentAction(
       associationId,
       action: 'payment.record.failed',
       entityType: 'payment',
+      eventType: 'error',
       summary: `Failed to record payment for bill ${billId}: ${error.message}`,
     });
     return { success: false, error: userMessage };
@@ -96,17 +99,54 @@ export async function recordPaymentAction(
 
   const { data: bill } = await client
     .from('bills')
-    .select('bill_no, units!inner(unit_no)')
+    .select('bill_no, bill_type, period, units!inner(unit_no, owner_id)')
     .eq('id', billId)
     .single();
+
+  const unit = Array.isArray(bill?.units) ? bill.units[0] : bill?.units;
 
   await logAuditEvent({
     associationId,
     action: 'payment.recorded',
     entityType: 'payment',
     entityId: paymentId as unknown as string,
-    summary: `Unit ${bill?.units?.unit_no ?? '?'} — ₹${amount.toLocaleString('en-IN')} collected via ${mode}`,
+    summary: `Unit ${unit?.unit_no ?? '?'} — ₹${amount.toLocaleString('en-IN')} collected via ${mode}`,
   });
+
+  // Fire payment-confirmed notification non-blocking via after()
+  if (bill && unit?.owner_id) {
+    const ownerUserId = unit.owner_id;
+    const billNo = bill.bill_no;
+    const billType = bill.bill_type;
+    const period = bill.period;
+    const unitNo = unit.unit_no;
+    const paidAmount = amount;
+
+    after(async () => {
+      const adminClient = getSupabaseServerAdminClient();
+      const { data: assoc } = await adminClient
+        .from('associations')
+        .select('accounts!inner(name, slug)')
+        .eq('id', associationId)
+        .single();
+
+      const assocAccounts = assoc?.accounts as {
+        name?: string;
+        slug?: string;
+      } | null;
+      await sendPaymentConfirmedNotification({
+        associationId,
+        associationName: assocAccounts?.name ?? '',
+        accountSlug: assocAccounts?.slug ?? '',
+        recipientUserId: ownerUserId,
+        unitNo,
+        billNo,
+        billType,
+        period,
+        paidAmount,
+      });
+    });
+  }
 
   revalidatePath(PAYMENTS_PATH, 'page');
 
@@ -150,6 +190,7 @@ export async function voidPaymentAction(
       action: 'payment.void.failed',
       entityType: 'payment',
       entityId: paymentId,
+      eventType: 'error',
       summary: `Failed to void payment ${paymentId}: ${deleteError.message}`,
     });
     return { success: false, error: userMessage };

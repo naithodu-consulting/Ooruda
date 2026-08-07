@@ -410,7 +410,11 @@ export async function downloadPdfAction(
   tab: TabKey | 'all',
   filters: Partial<ReportsFilters> = {},
 ): Promise<ActionResult<{ base64: string; filename: string }>> {
-  const { client, association, profile: resolvedProfile } = await resolveAssociation(associationId);
+  const {
+    client,
+    association,
+    profile: resolvedProfile,
+  } = await resolveAssociation(associationId);
   if (!association) return { success: false, error: 'Access denied.' };
 
   const fromPeriod = toPeriod(from);

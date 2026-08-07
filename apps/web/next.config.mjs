@@ -123,6 +123,11 @@ async function getRedirects() {
       destination: '/sitemap.xml',
       permanent: true,
     },
+    {
+      source: '/admin/notification-settings',
+      destination: '/admin/channels',
+      permanent: true,
+    },
   ];
 }
 

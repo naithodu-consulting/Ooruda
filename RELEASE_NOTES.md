@@ -4,6 +4,77 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4 — Notifications, Reminders, Activity Tracking & Security Hardening — 2026-08-06
+
+### Transactional SMS Notifications
+- **`@kit/sms` extended** — `sendSms(phone, templateKey, variables)` added to all providers: Kaleyra (DLT `template_id` + `template_data`), MSG91 (flow API), 2Factor (TRANS_SMS), and Mock (console).
+- **4 DLT template keys** registered: `bill_generated`, `payment_confirmed`, `reminder`, `overdue`. Each maps to a separate env var for the DLT-registered template ID.
+- **Kaleyra**: uses `type=TXN`, sends `template_id` + `template_data` (never `body` alongside `template_id`).
+
+### Automated Email Alerts
+- **`apps/web/lib/notify.ts`** — unified notification dispatcher for SMS + Email + In-app. Reads channel enablement from DB with 5-minute in-process cache. Uses `after()` from `next/server` so notifications never block the user-facing response.
+- **`packages/email-templates`** — new `BillReminderEmailProps` email template (`bill-reminder.email.tsx`) with amber (reminder) and red (overdue) variants, outstanding-amount highlight box, and CTA button.
+- **Email sender**: `hello@ooruda.com` via Resend.
+- **Triggers wired**: bill generation → `sendBillGeneratedNotifications()` (per unit: owner + active tenant); payment recorded → `sendPaymentConfirmedNotification()`.
+
+### Reminder Scheduling (pg_cron + Edge Function)
+- **Migration `20260806000002_reminder_cron.sql`**: enables `pg_cron` + `pg_net`; schedules `overdue-recompute` (1 AM IST daily) and `send-reminders` (9 AM IST daily).
+- **Edge Function `send-reminders`**: reads `billing_settings.reminder_schedule_json` per association, queries matching Unpaid/Partial/Overdue bills, sends SMS + email + in-app notification per recipient.
+- **`recompute_overdue_bills()`** PL/pgSQL function stamps Overdue status in DB (source of truth for all overdue display).
+
+### Enhanced Activity Tracking
+- **Migration `20260806000001_activity_tracking_and_notifications.sql`**: extends `audit_logs` with `event_type`, `http_method`, `path`, `status_code`, `duration_ms`, `error_code`, `metadata`, `ip_address`, `user_agent`; makes `association_id` nullable for platform-level events.
+- **`lib/audit-log.ts`** rewritten — `AuditEventType` union, all new fields, auto-resolves actor from session, uses admin client for system/auth events.
+- **Auth hook** (`supabase/functions/auth-events-hook`): Deno Edge Function with HMAC-SHA256 signature verification; maps auth events to `audit_logs` with masked email.
+- **Activity Log UI** (`/[account]/audit`): event type filter tabs (All / User Actions / Auth Events / Errors / System), status badge (HTTP code or event type), API path sub-row, error code display.
+- **Super-admin Activity page** (`/admin/activity`): platform-wide view across all associations, no `association_id` filter, Association column added.
+
+### In-App Notifications Bell
+- Uses Makerkit's existing `notifications` table (`NEXT_PUBLIC_ENABLE_NOTIFICATIONS=true`).
+- `notify.ts` writes `**title**\nbody` format to `notifications.body`; `MyAlertsCard` parses it for bold title + body.
+- **Notifications page** (`/[account]/notifications`): two-tab layout — "My Alerts" (per-user in-app alerts with dismiss/mark-all-read) + "Sent Log" (outbound notifications history with delivery metrics).
+- `notifications_log` table tracks all outbound deliveries with status (Sent/Failed/Delivered).
+
+### Notification Channel Management
+- **`notification_providers_config`** table: platform-default rows for SMS and Email (both disabled by default); super-admin can toggle per-channel.
+- **Admin → Communication Channels** (`/admin/channels`): toggle switches for SMS/Email/WhatsApp with real-time badge update. Permanent redirect from old `/admin/notification-settings` URL.
+- **Admin → Activity Log** (`/admin/activity`): linked from admin sidebar.
+- **Channel gate covers all email paths**: bill generation, payment receipt, bill reminders (both `notify.ts` and `send-reminders` Edge Function check `notification_providers_config` before sending).
+
+### Audit Log (assoc-admin)
+- Renamed from "Activity Log" back to "Audit Log" in nav, page title, and metadata.
+- Errors tab removed from assoc-admin view — only super-admin sees error events.
+
+### Security Hardening
+- **In-memory rate limiter** in `proxy.ts`: 5 req/60 s on `/auth/*`, 30 req/10 s on `/api/*`; 429 response with `Retry-After` header. Removed misleading `X-RateLimit-Limit: 0` header. No Redis dependency.
+- **Auth event hook hard-rejects** if `AUTH_HOOK_SECRET` is not configured (was silently accepting unauthenticated requests).
+- **Razorpay webhook**: both signature checks use `crypto.timingSafeEqual` (prevents timing-based HMAC oracle attacks).
+- **Auth event logging**: all sign-in, sign-up, MFA, token-refresh events tracked in `audit_logs` via Edge Function webhook.
+
+### Bug Fixes & Code Quality
+- `activeTenanUserId` typo fixed in `notify.ts` interface and `billing-actions.ts` call site → `activeTenantUserId`.
+- `send-reminders` Edge Function: notification links and email CTA now use the real association slug (`/home/<slug>/billing`) instead of dead `/home/-/billing`.
+- `packages/email-templates`: `BillReminderEmailProps` now accepts `accountSlug`; CTA href corrected.
+- `notify.ts` `getEmailAddresses()`: sequential `for` loop replaced with `Promise.all` (eliminates N+1 auth admin API calls).
+- `packages/next/src/routes/index.ts`: useless try/catch wrapper removed (oxlint `no-useless-catch`).
+- Migration `20260806000001`: `CREATE POLICY` statements now idempotent (guarded with `DROP POLICY IF EXISTS`).
+
+### Migrations in This Release
+
+| File | Description |
+|------|-------------|
+| `20260806000001_activity_tracking_and_notifications.sql` | Extends `audit_logs`; adds write RLS policies + seed rows for `notification_providers_config` |
+| `20260806000002_reminder_cron.sql` | pg_cron + pg_net, overdue-recompute + send-reminders schedules |
+
+### Deployment Steps Required
+1. Push migrations: `./scripts/db-push.sh`
+2. Deploy Edge Functions: `supabase functions deploy send-reminders` and `supabase functions deploy auth-events-hook`
+3. Set DB config vars: `app.supabase_project_url` and `app.supabase_service_key` (for cron → Edge Function call)
+4. Register `auth-events-hook` in Supabase Dashboard → Authentication → Hooks
+5. Set env vars: `KALEYRA_SMS_TEMPLATE_BILL_GENERATED`, `KALEYRA_SMS_TEMPLATE_PAYMENT_CONFIRMED`, `KALEYRA_SMS_TEMPLATE_REMINDER`, `KALEYRA_SMS_TEMPLATE_OVERDUE`, `RESEND_API_KEY`
+
+---
+
 ## v1.4 — Comprehensive performance audit & optimisation — 2026-08-05
 
 Full end-to-end audit of 72 confirmed bottlenecks across DB queries, API routes, server-side data fetching, and client-side rendering. All high-impact items resolved.

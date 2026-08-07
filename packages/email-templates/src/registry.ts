@@ -3,6 +3,7 @@ import {
   renderBillDispatchEmail,
   renderReceiptDispatchEmail,
 } from './emails/bill-dispatch.email';
+import { renderBillReminderEmail } from './emails/bill-reminder.email';
 import { renderInviteEmail } from './emails/invite.email';
 import { renderOtpEmail } from './emails/otp.email';
 
@@ -36,6 +37,7 @@ import { renderOtpEmail } from './emails/otp.email';
 export const EMAIL_TEMPLATE_RENDERERS = {
   'bill-dispatch-email': renderBillDispatchEmail,
   'receipt-dispatch-email': renderReceiptDispatchEmail,
+  'bill-reminder-email': renderBillReminderEmail,
   'account-delete-email': renderAccountDeleteEmail,
   'invite-email': renderInviteEmail,
   'otp-email': renderOtpEmail,

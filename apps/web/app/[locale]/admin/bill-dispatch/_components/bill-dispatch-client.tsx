@@ -129,13 +129,15 @@ export function BillDispatchClient({ associations }: Props) {
   const [billType, setBillType] = useState<string>('All');
 
   const [rows, setRows] = useState<DispatchBillRow[]>([]);
-  const [sortKey, setSortKey] = useState<'unitNo' | 'ownerName' | 'tenantName' | null>(null);
+  const [sortKey, setSortKey] = useState<
+    'unitNo' | 'ownerName' | 'tenantName' | null
+  >(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Per-row email target: 'owner' (default) or 'tenant'
-  const [emailTargets, setEmailTargets] = useState<
-    Record<string, EmailTarget>
-  >({});
+  const [emailTargets, setEmailTargets] = useState<Record<string, EmailTarget>>(
+    {},
+  );
   const [hasSearched, setHasSearched] = useState(false);
 
   const [isFetching, startFetch] = useTransition();
@@ -172,8 +174,7 @@ export function BillDispatchClient({ associations }: Props) {
         new Set(
           data
             .filter(
-              (r) =>
-                !blockReason(r, mode, defaultTargets[r.billId] ?? 'owner'),
+              (r) => !blockReason(r, mode, defaultTargets[r.billId] ?? 'owner'),
             )
             .map((r) => r.billId),
         ),
@@ -220,8 +221,12 @@ export function BillDispatchClient({ associations }: Props) {
 
   const sortedRows = sortKey
     ? [...rows].sort((a, b) => {
-        const av = (sortKey === 'tenantName' ? (a.tenantName ?? '') : a[sortKey]).toLowerCase();
-        const bv = (sortKey === 'tenantName' ? (b.tenantName ?? '') : b[sortKey]).toLowerCase();
+        const av = (
+          sortKey === 'tenantName' ? (a.tenantName ?? '') : a[sortKey]
+        ).toLowerCase();
+        const bv = (
+          sortKey === 'tenantName' ? (b.tenantName ?? '') : b[sortKey]
+        ).toLowerCase();
         const cmp = av.localeCompare(bv, 'en-IN');
         return sortDir === 'asc' ? cmp : -cmp;
       })
@@ -229,7 +234,10 @@ export function BillDispatchClient({ associations }: Props) {
 
   const toggleSort = (key: typeof sortKey) => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortKey(key); setSortDir('asc'); }
+    else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
   };
 
   const selectedRows = sortedRows.filter((r) => selectedIds.has(r.billId));
@@ -537,7 +545,7 @@ export function BillDispatchClient({ associations }: Props) {
                         <th key={key} className="px-4 py-3 text-left">
                           <button
                             onClick={() => toggleSort(key)}
-                            className="flex items-center gap-1 uppercase tracking-wide hover:text-foreground transition-colors"
+                            className="hover:text-foreground flex items-center gap-1 tracking-wide uppercase transition-colors"
                           >
                             {label}
                             {sortKey === key ? (

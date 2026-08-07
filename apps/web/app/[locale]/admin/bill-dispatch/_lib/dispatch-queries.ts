@@ -153,7 +153,8 @@ export async function fetchBillsForDispatch(params: {
     { id: string; payment_id: string; pdf_url: string | null }
   >();
   const paymentIdByBill = new Map<string, string>();
-  for (const p of (paymentsWithReceiptsResult.data ?? []) as unknown as PaymentWithReceipt[]) {
+  for (const p of (paymentsWithReceiptsResult.data ??
+    []) as unknown as PaymentWithReceipt[]) {
     if (!receiptByBill.has(p.bill_id) && p.receipts?.length) {
       const r = p.receipts[0]!;
       receiptByBill.set(p.bill_id, {
@@ -168,7 +169,10 @@ export async function fetchBillsForDispatch(params: {
   }
 
   const tenancyMap = new Map<string, string>();
-  for (const t of (tenancyResult.data ?? []) as { unit_id: string; tenant_id: string }[]) {
+  for (const t of (tenancyResult.data ?? []) as {
+    unit_id: string;
+    tenant_id: string;
+  }[]) {
     tenancyMap.set(t.unit_id, t.tenant_id);
   }
 

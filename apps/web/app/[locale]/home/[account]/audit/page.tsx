@@ -9,16 +9,16 @@ import { AuditLogCard, type AuditLogRow } from './_components/audit-log-card';
 
 interface Props {
   params: Promise<{ account: string }>;
-  searchParams: Promise<{ page?: string; search?: string }>;
+  searchParams: Promise<{ page?: string; search?: string; eventType?: string }>;
 }
 
 const PAGE_SIZE = 25;
 
-export const metadata = { title: 'Audit log' };
+export const metadata = { title: 'Audit Log' };
 
 export default async function AuditPage({ params, searchParams }: Props) {
   const { account } = await params;
-  const { page: pageParam, search } = await searchParams;
+  const { page: pageParam, search, eventType } = await searchParams;
   const { accountId } = await requireRole(account, ['assoc_admin']);
 
   const page = Math.max(1, parseInt(pageParam ?? '1', 10) || 1);
@@ -50,15 +50,34 @@ export default async function AuditPage({ params, searchParams }: Props) {
 
   let query = client
     .from('audit_logs')
-    .select('id, action, entity_type, summary, actor_user_id, created_at', {
-      count: 'exact',
-    })
+    .select(
+      'id, action, entity_type, summary, actor_user_id, created_at, event_type, status_code, error_code, path',
+      {
+        count: 'exact',
+      },
+    )
     .eq('association_id', association.id)
     .order('created_at', { ascending: false });
 
+  // Event type filter
+  const validEventTypes = [
+    'user_action',
+    'api_call',
+    'auth_event',
+    'system_event',
+    'error',
+  ];
+  if (eventType && validEventTypes.includes(eventType)) {
+    if (eventType === 'error') {
+      // "error" tab: any event with status_code >= 400 OR event_type = 'error'
+      query = query.or(`event_type.eq.error,status_code.gte.400`);
+    } else {
+      query = query.eq('event_type', eventType);
+    }
+  }
+
   if (search) {
     if (actorIdFilter && actorIdFilter.length > 0) {
-      // Search matches action/summary OR any of the resolved actor IDs
       query = query.or(
         `action.ilike.%${search}%,summary.ilike.%${search}%,actor_user_id.in.(${actorIdFilter.map((id) => `"${id}"`).join(',')})`,
       );
@@ -73,7 +92,6 @@ export default async function AuditPage({ params, searchParams }: Props) {
     ...new Set((logs ?? []).map((l) => l.actor_user_id).filter(Boolean)),
   ] as string[];
 
-  // Use admin client so super-admin actors (not members of this account) resolve correctly
   const { data: profiles } =
     actorIds.length > 0
       ? await adminClient
@@ -112,6 +130,10 @@ export default async function AuditPage({ params, searchParams }: Props) {
       ? (roleLabelById.get(l.actor_user_id) ?? 'Super Admin')
       : null,
     created_at: l.created_at,
+    eventType: l.event_type ?? 'user_action',
+    statusCode: l.status_code ?? null,
+    errorCode: l.error_code ?? null,
+    path: l.path ?? null,
   }));
 
   const totalCount = count ?? 0;
@@ -121,11 +143,13 @@ export default async function AuditPage({ params, searchParams }: Props) {
     <PageBody>
       <TeamAccountLayoutPageHeader
         account={account}
-        title="Audit log"
+        title="Audit Log"
         description={
           totalCount === 0
             ? 'Nothing logged yet'
-            : `${totalCount} events · most recent first`
+            : eventType
+              ? `${totalCount} ${eventType.replace('_', ' ')} event${totalCount === 1 ? '' : 's'}`
+              : `${totalCount} event${totalCount === 1 ? '' : 's'} · most recent first`
         }
       />
 
@@ -134,8 +158,9 @@ export default async function AuditPage({ params, searchParams }: Props) {
         page={page}
         totalPages={totalPages}
         totalCount={totalCount}
-        account={account}
+        pageSize={PAGE_SIZE}
         search={search ?? ''}
+        eventType={eventType ?? ''}
       />
     </PageBody>
   );

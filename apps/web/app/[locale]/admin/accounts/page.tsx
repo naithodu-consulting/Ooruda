@@ -53,7 +53,10 @@ async function AccountsPage(props: AdminAccountsPageProps) {
       .order('name'),
     adminClient.auth.admin.listUsers({ perPage: 1000 }),
     adminClient.from('associations').select('account_id').eq('is_test', true),
-    adminClient.from('profiles').select('id, mobile_number').eq('is_test', true),
+    adminClient
+      .from('profiles')
+      .select('id, mobile_number')
+      .eq('is_test', true),
   ]);
 
   const superAdminIds = new Set(
@@ -68,9 +71,15 @@ async function AccountsPage(props: AdminAccountsPageProps) {
     );
   }
   if (testAssocError)
-    console.error('[admin/accounts] Failed to load test associations:', testAssocError.message);
+    console.error(
+      '[admin/accounts] Failed to load test associations:',
+      testAssocError.message,
+    );
   if (testProfilesError)
-    console.error('[admin/accounts] Failed to load test profiles:', testProfilesError.message);
+    console.error(
+      '[admin/accounts] Failed to load test profiles:',
+      testProfilesError.message,
+    );
 
   const testAccountIds = new Set([
     ...(testAssociations ?? []).map((r) => r.account_id),

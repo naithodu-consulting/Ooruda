@@ -534,15 +534,35 @@ export function StatementTable({
       const delta = effectiveDelta(e);
       if (e.direction === 'credit') totalCredits += Math.max(0, delta);
       if (e.direction === 'debit') totalDebits += e.amount;
-      if (e.entry_type === 'advance_payment' || e.entry_type === 'advance_applied') hasAdvances = true;
+      if (
+        e.entry_type === 'advance_payment' ||
+        e.entry_type === 'advance_applied'
+      )
+        hasAdvances = true;
       if (e.entry_type === 'due_payment') hasPayments = true;
-      if (e.entry_type === 'advance_payment') totalAdvanceCredits += Math.max(0, delta);
-      if (e.entry_type === 'due_payment') totalPaymentCredits += Math.max(0, delta);
+      if (e.entry_type === 'advance_payment')
+        totalAdvanceCredits += Math.max(0, delta);
+      if (e.entry_type === 'due_payment')
+        totalPaymentCredits += Math.max(0, delta);
     }
-    return { totalCredits, totalDebits, hasAdvances, hasPayments, totalAdvanceCredits, totalPaymentCredits };
+    return {
+      totalCredits,
+      totalDebits,
+      hasAdvances,
+      hasPayments,
+      totalAdvanceCredits,
+      totalPaymentCredits,
+    };
   }, [rows]);
 
-  const { totalCredits, totalDebits, hasAdvances, hasPayments, totalAdvanceCredits, totalPaymentCredits } = rowStats;
+  const {
+    totalCredits,
+    totalDebits,
+    hasAdvances,
+    hasPayments,
+    totalAdvanceCredits,
+    totalPaymentCredits,
+  } = rowStats;
 
   const creditsSubLabel =
     hasAdvances && hasPayments

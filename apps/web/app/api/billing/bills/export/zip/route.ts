@@ -57,7 +57,9 @@ export const POST = enhanceRouteHandler(
     // Include pdf_url so we can batch-sign cached PDFs without a per-bill DB call.
     const { data: bills, error } = await client
       .from('bills')
-      .select('id, unit_id, period, bill_no, bill_type, pdf_url, units(unit_no)')
+      .select(
+        'id, unit_id, period, bill_no, bill_type, pdf_url, units(unit_no)',
+      )
       .eq('association_id', association.id)
       .in('unit_id', unitIds)
       .neq('status', 'Void')

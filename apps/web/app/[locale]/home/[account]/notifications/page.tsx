@@ -3,11 +3,13 @@ import { Bell, BellRing, Send } from 'lucide-react';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { MetricCard } from '@kit/ui/metric-card';
 import { PageBody } from '@kit/ui/page';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@kit/ui/tabs';
 import { Trans } from '@kit/ui/trans';
 
-import { requireRole } from '~/lib/rbac';
+import { hasMinimumRole, requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { MyAlertsCard } from './_components/my-alerts-card';
 import {
   NotificationsLogCard,
   type NotificationLogRow,
@@ -21,107 +23,156 @@ export const metadata = { title: 'Notifications' };
 
 export default async function NotificationsPage({ params }: Props) {
   const { account } = await params;
-  const { accountId } = await requireRole(account, [
+  const { role, accountId, userId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
+    'prop_owner',
+    'tenant',
   ]);
+
+  const isAdmin = hasMinimumRole(role, 'billing_operator');
 
   const client = getSupabaseServerClient();
 
-  const { data: association } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  // My personal in-app alerts — all roles
+  const myAlertsQuery = client
+    .from('notifications')
+    .select('id, type, body, link, dismissed, created_at')
+    .eq('account_id', userId)
+    .eq('channel', 'in_app')
+    .eq('dismissed', false)
+    .order('created_at', { ascending: false })
+    .limit(50);
 
-  if (!association) {
-    throw new Error('Unable to load the association for this account.');
+  // Outbound sent log — admins only
+  const logsQuery = isAdmin
+    ? client
+        .from('associations')
+        .select('id')
+        .eq('account_id', accountId)
+        .single()
+    : null;
+
+  const [myAlertsResult, assocResult] = await Promise.all([
+    myAlertsQuery,
+    logsQuery ?? Promise.resolve({ data: null }),
+  ]);
+
+  const myAlerts = myAlertsResult.data ?? [];
+
+  let rows: NotificationLogRow[] = [];
+
+  if (isAdmin && assocResult.data) {
+    const { data: logs } = await client
+      .from('notifications_log')
+      .select(
+        'id, type, recipient_user_id, channel, provider_key, status, sent_at',
+      )
+      .eq('association_id', assocResult.data.id)
+      .order('sent_at', { ascending: false })
+      .limit(100);
+
+    const recipientIds = [
+      ...new Set((logs ?? []).map((l) => l.recipient_user_id).filter(Boolean)),
+    ] as string[];
+
+    const { data: profiles } =
+      recipientIds.length > 0
+        ? await client
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', recipientIds)
+        : { data: [] };
+
+    const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
+
+    rows = (logs ?? []).map((l) => ({
+      id: l.id,
+      type: l.type,
+      recipient: l.recipient_user_id
+        ? (nameById.get(l.recipient_user_id) ?? 'Unknown')
+        : '—',
+      channel: l.channel,
+      provider_key: l.provider_key,
+      status: l.status,
+      sent_at: l.sent_at,
+    }));
   }
-
-  const { data: logs } = await client
-    .from('notifications_log')
-    .select(
-      'id, type, recipient_user_id, channel, provider_key, status, sent_at, provider_ref',
-    )
-    .eq('association_id', association.id)
-    .order('sent_at', { ascending: false })
-    .limit(100);
-
-  const recipientIds = [
-    ...new Set((logs ?? []).map((l) => l.recipient_user_id).filter(Boolean)),
-  ] as string[];
-
-  const { data: profiles } =
-    recipientIds.length > 0
-      ? await client
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', recipientIds)
-      : { data: [] };
-
-  const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
-
-  const rows: NotificationLogRow[] = (logs ?? []).map((l) => ({
-    id: l.id,
-    type: l.type,
-    recipient: l.recipient_user_id
-      ? (nameById.get(l.recipient_user_id) ?? 'Unknown')
-      : '—',
-    channel: l.channel,
-    provider_key: l.provider_key,
-    status: l.status,
-    sent_at: l.sent_at,
-  }));
 
   const sentCount = rows.filter(
     (r) => r.status === 'Sent' || r.status === 'Delivered',
   ).length;
   const deliveredCount = rows.filter((r) => r.status === 'Delivered').length;
-  const reminderCount = rows.filter((r) => r.type === 'Reminder').length;
+  const reminderCount = rows.filter(
+    (r) => r.type === 'reminder' || r.type === 'overdue',
+  ).length;
+
+  const description = isAdmin
+    ? `${myAlerts.length} unread alert${myAlerts.length === 1 ? '' : 's'} · ${rows.length} sent`
+    : myAlerts.length === 0
+      ? 'No new alerts'
+      : `${myAlerts.length} unread alert${myAlerts.length === 1 ? '' : 's'}`;
 
   return (
     <PageBody>
       <TeamAccountLayoutPageHeader
         account={account}
         title={<Trans i18nKey="association.nav.notifications" />}
-        description={
-          rows.length === 0
-            ? 'No notifications sent yet'
-            : `${rows.length} notifications · ${deliveredCount} delivered`
-        }
+        description={description}
       />
 
-      {rows.length > 0 ? (
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-          <MetricCard
-            icon={Send}
-            label="Sent"
-            value={String(sentCount)}
-            sublabel="Out for delivery"
-            variant="blue"
-          />
-          <MetricCard
-            icon={BellRing}
-            label="Delivered"
-            value={String(deliveredCount)}
-            sublabel={
-              sentCount === 0
-                ? '0% delivered'
-                : `${Math.round((deliveredCount / sentCount) * 100)}% delivered`
-            }
-            variant="green"
-          />
-          <MetricCard
-            icon={Bell}
-            label="Reminders"
-            value={String(reminderCount)}
-            sublabel="Payment reminders sent"
-            variant="amber"
-          />
-        </div>
-      ) : null}
+      {isAdmin ? (
+        <Tabs defaultValue="alerts">
+          <TabsList className="mb-4">
+            <TabsTrigger value="alerts" data-test="tab-my-alerts">
+              My Alerts
+              {myAlerts.length > 0 && (
+                <span className="bg-primary text-primary-foreground ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold">
+                  {myAlerts.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="sent-log" data-test="tab-sent-log">
+              Sent Log
+            </TabsTrigger>
+          </TabsList>
 
-      <NotificationsLogCard rows={rows} />
+          <TabsContent value="alerts">
+            <MyAlertsCard alerts={myAlerts} />
+          </TabsContent>
+
+          <TabsContent value="sent-log">
+            {rows.length > 0 && (
+              <div className="mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+                <MetricCard
+                  icon={Send}
+                  label="Sent"
+                  value={String(sentCount)}
+                  sublabel="Dispatched to recipients"
+                  variant="blue"
+                />
+                <MetricCard
+                  icon={BellRing}
+                  label="Delivered"
+                  value={String(deliveredCount)}
+                  sublabel="Confirmed by carrier"
+                  variant="green"
+                />
+                <MetricCard
+                  icon={Bell}
+                  label="Reminders"
+                  value={String(reminderCount)}
+                  sublabel="Overdue & scheduled alerts"
+                  variant="amber"
+                />
+              </div>
+            )}
+            <NotificationsLogCard rows={rows} />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <MyAlertsCard alerts={myAlerts} />
+      )}
     </PageBody>
   );
 }

@@ -4,6 +4,98 @@ Items that are scoped and understood but not yet implemented. Each entry include
 
 ---
 
+## Dev DB sync — pending steps (do before next release push)
+
+**Priority:** High — must complete before pushing v1.4 to dev/staging  
+**Linked Supabase project:** `bcdosjrbkkemsqowhigj` (dev)
+
+### Step 1 — Push pending migrations
+
+4 migrations are not yet on dev. Run:
+
+```bash
+cd apps/web && supabase migration list --linked   # verify these 4 show blank remote column
+./scripts/db-push.sh
+```
+
+Pending migrations:
+| Migration | Purpose |
+|---|---|
+| `20260805000002_missing_fk_indexes.sql` | FK index performance |
+| `20260806000001_activity_tracking_and_notifications.sql` | audit_logs enhancements, notification schema |
+| `20260806000002_reminder_cron.sql` | pg_cron schedule for `send-reminders` Edge Function |
+| `20260806000003_drop_in_app_notifications.sql` | Drop legacy in-app notification tables |
+
+### Step 2 — Register auth-events-hook in Supabase Dashboard
+
+After migrations are applied:
+
+1. Go to Supabase Dashboard → **Authentication → Hooks**
+2. Add a new **HTTP** hook
+3. URL: `https://bcdosjrbkkemsqowhigj.supabase.co/functions/v1/auth-events-hook`
+4. Events to subscribe: Login, Logout, Signup, User Created, Password Recovery, Token Refreshed
+5. Set `AUTH_HOOK_SECRET` environment variable in the Edge Function's secrets (Dashboard → Edge Functions → auth-events-hook → Secrets) and configure the same value as the hook secret in the Dashboard hook setup
+
+### Step 3 — Verify cron job registered
+
+After migration `20260806000002` is applied, confirm in SQL Editor:
+
+```sql
+select jobname, schedule, command from cron.job;
+```
+
+Should show a `send-reminders` job scheduled for `0 3 * * *` (9 AM IST = 3:30 AM UTC, approximately).
+
+### Step 4 — Smoke-test auth events
+
+Log out and log back in, then check the super-admin Activity Log → Auth Events tab. A `auth.login` row should appear.
+
+---
+
+## Activity Log — Phase 4 deferred items
+
+**Feature:** Activity Log / Audit Log (v1.4)  
+**Context:** Phase 1–3 shipped in v1.4 (audit_logs table, UI with tabs/icons/search/pagination, error instrumentation, Edge Function hooks). These items were descoped to keep scope manageable.
+
+### P4-A: Tab count badges
+
+Show event counts on each filter tab so users can spot anomalies at a glance (e.g. "Errors (12)").
+
+**Approach:** Run a single aggregation query alongside the main log query:
+```sql
+select event_type, count(*) from audit_logs
+where association_id = $1
+group by event_type;
+```
+Map the counts to the tab keys and render as a `<Badge>` inside each `EventTypeTabs` entry.
+
+**Files:** `audit-shared.tsx` (EventTypeTabs needs a `counts` prop), `audit/page.tsx` (add count query), `admin/activity/page.tsx` (same).
+
+### P4-B: CSV export
+
+Allow admins to download the current filtered view as CSV for compliance/reporting.
+
+**Approach:** Add a "Download CSV" button to `audit-log-card.tsx` and `admin-activity-card.tsx`. On click, fire a server action or route handler that re-runs the same filtered query (no pagination) and streams a CSV response.
+
+**Files:** New route `app/api/audit/export/route.ts`, button in both card components.
+
+### P4-C: Audit log retention policy (90-day pruning)
+
+Prevent unbounded table growth. Rows older than 90 days should be pruned automatically.
+
+**Approach:** Add a pg_cron job in a new migration:
+```sql
+select cron.schedule(
+  'prune-audit-logs',
+  '0 2 * * *',  -- 2 AM UTC daily
+  $$delete from audit_logs where created_at < now() - interval '90 days'$$
+);
+```
+
+Consider whether auth_event and error rows should have a longer retention (180 days) for compliance.
+
+---
+
 ## Enhancement: URL sync for Payments page type/unit filters
 
 **Priority:** Low  

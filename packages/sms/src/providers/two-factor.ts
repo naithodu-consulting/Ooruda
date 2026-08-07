@@ -30,4 +30,36 @@ export class TwoFactorSmsProvider implements ISmsProvider {
       return { success: false, error: (err as Error).message };
     }
   }
+
+  async sendSms(
+    phone: string,
+    _templateKey: string,
+    variables: Record<string, string>,
+  ): Promise<SmsResponse> {
+    if (!this.apiKey)
+      return {
+        success: false,
+        error: '2Factor API key missing (TWOFACTOR_API_KEY).',
+      };
+
+    const cleaned = phone.replace(/\D/g, '');
+    // Build a simple text message from variables for transactional SMS
+    const message = encodeURIComponent(
+      variables['message'] ?? Object.values(variables).join(' '),
+    );
+
+    try {
+      const url = `https://2factor.in/API/V1/${this.apiKey}/TRANS_SMS/${cleaned}/${message}`;
+      const res = await fetch(url);
+      const data = (await res.json()) as { Status?: string; Details?: string };
+      if (res.ok && data.Status === 'Success')
+        return { success: true, messageId: data.Details };
+      return {
+        success: false,
+        error: data.Details ?? '2Factor transactional SMS failed.',
+      };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  }
 }

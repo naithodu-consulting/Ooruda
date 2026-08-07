@@ -45,7 +45,10 @@ export const GET = enhanceRouteHandler(
 
     if (queryError) {
       const logger = await getLogger();
-      logger.error({ receipt_no, error: queryError.message }, '[cash-ledger-by-receipt] query error');
+      logger.error(
+        { receipt_no, error: queryError.message },
+        '[cash-ledger-by-receipt] query error',
+      );
       return NextResponse.json(
         { error: 'Failed to load payment.' },
         { status: 500 },
@@ -165,7 +168,10 @@ export const GET = enhanceRouteHandler(
       });
     } catch (err) {
       const logger = await getLogger();
-      logger.error({ receipt_no, error: err }, '[cash-ledger-by-receipt] render error');
+      logger.error(
+        { receipt_no, error: err },
+        '[cash-ledger-by-receipt] render error',
+      );
       return NextResponse.json(
         { error: 'Could not generate receipt PDF.' },
         { status: 500 },

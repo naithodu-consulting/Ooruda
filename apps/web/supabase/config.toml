@@ -54,6 +54,28 @@ jwt_expiry = 3600
 enable_signup = true
 enable_manual_linking = true
 
+# Phone / SMS auth — test numbers bypass the SMS hook and always accept OTP 123456.
+# These match the seed_test_users.sh phone numbers (no '+' prefix).
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+
+# Twilio stub — only here to satisfy GoTrue's requirement for a provider so that
+# GOTRUE_EXTERNAL_PHONE_ENABLED=true. Test OTP numbers bypass this entirely.
+# The send_sms hook below overrides actual delivery for real numbers.
+[auth.sms.twilio]
+account_sid = "AClocal00000000000000000000000000"
+auth_token = "local0000000000000000000000000000"
+message_service_sid = "MGlocal0000000000000000000000000000"
+
+[auth.sms.test_otp]
+919911000001 = "123456"
+919911000002 = "123456"
+919911000003 = "123456"
+919911000004 = "123456"
+919911000005 = "123456"
+919911000006 = "123456"
+
 # Enable TOTP MFA
 [auth.mfa.totp]
 verify_enabled = true
@@ -114,6 +136,15 @@ content_path = "./supabase/templates/change-email-address.html"
 [auth.email.template.magic_link]
 subject = "Your sign-in code"
 content_path = "./supabase/templates/otp.html"
+
+# Wire the custom-sms-hook Edge Function as the GoTrue send_sms hook.
+# This enables GOTRUE_EXTERNAL_PHONE_ENABLED so phone OTP sign-in works locally.
+# For test_otp numbers GoTrue bypasses the hook entirely (no real SMS sent).
+# For any real number it calls the function, which uses MOCK_OTP=true locally.
+[auth.hook.send_sms]
+enabled = true
+uri = "http://127.0.0.1:54321/functions/v1/custom-sms-hook"
+secrets = "v1,whsec_localdevsecret1234567890abcdef12345"
 
 [analytics]
 # Disabled for local dev: the vector container bind-mounts the Docker

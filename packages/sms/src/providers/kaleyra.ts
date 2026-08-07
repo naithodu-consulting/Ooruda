@@ -18,10 +18,24 @@ import type { ISmsProvider, SmsResponse } from '../types';
  *   KALEYRA_WA_TEMPLATE_LANG      — Template language code (default: "en")
  *   KALEYRA_WA_HAS_COPY_BUTTON    — "true" if template has a copy-code button component
  *
- * NOTE: the Kaleyra send logic is intentionally duplicated in
+ * Transactional SMS (sendSms):
+ *   KALEYRA_SMS_TEMPLATE_BILL_GENERATED   — DLT template ID for bill-generated SMS
+ *   KALEYRA_SMS_TEMPLATE_PAYMENT_CONFIRMED — DLT template ID for payment-confirmed SMS
+ *   KALEYRA_SMS_TEMPLATE_REMINDER         — DLT template ID for reminder SMS
+ *   KALEYRA_SMS_TEMPLATE_OVERDUE          — DLT template ID for overdue SMS
+ *
+ * NOTE: the Kaleyra OTP send logic is intentionally duplicated in
  * apps/web/supabase/functions/custom-sms-hook/index.ts (Deno-compatible copy).
- * Keep both in sync when making changes here.
+ * Keep both in sync when making OTP-related changes here.
  */
+
+// Map of logical template keys → env var names holding the DLT template ID
+const TEMPLATE_ENV_MAP: Record<string, string> = {
+  bill_generated: 'KALEYRA_SMS_TEMPLATE_BILL_GENERATED',
+  payment_confirmed: 'KALEYRA_SMS_TEMPLATE_PAYMENT_CONFIRMED',
+  reminder: 'KALEYRA_SMS_TEMPLATE_REMINDER',
+  overdue: 'KALEYRA_SMS_TEMPLATE_OVERDUE',
+};
 
 // Region → API host mapping per Kaleyra docs
 const REGION_HOSTS: Record<string, string> = {
@@ -42,15 +56,22 @@ export class KaleyraProvider implements ISmsProvider {
   private readonly senderId = process.env.KALEYRA_SENDER_ID ?? 'KLRHXA';
   private readonly smsTemplateId = process.env.KALEYRA_SMS_TEMPLATE_ID ?? '';
   private readonly region = (process.env.KALEYRA_REGION ?? 'IN').toUpperCase();
-  private readonly channel = (process.env.KALEYRA_CHANNEL ?? 'sms').toLowerCase();
+  private readonly channel = (
+    process.env.KALEYRA_CHANNEL ?? 'sms'
+  ).toLowerCase();
   private readonly waFrom = process.env.KALEYRA_WA_FROM ?? '';
   private readonly waTemplateName = process.env.KALEYRA_WA_TEMPLATE_NAME ?? '';
-  private readonly waTemplateLang = process.env.KALEYRA_WA_TEMPLATE_LANG ?? 'en';
-  private readonly waHasCopyButton = process.env.KALEYRA_WA_HAS_COPY_BUTTON === 'true';
+  private readonly waTemplateLang =
+    process.env.KALEYRA_WA_TEMPLATE_LANG ?? 'en';
+  private readonly waHasCopyButton =
+    process.env.KALEYRA_WA_HAS_COPY_BUTTON === 'true';
 
   async sendOtp(phone: string, otp: string): Promise<SmsResponse> {
     if (!this.apiKey || !this.sid) {
-      return { success: false, error: 'Kaleyra credentials missing (KALEYRA_API_KEY, KALEYRA_SID).' };
+      return {
+        success: false,
+        error: 'Kaleyra credentials missing (KALEYRA_API_KEY, KALEYRA_SID).',
+      };
     }
 
     try {
@@ -79,7 +100,10 @@ export class KaleyraProvider implements ISmsProvider {
       body.set('template_id', this.smsTemplateId);
       body.set('template_data', JSON.stringify({ num: otp }));
     } else {
-      body.set('body', `${otp} is your login verification code for Ooruda. Do not share it with anyone. Valid for 10 minutes.`);
+      body.set(
+        'body',
+        `${otp} is your login verification code for Ooruda. Do not share it with anyone. Valid for 10 minutes.`,
+      );
     }
 
     const res = await fetch(url, {
@@ -97,7 +121,10 @@ export class KaleyraProvider implements ISmsProvider {
     };
 
     if (res.ok && data.data) {
-      return { success: true, messageId: data.data.id ?? data.data.message_id ?? 'kaleyra-ok' };
+      return {
+        success: true,
+        messageId: data.data.id ?? data.data.message_id ?? 'kaleyra-ok',
+      };
     }
 
     const errMsg =
@@ -107,11 +134,77 @@ export class KaleyraProvider implements ISmsProvider {
     return { success: false, error: errMsg };
   }
 
-  private async sendWhatsAppOtp(phone: string, otp: string): Promise<SmsResponse> {
+  async sendSms(
+    phone: string,
+    templateKey: string,
+    variables: Record<string, string>,
+  ): Promise<SmsResponse> {
+    if (!this.apiKey || !this.sid) {
+      return {
+        success: false,
+        error: 'Kaleyra credentials missing (KALEYRA_API_KEY, KALEYRA_SID).',
+      };
+    }
+
+    const envVar = TEMPLATE_ENV_MAP[templateKey];
+    const templateId = envVar ? (process.env[envVar] ?? '') : '';
+
+    if (!templateId) {
+      return {
+        success: false,
+        error: `Kaleyra DLT template not configured for '${templateKey}'. Set ${envVar ?? 'KALEYRA_SMS_TEMPLATE_' + templateKey.toUpperCase()}.`,
+      };
+    }
+
+    const host = REGION_HOSTS[this.region] ?? REGION_HOSTS['IN']!;
+    const url = `https://${host}/v1/${this.sid}/messages`;
+
+    const body = new URLSearchParams({
+      to: normalizePhone(phone),
+      type: 'TXN',
+      sender: this.senderId,
+      template_id: templateId,
+      template_data: JSON.stringify(variables),
+    });
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'api-key': this.apiKey,
+        },
+        body: body.toString(),
+      });
+      const data = (await res.json()) as {
+        data?: { id?: string; message_id?: string } | null;
+        error?: { message?: string } | string;
+      };
+      if (res.ok && data.data) {
+        return {
+          success: true,
+          messageId: data.data.id ?? data.data.message_id ?? 'kaleyra-txn-ok',
+        };
+      }
+      const errMsg =
+        typeof data.error === 'string'
+          ? data.error
+          : (data.error?.message ?? `Kaleyra TXN failed (${res.status})`);
+      return { success: false, error: errMsg };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  }
+
+  private async sendWhatsAppOtp(
+    phone: string,
+    otp: string,
+  ): Promise<SmsResponse> {
     if (!this.waFrom || !this.waTemplateName) {
       return {
         success: false,
-        error: 'Kaleyra WhatsApp config missing (KALEYRA_WA_FROM, KALEYRA_WA_TEMPLATE_NAME).',
+        error:
+          'Kaleyra WhatsApp config missing (KALEYRA_WA_FROM, KALEYRA_WA_TEMPLATE_NAME).',
       };
     }
 
@@ -161,7 +254,10 @@ export class KaleyraProvider implements ISmsProvider {
     };
 
     if (res.ok && data.data) {
-      return { success: true, messageId: data.data.id ?? data.data.message_id ?? 'kaleyra-wa-ok' };
+      return {
+        success: true,
+        messageId: data.data.id ?? data.data.message_id ?? 'kaleyra-wa-ok',
+      };
     }
 
     const errMsg =

@@ -8,6 +8,7 @@ import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client'
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
+import { sendBillGeneratedNotifications } from '~/lib/notify';
 import { getAssociationRole } from '~/lib/rbac';
 
 import { getCashLedgerBalance } from '../../cash-ledger/_lib/cash-ledger-service';
@@ -123,7 +124,7 @@ export async function generateBillsAction(
       .single(),
     client
       .from('associations')
-      .select('gst_enabled, gst_rate')
+      .select('gst_enabled, gst_rate, accounts!inner(name, slug)')
       .eq('id', associationId)
       .single(),
     client
@@ -157,6 +158,12 @@ export async function generateBillsAction(
 
   const gstEnabled = association.gst_enabled ?? false;
   const gstRate = association.gst_rate ?? 0;
+  const assocAccounts = association.accounts as {
+    name?: string;
+    slug?: string;
+  } | null;
+  const associationName = assocAccounts?.name ?? '';
+  const accountSlug = assocAccounts?.slug ?? '';
   const calculateDueDate = (billingPeriod: string, day: number) =>
     `${billingPeriod}-${String(day).padStart(2, '0')}`;
   // Electricity bills are due in the NEXT calendar month after the billing period.
@@ -526,6 +533,7 @@ export async function generateBillsAction(
               associationId,
               action: 'bills.generation.failed',
               entityType: 'bill',
+              eventType: 'error',
               summary: `Failed to allocate bill number for ${typePrefix} in period ${period}: ${seqError?.message ?? 'no bill number returned'}`,
             });
             return false;
@@ -595,6 +603,7 @@ export async function generateBillsAction(
               associationId,
               action: 'bills.generation.failed',
               entityType: 'bill',
+              eventType: 'error',
               summary: `Failed to generate ${type} bill for period ${period} (unit ${unit.id}): ${rpcError.message}`,
             });
             return false;
@@ -809,6 +818,71 @@ export async function generateBillsAction(
     } catch {
       // non-fatal: bills are committed; audit log failure must not shadow the result
     }
+
+    // Fire bill-generated notifications for all newly created bills via after()
+    // so it never blocks the response.
+    after(async () => {
+      const adminClient = getSupabaseServerAdminClient();
+
+      // Bills with units — no tenancies join (no FK from bills→tenancies)
+      const { data: newBills } = await adminClient
+        .from('bills')
+        .select(`
+          id, bill_no, bill_type, total_amount, due_date,
+          units!inner(id, unit_no, owner_id)
+        `)
+        .eq('association_id', associationId)
+        .eq('period', period)
+        .neq('status', 'Void')
+        .order('bill_no', { ascending: true })
+        .limit(500);
+
+      if (!newBills?.length) return;
+
+      // Fetch active tenancies for these units separately
+      const unitIds = [
+        ...new Set(
+          newBills
+            .map((b) => {
+              const unit = Array.isArray(b.units) ? b.units[0] : b.units;
+              return unit?.id;
+            })
+            .filter(Boolean),
+        ),
+      ] as string[];
+
+      const { data: activeTenancies } = await adminClient
+        .from('tenancies')
+        .select('unit_id, tenant_id')
+        .in('unit_id', unitIds)
+        .eq('status', 'active');
+
+      const tenancyByUnit = new Map(
+        (activeTenancies ?? []).map((t) => [t.unit_id, t.tenant_id]),
+      );
+
+      const billedUnits = newBills.map((b) => {
+        const unit = Array.isArray(b.units) ? b.units[0] : b.units;
+        return {
+          unitId: unit?.id ?? '',
+          unitNo: unit?.unit_no ?? '',
+          ownerUserId: unit?.owner_id ?? null,
+          activeTenantUserId: tenancyByUnit.get(unit?.id ?? '') ?? null,
+          billNo: b.bill_no,
+          billType: b.bill_type,
+          period,
+          totalAmount: b.total_amount,
+          dueDate: b.due_date,
+        };
+      });
+
+      await sendBillGeneratedNotifications({
+        associationId,
+        associationName,
+        accountSlug,
+        billedUnits,
+      });
+    });
   }
 
   revalidatePath(BILLING_PATH, 'page');
