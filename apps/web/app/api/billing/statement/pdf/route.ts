@@ -73,27 +73,14 @@ export const GET = enhanceRouteHandler(
     const reqFrom = searchParams.get('from') ?? '';
     const reqTo = searchParams.get('to') ?? '';
 
-    // Resolve account → association
-    const { data: account } = await client
-      .from('accounts')
-      .select('id')
-      .eq('slug', accountSlug)
-      .maybeSingle();
-
-    if (!account) {
-      return NextResponse.json(
-        { error: 'Account not found.' },
-        { status: 404 },
-      );
-    }
-
+    // Resolve account → association in a single query via embedded join.
     const { data: association } = await client
       .from('associations')
       .select(
-        'id, address, gstin, pan_number, registration_number, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts(name, picture_url)',
+        'id, address, gstin, pan_number, registration_number, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts!inner(slug, name, picture_url)',
       )
-      .eq('account_id', account.id)
-      .single();
+      .eq('accounts.slug', accountSlug)
+      .maybeSingle();
 
     if (!association) {
       return NextResponse.json(

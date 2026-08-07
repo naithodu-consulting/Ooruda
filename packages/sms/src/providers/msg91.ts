@@ -4,6 +4,9 @@ export class Msg91SmsProvider implements ISmsProvider {
   private readonly authKey = process.env.MSG91_AUTH_KEY ?? '';
   private readonly templateId = process.env.MSG91_TEMPLATE_ID ?? '';
 
+  private readonly flowId = process.env.MSG91_FLOW_ID ?? '';
+  private readonly senderId = process.env.MSG91_SENDER_ID ?? '';
+
   async sendOtp(phone: string, otp: string): Promise<SmsResponse> {
     if (!this.authKey || !this.templateId) {
       return {
@@ -39,6 +42,48 @@ export class Msg91SmsProvider implements ISmsProvider {
         return { success: true, messageId: data.request_id ?? 'msg91-ok' };
       }
       return { success: false, error: data.message ?? 'MSG91 send failed.' };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  }
+
+  async sendSms(
+    phone: string,
+    _templateKey: string,
+    variables: Record<string, string>,
+  ): Promise<SmsResponse> {
+    if (!this.authKey || !this.flowId) {
+      return {
+        success: false,
+        error: 'MSG91 flow config missing (MSG91_AUTH_KEY, MSG91_FLOW_ID).',
+      };
+    }
+
+    let cleaned = phone.replace(/\D/g, '');
+    if (phone.startsWith('+')) cleaned = phone.slice(1).replace(/\D/g, '');
+    if (cleaned.length === 10) cleaned = '91' + cleaned;
+
+    try {
+      const res = await fetch('https://control.msg91.com/api/v5/flow/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', authkey: this.authKey },
+        body: JSON.stringify({
+          flow_id: this.flowId,
+          sender: this.senderId || 'OORUDA',
+          recipients: [{ mobiles: cleaned, ...variables }],
+        }),
+      });
+      const data = (await res.json()) as {
+        type?: string;
+        request_id?: string;
+        message?: string;
+      };
+      if (res.ok && data.type === 'success')
+        return { success: true, messageId: data.request_id };
+      return {
+        success: false,
+        error: data.message ?? 'MSG91 flow send failed.',
+      };
     } catch (err) {
       return { success: false, error: (err as Error).message };
     }

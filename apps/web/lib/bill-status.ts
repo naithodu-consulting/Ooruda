@@ -72,6 +72,8 @@ export function billStatusBadgeClassName(status: string): string | undefined {
       return badgeExtras.warning;
     case 'Overdue':
       return badgeExtras.danger;
+    case 'Void':
+      return 'border-muted-foreground/30 text-muted-foreground line-through';
     default:
       return undefined;
   }

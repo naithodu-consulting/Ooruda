@@ -304,6 +304,18 @@ function toCsv(
   return [...meta, [], header, ...dataRows].map((r) => r.join(',')).join('\n');
 }
 
+// Effective credit delta for an entry — used by opening balance and running balance.
+// Full reversals (payment_status='reversed') contribute 0: the bill debit already
+// represents the outstanding amount. Partial refunds contribute the net amount
+// (amount - refunded_amount) since the bill trigger has already adjusted paid_amount.
+function effectiveDelta(e: StatementEntry): number {
+  if (e.direction === 'debit') return -e.amount;
+  if (e.payment_status === 'reversed') return 0;
+  if (e.payment_status === 'partial_refund' && e.refunded_amount)
+    return e.amount - e.refunded_amount;
+  return e.amount;
+}
+
 export function StatementTable({
   account,
   units,
@@ -478,18 +490,6 @@ export function StatementTable({
   const showYear =
     fyFilter === FY_ALL || fyFilter === FY_CUSTOM || spansMultipleYears;
 
-  // Effective credit delta for an entry — used by opening balance and running balance.
-  // Full reversals (payment_status='reversed') contribute 0: the bill debit already
-  // represents the outstanding amount. Partial refunds contribute the net amount
-  // (amount - refunded_amount) since the bill trigger has already adjusted paid_amount.
-  function effectiveDelta(e: StatementEntry): number {
-    if (e.direction === 'debit') return -e.amount;
-    if (e.payment_status === 'reversed') return 0;
-    if (e.payment_status === 'partial_refund' && e.refunded_amount)
-      return e.amount - e.refunded_amount;
-    return e.amount;
-  }
-
   // Opening balance: sum of all entries for this unit BEFORE the filtered range.
   const openingBalance = useMemo(() => {
     if (!activeRange || 'inverted' in activeRange) return null;
@@ -502,7 +502,7 @@ export function StatementTable({
           e.entry_date < activeRange.from,
       )
       .reduce((sum, e) => sum + effectiveDelta(e), 0);
-  }, [entries, activeUnitId, billTypeFilter, activeRange]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [entries, activeUnitId, billTypeFilter, activeRange]);
 
   // Recompute running balance on filtered slice (entries arrive newest-first from
   // the server). Running balance is always computed oldest→newest, then the
@@ -515,40 +515,54 @@ export function StatementTable({
       return { ...e, runningBalance: bal };
     });
     return dateSortAsc ? withBal : withBal.reverse();
-  }, [filtered, openingBalance, dateSortAsc]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filtered, openingBalance, dateSortAsc]);
 
   const closingBalance =
     (dateSortAsc ? rows[rows.length - 1] : rows[0])?.runningBalance ??
     openingBalance ??
     0;
 
-  const totalCredits = rows.reduce(
-    (s, e) =>
-      s + (e.direction === 'credit' ? Math.max(0, effectiveDelta(e)) : 0),
-    0,
-  );
-  const totalDebits = rows.reduce(
-    (s, e) => s + (e.direction === 'debit' ? e.amount : 0),
-    0,
-  );
+  // Single pass over rows replaces 6 separate reduce/some calls.
+  const rowStats = useMemo(() => {
+    let totalCredits = 0;
+    let totalDebits = 0;
+    let hasAdvances = false;
+    let hasPayments = false;
+    let totalAdvanceCredits = 0;
+    let totalPaymentCredits = 0;
+    for (const e of rows) {
+      const delta = effectiveDelta(e);
+      if (e.direction === 'credit') totalCredits += Math.max(0, delta);
+      if (e.direction === 'debit') totalDebits += e.amount;
+      if (
+        e.entry_type === 'advance_payment' ||
+        e.entry_type === 'advance_applied'
+      )
+        hasAdvances = true;
+      if (e.entry_type === 'due_payment') hasPayments = true;
+      if (e.entry_type === 'advance_payment')
+        totalAdvanceCredits += Math.max(0, delta);
+      if (e.entry_type === 'due_payment')
+        totalPaymentCredits += Math.max(0, delta);
+    }
+    return {
+      totalCredits,
+      totalDebits,
+      hasAdvances,
+      hasPayments,
+      totalAdvanceCredits,
+      totalPaymentCredits,
+    };
+  }, [rows]);
 
-  const hasAdvances = rows.some(
-    (e) =>
-      e.entry_type === 'advance_payment' || e.entry_type === 'advance_applied',
-  );
-  const hasPayments = rows.some((e) => e.entry_type === 'due_payment');
-
-  const totalAdvanceCredits = rows.reduce(
-    (s, e) =>
-      s +
-      (e.entry_type === 'advance_payment' ? Math.max(0, effectiveDelta(e)) : 0),
-    0,
-  );
-  const totalPaymentCredits = rows.reduce(
-    (s, e) =>
-      s + (e.entry_type === 'due_payment' ? Math.max(0, effectiveDelta(e)) : 0),
-    0,
-  );
+  const {
+    totalCredits,
+    totalDebits,
+    hasAdvances,
+    hasPayments,
+    totalAdvanceCredits,
+    totalPaymentCredits,
+  } = rowStats;
 
   const creditsSubLabel =
     hasAdvances && hasPayments

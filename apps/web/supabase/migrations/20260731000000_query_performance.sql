@@ -23,11 +23,13 @@
 
 -- ── Fix 1a: is_aal2 — mark STABLE ───────────────────────────
 -- Only reads auth.jwt() which is constant within a transaction.
+-- SECURITY DEFINER is intentionally omitted: the function reads only
+-- auth.jwt() and needs no elevated privileges. set search_path = ''
+-- is sufficient to prevent search_path injection.
 create or replace function public.is_aal2()
 returns boolean
 language plpgsql
 stable
-security definer
 set search_path = ''
 as $$
 declare
@@ -42,7 +44,11 @@ grant execute on function public.is_aal2() to authenticated;
 
 
 -- ── Fix 1b: is_super_admin — mark STABLE ────────────────────
--- Only reads auth.jwt() (via is_aal2 above) — same guarantee.
+-- PropOps uses phone-OTP (AAL1) exclusively — no TOTP enrolment.
+-- The AAL2 guard is intentionally omitted; see migration
+-- 20260617000001_super_admin_no_mfa.sql for the rationale.
+-- Do NOT re-add the is_aal2() check here without restoring TOTP for
+-- the platform operator first (Phase 2 work).
 create or replace function public.is_super_admin()
 returns boolean
 language plpgsql
@@ -53,10 +59,6 @@ as $$
 declare
   v_is_super_admin boolean;
 begin
-  if not public.is_aal2() then
-    return false;
-  end if;
-
   select (auth.jwt() ->> 'app_metadata')::jsonb ->> 'role' = 'super-admin'
     into v_is_super_admin;
 

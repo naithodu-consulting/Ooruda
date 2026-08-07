@@ -2,12 +2,14 @@
 
 import { useCallback, useMemo, useState } from 'react';
 
-import { ChevronRight, Inbox } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+
+import { ChevronRight, Inbox, Trash2 } from 'lucide-react';
 
 import { Badge } from '@kit/ui/badge';
+import { Button } from '@kit/ui/button';
 import { cn } from '@kit/ui/utils';
 
-import { billStatusBadgeClassName } from '~/lib/bill-status';
 import { formatDateDMY } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
@@ -20,6 +22,7 @@ import {
   type UnitNode,
 } from '../_lib/unit-billing-types';
 import { BillDetailPanel } from './bill-detail-panel';
+import { VoidBillsBulkDialog } from './void-bill-dialog';
 
 /**
  * Levels 2–4 of the billing tree — period → charge type → line items &
@@ -33,9 +36,13 @@ import { BillDetailPanel } from './bill-detail-panel';
 export function UnitBillingDetail({
   periods,
   drafts,
+  canVoid = false,
+  associationId = '',
 }: {
   periods: PeriodNode[];
   drafts: UnitNode['drafts'];
+  canVoid?: boolean;
+  associationId?: string;
 }) {
   // Newest period open on arrival — that is the one being chased.
   const [expandedPeriods, setExpandedPeriods] = useState<Set<string>>(
@@ -77,6 +84,17 @@ export function UnitBillingDetail({
 
   return (
     <div className="overflow-x-auto">
+      {/* Column headers */}
+      <div className="text-muted-foreground grid min-w-[640px] grid-cols-[20px_minmax(90px,1fr)_minmax(0,0.9fr)_60px_100px_100px_90px] items-center gap-2 border-b px-3 py-2 text-[13px] font-bold tracking-wider uppercase sm:grid-cols-[20px_minmax(90px,1fr)_minmax(0,0.9fr)_80px_110px_110px_100px] sm:px-4">
+        <div />
+        <div>Period</div>
+        <div>Collection</div>
+        <div />
+        <div className="text-right">Outstanding</div>
+        <div className="text-right">Billed</div>
+        <div className="text-right">Bills</div>
+      </div>
+
       {drafts.length > 0 && (
         <DraftPeriodRow
           drafts={drafts}
@@ -95,6 +113,8 @@ export function UnitBillingDetail({
           onToggle={() => onTogglePeriod(period.period)}
           onToggleBill={onToggleBill}
           onDetailLoaded={onDetailLoaded}
+          canVoid={canVoid}
+          associationId={associationId}
         />
       ))}
     </div>
@@ -115,6 +135,8 @@ function PeriodRow({
   onToggle,
   onToggleBill,
   onDetailLoaded,
+  canVoid,
+  associationId,
 }: {
   period: PeriodNode;
   expanded: boolean;
@@ -123,9 +145,35 @@ function PeriodRow({
   onToggle: () => void;
   onToggleBill: (billId: string) => void;
   onDetailLoaded: (billId: string, detail: BillDetail) => void;
+  canVoid: boolean;
+  associationId: string;
 }) {
+  const router = useRouter();
+  const [bulkVoidOpen, setBulkVoidOpen] = useState(false);
+  const liveBillCount = period.bills.filter(
+    (n) => n.displayStatus !== 'Void',
+  ).length;
+  // Hide bulk void on fully-paid periods — every live bill has payments, so
+  // void_bills_bulk would skip them all anyway. No point offering the action.
+  const showBulkVoid =
+    canVoid && liveBillCount > 0 && period.status !== 'all_paid';
+
   return (
     <div className="border-b last:border-b-0">
+      {bulkVoidOpen && (
+        <VoidBillsBulkDialog
+          open={bulkVoidOpen}
+          associationId={associationId}
+          period={period.period}
+          periodLabel={formatPeriod(period.period)}
+          billCount={liveBillCount}
+          onClose={() => setBulkVoidOpen(false)}
+          onVoided={() => {
+            setBulkVoidOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
       <div
         role="button"
         tabIndex={0}
@@ -200,11 +248,26 @@ function PeriodRow({
           <div className="text-muted-foreground/50 text-xs">billed</div>
         </div>
 
-        {/* Col 7 — bill count (aligns with unit "Status" header) */}
-        <div className="flex justify-end">
+        {/* Col 7 — bill count + optional bulk void (aligns with unit "Status" header) */}
+        <div className="flex items-center justify-end gap-2">
           <span className="text-muted-foreground text-xs">
             {period.bills.length} bill{period.bills.length !== 1 ? 's' : ''}
           </span>
+          {showBulkVoid && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 shrink-0 gap-1 border-[var(--color-danger)]/40 px-1.5 text-xs text-[var(--color-danger)] hover:border-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
+              title="Void all bills for this period"
+              onClick={(e) => {
+                e.stopPropagation();
+                setBulkVoidOpen(true);
+              }}
+            >
+              <Trash2 className="h-3 w-3" />
+              Void
+            </Button>
+          )}
         </div>
       </div>
 
@@ -218,6 +281,8 @@ function PeriodRow({
               detail={detailCache.get(node.bill.id) ?? null}
               onToggle={() => onToggleBill(node.bill.id)}
               onDetailLoaded={onDetailLoaded}
+              canVoid={canVoid}
+              associationId={associationId}
             />
           ))}
         </div>
@@ -228,9 +293,9 @@ function PeriodRow({
 
 // ── Level 3: Bill type ───────────────────────────────────────────────────────
 
-// 6 cols — col 3 is a spacer; last 3 match UNIT_GRID cols 5-7 exactly.
+// 5 cols — col 3 is a spacer; last 2 match UNIT_GRID cols 5-6 exactly.
 const TYPE_GRID =
-  'grid min-w-[640px] grid-cols-[18px_minmax(0,1fr)_60px_100px_100px_90px] items-center gap-2 sm:grid-cols-[18px_minmax(0,1fr)_80px_110px_110px_100px]';
+  'grid min-w-[640px] grid-cols-[18px_minmax(0,1fr)_60px_100px_100px] items-center gap-2 sm:grid-cols-[18px_minmax(0,1fr)_80px_110px_110px]';
 
 function BillTypeRow({
   node,
@@ -238,15 +303,20 @@ function BillTypeRow({
   detail,
   onToggle,
   onDetailLoaded,
+  canVoid,
+  associationId,
 }: {
   node: BillTypeNode;
   expanded: boolean;
   detail: BillDetail | null;
   onToggle: () => void;
   onDetailLoaded: (billId: string, detail: BillDetail) => void;
+  canVoid: boolean;
+  associationId: string;
 }) {
+  const router = useRouter();
   const { bill, displayStatus, outstanding, daysOverdue } = node;
-  const isVoided = displayStatus === 'Cancelled';
+  const isVoided = displayStatus === 'Void';
 
   return (
     <>
@@ -325,16 +395,6 @@ function BillTypeRow({
             {outstanding > 0 ? 'owed' : 'paid'}
           </div>
         </div>
-
-        {/* Col 6 — status badge (aligns with "Status" header) */}
-        <div className="flex justify-end">
-          <Badge
-            variant="outline"
-            className={cn('text-sm', billStatusBadgeClassName(displayStatus))}
-          >
-            {displayStatus}
-          </Badge>
-        </div>
       </div>
 
       {expanded && (
@@ -342,6 +402,9 @@ function BillTypeRow({
           bill={bill}
           detail={detail}
           onLoaded={onDetailLoaded}
+          associationId={associationId}
+          canVoid={canVoid}
+          onVoided={() => router.refresh()}
         />
       )}
     </>

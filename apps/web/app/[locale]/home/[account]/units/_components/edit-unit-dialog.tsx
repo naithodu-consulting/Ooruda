@@ -71,28 +71,30 @@ export function EditUnitDialog(props: {
         }
       />
 
-      <DialogContent className="max-w-lg sm:max-w-xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-lg flex-col overflow-hidden sm:max-w-xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Unit {props.unit.unit_no}</DialogTitle>
           <DialogDescription>
-            Edit this unit's details, owner, and tenant.
+            Edit this unit&apos;s details, owner, and tenant.
           </DialogDescription>
         </DialogHeader>
 
-        <UnitDetailsForm
-          unit={props.unit}
-          associationId={props.associationId}
-          eligibleOwners={props.eligibleOwners}
-          onDone={() => setOpen(false)}
-        >
-          <TenantSection
+        <div className="min-h-0 flex-1 [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
+          <UnitDetailsForm
             unit={props.unit}
             associationId={props.associationId}
-            tenancy={props.tenancy}
-            eligibleTenants={props.eligibleTenants}
+            eligibleOwners={props.eligibleOwners}
             onDone={() => setOpen(false)}
-          />
-        </UnitDetailsForm>
+          >
+            <TenantSection
+              unit={props.unit}
+              associationId={props.associationId}
+              tenancy={props.tenancy}
+              eligibleTenants={props.eligibleTenants}
+              onDone={() => setOpen(false)}
+            />
+          </UnitDetailsForm>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -298,17 +300,28 @@ function UnitDetailsForm(props: {
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue>
+                          {(v: string) =>
+                            v === 'owner'
+                              ? 'Always bill owner'
+                              : v === 'tenant'
+                                ? 'Always bill tenant'
+                                : 'Auto — tenant if occupied, else owner'
+                          }
+                        </SelectValue>
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent className="min-w-[280px]">
                       <SelectItem value="auto">
-                        Auto (tenant if occupied, else owner)
+                        Auto — tenant if occupied, else owner
                       </SelectItem>
-                      <SelectItem value="owner">Always owner</SelectItem>
-                      <SelectItem value="tenant">Always tenant</SelectItem>
+                      <SelectItem value="owner">Always bill owner</SelectItem>
+                      <SelectItem value="tenant">Always bill tenant</SelectItem>
                     </SelectContent>
                   </Select>
+                  <FormDescription>
+                    Controls whose name appears on bills for this unit.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -321,10 +334,18 @@ function UnitDetailsForm(props: {
 
       {props.children}
 
-      <div className="bg-popover sticky bottom-0 flex border-t pt-4">
+      <div className="bg-popover sticky bottom-0 flex items-center gap-2 border-t pt-4 pb-1">
         <Button type="submit" form="unit-details-form" disabled={isPending}>
           {isPending && <Spinner className="mr-2 h-4 w-4" />}
           Save details
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={isPending}
+          onClick={props.onDone}
+        >
+          Cancel
         </Button>
       </div>
     </div>

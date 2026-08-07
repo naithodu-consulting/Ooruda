@@ -11,6 +11,7 @@ import {
   type OutstandingBill,
   type PaymentRow,
   type ReportsFilters,
+  type TabKey,
   type UnitConsumptionRow,
   type UnitOption,
 } from '../_lib/reports-types';
@@ -67,8 +68,8 @@ interface Props {
   associationId: string;
   from: string;
   to: string;
-  activeTab: string;
-  onTabChange: (tab: string) => void;
+  activeTab: TabKey;
+  onTabChange: (tab: TabKey) => void;
   filters: ReportsFilters;
   onFiltersChange: (patch: Partial<ReportsFilters>) => void;
   units: UnitOption[];
@@ -124,7 +125,7 @@ export function ReportsTabs({
     !!filters.paymentMode;
 
   return (
-    <Tabs value={activeTab} onValueChange={onTabChange}>
+    <Tabs value={activeTab} onValueChange={(tab) => onTabChange(tab as TabKey)}>
       {/* Header row: tabs + export */}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="overflow-x-auto pb-0.5">

@@ -148,19 +148,16 @@ export default async function BillingPage({ params, searchParams }: Props) {
   const generatedElecPeriods = new Set(
     rawBills.filter((b) => b.bill_type === 'electricity').map((b) => b.period),
   );
-  const maintenanceGenerated = rawBills.some(
-    (b) => b.bill_type === 'maintenance' && b.period === currentPeriod,
-  );
-
   const pendingElectricity = (mescomResult.data ?? []).filter(
     (mb) => !generatedElecPeriods.has(mb.period),
   ).length;
 
+  // Maintenance is an informational alert, not a stageable item — exclude it
+  // so the badge count reflects actual billable charges only.
   const draftCount =
     (otherChargesCount.count ?? 0) +
     (sinkingChargesCount.count ?? 0) +
-    pendingElectricity +
-    (maintenanceGenerated ? 0 : 1);
+    pendingElectricity;
 
   return (
     <PageBody>

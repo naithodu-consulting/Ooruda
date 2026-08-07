@@ -65,7 +65,7 @@ export function TeamAccountLayoutSidebar(props: {
   return (
     <Sidebar variant="floating" collapsible={collapsible}>
       <SidebarHeader className={'h-16 justify-center'}>
-        <TeamAccountSidebarBrand />
+        <TeamAccountSidebarBrand account={account} />
       </SidebarHeader>
 
       <SidebarContent className="no-scrollbar">

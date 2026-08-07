@@ -159,15 +159,17 @@ export function UnitBillingTable({
 
   // Counts are computed over the whole tree, not the filtered view, so the
   // pills always show how many units each filter would actually reveal.
-  const counts = useMemo(
-    () => ({
-      all: tree.length,
-      outstanding: tree.filter((n) => n.outstanding > 0).length,
-      overdue: tree.filter((n) => n.overdue > 0).length,
-      all_paid: tree.filter((n) => n.status === 'all_paid').length,
-    }),
-    [tree],
-  );
+  const counts = useMemo(() => {
+    let outstanding = 0,
+      overdue = 0,
+      all_paid = 0;
+    for (const n of tree) {
+      if (n.outstanding > 0) outstanding++;
+      if (n.overdue > 0) overdue++;
+      if (n.status === 'all_paid') all_paid++;
+    }
+    return { all: tree.length, outstanding, overdue, all_paid };
+  }, [tree]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -299,15 +301,17 @@ export function UnitBillingTable({
   const hasActiveFilter =
     !!search || filter !== 'all' || typeFilter !== 'all' || duration !== 'all';
 
-  const metrics = useMemo(
-    () => ({
-      units: filtered.length,
-      billed: filtered.reduce((s, n) => s + n.billed, 0),
-      outstanding: filtered.reduce((s, n) => s + n.outstanding, 0),
-      overdueUnits: filtered.filter((n) => n.overdue > 0).length,
-    }),
-    [filtered],
-  );
+  const metrics = useMemo(() => {
+    let billed = 0,
+      outstanding = 0,
+      overdueUnits = 0;
+    for (const n of filtered) {
+      billed += n.billed;
+      outstanding += n.outstanding;
+      if (n.overdue > 0) overdueUnits++;
+    }
+    return { units: filtered.length, billed, outstanding, overdueUnits };
+  }, [filtered]);
 
   return (
     <div className="bg-card overflow-hidden rounded-xl border">
@@ -397,7 +401,6 @@ export function UnitBillingTable({
               </button>
             ))}
           </div>
-
         </div>
 
         {/* Row 2: live summary tiles + export actions */}
@@ -465,7 +468,7 @@ export function UnitBillingTable({
 
       {/* ── Column headers + rows wrapped for horizontal scroll on mobile ─ */}
       <div className="overflow-x-auto">
-        <div className="text-muted-foreground grid min-w-[640px] grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px_90px] items-center gap-2 border-b px-3 py-2 text-[13px] font-bold tracking-wider uppercase sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px_100px] sm:px-4">
+        <div className="text-muted-foreground grid min-w-[640px] grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px] items-center gap-2 border-b px-3 py-2 text-[13px] font-bold tracking-wider uppercase sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px] sm:px-4">
           <div className="flex items-center justify-center">
             <input
               ref={selectAllRef}
@@ -482,7 +485,6 @@ export function UnitBillingTable({
           <div>Last Period</div>
           <div className="text-right">Outstanding</div>
           <div className="text-right">Overdue Bills</div>
-          <div className="text-right">Status</div>
         </div>
 
         {paged.length === 0 ? (

@@ -47,32 +47,39 @@ export async function POST(req: NextRequest) {
       { status: 404 },
     );
 
-  // Now that the caller is authenticated: membership + unit ownership.
-  const [{ data: membership }, unitAllowedResult] = await Promise.all([
-    client
-      .from('accounts_memberships')
-      .select('account_role')
-      .eq('user_id', user.id)
-      .eq('account_id', assoc.account_id)
-      .maybeSingle(),
-    // Pre-fetch both unit and tenancy — we'll pick the right one after knowing role.
-    Promise.all([
+  // Membership, unit ownership, and gateway all fetched in parallel.
+  // associationId is known from the request body so gateway can be included here.
+  const [{ data: membership }, unitAllowedResult, { data: gateway }] =
+    await Promise.all([
       client
-        .from('units')
-        .select('id')
-        .eq('id', unitId)
+        .from('accounts_memberships')
+        .select('account_role')
+        .eq('user_id', user.id)
+        .eq('account_id', assoc.account_id)
+        .maybeSingle(),
+      // Pre-fetch both unit and tenancy — we'll pick the right one after knowing role.
+      Promise.all([
+        client
+          .from('units')
+          .select('id')
+          .eq('id', unitId)
+          .eq('association_id', associationId)
+          .eq('owner_id', user.id)
+          .maybeSingle(),
+        client
+          .from('tenancies')
+          .select('id')
+          .eq('tenant_id', user.id)
+          .eq('unit_id', unitId)
+          .eq('status', 'active')
+          .maybeSingle(),
+      ]),
+      admin
+        .from('association_payment_gateways')
+        .select('key_id, key_secret, is_active')
         .eq('association_id', associationId)
-        .eq('owner_id', user.id)
         .maybeSingle(),
-      client
-        .from('tenancies')
-        .select('id')
-        .eq('tenant_id', user.id)
-        .eq('unit_id', unitId)
-        .eq('status', 'active')
-        .maybeSingle(),
-    ]),
-  ]);
+    ]);
 
   const role = membership?.account_role;
   if (role !== 'prop_owner' && role !== 'tenant') {
@@ -114,13 +121,6 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-
-  // Gateway credentials — fetched only now that the request is fully authorized.
-  const { data: gateway } = await admin
-    .from('association_payment_gateways')
-    .select('key_id, key_secret, is_active')
-    .eq('association_id', associationId)
-    .maybeSingle();
 
   if (!gateway?.is_active) {
     return NextResponse.json(

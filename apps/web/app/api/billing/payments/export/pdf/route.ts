@@ -210,6 +210,7 @@ export const POST = enhanceRouteHandler(
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="payments-export-${new Date().toISOString().slice(0, 10)}.pdf"`,
+          'Cache-Control': 'private, no-store',
         },
       });
     } catch (err) {

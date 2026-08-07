@@ -187,6 +187,7 @@ export async function createElectricityBillAction(
       associationId,
       action: 'mescom_bill.create.failed',
       entityType: 'mescom_bill',
+      eventType: 'error',
       summary: `Failed to create electricity bill for ${parsed.data.period}: ${error.message}`,
     });
     return { success: false, error: userMessage };
@@ -237,6 +238,7 @@ export async function deleteElectricityBillAction(
       action: 'mescom_bill.delete.failed',
       entityType: 'mescom_bill',
       entityId: electricityBillId,
+      eventType: 'error',
       summary: `Failed to delete electricity bill: ${error.message}`,
     });
     return { success: false, error: userMessage };
@@ -545,6 +547,7 @@ export async function bulkImportMeterReadingsAction(
         associationId,
         action: 'meter_readings.bulk_import.failed',
         entityType: 'mescom_bill',
+        eventType: 'error',
         summary: `Failed to bulk import meter readings: ${error.message}`,
       });
       const { userMessage } = await sanitizeActionError(error, {
@@ -643,6 +646,7 @@ export async function recordMeterReadingsAction(
       action: 'meter_readings.record.failed',
       entityType: 'mescom_bill',
       entityId: bill.id,
+      eventType: 'error',
       summary: `Failed to record meter readings for ${bill.period}: ${upsertError.message}`,
     });
     const { userMessage } = await sanitizeActionError(upsertError, {
@@ -821,6 +825,7 @@ export async function bulkImportSubMetersAction(
       associationId,
       action: 'sub_meter.bulk_import.failed',
       entityType: 'sub_meter',
+      eventType: 'error',
       summary: `Failed to bulk import sub-meters: ${error.message}`,
     });
     const { userMessage } = await sanitizeActionError(error, {

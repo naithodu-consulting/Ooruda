@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from '@kit/ui/table';
+import { cn } from '@kit/ui/utils';
 
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
@@ -115,11 +116,16 @@ export function DraftBillsTab(props: {
     0,
   );
 
+  // Maintenance is an alert/notification, not a stageable item — exclude it
+  // from the count so the badge reflects actual billable items only.
   const totalItems =
-    (props.maintenancePending ? 1 : 0) +
     props.pendingElectricityBills.length +
     props.pendingCharges.length +
     props.pendingSinkingCharges.length;
+
+  // Page-level total for amounts that are already quantified (maintenance is
+  // excluded because its amount is calculated at generation time).
+  const pageTotal = electricityTotal + otherChargesTotal + sinkingFundTotal;
 
   // Collect all unique periods across pending items for the period filter
   const allPeriods = Array.from(
@@ -176,53 +182,37 @@ export function DraftBillsTab(props: {
     <div className="flex flex-col gap-4 pt-2">
       {/* Summary chips */}
       <div className="flex flex-wrap items-center gap-2 border-b pb-4">
-        {[
-          { label: 'Items pending', value: String(totalItems) },
-          ...(props.maintenancePending
-            ? [
-                {
-                  label: 'Maintenance',
-                  value: formatPeriod(props.currentPeriod),
-                },
-              ]
-            : []),
-          ...(props.pendingElectricityBills.length > 0
-            ? [
-                {
-                  label: 'Electricity',
-                  value: `${props.pendingElectricityBills.length} month${props.pendingElectricityBills.length !== 1 ? 's' : ''} · ${formatINR(electricityTotal)}`,
-                },
-              ]
-            : []),
-          ...(props.pendingCharges.length > 0
-            ? [
-                {
-                  label: 'Other Charges',
-                  value: `${props.pendingCharges.length} charge${props.pendingCharges.length !== 1 ? 's' : ''} · ${formatINR(otherChargesTotal)}`,
-                },
-              ]
-            : []),
-          ...(props.pendingSinkingCharges.length > 0
-            ? [
-                {
-                  label: 'Sinking Fund',
-                  value: `${props.pendingSinkingCharges.length} charge${props.pendingSinkingCharges.length !== 1 ? 's' : ''} · ${formatINR(sinkingFundTotal)}`,
-                },
-              ]
-            : []),
-        ].map(({ label, value }) => (
-          <div
-            key={label}
-            className="bg-muted/50 flex flex-col items-center rounded-md px-3 py-1.5 text-center"
-          >
-            <span className="text-foreground text-base font-semibold tabular-nums">
-              {value}
-            </span>
-            <span className="text-muted-foreground text-[13px] font-medium">
-              {label}
-            </span>
-          </div>
-        ))}
+        {totalItems > 0 && (
+          <Chip label="Items ready to bill" value={String(totalItems)} />
+        )}
+        {pageTotal > 0 && (
+          <Chip label="Total charges" value={formatINR(pageTotal)} highlight />
+        )}
+        {props.pendingElectricityBills.length > 0 && (
+          <Chip
+            label="Electricity"
+            value={`${props.pendingElectricityBills.length} month${props.pendingElectricityBills.length !== 1 ? 's' : ''} · ${formatINR(electricityTotal)}`}
+          />
+        )}
+        {props.pendingCharges.length > 0 && (
+          <Chip
+            label="Other Charges"
+            value={`${props.pendingCharges.length} charge${props.pendingCharges.length !== 1 ? 's' : ''} · ${formatINR(otherChargesTotal)}`}
+          />
+        )}
+        {props.pendingSinkingCharges.length > 0 && (
+          <Chip
+            label="Sinking Fund"
+            value={`${props.pendingSinkingCharges.length} charge${props.pendingSinkingCharges.length !== 1 ? 's' : ''} · ${formatINR(sinkingFundTotal)}`}
+          />
+        )}
+        {props.maintenancePending && (
+          <Chip
+            label="Maintenance"
+            value={`${formatPeriod(props.currentPeriod)} · Not yet generated`}
+            muted
+          />
+        )}
       </div>
 
       {/* Filters + primary CTA */}
@@ -315,23 +305,23 @@ export function DraftBillsTab(props: {
       )}
 
       <div className="flex flex-col gap-4">
-        {/* Pending Maintenance */}
+        {/* Pending Maintenance — shown as an info callout, not a data section */}
         {showMaintenance && (
-          <DraftSection
-            icon={<Wrench className="h-4 w-4" />}
-            title="Maintenance"
-            badge={formatPeriod(props.currentPeriod)}
-          >
-            <p className="text-muted-foreground px-1 text-base">
-              Maintenance bills for{' '}
-              <span className="text-foreground font-medium">
-                {formatPeriod(props.currentPeriod)}
-              </span>{' '}
-              haven't been generated yet. All active units will receive a bill
-              when you click <span className="font-medium">Generate Bills</span>
-              .
-            </p>
-          </DraftSection>
+          <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3.5 dark:border-blue-800/40 dark:bg-blue-900/20">
+            <Wrench className="mt-0.5 h-4 w-4 shrink-0 text-blue-700 dark:text-blue-400" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                Maintenance bills for {formatPeriod(props.currentPeriod)} — not
+                yet generated
+              </p>
+              <p className="mt-0.5 text-sm text-blue-700 dark:text-blue-400">
+                Click <span className="font-semibold">Generate Bills</span>{' '}
+                above to create maintenance bills for all active units. The bill
+                amount is calculated based on each unit&apos;s area at
+                generation time.
+              </p>
+            </div>
+          </div>
         )}
 
         {/* Pending Electricity */}
@@ -532,6 +522,47 @@ export function DraftBillsTab(props: {
           </DraftSection>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function Chip({
+  label,
+  value,
+  highlight,
+  muted,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+  muted?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        'flex flex-col items-center rounded-md px-3 py-1.5 text-center',
+        highlight
+          ? 'bg-primary/10 ring-primary/30 ring-1'
+          : muted
+            ? 'bg-muted/30'
+            : 'bg-muted/50',
+      )}
+    >
+      <span
+        className={cn(
+          'text-base font-semibold tabular-nums',
+          highlight
+            ? 'text-primary'
+            : muted
+              ? 'text-muted-foreground'
+              : 'text-foreground',
+        )}
+      >
+        {value}
+      </span>
+      <span className="text-muted-foreground text-[13px] font-medium">
+        {label}
+      </span>
     </div>
   );
 }

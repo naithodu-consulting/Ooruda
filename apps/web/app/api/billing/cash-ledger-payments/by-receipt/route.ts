@@ -4,6 +4,7 @@ import * as z from 'zod';
 
 import { enhanceRouteHandler } from '@kit/next/routes';
 import { billTypeLabel, renderReceiptPdf } from '@kit/pdf-templates';
+import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 // ?receipt_no=PRM%2F26-27%2FMNT%2F000001
@@ -17,21 +18,15 @@ const querySchema = z.object({
 });
 
 export const GET = enhanceRouteHandler(
-  async function ({ request }) {
+  async function ({ request, user }) {
     const url = new URL(request.url);
     const { receipt_no } = querySchema.parse(
       Object.fromEntries(url.searchParams),
     );
 
     // cash_ledger_payments has REVOKE ALL FROM service_role — must use authenticated client.
+    // user is injected by enhanceRouteHandler (auth: true) — no extra getUser() call.
     const client = getSupabaseServerClient();
-
-    const {
-      data: { user },
-    } = await client.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const { data: payment, error: queryError } = await client
       .from('cash_ledger_payments')
@@ -49,9 +44,10 @@ export const GET = enhanceRouteHandler(
       .maybeSingle();
 
     if (queryError) {
-      console.error(
-        '[cash-ledger-by-receipt] query error:',
-        queryError.message,
+      const logger = await getLogger();
+      logger.error(
+        { receipt_no, error: queryError.message },
+        '[cash-ledger-by-receipt] query error',
       );
       return NextResponse.json(
         { error: 'Failed to load payment.' },
@@ -171,7 +167,11 @@ export const GET = enhanceRouteHandler(
         },
       });
     } catch (err) {
-      console.error('[cash-ledger-by-receipt] render error', err);
+      const logger = await getLogger();
+      logger.error(
+        { receipt_no, error: err },
+        '[cash-ledger-by-receipt] render error',
+      );
       return NextResponse.json(
         { error: 'Could not generate receipt PDF.' },
         { status: 500 },
@@ -182,6 +182,7 @@ export const GET = enhanceRouteHandler(
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${receipt_no}.pdf"`,
+        'Cache-Control': 'private, no-store',
       },
     });
   },

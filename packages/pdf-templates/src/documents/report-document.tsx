@@ -174,7 +174,7 @@ export interface ReportPdfData {
   )[];
   /** Applied filters to disclose in the PDF header. */
   appliedFilters?: {
-    unitNos?: string[];   // human-readable unit numbers
+    unitNos?: string[]; // human-readable unit numbers
     billTypes?: string[]; // human-readable bill type labels
   };
 }
@@ -262,26 +262,28 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
             }}
           >
             <Text
-              style={{ fontSize: 7.5, fontWeight: 'bold', color: '#1e3a8a', marginBottom: 3 }}
+              style={{
+                fontSize: 7.5,
+                fontWeight: 'bold',
+                color: '#1e3a8a',
+                marginBottom: 3,
+              }}
             >
               FILTERS APPLIED
             </Text>
             {(data.appliedFilters?.unitNos?.length ?? 0) > 0 && (
               <Text style={{ fontSize: 8, color: '#1e40af' }}>
-                Units:{' '}
-                {data.appliedFilters!.unitNos!.join(', ')}
+                Units: {data.appliedFilters!.unitNos!.join(', ')}
               </Text>
             )}
             {(data.appliedFilters?.billTypes?.length ?? 0) > 0 && (
               <Text style={{ fontSize: 8, color: '#1e40af', marginTop: 2 }}>
-                Charge types:{' '}
-                {data.appliedFilters!.billTypes!.join(', ')}
+                Charge types: {data.appliedFilters!.billTypes!.join(', ')}
               </Text>
             )}
-            <Text
-              style={{ fontSize: 7, color: '#3b5fc0', marginTop: 3 }}
-            >
-              This report covers the selected units/types only — not the full association.
+            <Text style={{ fontSize: 7, color: '#3b5fc0', marginTop: 3 }}>
+              This report covers the selected units/types only — not the full
+              association.
             </Text>
           </View>
         )}
