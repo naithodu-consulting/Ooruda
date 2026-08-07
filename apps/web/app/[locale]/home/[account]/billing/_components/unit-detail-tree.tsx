@@ -84,6 +84,17 @@ export function UnitBillingDetail({
 
   return (
     <div className="overflow-x-auto">
+      {/* Column headers */}
+      <div className="text-muted-foreground grid min-w-[640px] grid-cols-[20px_minmax(90px,1fr)_minmax(0,0.9fr)_60px_100px_100px_90px] items-center gap-2 border-b px-3 py-2 text-[13px] font-bold tracking-wider uppercase sm:grid-cols-[20px_minmax(90px,1fr)_minmax(0,0.9fr)_80px_110px_110px_100px] sm:px-4">
+        <div />
+        <div>Period</div>
+        <div>Collection</div>
+        <div />
+        <div className="text-right">Outstanding</div>
+        <div className="text-right">Billed</div>
+        <div className="text-right">Bills</div>
+      </div>
+
       {drafts.length > 0 && (
         <DraftPeriodRow
           drafts={drafts}

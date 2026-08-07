@@ -468,7 +468,7 @@ export function UnitBillingTable({
 
       {/* ── Column headers + rows wrapped for horizontal scroll on mobile ─ */}
       <div className="overflow-x-auto">
-        <div className="text-muted-foreground grid min-w-[640px] grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px_90px] items-center gap-2 border-b px-3 py-2 text-[13px] font-bold tracking-wider uppercase sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px_100px] sm:px-4">
+        <div className="text-muted-foreground grid min-w-[640px] grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px] items-center gap-2 border-b px-3 py-2 text-[13px] font-bold tracking-wider uppercase sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px] sm:px-4">
           <div className="flex items-center justify-center">
             <input
               ref={selectAllRef}
@@ -485,7 +485,6 @@ export function UnitBillingTable({
           <div>Last Period</div>
           <div className="text-right">Outstanding</div>
           <div className="text-right">Overdue Bills</div>
-          <div className="text-right">Status</div>
         </div>
 
         {paged.length === 0 ? (

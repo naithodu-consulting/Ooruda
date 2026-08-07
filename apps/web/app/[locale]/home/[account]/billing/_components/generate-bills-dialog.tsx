@@ -145,8 +145,10 @@ function GenerateBillsForm(props: {
     return (
       <div className="flex flex-col gap-4" role="alertdialog" aria-modal="true">
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-lg leading-snug font-medium">Generate Bills</h3>
-          <p className="text-muted-foreground text-base">
+          <h3 className="text-base leading-snug font-semibold">
+            Generate Bills
+          </h3>
+          <p className="text-muted-foreground text-sm">
             Are you sure you want to generate bills for this period? Once
             generated, bills cannot be deleted or modified.
           </p>

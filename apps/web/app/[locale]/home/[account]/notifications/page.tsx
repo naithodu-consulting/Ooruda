@@ -1,4 +1,4 @@
-import { Bell, BellRing, Send } from 'lucide-react';
+import { Bell, CircleDollarSign, Send } from 'lucide-react';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { MetricCard } from '@kit/ui/metric-card';
@@ -99,12 +99,10 @@ export default async function NotificationsPage({ params }: Props) {
     }));
   }
 
-  const sentCount = rows.filter(
-    (r) => r.status === 'Sent' || r.status === 'Delivered',
-  ).length;
-  const deliveredCount = rows.filter((r) => r.status === 'Delivered').length;
-  const reminderCount = rows.filter(
-    (r) => r.type === 'reminder' || r.type === 'overdue',
+  const sentCount = rows.length;
+  const billAlertCount = rows.filter((r) => r.type === 'bill_generated').length;
+  const paymentAlertCount = rows.filter(
+    (r) => r.type === 'payment_confirmed',
   ).length;
 
   const description = isAdmin
@@ -146,23 +144,23 @@ export default async function NotificationsPage({ params }: Props) {
               <div className="mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
                 <MetricCard
                   icon={Send}
-                  label="Sent"
+                  label="Total Sent"
                   value={String(sentCount)}
-                  sublabel="Dispatched to recipients"
+                  sublabel="SMS & email dispatched"
                   variant="blue"
                 />
                 <MetricCard
-                  icon={BellRing}
-                  label="Delivered"
-                  value={String(deliveredCount)}
-                  sublabel="Confirmed by carrier"
+                  icon={Bell}
+                  label="Bill Alerts"
+                  value={String(billAlertCount)}
+                  sublabel="Bills sent to owners & tenants"
                   variant="green"
                 />
                 <MetricCard
-                  icon={Bell}
-                  label="Reminders"
-                  value={String(reminderCount)}
-                  sublabel="Overdue & scheduled alerts"
+                  icon={CircleDollarSign}
+                  label="Payment Alerts"
+                  value={String(paymentAlertCount)}
+                  sublabel="Receipt confirmations sent"
                   variant="amber"
                 />
               </div>

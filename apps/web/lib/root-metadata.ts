@@ -33,8 +33,22 @@ export const generateRootMetadata = async (): Promise<Metadata> => {
       images: ['/images/brand/og-image.png'],
     },
     icons: {
-      icon: '/images/brand/ooruda-favicon.svg',
-      apple: '/images/brand/ooruda-favicon.svg',
+      icon: [
+        { url: '/images/favicon/favicon.ico', sizes: 'any' },
+        {
+          url: '/images/favicon/favicon-32x32.png',
+          type: 'image/png',
+          sizes: '32x32',
+        },
+        {
+          url: '/images/favicon/favicon-16x16.png',
+          type: 'image/png',
+          sizes: '16x16',
+        },
+        { url: '/images/brand/ooruda-favicon.svg', type: 'image/svg+xml' },
+      ],
+      apple: '/images/favicon/apple-touch-icon.png',
+      other: [{ rel: 'manifest', url: '/images/favicon/site.webmanifest' }],
     },
   };
 };

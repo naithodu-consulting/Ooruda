@@ -79,7 +79,7 @@ export function EditUnitDialog(props: {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
           <UnitDetailsForm
             unit={props.unit}
             associationId={props.associationId}
@@ -300,10 +300,18 @@ function UnitDetailsForm(props: {
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue>
+                          {(v: string) =>
+                            v === 'owner'
+                              ? 'Always bill owner'
+                              : v === 'tenant'
+                                ? 'Always bill tenant'
+                                : 'Auto — tenant if occupied, else owner'
+                          }
+                        </SelectValue>
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent className="min-w-[280px]">
                       <SelectItem value="auto">
                         Auto — tenant if occupied, else owner
                       </SelectItem>

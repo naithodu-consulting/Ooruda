@@ -6,18 +6,12 @@ import Link from 'next/link';
 
 import { ChevronRight } from 'lucide-react';
 
-import { Badge } from '@kit/ui/badge';
 import { cn } from '@kit/ui/utils';
 
-import { billStatusBadgeClassName } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
-import {
-  UNIT_STATUS_DOT,
-  UNIT_STATUS_LABEL,
-  type UnitNode,
-} from '../_lib/unit-billing-types';
+import { UNIT_STATUS_DOT, type UnitNode } from '../_lib/unit-billing-types';
 
 interface Props {
   node: UnitNode;
@@ -32,7 +26,7 @@ interface Props {
  * header row in `unit-billing-table.tsx` so amounts line up.
  */
 export const UNIT_GRID =
-  'grid min-w-[640px] grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px_90px] items-center gap-2 sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px_100px]';
+  'grid min-w-[640px] grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px] items-center gap-2 sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px]';
 
 /**
  * Level 1 of the billing drill-down: one unit, one row.
@@ -132,23 +126,6 @@ function UnitRowInner({ node, href, selected, onToggleSelect }: Props) {
           ) : (
             <span className="text-muted-foreground text-sm">—</span>
           )}
-        </div>
-
-        {/* Col 7 — status badge, styled consistently for all four states */}
-        <div className="flex justify-end">
-          <Badge
-            variant="outline"
-            className={cn(
-              'text-sm',
-              node.status === 'all_paid' && billStatusBadgeClassName('Paid'),
-              node.status === 'partial' && billStatusBadgeClassName('Partial'),
-              node.status === 'overdue' && billStatusBadgeClassName('Overdue'),
-              node.status === 'no_bills' &&
-                'border-muted-foreground/30 text-muted-foreground',
-            )}
-          >
-            {UNIT_STATUS_LABEL[node.status]}
-          </Badge>
         </div>
       </Link>
     </div>
