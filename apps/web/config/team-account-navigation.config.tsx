@@ -17,7 +17,7 @@ import { NavigationConfigSchema } from '@kit/ui/navigation-schema';
 
 import pathsConfig from '~/config/paths.config';
 
-const iconClasses = 'w-4';
+const iconClasses = 'w-4 h-4 shrink-0';
 
 const getRoutes = (account: string) => [
   {

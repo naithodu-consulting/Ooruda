@@ -167,15 +167,35 @@ export default async function MescomPage({ params }: Props) {
     string,
     Record<string, number>
   > = {};
+  // Build per-subMeter sorted arrays (readings already sorted asc by period)
+  // then for each bill, find the latest reading strictly before bill.period
+  // in O(readings + bills × subMeters) rather than O(bills × readings).
+  const readingsByMeter = new Map<
+    string,
+    { period: string; current_reading: number; minimum_charge: number }[]
+  >();
+  for (const r of allReadings) {
+    const list = readingsByMeter.get(r.sub_meter_id) ?? [];
+    list.push({
+      period: r.period,
+      current_reading: r.current_reading,
+      minimum_charge: r.minimum_charge ?? 0,
+    });
+    readingsByMeter.set(r.sub_meter_id, list);
+  }
   for (const bill of billRows) {
     lastReadingBeforePeriodByBill[bill.id] = {};
     lastMinChargeBeforePeriodByBill[bill.id] = {};
-    for (const r of allReadings) {
-      if (r.period < bill.period) {
-        lastReadingBeforePeriodByBill[bill.id]![r.sub_meter_id] =
-          r.current_reading;
-        lastMinChargeBeforePeriodByBill[bill.id]![r.sub_meter_id] =
-          r.minimum_charge ?? 0;
+    for (const [meterId, mReadings] of readingsByMeter) {
+      // mReadings is sorted asc by period; walk backwards to find latest < bill.period
+      for (let i = mReadings.length - 1; i >= 0; i--) {
+        if (mReadings[i]!.period < bill.period) {
+          lastReadingBeforePeriodByBill[bill.id]![meterId] =
+            mReadings[i]!.current_reading;
+          lastMinChargeBeforePeriodByBill[bill.id]![meterId] =
+            mReadings[i]!.minimum_charge;
+          break;
+        }
       }
     }
   }

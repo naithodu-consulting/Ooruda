@@ -139,15 +139,16 @@ async function resolveBillingEntity(
         companyGstin: tenancy.company_gstin,
       };
     }
+    // tenancies.tenant_id → auth.users(id), not profiles.id — PostgREST cannot
+    // resolve profiles() as an embedded join from tenancies. Fetch separately.
     const { data: profileData } = await admin
       .from('profiles')
       .select('full_name')
       .eq('id', tenancy.tenant_id)
       .maybeSingle();
-    const profile = profileData as { full_name: string | null } | null;
     return {
       isCompany: false,
-      name: profile?.full_name ?? null,
+      name: profileData?.full_name ?? null,
       companyAddress: null,
       companyGstin: null,
     };
@@ -234,8 +235,9 @@ export async function getOrGenerateBillPdf(
 
     // Fetch the bill using the admin client to ensure we get the full
     // nested association + accounts join (which might otherwise be filtered
-    // by RLS for non-members, obscuring the logo). We manually authorize
-    // the user via `canAccessUnit` immediately below.
+    // by RLS for non-members, obscuring the logo). Auth was already confirmed
+    // by canAccessUnit() before this generate() closure was entered — the
+    // second check is intentionally removed to avoid 6+ serial DB calls.
     const { data: bill, error: billError } = await admin
       .from('bills')
       .select(
@@ -259,23 +261,6 @@ export async function getOrGenerateBillPdf(
       logger.warn(
         { billId, found: !!bill },
         'Bill not found, or missing unit/association join, when generating PDF',
-      );
-      return null;
-    }
-
-    if (
-      !opts?.skipAuth &&
-      !(await canAccessUnit(
-        bill.association_id,
-        bill.unit_id,
-        (bill.units as unknown as { owner_id: string | null } | null)
-          ?.owner_id ?? null,
-        bill.tenancy_id,
-      ))
-    ) {
-      logger.warn(
-        { billId, associationId: bill.association_id, unitId: bill.unit_id },
-        "Caller is not authorized to access this bill's unit",
       );
       return null;
     }
@@ -615,27 +600,30 @@ export async function preRenderBillPdf(billId: string): Promise<void> {
  */
 export async function getOrGenerateReceiptPdf(
   paymentId: string,
+  opts?: { skipAuth?: boolean },
 ): Promise<GeneratedPdf | null> {
   // Auth pre-check before the dedup map — see getOrGenerateBillPdf for rationale.
-  const authClient = getSupabaseServerClient();
-  const { data: paymentMeta } = await authClient
-    .from('payments')
-    .select('association_id, bills(unit_id, tenancy_id, units(owner_id))')
-    .eq('id', paymentId)
-    .maybeSingle();
-  if (!paymentMeta?.bills) return null;
-  const bill = paymentMeta.bills as unknown as {
-    unit_id: string;
-    tenancy_id: string | null;
-    units: { owner_id: string | null } | null;
-  };
-  const authorized = await canAccessUnit(
-    paymentMeta.association_id,
-    bill.unit_id,
-    bill.units?.owner_id ?? null,
-    bill.tenancy_id,
-  );
-  if (!authorized) return null;
+  if (!opts?.skipAuth) {
+    const authClient = getSupabaseServerClient();
+    const { data: paymentMeta } = await authClient
+      .from('payments')
+      .select('association_id, bills(unit_id, tenancy_id, units(owner_id))')
+      .eq('id', paymentId)
+      .maybeSingle();
+    if (!paymentMeta?.bills) return null;
+    const bill = paymentMeta.bills as unknown as {
+      unit_id: string;
+      tenancy_id: string | null;
+      units: { owner_id: string | null } | null;
+    };
+    const authorized = await canAccessUnit(
+      paymentMeta.association_id,
+      bill.unit_id,
+      bill.units?.owner_id ?? null,
+      bill.tenancy_id,
+    );
+    if (!authorized) return null;
+  }
 
   const cacheKey = `receipt_${paymentId}`;
   if (pendingPdfGenerations.has(cacheKey)) {
@@ -685,6 +673,7 @@ export async function getOrGenerateReceiptPdf(
     }
 
     if (
+      !opts?.skipAuth &&
       !(await canAccessUnit(
         payment.association_id,
         payment.bills.unit_id,

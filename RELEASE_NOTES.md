@@ -4,6 +4,343 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4 — Notifications, Reminders, Activity Tracking & Security Hardening — 2026-08-06
+
+### Transactional SMS Notifications
+- **`@kit/sms` extended** — `sendSms(phone, templateKey, variables)` added to all providers: Kaleyra (DLT `template_id` + `template_data`), MSG91 (flow API), 2Factor (TRANS_SMS), and Mock (console).
+- **4 DLT template keys** registered: `bill_generated`, `payment_confirmed`, `reminder`, `overdue`. Each maps to a separate env var for the DLT-registered template ID.
+- **Kaleyra**: uses `type=TXN`, sends `template_id` + `template_data` (never `body` alongside `template_id`).
+
+### Automated Email Alerts
+- **`apps/web/lib/notify.ts`** — unified notification dispatcher for SMS + Email + In-app. Reads channel enablement from DB with 5-minute in-process cache. Uses `after()` from `next/server` so notifications never block the user-facing response.
+- **`packages/email-templates`** — new `BillReminderEmailProps` email template (`bill-reminder.email.tsx`) with amber (reminder) and red (overdue) variants, outstanding-amount highlight box, and CTA button.
+- **Email sender**: `hello@ooruda.com` via Resend.
+- **Triggers wired**: bill generation → `sendBillGeneratedNotifications()` (per unit: owner + active tenant); payment recorded → `sendPaymentConfirmedNotification()`.
+
+### Reminder Scheduling (pg_cron + Edge Function)
+- **Migration `20260806000002_reminder_cron.sql`**: enables `pg_cron` + `pg_net`; schedules `overdue-recompute` (1 AM IST daily) and `send-reminders` (9 AM IST daily).
+- **Edge Function `send-reminders`**: reads `billing_settings.reminder_schedule_json` per association, queries matching Unpaid/Partial/Overdue bills, sends SMS + email + in-app notification per recipient.
+- **`recompute_overdue_bills()`** PL/pgSQL function stamps Overdue status in DB (source of truth for all overdue display).
+
+### Enhanced Activity Tracking
+- **Migration `20260806000001_activity_tracking_and_notifications.sql`**: extends `audit_logs` with `event_type`, `http_method`, `path`, `status_code`, `duration_ms`, `error_code`, `metadata`, `ip_address`, `user_agent`; makes `association_id` nullable for platform-level events.
+- **`lib/audit-log.ts`** rewritten — `AuditEventType` union, all new fields, auto-resolves actor from session, uses admin client for system/auth events.
+- **Auth hook** (`supabase/functions/auth-events-hook`): Deno Edge Function with HMAC-SHA256 signature verification; maps auth events to `audit_logs` with masked email.
+- **Activity Log UI** (`/[account]/audit`): event type filter tabs (All / User Actions / Auth Events / Errors / System), status badge (HTTP code or event type), API path sub-row, error code display.
+- **Super-admin Activity page** (`/admin/activity`): platform-wide view across all associations, no `association_id` filter, Association column added.
+
+### In-App Notifications Bell
+- Uses Makerkit's existing `notifications` table (`NEXT_PUBLIC_ENABLE_NOTIFICATIONS=true`).
+- `notify.ts` writes `**title**\nbody` format to `notifications.body`; `MyAlertsCard` parses it for bold title + body.
+- **Notifications page** (`/[account]/notifications`): two-tab layout — "My Alerts" (per-user in-app alerts with dismiss/mark-all-read) + "Sent Log" (outbound notifications history with delivery metrics).
+- `notifications_log` table tracks all outbound deliveries with status (Sent/Failed/Delivered).
+
+### Notification Channel Management
+- **`notification_providers_config`** table: platform-default rows for SMS and Email (both disabled by default); super-admin can toggle per-channel.
+- **Admin → Communication Channels** (`/admin/channels`): toggle switches for SMS/Email/WhatsApp with real-time badge update. Permanent redirect from old `/admin/notification-settings` URL.
+- **Admin → Activity Log** (`/admin/activity`): linked from admin sidebar.
+- **Channel gate covers all email paths**: bill generation, payment receipt, bill reminders (both `notify.ts` and `send-reminders` Edge Function check `notification_providers_config` before sending).
+
+### Audit Log (assoc-admin)
+- Renamed from "Activity Log" back to "Audit Log" in nav, page title, and metadata.
+- Errors tab removed from assoc-admin view — only super-admin sees error events.
+
+### Security Hardening
+- **In-memory rate limiter** in `proxy.ts`: 5 req/60 s on `/auth/*`, 30 req/10 s on `/api/*`; 429 response with `Retry-After` header. Removed misleading `X-RateLimit-Limit: 0` header. No Redis dependency.
+- **Auth event hook hard-rejects** if `AUTH_HOOK_SECRET` is not configured (was silently accepting unauthenticated requests).
+- **Razorpay webhook**: both signature checks use `crypto.timingSafeEqual` (prevents timing-based HMAC oracle attacks).
+- **Auth event logging**: all sign-in, sign-up, MFA, token-refresh events tracked in `audit_logs` via Edge Function webhook.
+
+### Bug Fixes & Code Quality
+- `activeTenanUserId` typo fixed in `notify.ts` interface and `billing-actions.ts` call site → `activeTenantUserId`.
+- `send-reminders` Edge Function: notification links and email CTA now use the real association slug (`/home/<slug>/billing`) instead of dead `/home/-/billing`.
+- `packages/email-templates`: `BillReminderEmailProps` now accepts `accountSlug`; CTA href corrected.
+- `notify.ts` `getEmailAddresses()`: sequential `for` loop replaced with `Promise.all` (eliminates N+1 auth admin API calls).
+- `packages/next/src/routes/index.ts`: useless try/catch wrapper removed (oxlint `no-useless-catch`).
+- Migration `20260806000001`: `CREATE POLICY` statements now idempotent (guarded with `DROP POLICY IF EXISTS`).
+
+### Migrations in This Release
+
+| File | Description |
+|------|-------------|
+| `20260806000001_activity_tracking_and_notifications.sql` | Extends `audit_logs`; adds write RLS policies + seed rows for `notification_providers_config` |
+| `20260806000002_reminder_cron.sql` | pg_cron + pg_net, overdue-recompute + send-reminders schedules |
+
+### Deployment Steps Required
+1. Push migrations: `./scripts/db-push.sh`
+2. Deploy Edge Functions: `supabase functions deploy send-reminders` and `supabase functions deploy auth-events-hook`
+3. Set DB config vars: `app.supabase_project_url` and `app.supabase_service_key` (for cron → Edge Function call)
+4. Register `auth-events-hook` in Supabase Dashboard → Authentication → Hooks
+5. Set env vars: `KALEYRA_SMS_TEMPLATE_BILL_GENERATED`, `KALEYRA_SMS_TEMPLATE_PAYMENT_CONFIRMED`, `KALEYRA_SMS_TEMPLATE_REMINDER`, `KALEYRA_SMS_TEMPLATE_OVERDUE`, `RESEND_API_KEY`
+
+---
+
+## v1.4 — Comprehensive performance audit & optimisation — 2026-08-05
+
+Full end-to-end audit of 72 confirmed bottlenecks across DB queries, API routes, server-side data fetching, and client-side rendering. All high-impact items resolved.
+
+### Database (migration `20260805000002_missing_fk_indexes.sql`)
+- **8 missing FK indexes** added with `CREATE INDEX CONCURRENTLY` — highest-impact: `payments(association_id)` was causing 2-3 s full-table scans on Payments/Billing pages.
+- **GIN trigram indexes** on `profiles.full_name` and `audit_logs.action` for sub-millisecond `ILIKE '%…%'` search.
+- **New `get_unit_ledger_balances()` RPC** — replaces full-table `cash_ledger` fetch + client-side JS reduce with a single DB-side `SUM … GROUP BY`, eliminating thousands of extra rows sent over the wire.
+
+### API routes — serial round-trip elimination
+- **Cash ledger aggregation** (`lib/cash-ledger-aggregation.ts`) — switched to new RPC; eliminates full table scan and JS aggregation.
+- **Bill dispatch** (`admin/bill-dispatch/_lib/dispatch-queries.ts`) — 4-serial-hop bills→payments→receipts→tenancies→profiles collapsed to 2 parallel queries.
+- **Billing units page** — `profiles` join added to units SELECT, eliminating a 5th serial round-trip.
+- **Unit detail page** — same profile join fix; removes a conditional sequential `profiles` fetch.
+- **PDF generation** (`billing/_lib/server/pdf-generation.ts`) — removed duplicate `canAccessUnit()` inside `generate()` closure (was called twice per cache miss); added profiles join to tenancy query.
+- **Razorpay `verify-due` and `create-order-due` routes** — gateway fetch added to the existing `Promise.all`, removing a sequential hop after auth checks.
+- **Statement PDF route** — collapsed `accounts → associations` two-hop serial into a single join query (`accounts!inner`).
+
+### API routes — auth & caching fixes
+- **`cash-ledger-payments/[id]/pdf` and `by-receipt`** — removed redundant `auth.getUser()` calls (already injected by `enhanceRouteHandler`); replaced `console.error` with structured `logger.error`.
+- **`Cache-Control: private, no-store`** added to all on-demand PDF responses (bills export, payments export, cash-ledger PDFs) so Next.js Edge Cache never stores user-specific documents.
+
+### Server-side page data fetching
+- **Members page** — `is_super_admin()` RPC now runs in `Promise.all` alongside `loadMembersPageData()`.
+- **Reports actions** — eliminated duplicate `profiles` fetch in `downloadPdfAction` (was already fetched by `resolveAssociation()`).
+- **Electricity page** — O(bills × readings) nested loop replaced with O(bills + readings) pre-index + backwards scan per bill.
+
+### Client-side rendering
+- **Statement table** — 6 separate `rows.reduce/some` passes replaced with single `useMemo` pass, saving 5 redundant array traversals on every filter change.
+- **Unit billing table counts** — 3 separate `tree.filter` calls merged into one pass per filter change.
+- **Unit billing table metrics** — 3 separate `filtered.reduce/filter` calls merged into one pass.
+- **`UnitRow`** wrapped in `React.memo` — prevents all 25+ unit rows from re-rendering on every filter keystroke.
+- **Electricity page** `meter_readings` query bounded to one period before the oldest visible MESCOM bill — eliminates loading all-time readings history on every page load.
+- **Reports payments tab** `bill_type` filter now applied to Razorpay payments at DB level (was only applied to cash-ledger payments; Razorpay rows were returned unfiltered then discarded client-side).
+- **`/billing/` root `loading.tsx`** added — Next.js now shows the global loader skeleton during server-render of the billing overview instead of a blank page flash.
+- **ZIP export N+1 eliminated** (`api/billing/bills/export/zip`) — `pdf_url` added to initial SELECT; all cached PDFs are now batch-signed in one `createSignedUrls` Storage API call and fetched fully in parallel. Previously: N DB queries + N signed URL calls + N sequential HTTP fetches (batched 5). Now: 0 extra DB queries + 1 batch Storage call + all HTTP fetches in parallel. Saves 4–20 s on typical 10–25 unit exports.
+
+---
+
+## v1.4 — Kaleyra SMS/WhatsApp integration — 2026-08-05
+
+### SMS provider replaced: MSG91/2Factor → Kaleyra
+- **New provider `KaleyraProvider`** in `@kit/sms` — supports SMS OTP and WhatsApp OTP via Kaleyra's v1/v2 REST APIs.
+- **Supabase Edge Function updated** — `custom-sms-hook` now dispatches OTP via Kaleyra when `SMS_PROVIDER=kaleyra`.
+- **DLT template wired up** — sender ID `HABSOL`, template ID `1077123750020216799` ("Ooruda OTP template Habbaa"), region `IN`.
+- **WhatsApp channel ready** — switchable via `KALEYRA_CHANNEL=whatsapp` with per-template copy-code button support (`KALEYRA_WA_HAS_COPY_BUTTON`).
+- **Kaleyra email API documented** as backup to Resend (no mailer adapter change; Resend remains primary).
+- Legacy MSG91 and 2Factor providers retained as fallback options.
+
+---
+
+## v1.4 — Admin Accounts page overhaul + test-phone auto-tagging — 2026-08-05
+
+### Admin accounts page — full UI/UX redesign
+- **Removed "All" tab** — replaced with two concrete tabs: Associations and Users, each showing only relevant columns.
+- **Tab counts** — tabs now show record totals: "Associations (3)" / "Users (63)".
+- **Tab-contextual columns** — Associations tab: Name, Created, Actions. Users tab: Name, Phone, Email, Roles, Created, Actions. The redundant Type column and low-value Updated At column are removed.
+- **Role chips** — roles are now displayed as readable `bg-muted` chips instead of comma-joined plain text. Multi-role users show one chip per role with flex-wrap.
+- **Date-only timestamps** — Created column shows date only (e.g. "14 Jun 2026"); hovering shows the full date+time tooltip.
+- **Tab-contextual Create buttons** — "Create Association" and "Create User" buttons appear inline in the filter row, contextual to the active tab. Abbreviated labels on mobile ("+ Assoc" / "+ User").
+- **Instant client-side tab switching** — all data is fetched once on server load and filtered in-memory on the client. Tab switches and search are instantaneous with no server round-trip. (Previous approach used `router.push` + server prefetch; replaced with local state + client filter since the dataset is small.)
+- **Debounced live search** — search triggers after 200ms of typing; a visible Search button also submits. Placeholder text adapts to the active tab.
+- **Empty state** — friendly empty state with icon and message when no records match a query.
+- **Name/Email truncation** — long names and emails truncate with `…` and show full value on hover.
+- **Table responsive** — Users table sets min-width for horizontal scroll on mobile instead of compressing columns.
+- **Test badge compact** — Test badge is a small `text-[10px]` inline pill that never breaks the name row layout.
+- **Actions menu fixes** — "Delete Personal Account" → "Delete User"; "Send Reset Password link" → "Send Reset Password Link".
+
+### Admin login redirect
+- Super admin landing page (`/admin`) now redirects immediately to `/admin/accounts`. The Dashboard page had no usable content.
+- Dashboard removed from the admin sidebar and mobile nav dropdown.
+
+### Auto-tagging test users by phone prefix
+- Users with a phone number starting with `+9199110000` or `+9199999999` are automatically tagged as test users (`profiles.is_test = true`).
+- A database trigger (`trg_auto_tag_test_phone`) ensures all future users with these prefixes are auto-tagged on insert/update of phone number. Correcting a test phone to a real number un-tags the user.
+- The accounts page also detects test phones in real-time as a fallback (for records created before the migration runs on remote).
+- Backfill covers rows where `is_test IS NOT TRUE` (handles both `false` and `NULL`).
+
+---
+
+## v1.4 — Mobile nav fixes: Bill Dispatch in admin, hamburger always visible — 2026-08-05
+
+### Admin mobile nav — Bill Dispatch missing
+- Bill Dispatch was present in the desktop sidebar but omitted from the admin topbar's mobile dropdown. Added it (gated by the same `NEXT_PUBLIC_ENABLE_BILL_DISPATCH` env flag).
+
+### Team account topbar — hamburger button collapsing on narrow screens
+- The left flex container used `min-w-0`, allowing it to shrink to zero on narrow phones (360–375px) and hide the Menu/hamburger button behind the AssociationSwitcher. Fixed by making the left container `shrink-0` so the button is always guaranteed space.
+- Page label hidden on mobile (`hidden lg:block`) — it wasn't visible at narrow widths anyway and was competing for space.
+- AssociationSwitcher label capped at `max-w-[90px]` on phones (`max-w-[140px]` on sm+) so the name and hamburger coexist on 360px screens.
+
+---
+
+## v1.4 — UX fixes: Edit Unit dialog, billing banner, admin Cancel, sidebar icons — 2026-08-05
+
+### Edit Unit dialog
+- Added **Cancel** button next to Save details — dialog was previously only dismissible via the X icon.
+- Dialog content is now scrollable (`overflow-y-auto`, `max-h-[90vh]`) so the full form is accessible on small screens.
+- **Bill to** option labels shortened and clarified: "Auto (tenant if occupied, else owner)" → "Auto — tenant if occupied, else owner"; added "Always bill owner / Always bill tenant" for clarity.
+- Added form description for the Bill to field: "Controls whose name appears on bills for this unit."
+
+### Maintenance bills callout
+- Removed duplicate icons — the callout was showing both a Wrench and an Info icon side by side. Now shows only the Wrench.
+- Reworded body copy: "Click **Generate Bills** above to create maintenance bills for all active units. The bill amount is calculated based on each unit's area at generation time." — clearer action prompt.
+
+### Admin Edit User — Cancel button
+- Cancel button was a no-op when the dialog was opened from the account detail page (no `onOpenChange` prop passed). Dialog now tracks its own `internalOpen` state and supports both controlled and uncontrolled usage.
+
+### Sidebar nav icons on mobile
+- Nav icons defined with only `w-4` (no `h-4`) caused aspect-ratio mismatches on some mobile browsers where the SVG height defaulted to the lucide size attribute (24px) while width was clamped to 16px. Fixed: icon class is now `w-4 h-4 shrink-0` in both team and personal account navigation configs.
+
+### Bill dispatch — sortable columns
+- Unit, Owner, and Tenant columns in the dispatch table are now sortable. Click a column header to sort ascending; click again to flip to descending. An inactive sort indicator (⇅) is shown on unsorted columns. Locale-aware sort via `localeCompare('en-IN')`.
+
+---
+
+## v1.4 — Bill Dispatch: UX polish, correctness fixes & PDF auto-generation — 2026-08-05
+
+### Sortable columns
+- Unit, Owner, and Tenant columns in the dispatch table are now sortable. Click a column header to sort ascending; click again to flip to descending. An inactive sort indicator (⇅) is shown on unsorted columns. Locale-aware sort via `localeCompare('en-IN')`.
+
+---
+
+## v1.4 — Bill Dispatch: UX polish, correctness fixes & PDF auto-generation — 2026-08-05
+
+### Owner / Tenant email toggle
+- Each dispatch row now has an **Owner / Tenant** toggle so the operator can choose who receives the email. Defaults to Owner; switches to Tenant when only the tenant has an email on file.
+- Added **Tenant Name** column. Removed Status column (payment status doesn't belong in a dispatch view).
+- Toggle buttons have equal fixed widths (`58px` each). Unavailable side is greyed out with `cursor-not-allowed`.
+
+### PDF auto-generation on send
+- Bills or receipts with no cached PDF (`pdf_url = null`) no longer block dispatch. The server now calls `getOrGenerateBillPdf` / `getOrGenerateReceiptPdf` with `skipAuth: true` at send time, generating and attaching the PDF on-the-fly.
+- "No PDF" warning replaced with a muted grey "Auto-generate on send" hint — not a blocker.
+- Storage-miss retry: if the cached storage object was deleted after the snapshot, the server nulls `pdf_url` and regenerates rather than failing silently.
+- Summary bar shows an informational chip ("N PDFs will be generated on send") rather than a warning.
+
+### Receipts mode — advance credit bills
+- Bills fully paid via advance credit (no `payments` row) now display a grey **"Advance credit"** label in receipts mode instead of an alarming "No receipt" warning. They are skipped cleanly with an info chip in the summary bar.
+
+### Correctness fixes
+- **Receipts mode was empty:** `.eq('status', 'paid')` matched zero rows — DB stores `'Paid'` (Title Case). Fixed.
+- **Bill status filter:** replaced `.neq('status', 'Void')` blocklist with `.in('status', ['Unpaid', 'Partial', 'Paid', 'Overdue'])` allowlist.
+- **`paymentIdByBill` / `receiptByBill` mismatch:** for bills with multiple partial payments, the two maps could point to different payment rows. Fixed by deriving `paymentIdByBill` from `receiptByBill` after adding `ORDER BY paid_at DESC`.
+- **Receipt fallback storage path:** was queried by `receiptId`; now uses `payment_id` to match the PDF generation call.
+- **Timezone off-by-one:** due dates rendered one day early when ISO strings are parsed as UTC midnight. Added `timeZone: 'Asia/Kolkata'` to both the dispatch client (`formatDueDate`) and the email template (`dueDateLabel`).
+- **`recipientEmail` rename:** `SendBillEmailsInput.items` field was `ownerEmail`; renamed to `recipientEmail` to reflect that it may be the tenant's address.
+- **`downloadFromStorage` type:** parameter changed from `client: any` to `client: SupabaseClient` with a proper import.
+- **`emailTargets` state:** changed from `Map<string, EmailTarget>` (non-idiomatic in React) to `Record<string, EmailTarget>` with spread updates.
+- **`skipAuth` added to `getOrGenerateReceiptPdf`:** mirrors existing bill pattern; outer pre-check and inner `canAccessUnit` call are both bypassed when `skipAuth: true`.
+
+---
+
+## v1.4 — Bill Dispatch Bug Fixes — 2026-08-05
+
+### Email template — layout, dark mode & copy
+
+- **Detail table rendered as stacked lines with large gaps.** The label/value rows used `<Row>` with `<Text>` children — react-email's `Row` renders a `<tr>`, so a `<Text>` (a `<p>`) inside it is invalid HTML and mail clients hoisted it out of the table, stacking label and value on separate lines. Rebuilt with `Row` + `Column` (proper `<td>` cells) and fixed 42/58 column widths so values align across all rows.
+- **Dark mode:** added `color-scheme` / `supported-color-schemes` meta tags so Apple Mail, iOS Mail and Outlook no longer auto-invert the email. Gmail's Android app force-inverts regardless of these hints — the palette stays legible when it does, but full control is not possible there.
+- **Bill type case:** subjects and headings showed the raw DB value ("Your maintenance Bill"). Now title-cased via `formatBillType()`, so `other_charges` renders as "Other Charges".
+- **Copy:** removed the duplicated bill-type wording between heading and body, added the association name to the body, and made the preview text useful (amount + due date rather than a repeat of the subject).
+- Spacing tightened throughout; body text raised to 15px/24px.
+
+### Attachments
+
+- **Missing attachment sent silently.** `fetchPdfAsBase64` returned `null` on failure and the email was sent anyway — delivering a bill that claims "attached to this email" with nothing attached. It now throws, and the item is reported as failed instead of being sent.
+- **Invalid attachment filenames.** Bill numbers contain slashes (`DT/26-27/MNT/000006`), which are path separators; Gmail showed truncated names. Added `toSafeFilename()` → `Bill_DT-26-27-MNT-000006_2026-08.pdf`.
+- **Receipts mode no longer falls back to the bill PDF.** Previously a paid bill with no receipt PDF would send a "Payment Receipt" email with the *invoice* attached. Receipts now require an actual receipt PDF.
+
+### Bill Dispatch screen
+
+- Rows with no PDF are now flagged ("No PDF" under the bill number), excluded from auto-selection, and counted in a warning chip — matching the existing "no email" treatment. Previously these rows looked sendable and failed silently at send time.
+- Page heading aligned with the content below it (`PageHeader` lacks the `lg:px-4` that `PageBody` carries).
+
+### Diagnostics
+
+- Each failed dispatch now logs at `error` level with the unit, bill number and full stack. The audit log previously recorded only counts, so the cause of a failure was unrecoverable. The client still receives only the sanitized message.
+
+---
+
+## v1.4 — Bill Dispatch Tool + Security Hardening — 2026-08-04
+
+### Feature: Bulk Bill & Receipt Email Dispatch (internal, non-prod only)
+
+A temporary super-admin tool at `/admin/bill-dispatch` for manually sending generated bills and payment receipts to unit owners via email. Gated by `NEXT_PUBLIC_ENABLE_BILL_DISPATCH=true` — must not be set in production.
+
+**How it works:**
+- Select an association, billing period, and bill type (All / Maintenance / Electricity / Other Charges / Sinking Fund).
+- Toggle between **Bills** mode (any status) and **Receipts** mode (paid-only).
+- Results capped at 50 records. Units with no owner email on file are flagged and skipped.
+- Confirmation dialog before sending (irreversible). Results summary shown after dispatch.
+- Emails sent via Resend with the PDF bill or receipt attached (downloaded from Supabase storage).
+
+**Email templates (`packages/email-templates`):**
+- Two new react-email templates: `BillEmail` (amber amount-due box) and `ReceiptEmail` (green amount-paid box).
+- Branding matches existing Ooruda OTP email — amber header bar, "ooruda" wordmark, warm-grey detail table.
+- Added to `src/index.ts` and `src/registry.ts`.
+
+**Security:**
+- All server functions (`fetchAssociationsForDispatch`, `fetchBillsForDispatch`, `sendBillEmailsAction`) guarded with `isSuperAdmin()` — throws if caller is not a super admin.
+- `billType` validated against a server-side whitelist (`VALID_BILL_TYPES`) before interpolation into PostgREST `.or()` filter — prevents filter injection.
+- `RESEND_API_KEY` throws explicitly if undefined (no silent empty-string fallback).
+- Resend HTTP errors are sanitized to `Email delivery failed (HTTP <status>)` — raw response body is not surfaced to the client.
+- Both server files marked `import 'server-only'`.
+- Dispatch events logged via `getLogger()` for audit trail.
+
+**Shared config (`dispatch-config.ts`):** `DISPATCH_SENDER_EMAIL` and `VALID_BILL_TYPES` constants are shared between server and client to keep values in one place.
+
+---
+
+## v1.4 — Void Bills + Billing UX Polish — 2026-08-03
+
+### UX Polish — Billing Dashboard & Drafts (batch 2)
+
+**Screenshot 1 — Billing dashboard tiles:**
+- All four KPI tiles now render at equal height. Added `h-full` to the `Tile` link wrapper and to `MetricCard`, so the tile with no sublabel (e.g. "This Month Billed" when percent is unavailable) no longer appears shorter than its neighbours.
+
+**Screenshot 2 — Drafts page:**
+- **Draft count fix:** Maintenance pending was counted as 1 item in both the "Items pending" summary chip and the Billing dashboard badge. Maintenance is not a stageable/quantifiable item — it has no amount until generation. Both counts now reflect only actual billable items (electricity invoices + other charges + sinking fund charges).
+- **Maintenance chip:** Replaced the period-only chip with "August 2026 · Not yet generated" using a muted treatment so it reads as informational rather than a number to act on.
+- **Maintenance section redesign:** Replaced the `DraftSection` card (which visually mimicked the electricity data table) with a distinct blue info banner, making it clear this is a notification about future generation rather than a list of staged items.
+- **Page-level total:** Added a highlighted "Total charges" chip showing the sum of all quantified pending amounts (electricity + other charges + sinking fund) — giving an admin a single number when deciding whether to generate now or wait.
+- **Button cursor:** Added a global CSS rule (`button:not(:disabled) { cursor: pointer }`) so all clickable buttons show the hand cursor on hover.
+
+**Unit billing detail (Screenshot 3 — 7 fixes):**
+- Bulk void button hidden on fully-paid periods.
+- Bulk void button given a visible danger outline and "Void" text label.
+- Void Bill button icon changed from XCircle → Ban (correct semantic icon for voiding).
+- "Overdue Bills" stat tile hidden when overdueCount is 0 (reduces visual noise on healthy units).
+- "Status:" label added before the unit status badge for clarity.
+- Due date shows amber warning when bill is due within 7 days, with a "Nd left" countdown.
+- Period label added above the due date in the bill detail panel.
+
+### Feature: Cancel Bills
+
+Administrators can now cancel (void) bills that were generated incorrectly, without deleting them. This preserves the full audit trail while allowing corrected bills to be re-generated for the same period.
+
+**Key design decisions:**
+- Only `assoc_admin` can cancel bills. Billing operators cannot.
+- Bills with any payments or advance credit applied are blocked from cancellation — the admin must reverse those transactions first.
+- A cancellation reason is mandatory.
+- Bill numbers are permanently retired. Even after cancellation, the bill row stays in the database with its unique bill number, so the same number is never assigned to a new bill.
+- After cancellation, new bills can be generated for the same unit/period/charge type — the generation logic skips void bills when checking for duplicates.
+
+**Changes:**
+
+**Database migration (`20260803000000_void_bill.sql`):**
+- Added `'Void'` to the `bills.status` check constraint.
+- Added `void_reason`, `voided_at`, `voided_by` audit columns to `bills`.
+- Patched `sync_bill_payment_status()` trigger to skip status updates on already-voided bills (prevents payment aggregation from overwriting the Void status).
+- Created `void_bill(bill_id, reason)` SECURITY DEFINER function — validates role, checks for payments, then marks the bill Void.
+- Created `void_bills_bulk(association_id, period, bill_type, reason)` SECURITY DEFINER function — voids all eligible bills for a period, silently skipping any that have payments attached. Returns count of bills voided.
+
+**Bill generation:** Added `.neq('status', 'Void')` to the existing bills check so voided bills are invisible to the duplicate-detection logic.
+
+**UI — Single bill cancel:**
+- A "Cancel Bill" button appears in the bill detail panel for `assoc_admin` users on bills with no payments.
+- Clicking opens a confirmation dialog with a required reason field and a warning about irreversibility.
+- Cancelled bills show a strikethrough label and no longer display a PDF download link.
+
+**UI — Bulk cancel (period-level):**
+- A trash icon appears next to the bill count in each period row for `assoc_admin` users.
+- Opens a bulk cancel dialog showing the bill count for the period. Bills with payments are automatically skipped (not errored).
+
+**Reports:** Outstanding bills queries in `reports-actions.ts` and `reports-client-page.tsx` now exclude `status = 'Void'` so cancelled bills don't inflate outstanding balances.
+
+---
+
 ## Bug Fixes & UX Polish — 2026-07-31 (batch 3)
 
 ### Reports — PDF filter disclosure & tab-aware title
@@ -658,6 +995,12 @@ Owner dashboard "Amount Due" now aggregates outstanding across ALL unpaid/partia
 | `20260707132123_sync_test_user_account_names.sql` | Jul 7 | Sync `accounts.name` from `profiles.full_name` for all test users (display name fix) |
 | `20260708000001_unit_status_self_occupied_rented.sql` | Jul 8 | Drop `Occupied` CHECK; migrate existing rows; add CHECK for `Self Occupied`, `Rented`, `Vacant` |
 | `20260709000001_meter_readings_load_kva.sql` | Jul 9 | Add nullable `load_kva` column to `meter_readings` for per-reading tracking |
+| `20260729000002_collection_summary_advance.sql` | Jul 29 | Advance credit support in collection summary |
+| `20260731000000_query_performance.sql` | Jul 31 | Query performance indexes |
+| `20260803000000_void_bill.sql` | Aug 3 | Void bill support |
+| `20260804093956_reconcile_schema_drift.sql` | Aug 4 | Reconcile schema drift |
+| `20260804143333_smoke_test_push_workflow.sql` | Aug 4 | Smoke test migration for push workflow verification |
+| `20260805000001_auto_tag_test_phone_users.sql` | Aug 5 | Auto-tag `profiles.is_test = true` for phones starting with `+91991100` or `+9199999`; trigger for new users |
 
 ---
 
@@ -3064,3 +3407,39 @@ GST-registered"), not proof that tax was charged; GST is only levied when the as
   `hasAreaColumns`. The description column absorbs the freed width (`flexGrow: 1`).
 
 _Last updated: 2026-07-31_
+
+---
+
+## Infrastructure: Three-Environment Setup — 2026-08-04
+
+### Overview
+
+Separated the single Supabase project into three distinct environments — local Docker, Ooruda Development (staging), and Ooruda Production — to eliminate the risk of feature development affecting live data.
+
+### Environments
+
+| Environment | Supabase Project | Branch | Deployment |
+|---|---|---|---|
+| Local | Docker (local) | any | `pnpm supabase:web:start` |
+| Dev/Staging | Ooruda Development (`bcdosjrbkkemsqowhigj`) | `release` | ooruda.vercel.app |
+| Production | Ooruda Production (`vkxchopjqakvftcnxwie`) | `main` | ooruda.com |
+
+### Changes
+
+- **Schema reconciliation migration** (`20260804093956_reconcile_schema_drift.sql`): Dropped two orphaned functions (`get_user_id_by_email`, `get_user_id_by_phone`), fixed `account_image` storage policy WITH CHECK clause, revoked all anon table grants and blocked future grants via ALTER DEFAULT PRIVILEGES.
+- **Ooruda Development project** created on Supabase with all 112 migrations applied, storage buckets configured, edge functions deployed, auth hooks wired, and SMS secrets added to match production.
+- **Dev database seeded** with production data backup then scrubbed of all real association data — only 3 test associations and test users remain.
+- **`.env.local`** restructured with active/inactive blocks for easy environment switching.
+- **`scripts/db-push.sh`** — guardrail script added to prevent accidental migration pushes to production. Blocks `supabase db push --linked` unless `--production` flag is explicitly passed with a "yes" confirmation. Deployed to all active branches (`main`, `release`, `bugfixes`, `bugfixes_main`, `v1.4`).
+- **AGENTS.md** updated to document the 3-environment workflow and standard migration end-to-end steps.
+
+### Migrations Changelog — v1.4
+
+| Migration | Description |
+|---|---|
+| `20260803000000_void_bill.sql` | Add `'Void'` status, `void_reason/voided_at/voided_by` columns, guard `sync_bill_payment_status` trigger, `void_bill()` and `void_bills_bulk()` SECURITY DEFINER functions |
+| `20260728000002_cash_ledger_bill_numbering.sql` | Patched to enable RLS on `cash_ledger_sequences` (missed in original migration) |
+| `20260804093956_reconcile_schema_drift.sql` | Drop orphaned functions, fix `account_image` storage policy, revoke anon grants |
+| `20260805000002_missing_fk_indexes.sql` | 8 missing FK indexes (CONCURRENTLY), GIN trigram indexes on `profiles.full_name` and `audit_logs.action`, new `get_unit_ledger_balances()` RPC for DB-side aggregation |
+
+_Last updated: 2026-08-05_  <!-- Performance audit Phase 1-9 -->

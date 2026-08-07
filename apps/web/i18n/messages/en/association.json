@@ -15,7 +15,7 @@
     "admin": "Admin",
     "members": "Members",
     "settings": "Billing settings",
-    "audit": "Activity Log"
+    "audit": "Audit Log"
   },
   "label": "Association",
   "labelPlural": "Associations",

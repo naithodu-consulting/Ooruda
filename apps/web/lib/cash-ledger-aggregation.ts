@@ -28,48 +28,50 @@ export async function loadUnitLedgerBalances(
   const unitNoMap = new Map(units.map((u) => [u.id, u.unit_no]));
 
   const client = getSupabaseServerClient();
+  // Use server-side aggregation RPC instead of fetching all raw rows.
+  // get_unit_ledger_balances() returns one row per (unit_id, bill_type)
+  // with a pre-computed net balance, avoiding large payload transfers.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (client as any)
-    .from('cash_ledger')
-    .select('unit_id, bill_type, amount, direction')
-    .eq('association_id', associationId)
-    .in('unit_id', unitIds);
+  const { data } = await (client as any).rpc('get_unit_ledger_balances', {
+    p_association_id: associationId,
+    p_unit_ids: unitIds,
+  });
 
   if (!data) return [];
 
-  const perUnitType = new Map<string, number>();
+  // Nested map avoids fragile string-concatenation keys.
+  const perUnitType = new Map<string, Map<string, number>>();
   for (const row of data as {
     unit_id: string;
     bill_type: string;
-    amount: number;
-    direction: string;
+    net: number;
   }[]) {
-    const key = `${row.unit_id}:${row.bill_type}`;
-    const delta = row.direction === 'credit' ? row.amount : -row.amount;
-    perUnitType.set(key, (perUnitType.get(key) ?? 0) + delta);
+    if (!perUnitType.has(row.unit_id)) perUnitType.set(row.unit_id, new Map());
+    perUnitType.get(row.unit_id)!.set(row.bill_type, Number(row.net));
   }
 
   const unitMap = new Map<string, UnitCashLedgerBalance>();
-  for (const [key, bal] of perUnitType) {
-    if (bal === 0) continue;
-    const [unit_id, bill_type] = key.split(':') as [string, string];
-    if (!unitMap.has(unit_id)) {
-      unitMap.set(unit_id, {
-        unit_id,
-        unit_no: unitNoMap.get(unit_id) ?? unit_id,
-        totalCredit: 0,
-        totalDue: 0,
-        credits: [],
-        dues: [],
-      });
-    }
-    const entry = unitMap.get(unit_id)!;
-    if (bal > 0) {
-      entry.totalCredit += bal;
-      entry.credits.push({ bill_type, amount: bal });
-    } else {
-      entry.totalDue += Math.abs(bal);
-      entry.dues.push({ bill_type, amount: Math.abs(bal) });
+  for (const [unit_id, byType] of perUnitType) {
+    for (const [bill_type, bal] of byType) {
+      if (bal === 0) continue;
+      if (!unitMap.has(unit_id)) {
+        unitMap.set(unit_id, {
+          unit_id,
+          unit_no: unitNoMap.get(unit_id) ?? unit_id,
+          totalCredit: 0,
+          totalDue: 0,
+          credits: [],
+          dues: [],
+        });
+      }
+      const entry = unitMap.get(unit_id)!;
+      if (bal > 0) {
+        entry.totalCredit += bal;
+        entry.credits.push({ bill_type, amount: bal });
+      } else {
+        entry.totalDue += Math.abs(bal);
+        entry.dues.push({ bill_type, amount: Math.abs(bal) });
+      }
     }
   }
 

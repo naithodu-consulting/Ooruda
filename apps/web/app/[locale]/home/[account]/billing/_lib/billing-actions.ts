@@ -8,10 +8,18 @@ import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client'
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
+import { sendBillGeneratedNotifications } from '~/lib/notify';
 import { getAssociationRole } from '~/lib/rbac';
 
 import { getCashLedgerBalance } from '../../cash-ledger/_lib/cash-ledger-service';
-import { type GenerateBillsInput, GenerateBillsSchema } from './billing-schema';
+import {
+  type GenerateBillsInput,
+  GenerateBillsSchema,
+  type VoidBillInput,
+  VoidBillSchema,
+  type VoidBillsBulkInput,
+  VoidBillsBulkSchema,
+} from './billing-schema';
 import { preRenderBillPdf } from './server/pdf-generation';
 
 const BILLING_PATH = '/home/[account]/billing';
@@ -29,6 +37,18 @@ async function requireBillingAccess(
 
   if (role !== 'assoc_admin' && role !== 'billing_operator') {
     return 'Only an association admin or billing operator can do that.';
+  }
+
+  return null;
+}
+
+async function requireAdminAccess(
+  associationId: string,
+): Promise<string | null> {
+  const role = await getAssociationRole(associationId);
+
+  if (role !== 'assoc_admin') {
+    return 'Only an association admin can do that.';
   }
 
   return null;
@@ -104,14 +124,15 @@ export async function generateBillsAction(
       .single(),
     client
       .from('associations')
-      .select('gst_enabled, gst_rate')
+      .select('gst_enabled, gst_rate, accounts!inner(name, slug)')
       .eq('id', associationId)
       .single(),
     client
       .from('bills')
       .select('unit_id, bill_no')
       .eq('association_id', associationId)
-      .eq('period', period),
+      .eq('period', period)
+      .neq('status', 'Void'),
   ]);
 
   const activeChargeTypes = chargeTypes ?? [];
@@ -137,6 +158,12 @@ export async function generateBillsAction(
 
   const gstEnabled = association.gst_enabled ?? false;
   const gstRate = association.gst_rate ?? 0;
+  const assocAccounts = association.accounts as {
+    name?: string;
+    slug?: string;
+  } | null;
+  const associationName = assocAccounts?.name ?? '';
+  const accountSlug = assocAccounts?.slug ?? '';
   const calculateDueDate = (billingPeriod: string, day: number) =>
     `${billingPeriod}-${String(day).padStart(2, '0')}`;
   // Electricity bills are due in the NEXT calendar month after the billing period.
@@ -189,10 +216,8 @@ export async function generateBillsAction(
           .eq('period', period)
           .eq('billed', false)
       : Promise.resolve({ data: [] as PendingRow[] }),
-    // pending_sinking_fund_charges is not yet in generated types — cast to any.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     sinkingFundCT
-      ? (client as any)
+      ? client
           .from('pending_sinking_fund_charges')
           .select('id, unit_id, label, amount, split_mode, due_date')
           .eq('association_id', associationId)
@@ -506,6 +531,7 @@ export async function generateBillsAction(
               associationId,
               action: 'bills.generation.failed',
               entityType: 'bill',
+              eventType: 'error',
               summary: `Failed to allocate bill number for ${typePrefix} in period ${period}: ${seqError?.message ?? 'no bill number returned'}`,
             });
             return false;
@@ -575,6 +601,7 @@ export async function generateBillsAction(
               associationId,
               action: 'bills.generation.failed',
               entityType: 'bill',
+              eventType: 'error',
               summary: `Failed to generate ${type} bill for period ${period} (unit ${unit.id}): ${rpcError.message}`,
             });
             return false;
@@ -766,8 +793,7 @@ export async function generateBillsAction(
   }
   if (shouldGenSinking && sinkingCreated > 0 && pendingSinkingRows.length > 0) {
     const sinkingIds = pendingSinkingRows.map((r) => r.id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (client as any)
+    await client
       .from('pending_sinking_fund_charges')
       .update({ billed: true })
       .in('id', sinkingIds);
@@ -789,6 +815,71 @@ export async function generateBillsAction(
     } catch {
       // non-fatal: bills are committed; audit log failure must not shadow the result
     }
+
+    // Fire bill-generated notifications for all newly created bills via after()
+    // so it never blocks the response.
+    after(async () => {
+      const adminClient = getSupabaseServerAdminClient();
+
+      // Bills with units — no tenancies join (no FK from bills→tenancies)
+      const { data: newBills } = await adminClient
+        .from('bills')
+        .select(`
+          id, bill_no, bill_type, total_amount, due_date,
+          units!inner(id, unit_no, owner_id)
+        `)
+        .eq('association_id', associationId)
+        .eq('period', period)
+        .neq('status', 'Void')
+        .order('bill_no', { ascending: true })
+        .limit(500);
+
+      if (!newBills?.length) return;
+
+      // Fetch active tenancies for these units separately
+      const unitIds = [
+        ...new Set(
+          newBills
+            .map((b) => {
+              const unit = Array.isArray(b.units) ? b.units[0] : b.units;
+              return unit?.id;
+            })
+            .filter(Boolean),
+        ),
+      ] as string[];
+
+      const { data: activeTenancies } = await adminClient
+        .from('tenancies')
+        .select('unit_id, tenant_id')
+        .in('unit_id', unitIds)
+        .eq('status', 'active');
+
+      const tenancyByUnit = new Map(
+        (activeTenancies ?? []).map((t) => [t.unit_id, t.tenant_id]),
+      );
+
+      const billedUnits = newBills.map((b) => {
+        const unit = Array.isArray(b.units) ? b.units[0] : b.units;
+        return {
+          unitId: unit?.id ?? '',
+          unitNo: unit?.unit_no ?? '',
+          ownerUserId: unit?.owner_id ?? null,
+          activeTenantUserId: tenancyByUnit.get(unit?.id ?? '') ?? null,
+          billNo: b.bill_no,
+          billType: b.bill_type,
+          period,
+          totalAmount: b.total_amount,
+          dueDate: b.due_date,
+        };
+      });
+
+      await sendBillGeneratedNotifications({
+        associationId,
+        associationName,
+        accountSlug,
+        billedUnits,
+      });
+    });
   }
 
   revalidatePath(BILLING_PATH, 'page');
@@ -1057,18 +1148,15 @@ export async function addSinkingFundChargeToUnitAction(
   if (unitError || !unit)
     return { success: false, error: 'Unit not found in this association.' };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (client as any)
-    .from('pending_sinking_fund_charges')
-    .insert({
-      association_id: associationId,
-      unit_id: input.unit_id,
-      period: input.period,
-      label: input.label.trim(),
-      amount: input.amount,
-      split_mode: null,
-      due_date: input.due_date ?? null,
-    });
+  const { error } = await client.from('pending_sinking_fund_charges').insert({
+    association_id: associationId,
+    unit_id: input.unit_id,
+    period: input.period,
+    label: input.label.trim(),
+    amount: input.amount,
+    split_mode: null,
+    due_date: input.due_date ?? null,
+  });
 
   if (error) return { success: false, error: error.message };
   revalidatePath(BILLING_PATH, 'page');
@@ -1096,18 +1184,15 @@ export async function bulkAddSinkingFundChargeAction(
     return { success: false, error: 'Amount must be positive.' };
 
   const client = getSupabaseServerClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (client as any)
-    .from('pending_sinking_fund_charges')
-    .insert({
-      association_id: associationId,
-      unit_id: null,
-      period: input.period,
-      label: input.label.trim(),
-      amount: input.amount,
-      split_mode: input.split_mode,
-      due_date: input.due_date ?? null,
-    });
+  const { error } = await client.from('pending_sinking_fund_charges').insert({
+    association_id: associationId,
+    unit_id: null,
+    period: input.period,
+    label: input.label.trim(),
+    amount: input.amount,
+    split_mode: input.split_mode,
+    due_date: input.due_date ?? null,
+  });
 
   if (error) return { success: false, error: error.message };
   revalidatePath(BILLING_PATH, 'page');
@@ -1123,8 +1208,7 @@ export async function removePendingSinkingFundChargeAction(
 
   const client = getSupabaseServerClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: charge } = await (client as any)
+  const { data: charge } = await client
     .from('pending_sinking_fund_charges')
     .select('billed')
     .eq('id', chargeId)
@@ -1138,8 +1222,7 @@ export async function removePendingSinkingFundChargeAction(
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (client as any)
+  const { error } = await client
     .from('pending_sinking_fund_charges')
     .delete()
     .eq('id', chargeId)
@@ -1220,4 +1303,95 @@ export async function deleteAllBillsAction(associationId: string): Promise<
     deletedPayments: data.deleted_payments,
     deletedReceipts: data.deleted_receipts,
   };
+}
+
+// ── Void bill ─────────────────────────────────────────────────────────────────
+
+export async function voidBillAction(
+  associationId: string,
+  input: VoidBillInput,
+): Promise<ActionResult> {
+  const roleError = await requireAdminAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  const parsed = VoidBillSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Please check the form.',
+    };
+  }
+
+  const { billId, reason } = parsed.data;
+  const client = getSupabaseServerClient();
+
+  const { error } = await client.rpc('void_bill', {
+    p_bill_id: billId,
+    p_reason: reason,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  after(() =>
+    logAuditEvent({
+      associationId,
+      action: 'bill.voided',
+      entityType: 'bill',
+      entityId: billId,
+      summary: `Bill cancelled. Reason: ${reason}`,
+    }),
+  );
+
+  revalidatePath(BILLING_PATH, 'page');
+  revalidatePath('/home/[account]/payments', 'page');
+
+  return { success: true };
+}
+
+export async function voidBillsBulkAction(
+  associationId: string,
+  input: VoidBillsBulkInput,
+): Promise<ActionResult & { voided?: number }> {
+  const roleError = await requireAdminAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  const parsed = VoidBillsBulkSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Please check the form.',
+    };
+  }
+
+  const { period, billType, reason } = parsed.data;
+  const client = getSupabaseServerClient();
+
+  const { data, error } = await client.rpc('void_bills_bulk', {
+    p_association_id: associationId,
+    p_period: period,
+    p_bill_type: billType,
+    p_reason: reason,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const voided = data as unknown as number;
+
+  after(() =>
+    logAuditEvent({
+      associationId,
+      action: 'bill.bulk_voided',
+      entityType: 'bill',
+      summary: `Bulk cancelled ${voided} bills for ${period} (type: ${billType}). Reason: ${reason}`,
+    }),
+  );
+
+  revalidatePath(BILLING_PATH, 'page');
+  revalidatePath('/home/[account]/payments', 'page');
+
+  return { success: true, voided };
 }

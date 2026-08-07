@@ -1,15 +1,9 @@
-import { AdminDashboard } from '@kit/admin/components/admin-dashboard';
+import { redirect } from 'next/navigation';
+
 import { AdminGuard } from '@kit/admin/components/admin-guard';
-import { PageBody, PageHeader } from '@kit/ui/page';
 
-function AdminPage() {
-  return (
-    <PageBody>
-      <PageHeader description={`Super Admin`} />
-
-      <AdminDashboard />
-    </PageBody>
-  );
+function AdminPage(): never {
+  redirect('/admin/accounts');
 }
 
 export default AdminGuard(AdminPage);

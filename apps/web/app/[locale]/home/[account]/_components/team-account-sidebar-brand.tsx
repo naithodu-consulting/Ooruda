@@ -2,10 +2,10 @@ import Link from 'next/link';
 
 import { OorudaMark } from '~/components/ooruda-mark';
 
-export function TeamAccountSidebarBrand() {
+export function TeamAccountSidebarBrand({ account }: { account: string }) {
   return (
     <Link
-      href={'/home'}
+      href={`/home/${account}`}
       aria-label={'Ooruda Home'}
       className="flex items-center gap-2.5 px-1 group-data-[collapsible=icon]:justify-center"
     >

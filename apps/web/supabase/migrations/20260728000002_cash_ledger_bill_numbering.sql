@@ -34,6 +34,8 @@ create table if not exists public.cash_ledger_sequences (
 -- Only accessed by SECURITY DEFINER functions below — no direct client access.
 revoke all on public.cash_ledger_sequences from authenticated, anon, service_role;
 
+alter table public.cash_ledger_sequences enable row level security;
+
 -- ── 2. Helper: _allocate_ledger_doc_no ───────────────────────────────────────
 -- Called only from SECURITY DEFINER functions that have already validated auth.
 -- No caller-role check here; the callers are responsible for authorization.

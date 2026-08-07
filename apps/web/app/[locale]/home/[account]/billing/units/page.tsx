@@ -95,9 +95,6 @@ export default async function BillingUnitsPage({
   const unitRows = unitsResult.data ?? [];
   const unitNoById = new Map(unitRows.map((u) => [u.id, u.unit_no]));
 
-  // Deliberately scoped to the owners actually on screen. This costs one extra
-  // round trip because it depends on the units result, but selecting `profiles`
-  // unscoped would read far more rows than this page has any business seeing.
   const ownerIds = [
     ...new Set(
       unitRows.map((u) => u.owner_id).filter((id): id is string => !!id),

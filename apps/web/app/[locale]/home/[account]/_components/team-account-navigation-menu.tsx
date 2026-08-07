@@ -54,7 +54,11 @@ export function TeamAccountNavigationMenu(props: {
 
       <div className={'flex items-center justify-end space-x-1'}>
         <If condition={featureFlagsConfig.enableNotifications}>
-          <TeamAccountNotifications accountId={account.id} userId={user.id} />
+          <TeamAccountNotifications
+            accountId={account.id}
+            userId={user.id}
+            accountSlug={account.slug ?? ''}
+          />
         </If>
 
         <div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -59,6 +61,15 @@ export function AdminEditUserDialog(
   const router = useRouter();
   const isTeamMode = !!props.teamAccountId;
 
+  // Support both controlled (open/onOpenChange) and uncontrolled (trigger-only) usage.
+  const [internalOpen, setInternalOpen] = useState(false);
+  const controlled = props.open !== undefined;
+  const dialogOpen = controlled ? props.open : internalOpen;
+  const handleOpenChange = (open: boolean) => {
+    if (!controlled) setInternalOpen(open);
+    props.onOpenChange?.(open);
+  };
+
   // Form validation schema: enforces mandatory name, phone, and role (if team mode)
   const FormSchema = z.object({
     fullName: z
@@ -94,9 +105,7 @@ export function AdminEditUserDialog(
     onSuccess: () => {
       toast.success('User details updated successfully');
       router.refresh();
-      if (props.onOpenChange) {
-        props.onOpenChange(false);
-      }
+      handleOpenChange(false);
     },
     onError: (err) => {
       toast.error(err.error?.serverError ?? 'Failed to update user');
@@ -117,7 +126,7 @@ export function AdminEditUserDialog(
   };
 
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+    <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
       {props.children && (
         <DialogTrigger render={props.children as React.ReactElement} />
       )}
@@ -242,7 +251,7 @@ export function AdminEditUserDialog(
                 type="button"
                 variant="outline"
                 disabled={isPending}
-                onClick={() => props.onOpenChange?.(false)}
+                onClick={() => handleOpenChange(false)}
               >
                 Cancel
               </Button>

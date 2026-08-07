@@ -6,7 +6,7 @@ import { NavigationConfigSchema } from '@kit/ui/navigation-schema';
 import featureFlagsConfig from '~/config/feature-flags.config';
 import pathsConfig from '~/config/paths.config';
 
-const iconClasses = 'w-4';
+const iconClasses = 'w-4 h-4 shrink-0';
 
 const routes = [
   {
