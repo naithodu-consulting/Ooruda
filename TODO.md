@@ -111,6 +111,32 @@ Consider whether auth_event and error rows should have a longer retention (180 d
 
 ---
 
+## Known gap: Admin action errors not logged to Activity Log
+
+**Priority:** Low  
+**File:** `packages/features/admin/src/lib/server/admin-server-actions.ts`
+
+Safe-action failures (e.g. duplicate email on Edit User, invalid phone) throw and return a typed error to the UI but never write to `audit_logs`. The Errors tab in the super-admin Activity Log only shows rows explicitly written with `event_type: 'error'` via `lib/audit-log.ts` — unhandled safe-action throws are invisible there.
+
+**Fix:** Add a `catch` block in each admin action that writes a failure row:
+
+```ts
+} catch (err) {
+  await logAuditEvent({
+    action: 'admin.update_user.failed',
+    eventType: 'error',
+    summary: err instanceof Error ? err.message : String(err),
+    entityType: 'user',
+    entityId: userId,
+  });
+  throw err; // re-throw so safe-action still returns the error to the UI
+}
+```
+
+Affects all actions in `admin-server-actions.ts`. Consider a shared `withAuditError()` wrapper to avoid repetition.
+
+---
+
 ## Enhancement: URL sync for Payments page type/unit filters
 
 **Priority:** Low  

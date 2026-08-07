@@ -202,9 +202,18 @@ function buildReminderEmailHtml(params: {
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
-Deno.serve(async (_req) => {
+Deno.serve(async (req) => {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+    // Optional test filters — pass in request body to restrict to one unit/association
+    let testUnitId: string | null = null;
+    let testAssociationId: string | null = null;
+    try {
+      const body = await req.json().catch(() => ({}));
+      testUnitId = body.test_unit_id ?? null;
+      testAssociationId = body.test_association_id ?? null;
+    } catch { /* no body — cron invocation */ }
 
     // Check which channels are enabled (platform defaults, association_id IS NULL)
     const { data: channelConfigs } = await supabase
@@ -238,10 +247,12 @@ Deno.serve(async (_req) => {
     today.setHours(0, 0, 0, 0);
 
     // Fetch all associations with their reminder schedules
-    const { data: associations } = await supabase
+    let assocQuery = supabase
       .from('associations')
       .select('id, name, accounts!inner(slug)')
       .eq('is_active', true);
+    if (testAssociationId) assocQuery = assocQuery.eq('id', testAssociationId);
+    const { data: associations } = await assocQuery;
 
     if (!associations?.length) {
       return new Response(JSON.stringify({ processed: 0 }), {
@@ -305,7 +316,7 @@ Deno.serve(async (_req) => {
 
       if (!targetDates.length) continue;
 
-      const { data: bills } = await supabase
+      let billsQuery = supabase
         .from('bills')
         .select(`
           id, bill_no, bill_type, period, total_amount, paid_amount, advance_applied, due_date,
@@ -314,10 +325,21 @@ Deno.serve(async (_req) => {
         `)
         .eq('association_id', assoc.id)
         .in('status', ['Unpaid', 'Partial', 'Overdue'])
-        .in(
-          'due_date',
-          targetDates.map((t) => t.date),
-        );
+        .in('due_date', targetDates.map((t) => t.date));
+      // In test mode: skip due-date filter and restrict to the specified unit
+      if (testUnitId) {
+        billsQuery = supabase
+          .from('bills')
+          .select(`
+            id, bill_no, bill_type, period, total_amount, paid_amount, advance_applied, due_date,
+            units!inner(id, unit_no, owner_id),
+            tenancies(tenant_id, status)
+          `)
+          .eq('association_id', assoc.id)
+          .in('status', ['Unpaid', 'Partial', 'Overdue'])
+          .eq('unit_id', testUnitId);
+      }
+      const { data: bills } = await billsQuery;
 
       if (!bills?.length) continue;
 
