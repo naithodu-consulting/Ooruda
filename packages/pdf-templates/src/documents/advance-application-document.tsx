@@ -125,7 +125,7 @@ export function AdvanceApplicationDocument({
           </View>
           <View style={styles.tableRow}>
             <Text style={styles.colDescription}>
-              {'Advance credit - ' + billTypeLabel(application.billType)}
+              {'Advance applied — ' + billTypeLabel(application.billType)}
             </Text>
             <Text style={styles.colDescription}>{application.billNo}</Text>
             <Text style={[styles.colAmount, { textAlign: 'right' }]}>

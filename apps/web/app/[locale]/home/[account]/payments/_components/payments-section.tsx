@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Loader2 } from 'lucide-react';
 
 import { billTypeLabel } from '@kit/pdf-templates';
 import { Badge } from '@kit/ui/badge';
@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@kit/ui/select';
+import { toast } from '@kit/ui/sonner';
 import {
   Table,
   TableBody,
@@ -35,11 +36,9 @@ import {
 } from '@kit/ui/table';
 import { cn } from '@kit/ui/utils';
 
-import { ExportMenu } from '~/components/export-menu';
 import { getDurationItems } from '~/lib/bill-filter-items';
 import { getPeriodsForDuration } from '~/lib/bill-period-filter';
 import { billStatusBadgeClassName, displayBillStatus } from '~/lib/bill-status';
-import { exportPaymentsCsv } from '~/lib/export-csv';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
@@ -60,6 +59,7 @@ export interface BillPaymentRow {
   advance_applied: number;
   status: string;
   due_date: string;
+  tenancy_id: string | null;
   payments: PaymentRow[];
 }
 
@@ -265,6 +265,66 @@ export function PaymentsSection(props: {
       .filter((b) => b.outstanding > 0);
   }, [props.bills, unitTab]);
 
+  const [zipLoading, setZipLoading] = useState(false);
+
+  // Cash payment IDs and advance voucher nos — separate because they hit different PDF routes
+  const { zipPaymentIds, zipAdvanceVoucherNos } = useMemo(() => {
+    const paymentIds: string[] = [];
+    const advanceVoucherNos: string[] = [];
+    for (const b of filtered) {
+      for (const p of b.payments) {
+        if (p.is_advance && p.receipt_no) {
+          advanceVoucherNos.push(p.receipt_no);
+        } else if (!p.is_advance) {
+          paymentIds.push(p.id);
+        }
+      }
+    }
+    return {
+      zipPaymentIds: paymentIds,
+      zipAdvanceVoucherNos: advanceVoucherNos,
+    };
+  }, [filtered]);
+
+  const totalReceiptCount = zipPaymentIds.length + zipAdvanceVoucherNos.length;
+
+  async function handleDownloadReceipts() {
+    if (zipLoading || totalReceiptCount === 0 || !props.accountSlug) return;
+    setZipLoading(true);
+    const toastId = toast.loading('Preparing receipts…');
+    try {
+      const res = await fetch('/api/billing/payments/export/zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentIds: zipPaymentIds,
+          advanceVoucherNos: zipAdvanceVoucherNos,
+          accountSlug: props.accountSlug,
+        }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(json?.error ?? `Download failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `receipts-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.dismiss(toastId);
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+      toast.dismiss(toastId);
+      toast.error('Download failed — please try again.');
+    } finally {
+      setZipLoading(false);
+    }
+  }
+
   const isEmpty = props.bills.length === 0 && !hasActiveFilters;
 
   return (
@@ -414,13 +474,23 @@ export function PaymentsSection(props: {
             </Button>
           )}
 
-          <ExportMenu
-            ids={filtered.map((b) => b.id)}
-            count={filtered.length}
-            noun="payments"
-            onCsvExport={() => exportPaymentsCsv(filtered)}
-            pdfEndpoint="/api/billing/payments/export/pdf"
-          />
+          {props.canManage && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={totalReceiptCount === 0 || zipLoading}
+              onClick={handleDownloadReceipts}
+              className="h-9 gap-1.5 text-xs font-semibold"
+              data-test="download-receipts-btn"
+            >
+              {zipLoading ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Download className="size-3.5" />
+              )}
+              Download Receipts ({totalReceiptCount})
+            </Button>
+          )}
 
           {/* Live metrics strip */}
           {filtered.length > 0 && (
@@ -567,6 +637,7 @@ export function PaymentsSection(props: {
                             billNo={bill.bill_no}
                             associationId={props.associationId}
                             outstanding={outstanding}
+                            hasTenancy={bill.tenancy_id != null}
                           />
                         ) : null}
                       </TableCell>

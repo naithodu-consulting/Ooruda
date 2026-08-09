@@ -4,6 +4,40 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4.3 — Payments: Bulk Receipt Download, Advance Payment Receipts, PDF Speed — 2026-08-10
+
+### Bulk Receipt Download
+
+- **"Download Receipts (N)" button** added to the Payments page (admin/operator only), mirroring the bulk bill ZIP download. Respects all active filters. Includes both cash/card payment receipts and advance credit vouchers.
+- **`apps/web/app/api/billing/payments/export/zip/route.ts`** (new): POST endpoint accepting `paymentIds` (bill payment receipts) and `advanceVoucherNos` (advance vouchers) — scoped to the caller's association via `association_id` filter to prevent cross-association data access.
+- **`apps/web/app/api/billing/payments/export/zip/bulk-render.ts`** (new): `fetchBulkReceiptData` batches all payment + join queries; `renderReceiptFromPrefetch` renders each receipt with zero extra DB calls.
+- **ExportMenu removed** from Payments page.
+
+### Advance Payment Receipts
+
+- Bills fully or partially paid via advance credit now show an **"Advance Applied"** entry in the payments dialog alongside cash payments, with a downloadable Advance Credit Voucher PDF.
+- `BILL_WITH_PAYMENTS_SELECT` extended to join `advance_application_receipts` per bill.
+- `PaymentRow` extended with `is_advance` flag; PDF URL routes accordingly (`/api/billing/advance-applications/[voucherNo]/pdf` vs `/api/billing/receipts/[id]/pdf`).
+- **Advance Credit Voucher description** updated from "Advance credit - {type}" to "Advance applied — {type}" for clarity.
+
+### PDF Generation Speed
+
+- **Logo in-memory cache** (`logoCache` Map in `pdf-generation.ts`): logo download + sharp resize runs once per process lifetime per association. Eliminates repeated Storage downloads on every PDF request.
+- **Receipt fast-path**: `getOrGenerateReceiptPdf` now does a lightweight `receipts(receipt_no, pdf_url)` query first; if a cached PDF exists, returns a signed URL immediately without executing the full association/unit/accounts join. Matches the pattern that made bill PDFs fast.
+- **Logo style fix** (`cash-ledger-payments` routes): both cash ledger PDF routes were passing the raw Storage URL instead of a preprocessed JPEG data URI — react-pdf cannot fetch Supabase Storage URLs directly. Both now call `preprocessLogoForPdf`.
+
+### Bug Fixes
+
+- **Bulk receipt payer name**: `resolveReceivedFrom` was using `bill_to` preference to pick the payer when `paid_by_role = 'Owner'`, returning the tenant's name instead of the owner's. Fixed to match `resolvePayerEntity` (owner is always the fallback when not paid by Tenant).
+- **Bulk receipt period**: Period was derived from `paid_at` timestamp (payment month) instead of `bill_period` (billing month). A payment in August for a July bill now correctly prints July on the receipt.
+- **`paymentContext` removed** from bulk receipt render path — this field is for cash ledger dues receipts only; passing it on bill payment receipts produced spurious text in the PDF.
+
+| Migration | Change |
+|---|---|
+| — | No migrations |
+
+---
+
 ## v1.4.2 — Bulk Bill Download Optimisation & Billing UX Cleanup — 2026-08-10
 
 ### Bulk ZIP Download — Batch Query Optimisation

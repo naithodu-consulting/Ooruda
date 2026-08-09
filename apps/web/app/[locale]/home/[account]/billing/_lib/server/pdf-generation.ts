@@ -15,6 +15,10 @@ import { getAssociationRole } from '~/lib/rbac';
 const LOGO_MAX_PX = 208;
 const LOGO_BUCKET = 'account_image';
 
+// Cached processed logos — keyed by raw Storage URL. Survives the process
+// lifetime so the logo download + sharp resize only happens once per deploy.
+const logoCache = new Map<string, string>();
+
 /**
  * Downloads the association logo from Supabase Storage via the admin client,
  * resizes it to fit 208×208 px, and converts it to a JPEG data URI.
@@ -26,6 +30,8 @@ export async function preprocessLogoForPdf(
   rawUrl: string | null | undefined,
 ): Promise<string | null> {
   if (!rawUrl) return null;
+  const cached = logoCache.get(rawUrl);
+  if (cached) return cached;
   // Extract the storage object path from the URL.
   // Local:  http://127.0.0.1:54321/storage/v1/object/public/account_image/<path>
   // Remote: https://<ref>.supabase.co/storage/v1/object/public/account_image/<path>
@@ -49,7 +55,9 @@ export async function preprocessLogoForPdf(
       })
       .jpeg({ quality: 75 })
       .toBuffer();
-    return `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+    const dataUri = `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+    logoCache.set(rawUrl, dataUri);
+    return dataUri;
   } catch {
     return null;
   }
@@ -767,14 +775,37 @@ export async function getOrGenerateReceiptPdf(
     const logger = await getLogger();
     const admin = getSupabaseServerAdminClient();
 
-    // Fetch the payment using the admin client to ensure we get the full
-    // nested association + accounts join (which might otherwise be filtered
-    // by RLS for non-members, obscuring the logo). We manually authorize
-    // the user via `canAccessUnit` immediately below.
+    // Fast-path: check if the PDF is already cached without fetching heavy joins.
+    const { data: quickCheck } = await admin
+      .from('payments')
+      .select('receipts(receipt_no, pdf_url)')
+      .eq('id', paymentId)
+      .maybeSingle();
+    const quickReceipt = quickCheck?.receipts as
+      | { receipt_no: string; pdf_url: string | null }
+      | { receipt_no: string; pdf_url: string | null }[]
+      | null;
+    const existingPdfUrl = Array.isArray(quickReceipt)
+      ? (quickReceipt[0]?.pdf_url ?? null)
+      : (quickReceipt?.pdf_url ?? null);
+    const existingReceiptNo = Array.isArray(quickReceipt)
+      ? (quickReceipt[0]?.receipt_no ?? null)
+      : (quickReceipt?.receipt_no ?? null);
+    if (existingPdfUrl && existingReceiptNo) {
+      const { data: signed } = await admin.storage
+        .from(BUCKET)
+        .createSignedUrl(existingPdfUrl, 300);
+      if (signed?.signedUrl) {
+        return { signedUrl: signed.signedUrl, filename: `${existingReceiptNo}.pdf` };
+      }
+      // Object missing from storage — fall through to regenerate.
+    }
+
+    // Cache miss: fetch with full joins to render the PDF.
     const { data: payment, error: paymentError } = await admin
       .from('payments')
       .select(
-        `id, association_id, amount, mode, reference_no, paid_at, paid_by_role,
+        `id, association_id, amount, mode, reference_no, razorpay_payment_id, paid_at, paid_by_role,
          bills(bill_no, period, unit_id, tenancy_id, units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin), associations(address, gstin, pan_number, registration_number, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts(name, picture_url))),
          receipts(id, receipt_no, pdf_url, generated_at)`,
       )
@@ -908,7 +939,11 @@ export async function getOrGenerateReceiptPdf(
           paidAt: payment.paid_at,
           referenceNo:
             (payment as unknown as { reference_no: string | null })
-              .reference_no ?? null,
+              .reference_no ??
+            (payment.mode === 'Razorpay'
+              ? ((payment as unknown as { razorpay_payment_id: string | null })
+                  .razorpay_payment_id ?? null)
+              : null),
         },
       });
     } catch (error) {
