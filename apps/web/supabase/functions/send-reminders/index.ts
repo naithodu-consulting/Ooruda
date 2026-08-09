@@ -160,10 +160,14 @@ function formatDate(raw: string): string {
   const [year, month, day] = raw.split('-');
   if (!year || !month || !day) return raw;
   const d = parseInt(day);
-  const suffix = d === 1 || d === 21 || d === 31 ? 'st'
-    : d === 2 || d === 22 ? 'nd'
-    : d === 3 || d === 23 ? 'rd'
-    : 'th';
+  const suffix =
+    d === 1 || d === 21 || d === 31
+      ? 'st'
+      : d === 2 || d === 22
+        ? 'nd'
+        : d === 3 || d === 23
+          ? 'rd'
+          : 'th';
   const date = new Date(parseInt(year), parseInt(month) - 1, d);
   const monthName = date.toLocaleDateString('en-IN', { month: 'long' });
   return `${d}${suffix} ${monthName} ${year}`;
@@ -250,7 +254,9 @@ Deno.serve(async (req) => {
       const body = await req.json().catch(() => ({}));
       testUnitId = body.test_unit_id ?? null;
       testAssociationId = body.test_association_id ?? null;
-    } catch { /* no body — cron invocation */ }
+    } catch {
+      /* no body — cron invocation */
+    }
 
     // Check which channels are enabled (platform defaults, association_id IS NULL)
     const { data: channelConfigs } = await supabase
@@ -359,7 +365,10 @@ Deno.serve(async (req) => {
         `)
         .eq('association_id', assoc.id)
         .in('status', ['Unpaid', 'Partial', 'Overdue'])
-        .in('due_date', targetDates.map((t) => t.date));
+        .in(
+          'due_date',
+          targetDates.map((t) => t.date),
+        );
       // In test mode: skip due-date filter and restrict to the specified unit
       if (testUnitId) {
         billsQuery = supabase
@@ -389,7 +398,10 @@ Deno.serve(async (req) => {
         units:
           | { id: string; unit_no: string; owner_id: string }
           | { id: string; unit_no: string; owner_id: string }[];
-        tenancies: { tenant_id: string; status: string }[] | { tenant_id: string; status: string } | null;
+        tenancies:
+          | { tenant_id: string; status: string }[]
+          | { tenant_id: string; status: string }
+          | null;
       }[]) {
         const unit = Array.isArray(bill.units) ? bill.units[0] : bill.units;
         if (!unit) continue;
@@ -409,11 +421,9 @@ Deno.serve(async (req) => {
         const tenanciesArr = Array.isArray(bill.tenancies)
           ? bill.tenancies
           : bill.tenancies
-          ? [bill.tenancies]
-          : [];
-        const activeTenancy = tenanciesArr.find(
-          (t) => t.status === 'active',
-        );
+            ? [bill.tenancies]
+            : [];
+        const activeTenancy = tenanciesArr.find((t) => t.status === 'active');
         const recipientIds = [unit.owner_id, activeTenancy?.tenant_id].filter(
           Boolean,
         ) as string[];
@@ -459,7 +469,8 @@ Deno.serve(async (req) => {
             ? `Overdue Bill — Unit ${unit.unit_no}`
             : `Bill Reminder — Unit ${unit.unit_no}`;
           const outstandingStr = new Intl.NumberFormat('en-IN', {
-            style: 'currency', currency: 'INR',
+            style: 'currency',
+            currency: 'INR',
           }).format(outstanding);
           const notifBody = isOverdue
             ? `Your ${billTypeLabel} bill for ${periodLabel} of ${outstandingStr} is overdue (due ${dueDateLabel}). Pay now.`
@@ -472,7 +483,9 @@ Deno.serve(async (req) => {
               link: `/home/${assoc.accounts.slug}/billing`,
               channel: 'in_app',
             });
-          } catch { /* non-fatal */ }
+          } catch {
+            /* non-fatal */
+          }
 
           // SMS
           if (smsEnabled && profile?.mobile_number) {
@@ -496,7 +509,9 @@ Deno.serve(async (req) => {
                 status: result.success ? 'Sent' : 'Failed',
                 provider_ref: result.messageId ?? null,
               });
-            } catch { /* non-fatal */ }
+            } catch {
+              /* non-fatal */
+            }
             if (result.success) totalSent++;
             else totalFailed++;
           }
@@ -526,7 +541,9 @@ Deno.serve(async (req) => {
                 status: result.success ? 'Sent' : 'Failed',
                 provider_ref: result.messageId ?? null,
               });
-            } catch { /* non-fatal */ }
+            } catch {
+              /* non-fatal */
+            }
             if (result.success) totalSent++;
             else totalFailed++;
           }
@@ -544,7 +561,9 @@ Deno.serve(async (req) => {
         summary: `Reminder cron: ${totalSent} sent, ${totalFailed} failed`,
         event_type: 'system_event',
       });
-    } catch { /* non-fatal */ }
+    } catch {
+      /* non-fatal */
+    }
 
     return new Response(
       JSON.stringify({ sent: totalSent, failed: totalFailed }),

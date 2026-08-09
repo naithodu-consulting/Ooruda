@@ -32,6 +32,7 @@ export interface CashLedgerDueRow {
   unit_no: string;
   bill_type: string;
   balance: number; // negative = outstanding
+  hasTenancy?: boolean;
 }
 
 interface Props {
@@ -147,6 +148,7 @@ export function CashLedgerDuesSection({
           unitNo={payTarget.unit_no}
           billType={payTarget.bill_type}
           outstanding={Math.abs(payTarget.balance)}
+          hasTenancy={payTarget.hasTenancy ?? false}
           onSuccess={() => {
             setPayTarget(null);
             router.refresh();
