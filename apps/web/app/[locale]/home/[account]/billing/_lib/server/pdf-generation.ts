@@ -455,6 +455,7 @@ export async function getOrGenerateBillPdf(
             generatedAt: bill.generated_at,
             totalAmount: bill.total_amount,
             paidAmount: bill.paid_amount,
+            advanceApplied: bill.advance_applied ?? null,
           },
           meters,
           minimumCharge,

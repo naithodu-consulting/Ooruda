@@ -4,6 +4,35 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4.1 — Electricity Billing Period Alignment — 2026-08-09
+
+### Electricity Billing: Period Alignment with Other Bill Types
+
+**Breaking change in billing workflow semantics** (data migrated automatically).
+
+Previously, electricity data was stored under the *reading month*: a July collection bill had `period = 2026-06` and `due_date = 2026-07-10`, forcing the billing operator to run two separate "Generate bills" passes to assemble a full month's collection. All other bill types use the billing month as `period`.
+
+From this release, electricity bills share the same period semantics as maintenance, other charges, and sinking fund:
+
+- **Billing month** = the month payment is collected = `bills.period` / `mescom_bills.period`
+- **Reading dates** = captured in `mescom_bills.period_start` / `period_end` (unchanged source of truth for the PDF)
+- One "Generate bills for July" run now produces all bill types due in July
+
+**Changes:**
+
+- **`billing-actions.ts`**: Removed the `elecPeriod` next-month offset. Electricity `due_date` now uses the same `calculateDueDate(period, electricity_due_day)` as all other types.
+- **MESCOM bill upload form**: Default period is now the current month (was previous month). Period dropdown includes current month. Field labels updated: "Billing Month" (not "Billing Period"), "Reading from" / "Reading to" (not "Period start/end"). `period_start`/`period_end` now auto-populate to the previous month's date range (the reading month).
+- **Electricity bill PDF**: Line item description changed from *"Electricity Charges for June 2026"* to *"Electricity Charges — Jun 2026 Readings"* (reading month, not billing month). Metadata label changed from *"Billing Period"* to *"Reading Period"*. `period_start`/`period_end` display logic unchanged; falls back to `bill.period - 1 month` when not set.
+- **Migration `20260809000001_electricity_billing_period_alignment.sql`**: Shifts `mescom_bills.period`, `meter_readings.period`, and `bills.period` (electricity only) forward by one month. Backfills `period_start`/`period_end` on any MESCOM bills missing them. Includes a safety guard that aborts if the shift would cause a unique-constraint collision (e.g., consecutive-month test data).
+
+**Prod note**: One month of electricity data in production — collision guard will pass. Run `./scripts/db-push.sh --production` as usual.
+
+| Migration | Change |
+|---|---|
+| `20260809000001_electricity_billing_period_alignment.sql` | Period +1 month shift for electricity data; period_start/period_end backfill |
+
+---
+
 ## v1.4 — Notifications, Reminders, Activity Tracking & Security Hardening — 2026-08-06
 
 ### Transactional SMS Notifications
