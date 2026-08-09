@@ -34,6 +34,8 @@ export interface PaymentRow {
   paid_by_role: string;
   paid_at: string;
   receipt_no: string | null;
+  /** True for advance application entries (voucher_no stored in receipt_no). */
+  is_advance?: boolean;
 }
 
 export function BillPaymentsDialog(props: {
@@ -116,11 +118,21 @@ export function BillPaymentsDialog(props: {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
-                      <span>{payment.receipt_no ?? '—'}</span>
+                      <span className="font-mono text-xs">
+                        {payment.receipt_no ?? '—'}
+                      </span>
                       {payment.receipt_no ? (
                         <DownloadPdfButton
-                          href={`/api/billing/receipts/${payment.id}/pdf`}
-                          label="Download receipt PDF"
+                          href={
+                            payment.is_advance
+                              ? `/api/billing/advance-applications/${encodeURIComponent(payment.receipt_no)}/pdf`
+                              : `/api/billing/receipts/${payment.id}/pdf`
+                          }
+                          label={
+                            payment.is_advance
+                              ? 'Download advance voucher'
+                              : 'Download receipt PDF'
+                          }
                           dataTest={`download-receipt-${payment.id}`}
                           variant="ghost"
                           iconSize="icon-xs"

@@ -24,9 +24,7 @@ export const styles = StyleSheet.create({
     marginBottom: 4,
   },
   logo: {
-    width: 104,
-    height: 104,
-    objectFit: 'contain',
+    width: 80,
     marginRight: 14,
   },
   headerNameBlock: {

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 
-import { Download, FileSpreadsheet, FileText, Loader2 } from 'lucide-react';
+import { FileSpreadsheet, FileText, Loader2, Sheet } from 'lucide-react';
 
 import { Button } from '@kit/ui/button';
 import {
@@ -99,9 +99,9 @@ export function ExportMenu({
       {pdfLoading ? (
         <Loader2 className="size-3.5 animate-spin" />
       ) : (
-        <Download className="size-3.5" />
+        <Sheet className="size-3.5" />
       )}
-      Download {count > 0 ? `${count} ${noun}` : noun}
+      Export
     </Button>
   );
 
