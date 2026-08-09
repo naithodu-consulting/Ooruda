@@ -211,12 +211,18 @@ export async function fetchBulkBillData(
     ]);
 
     if (mescomResult.error)
-      throw new Error(`mescom_bills fetch failed: ${mescomResult.error.message}`);
+      throw new Error(
+        `mescom_bills fetch failed: ${mescomResult.error.message}`,
+      );
     const [unitSubMeterResult, caSubMeterResult] = subMeterResults;
     if (unitSubMeterResult.error)
-      throw new Error(`sub_meters fetch failed: ${unitSubMeterResult.error.message}`);
+      throw new Error(
+        `sub_meters fetch failed: ${unitSubMeterResult.error.message}`,
+      );
     if (caSubMeterResult.error)
-      throw new Error(`sub_meters (CommonArea) fetch failed: ${caSubMeterResult.error.message}`);
+      throw new Error(
+        `sub_meters (CommonArea) fetch failed: ${caSubMeterResult.error.message}`,
+      );
 
     // Build mescom lookup by period
     const mescomRows_ = (mescomResult.data ?? []) as (MescomBill & {
@@ -232,7 +238,8 @@ export async function fetchBulkBillData(
       arr.push(sm);
       subMetersByUnit.set(sm.unit_id!, arr);
     }
-    commonAreaSubMeters = (caSubMeterResult.data ?? []) as unknown as SubMeter[];
+    commonAreaSubMeters = (caSubMeterResult.data ??
+      []) as unknown as SubMeter[];
 
     // Query 4: meter_readings for all mescom bills at once
     const mescomIds = mescomRows_.map((m) => m.id);
@@ -244,7 +251,9 @@ export async function fetchBulkBillData(
         )
         .in('mescom_bill_id', mescomIds);
       if (readingsError)
-        throw new Error(`meter_readings fetch failed: ${readingsError.message}`);
+        throw new Error(
+          `meter_readings fetch failed: ${readingsError.message}`,
+        );
 
       for (const r of (readings ?? []) as (MeterReading & {
         mescom_bill_id: string;

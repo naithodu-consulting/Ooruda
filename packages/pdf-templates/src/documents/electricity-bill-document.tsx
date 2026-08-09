@@ -205,7 +205,9 @@ export function ElectricityBillDocument({
             </View>
             <View style={sharedStyles.metaRow}>
               <Text style={sharedStyles.metaLabel}>Reading Period:</Text>
-              <Text style={sharedStyles.metaValue}>{readingPeriodLabel(bill)}</Text>
+              <Text style={sharedStyles.metaValue}>
+                {readingPeriodLabel(bill)}
+              </Text>
             </View>
           </View>
           <View style={sharedStyles.metaGridRow}>

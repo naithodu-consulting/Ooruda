@@ -370,8 +370,9 @@ function ReadingsForm(props: {
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
               Sub-meter total exceeds the block consumption by{' '}
-              <strong>{unitsFmt.format(overageUnits)} units</strong>. Sub-meters cannot consume more than the
-              main Electricity meter. Please correct the readings before saving.
+              <strong>{unitsFmt.format(overageUnits)} units</strong>. Sub-meters
+              cannot consume more than the main Electricity meter. Please
+              correct the readings before saving.
             </AlertDescription>
           </Alert>
         ) : null}

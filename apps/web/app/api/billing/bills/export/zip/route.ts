@@ -164,9 +164,15 @@ export const POST = enhanceRouteHandler(
       const tDl0 = performance.now();
       await withConcurrency(withPdf, DOWNLOAD_CONCURRENCY, async (bill) => {
         const url = urlByPath.get(bill.pdf_url!);
-        if (!url) { cacheFallbacks.push(bill); return; }
+        if (!url) {
+          cacheFallbacks.push(bill);
+          return;
+        }
         const res = await fetch(url);
-        if (!res.ok) { cacheFallbacks.push(bill); return; }
+        if (!res.ok) {
+          cacheFallbacks.push(bill);
+          return;
+        }
         files[buildPath(bill)] = new Uint8Array(await res.arrayBuffer());
       });
       logger.debug(
