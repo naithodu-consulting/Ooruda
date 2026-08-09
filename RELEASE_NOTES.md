@@ -4,6 +4,35 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4.2 — Bulk Bill Download Optimisation & Billing UX Cleanup — 2026-08-10
+
+### Bulk ZIP Download — Batch Query Optimisation
+
+The ZIP download was making ~6 DB queries per bill (N×6 queries for N bills), causing 10s+ response times for 30+ bills.
+
+- **`apps/web/app/api/billing/bills/export/zip/bulk-render.ts`** (new): `fetchBulkBillData` replaces per-bill queries with 6 fixed `IN(...)` batch queries for all bills at once, building lookup Maps for O(1) per-bill access. `renderBillFromPrefetch` renders each PDF from those Maps with zero DB calls. Result: 55 bills in ~4.6s.
+- **`route.ts`** rewritten: `withConcurrency` limiter (render: 12, download: 30) prevents socket exhaustion. Cached PDF downloads are throttled instead of unbounded `Promise.all`. Cache-miss fallbacks collected cleanly and merged into the render queue.
+- All 6 Supabase batch queries have explicit error checking — failures throw a 500 instead of producing silently corrupt PDFs.
+- `bill_to` field respected in bulk render: units with `bill_to = 'owner'` always bill the owner even when a tenancy exists.
+- `renderBillPdfBuffer` removed from `pdf-generation.ts` (superseded by `renderBillFromPrefetch`).
+
+### Billing UI Cleanup
+
+- **Single "Download Bills (N)" button**: replaces the previous dual-button layout (ExportMenu + separate ZIP button). Shows a count reflecting the current selection (or all visible bills when nothing is selected).
+- **ExportMenu ZIP option removed**: ZIP was the only billing export; the dropdown is now reserved for future Reports use. `export-menu.tsx` and `export-csv.ts` preserved as-is — documented in `TECH_DEBT.md` for potential Reports reuse.
+- **Checkbox visual bug fixed** (`unit-row.tsx`): `e.preventDefault()` on the parent div suppressed the browser's native checkbox toggle, causing checked state to not render visually even though React state updated correctly. Fixed by moving `e.stopPropagation()` directly onto the checkbox's `onClick` and removing `preventDefault`.
+- **Overdue filter fixed** (`unit-billing-table.tsx`): export filter used client-side `due_date < today` (diverges from DB-stamped overdue status; also has IST UTC-midnight shift bug). Replaced with `b.status === 'Overdue'`.
+
+### PDF Logo Fix
+
+- **`packages/pdf-templates/src/components/styles.ts`**: Removed `height: 104` and `objectFit: 'contain'` from the logo style — react-pdf ignores `objectFit`, causing the fixed height to crop non-square logos. Now uses `width: 80` only; react-pdf scales proportionally from the image's natural dimensions.
+
+| Migration | Change |
+|---|---|
+| — | No migrations |
+
+---
+
 ## v1.4.1 — Electricity Billing Period Alignment — 2026-08-09
 
 ### Electricity Billing: Period Alignment with Other Bill Types
