@@ -25,9 +25,18 @@ export async function getNotificationSettingsAction(): Promise<
     .from('notification_providers_config')
     .select('channel, provider_key, is_active')
     .is('association_id', null)
-    .order('channel');
+    .order('channel')
+    .order('priority', { ascending: false });
 
-  return (data ?? []).map((r) => ({
+  // Deduplicate: keep the highest-priority row per channel in case of data anomalies
+  const seen = new Set<string>();
+  const deduped = (data ?? []).filter((r) => {
+    if (seen.has(r.channel)) return false;
+    seen.add(r.channel);
+    return true;
+  });
+
+  return deduped.map((r) => ({
     channel: r.channel,
     providerKey: r.provider_key,
     isActive: r.is_active,
