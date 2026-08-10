@@ -64,11 +64,11 @@ function toDbPeriod(mmYyyy: string): string {
   return `${yyyy}-${mm}`;
 }
 
-/** Generates the last N months excluding current month, as MM/YYYY strings */
+/** Generates the current month + last N-1 months, as MM/YYYY strings */
 function getPeriodOptions(count = 7): { value: string; label: string }[] {
   const options = [];
   const now = new Date();
-  for (let i = 1; i <= count; i++) {
+  for (let i = 0; i < count; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const yyyy = String(d.getFullYear());
