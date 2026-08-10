@@ -44,7 +44,7 @@ function AuthLayout({ children }: React.PropsWithChildren) {
             }}
           />
 
-          <div className="px-6 py-7 sm:px-8">{children}</div>
+          <div className="px-6 py-8 sm:px-10 sm:py-10">{children}</div>
         </div>
 
         <p className="mt-5 text-center text-[11px] text-[#a09070]">

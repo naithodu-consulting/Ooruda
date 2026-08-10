@@ -832,6 +832,7 @@ export type Database = {
           id: string
           mode: string
           paid_at: string
+          paid_by_role: string
           razorpay_payment_id: string | null
           receipt_no: string | null
           receipt_pdf_url: string | null
@@ -840,6 +841,7 @@ export type Database = {
           refunded_amount: number
           reversed_at: string | null
           status: string
+          tenancy_id: string | null
           unit_id: string
         }
         Insert: {
@@ -850,6 +852,7 @@ export type Database = {
           id?: string
           mode: string
           paid_at?: string
+          paid_by_role?: string
           razorpay_payment_id?: string | null
           receipt_no?: string | null
           receipt_pdf_url?: string | null
@@ -858,6 +861,7 @@ export type Database = {
           refunded_amount?: number
           reversed_at?: string | null
           status?: string
+          tenancy_id?: string | null
           unit_id: string
         }
         Update: {
@@ -868,6 +872,7 @@ export type Database = {
           id?: string
           mode?: string
           paid_at?: string
+          paid_by_role?: string
           razorpay_payment_id?: string | null
           receipt_no?: string | null
           receipt_pdf_url?: string | null
@@ -876,6 +881,7 @@ export type Database = {
           refunded_amount?: number
           reversed_at?: string | null
           status?: string
+          tenancy_id?: string | null
           unit_id?: string
         }
         Relationships: [
@@ -884,6 +890,13 @@ export type Database = {
             columns: ["association_id"]
             isOneToOne: false
             referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_ledger_payments_tenancy_id_fkey"
+            columns: ["tenancy_id"]
+            isOneToOne: false
+            referencedRelation: "tenancies"
             referencedColumns: ["id"]
           },
           {
@@ -1006,47 +1019,6 @@ export type Database = {
           enable_team_accounts?: boolean
         }
         Relationships: []
-      }
-      in_app_notifications: {
-        Row: {
-          association_id: string | null
-          body: string
-          created_at: string
-          id: string
-          link_to: string | null
-          read_at: string | null
-          title: string
-          user_id: string
-        }
-        Insert: {
-          association_id?: string | null
-          body: string
-          created_at?: string
-          id?: string
-          link_to?: string | null
-          read_at?: string | null
-          title: string
-          user_id: string
-        }
-        Update: {
-          association_id?: string | null
-          body?: string
-          created_at?: string
-          id?: string
-          link_to?: string | null
-          read_at?: string | null
-          title?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "in_app_notifications_association_id_fkey"
-            columns: ["association_id"]
-            isOneToOne: false
-            referencedRelation: "associations"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       invitations: {
         Row: {
@@ -2490,6 +2462,7 @@ export type Database = {
           p_association_id: string
           p_bill_type: string
           p_mode: string
+          p_paid_by_role?: string
           p_reference_no?: string
           p_unit_id: string
         }

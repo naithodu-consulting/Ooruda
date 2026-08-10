@@ -44,7 +44,7 @@ function receiptNoOf(payment: RawPayment): string | null {
 }
 
 const BILL_WITH_PAYMENTS_SELECT =
-  'id, period, bill_no, bill_type, total_amount, paid_amount, advance_applied, status, due_date, units(unit_no), payments(id, amount, mode, reference_no, paid_by_role, paid_at, receipts(receipt_no))';
+  'id, period, bill_no, bill_type, total_amount, paid_amount, advance_applied, status, due_date, tenancy_id, units(unit_no), payments(id, amount, mode, reference_no, paid_by_role, paid_at, receipts(receipt_no)), advance_application_receipts(id, voucher_no, amount, applied_at)';
 
 export default async function PaymentsPage({ params, searchParams }: Props) {
   const [{ account }, { duration, status }] = await Promise.all([
@@ -298,7 +298,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     unit_no: (dp.units as { unit_no: string } | null)?.unit_no,
   }));
 
-  const cashLedgerDues: CashLedgerDueRow[] = Array.isArray(rawDues)
+  const rawDuesArray = Array.isArray(rawDues)
     ? (rawDues as {
         unit_id: string;
         unit_no: string;
@@ -306,6 +306,26 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         balance: number;
       }[])
     : [];
+
+  // For admin view: determine which due units have an active tenancy so the
+  // PayDueDialog can enable/disable the "Tenant" paid-by option correctly.
+  let unitsWithActiveTenancy = new Set<string>();
+  if (!isUserRestricted && rawDuesArray.length > 0) {
+    const dueUnitIds = [...new Set(rawDuesArray.map((r) => r.unit_id))];
+    const { data: activeTenancies } = await client
+      .from('tenancies')
+      .select('unit_id')
+      .in('unit_id', dueUnitIds)
+      .eq('status', 'active');
+    unitsWithActiveTenancy = new Set(
+      (activeTenancies ?? []).map((t) => t.unit_id),
+    );
+  }
+
+  const cashLedgerDues: CashLedgerDueRow[] = rawDuesArray.map((r) => ({
+    ...r,
+    hasTenancy: unitsWithActiveTenancy.has(r.unit_id),
+  }));
 
   const rows: BillPaymentRow[] = (bills ?? []).map((b) => ({
     id: b.id,
@@ -320,8 +340,10 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     ),
     status: b.status,
     due_date: b.due_date,
-    payments: ((b.payments as unknown as RawPayment[] | null) ?? []).map(
-      (p) => ({
+    tenancy_id:
+      (b as unknown as { tenancy_id: string | null }).tenancy_id ?? null,
+    payments: [
+      ...((b.payments as unknown as RawPayment[] | null) ?? []).map((p) => ({
         id: p.id,
         amount: p.amount,
         mode: p.mode,
@@ -329,8 +351,30 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         paid_by_role: p.paid_by_role,
         paid_at: p.paid_at,
         receipt_no: receiptNoOf(p),
-      }),
-    ),
+        is_advance: false as const,
+      })),
+      ...(
+        (
+          b as unknown as {
+            advance_application_receipts?: {
+              id: string;
+              voucher_no: string;
+              amount: number;
+              applied_at: string;
+            }[];
+          }
+        ).advance_application_receipts ?? []
+      ).map((a) => ({
+        id: a.id,
+        amount: a.amount,
+        mode: 'Advance Applied',
+        reference_no: null,
+        paid_by_role: '—',
+        paid_at: a.applied_at,
+        receipt_no: a.voucher_no,
+        is_advance: true as const,
+      })),
+    ],
   }));
 
   const allUnitCount = allUnitIds.length;

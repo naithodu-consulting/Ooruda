@@ -4,10 +4,8 @@ import { useState } from 'react';
 
 import Link from 'next/link';
 
-import { AlertTriangle, Banknote, Clock, Receipt, Zap } from 'lucide-react';
+import { AlertTriangle, Banknote, Clock, Receipt } from 'lucide-react';
 
-import { Alert, AlertDescription } from '@kit/ui/alert';
-import { alertExtras } from '@kit/ui/alert-extras';
 import { Badge } from '@kit/ui/badge';
 import { badgeExtras } from '@kit/ui/badge-extras';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
@@ -16,7 +14,6 @@ import { cn } from '@kit/ui/utils';
 
 import { getDurationItems } from '~/lib/bill-filter-items';
 import { formatINR } from '~/lib/format-inr';
-import { formatPeriod } from '~/lib/format-period';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -207,7 +204,9 @@ export function AdminOverviewPanel({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="text-sm">Collection progress</CardTitle>
+            <CardTitle className="text-sm font-bold">
+              Collection progress
+            </CardTitle>
             <Badge className={badgeExtras.success}>
               {metrics.periodDisplay}
             </Badge>
@@ -255,7 +254,7 @@ export function AdminOverviewPanel({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Ageing analysis</CardTitle>
+            <CardTitle className="text-sm font-bold">Ageing analysis</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <AgeingBar
@@ -283,50 +282,10 @@ export function AdminOverviewPanel({
         </Card>
       </div>
 
-      {/* Pending actions — static data (mescom) + duration-sensitive (overdue count) */}
-      {(metrics.overdueCount > 0 || !staticData.mescomBillUploaded) && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Pending actions</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {metrics.overdueCount > 0 && (
-              <Alert className={alertExtras.warning}>
-                <AlertTriangle />
-                <AlertDescription>
-                  <strong>{metrics.overdueCount} units</strong> overdue —{' '}
-                  <Link
-                    href={`/home/${account}/notifications`}
-                    className="font-semibold underline"
-                  >
-                    send bulk reminder →
-                  </Link>
-                </AlertDescription>
-              </Alert>
-            )}
-            {!staticData.mescomBillUploaded && (
-              <Alert className={alertExtras.info}>
-                <Zap />
-                <AlertDescription>
-                  Electricity bill for {formatPeriod(staticData.currentMonth)}{' '}
-                  hasn&apos;t been added yet.{' '}
-                  <Link
-                    href={`/home/${account}/electricity`}
-                    className="font-semibold underline"
-                  >
-                    Add Bill →
-                  </Link>
-                </AlertDescription>
-              </Alert>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Recent activity — static, never changes with duration */}
       <Card>
         <CardHeader className="flex flex-col gap-2 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="text-sm">Recent activity</CardTitle>
+          <CardTitle className="text-sm font-bold">Recent activity</CardTitle>
           <Link
             href={`/home/${account}/audit`}
             className="text-sm font-semibold text-orange-600 hover:text-orange-700 hover:underline"

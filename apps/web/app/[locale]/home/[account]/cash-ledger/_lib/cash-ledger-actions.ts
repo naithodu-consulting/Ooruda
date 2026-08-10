@@ -288,6 +288,7 @@ export interface RecordDuePaymentInput {
   bill_type: string;
   amount: number;
   mode: 'Cash' | 'Bank Transfer' | 'UPI' | 'Cheque';
+  paid_by_role?: 'Owner' | 'Tenant';
   reference_no?: string;
 }
 
@@ -338,6 +339,7 @@ export async function recordDuePaymentAction(
       p_amount: input.amount,
       p_mode: input.mode,
       p_reference_no: input.reference_no?.trim() || null,
+      p_paid_by_role: input.paid_by_role ?? 'Owner',
     },
   );
 

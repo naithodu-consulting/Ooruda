@@ -54,6 +54,7 @@ export function RecordPaymentDialog(props: {
   billNo: string;
   associationId: string;
   outstanding: number;
+  hasTenancy: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -82,6 +83,7 @@ export function RecordPaymentDialog(props: {
         <RecordPaymentForm
           billId={props.billId}
           associationId={props.associationId}
+          hasTenancy={props.hasTenancy}
           onDone={() => setOpen(false)}
         />
       </DialogContent>
@@ -92,6 +94,7 @@ export function RecordPaymentDialog(props: {
 function RecordPaymentForm(props: {
   billId: string;
   associationId: string;
+  hasTenancy: boolean;
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -207,7 +210,9 @@ function RecordPaymentForm(props: {
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="Owner">Owner</SelectItem>
-                  <SelectItem value="Tenant">Tenant</SelectItem>
+                  <SelectItem value="Tenant" disabled={!props.hasTenancy}>
+                    Tenant{!props.hasTenancy ? ' (no active tenant)' : ''}
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />

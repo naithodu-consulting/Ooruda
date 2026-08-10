@@ -47,20 +47,17 @@ function UnitRowInner({ node, href, selected, onToggleSelect }: Props) {
           'group hover:bg-muted/50 focus-visible:ring-ring px-3 py-3 transition-colors focus-visible:ring-1 focus-visible:outline-none sm:px-4',
         )}
       >
-        {/* Selection is an action on the row, not navigation — swallow the
-            click so ticking a box never opens the unit. */}
-        <div
-          className="flex items-center justify-center"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        >
+        {/* stopPropagation prevents the Link from navigating; no preventDefault
+            so the browser's native checkbox toggle (and React's checked state)
+            both render correctly. */}
+        <div className="flex items-center justify-center">
           <input
             type="checkbox"
             checked={selected}
             onChange={() => onToggleSelect(unit.id)}
+            onClick={(e) => e.stopPropagation()}
             aria-label={`Select unit ${unit.unit_no}`}
+            data-test={`unit-select-${unit.id}`}
             className="h-3.5 w-3.5 cursor-pointer rounded"
           />
         </div>

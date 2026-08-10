@@ -12,7 +12,102 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole } from '~/lib/rbac';
-import { sanitizeLogoUrl } from '~/lib/server/sanitize-logo-url';
+const LOGO_MAX_PX = 208;
+const LOGO_BUCKET = 'account_image';
+
+// Cached processed logos — keyed by raw Storage URL. Survives the process
+// lifetime so the logo download + sharp resize only happens once per deploy.
+const logoCache = new Map<string, string>();
+
+/**
+ * Downloads the association logo from Supabase Storage via the admin client,
+ * resizes it to fit 208×208 px, and converts it to a JPEG data URI.
+ * Using the admin SDK (not a URL fetch) avoids SSRF filtering and works
+ * identically in local dev and production.
+ * Falls back to null on any error so PDF generation still succeeds logo-free.
+ */
+export async function preprocessLogoForPdf(
+  rawUrl: string | null | undefined,
+): Promise<string | null> {
+  if (!rawUrl) return null;
+  const cached = logoCache.get(rawUrl);
+  if (cached) return cached;
+
+  // Extract the storage object path from the URL.
+  // Local:  http://127.0.0.1:54321/storage/v1/object/public/account_image/<path>
+  // Remote: https://<ref>.supabase.co/storage/v1/object/public/account_image/<path>
+  const marker = `/object/public/${LOGO_BUCKET}/`;
+  const markerIdx = rawUrl.indexOf(marker);
+  if (markerIdx === -1) return null;
+  const storagePath = rawUrl.slice(markerIdx + marker.length).split('?')[0];
+  if (!storagePath) return null;
+
+  const logger = await getLogger();
+  try {
+    // account_image is a public bucket — prefer a direct HTTP fetch so that
+    // cross-environment URLs resolve correctly (e.g. dev DB storing a
+    // production Storage URL, which the dev admin client cannot access).
+    // Fall back to the admin SDK download for cases where the direct fetch
+    // fails (network policy, etc.).
+    let buffer: Buffer | null = null;
+
+    const res = await fetch(rawUrl, { cache: 'no-store' }).catch((err) => {
+      logger.warn(
+        { rawUrl, err },
+        'preprocessLogoForPdf: direct fetch failed, trying admin SDK',
+      );
+      return null;
+    });
+
+    if (res?.ok) {
+      buffer = Buffer.from(await res.arrayBuffer());
+    } else {
+      if (res) {
+        logger.warn(
+          { rawUrl, status: res.status },
+          'preprocessLogoForPdf: direct fetch non-OK, trying admin SDK',
+        );
+      }
+      const admin = getSupabaseServerAdminClient();
+      const { data, error } = await admin.storage
+        .from(LOGO_BUCKET)
+        .download(storagePath);
+      if (error) {
+        logger.error(
+          { rawUrl, storagePath, error },
+          'preprocessLogoForPdf: admin SDK download failed',
+        );
+        return null;
+      }
+      if (!data) return null;
+      buffer = Buffer.from(await data.arrayBuffer());
+    }
+
+    if (!buffer) return null;
+
+    const sharp = (await import('sharp')).default;
+    // Check for alpha channel before JPEG conversion — JPEG has no transparency
+    // support, so any alpha pixels map to black by default. Flatten against white
+    // when the source has an alpha channel (PNG, WEBP, etc.) so the logo renders
+    // on the white PDF background as intended.
+    const instance = sharp(buffer);
+    const { hasAlpha } = await instance.metadata();
+    const jpeg = await instance
+      .resize(LOGO_MAX_PX, LOGO_MAX_PX, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .flatten(hasAlpha ? { background: '#ffffff' } : false)
+      .jpeg({ quality: 75 })
+      .toBuffer();
+    const dataUri = `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+    logoCache.set(rawUrl, dataUri);
+    return dataUri;
+  } catch (err) {
+    logger.error({ rawUrl, err }, 'preprocessLogoForPdf: unexpected error');
+    return null;
+  }
+}
 import { getActiveTenancyId } from '~/lib/unit-access';
 
 const BUCKET = 'billing-documents';
@@ -99,7 +194,7 @@ type TenancyBillingRow = {
 };
 
 /**
- * Resolves the billing entity for a unit.
+ * Resolves the billing entity for a unit — used for BILL PDFs only.
  * - bill_to=auto: use the tenancy that was active when the bill was
  *   generated, if any, else owner.
  * - bill_to=owner: always owner.
@@ -174,6 +269,93 @@ async function resolveBillingEntity(
     return {
       isCompany: false,
       name: profile?.full_name ?? null,
+      companyAddress: null,
+      companyGstin: null,
+    };
+  }
+
+  return {
+    isCompany: false,
+    name: null,
+    companyAddress: null,
+    companyGstin: null,
+  };
+}
+
+/**
+ * Resolves the PAYER entity for RECEIPT PDFs — "Received From".
+ *
+ * Uses `paid_by_role` (the explicit choice made at payment time) rather than
+ * `bill_to` (the billing preference on the unit), so the receipt always
+ * reflects who actually paid, not who the bill was addressed to.
+ *
+ * - 'Owner': fetch owner profile / company details from the unit row.
+ * - 'Tenant': fetch the tenant profile from `bills.tenancy_id`. Falls back
+ *   to the owner if no tenancy is recorded (e.g. self-occupied period).
+ */
+async function resolvePayerEntity(
+  paidByRole: string,
+  unit: UnitBillingFields,
+  tenancyId: string | null,
+): Promise<BillingEntityData> {
+  const admin = getSupabaseServerAdminClient();
+
+  if (paidByRole === 'Tenant' && tenancyId) {
+    const { data } = await admin
+      .from('tenancies')
+      .select(
+        'tenant_id, is_company, company_name, company_address, company_gstin',
+      )
+      .eq('id', tenancyId)
+      .maybeSingle();
+    const tenancy = data as TenancyBillingRow | null;
+
+    if (tenancy) {
+      if (tenancy.is_company) {
+        return {
+          isCompany: true,
+          name: tenancy.company_name,
+          companyAddress: tenancy.company_address,
+          companyGstin: tenancy.company_gstin,
+        };
+      }
+      const { data: profileData } = await admin
+        .from('profiles')
+        .select('full_name')
+        .eq('id', tenancy.tenant_id)
+        .maybeSingle();
+      return {
+        isCompany: false,
+        name:
+          (profileData as { full_name: string | null } | null)?.full_name ??
+          null,
+        companyAddress: null,
+        companyGstin: null,
+      };
+    }
+    // Fall through to owner if tenancy_id was set but row no longer exists.
+  }
+
+  // Owner (or fallback)
+  if (unit.owner_is_company) {
+    return {
+      isCompany: true,
+      name: unit.owner_company_name,
+      companyAddress: unit.owner_company_address,
+      companyGstin: unit.owner_company_gstin,
+    };
+  }
+
+  if (unit.owner_id) {
+    const { data: profileData } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', unit.owner_id)
+      .maybeSingle();
+    return {
+      isCompany: false,
+      name:
+        (profileData as { full_name: string | null } | null)?.full_name ?? null,
       companyAddress: null,
       companyGstin: null,
     };
@@ -317,9 +499,9 @@ export async function getOrGenerateBillPdf(
       // bill, query by meter_type + units join instead of unit_id.
       const isCommonAreaBill = unitData.type === 'Common Area';
 
-      // Fetch mescom_bill, sub_meters, and billing entity in parallel — none
-      // of these depend on each other.
-      const [{ data: mescomBill }, { data: subMeters }, billTo] =
+      // Fetch mescom_bill, sub_meters, billing entity, and logo in parallel —
+      // none of these depend on each other.
+      const [{ data: mescomBill }, { data: subMeters }, billTo, logoUrl] =
         await Promise.all([
           admin
             .from('mescom_bills')
@@ -357,6 +539,7 @@ export async function getOrGenerateBillPdf(
             },
             bill.tenancy_id,
           ),
+          preprocessLogoForPdf(association.accounts?.picture_url),
         ]);
 
       if (!mescomBill) {
@@ -427,7 +610,7 @@ export async function getOrGenerateBillPdf(
           association: {
             name: association.accounts?.name ?? 'Association',
             address: association.address,
-            logoUrl: sanitizeLogoUrl(association.accounts?.picture_url),
+            logoUrl,
             gstin: association.gstin,
             panNumber,
             registrationNumber: association.registration_number ?? null,
@@ -455,6 +638,7 @@ export async function getOrGenerateBillPdf(
             generatedAt: bill.generated_at,
             totalAmount: bill.total_amount,
             paidAmount: bill.paid_amount,
+            advanceApplied: bill.advance_applied ?? null,
           },
           meters,
           minimumCharge,
@@ -467,17 +651,20 @@ export async function getOrGenerateBillPdf(
         return null;
       }
     } else {
-      const billTo = await resolveBillingEntity(
-        {
-          bill_to: unitData.bill_to ?? 'auto',
-          owner_id: unitData.owner_id,
-          owner_is_company: unitData.owner_is_company ?? false,
-          owner_company_name: unitData.owner_company_name ?? null,
-          owner_company_address: unitData.owner_company_address ?? null,
-          owner_company_gstin: unitData.owner_company_gstin ?? null,
-        },
-        bill.tenancy_id,
-      );
+      const [billTo, logoUrl] = await Promise.all([
+        resolveBillingEntity(
+          {
+            bill_to: unitData.bill_to ?? 'auto',
+            owner_id: unitData.owner_id,
+            owner_is_company: unitData.owner_is_company ?? false,
+            owner_company_name: unitData.owner_company_name ?? null,
+            owner_company_address: unitData.owner_company_address ?? null,
+            owner_company_gstin: unitData.owner_company_gstin ?? null,
+          },
+          bill.tenancy_id,
+        ),
+        preprocessLogoForPdf(association.accounts?.picture_url),
+      ]);
       try {
         bytes = await renderBillPdf({
           association: {
@@ -486,7 +673,7 @@ export async function getOrGenerateBillPdf(
             gstin: association.gstin,
             panNumber,
             registrationNumber: association.registration_number ?? null,
-            logoUrl: sanitizeLogoUrl(association.accounts?.picture_url),
+            logoUrl,
             gstEnabled: association.gst_enabled,
             gstRate: association.gst_rate,
             email: assocData.email ?? null,
@@ -634,14 +821,40 @@ export async function getOrGenerateReceiptPdf(
     const logger = await getLogger();
     const admin = getSupabaseServerAdminClient();
 
-    // Fetch the payment using the admin client to ensure we get the full
-    // nested association + accounts join (which might otherwise be filtered
-    // by RLS for non-members, obscuring the logo). We manually authorize
-    // the user via `canAccessUnit` immediately below.
+    // Fast-path: check if the PDF is already cached without fetching heavy joins.
+    const { data: quickCheck } = await admin
+      .from('payments')
+      .select('receipts(receipt_no, pdf_url)')
+      .eq('id', paymentId)
+      .maybeSingle();
+    const quickReceipt = quickCheck?.receipts as
+      | { receipt_no: string; pdf_url: string | null }
+      | { receipt_no: string; pdf_url: string | null }[]
+      | null;
+    const existingPdfUrl = Array.isArray(quickReceipt)
+      ? (quickReceipt[0]?.pdf_url ?? null)
+      : (quickReceipt?.pdf_url ?? null);
+    const existingReceiptNo = Array.isArray(quickReceipt)
+      ? (quickReceipt[0]?.receipt_no ?? null)
+      : (quickReceipt?.receipt_no ?? null);
+    if (existingPdfUrl && existingReceiptNo) {
+      const { data: signed } = await admin.storage
+        .from(BUCKET)
+        .createSignedUrl(existingPdfUrl, 300);
+      if (signed?.signedUrl) {
+        return {
+          signedUrl: signed.signedUrl,
+          filename: `${existingReceiptNo}.pdf`,
+        };
+      }
+      // Object missing from storage — fall through to regenerate.
+    }
+
+    // Cache miss: fetch with full joins to render the PDF.
     const { data: payment, error: paymentError } = await admin
       .from('payments')
       .select(
-        `id, association_id, amount, mode, reference_no, paid_at,
+        `id, association_id, amount, mode, reference_no, razorpay_payment_id, paid_at, paid_by_role,
          bills(bill_no, period, unit_id, tenancy_id, units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin), associations(address, gstin, pan_number, registration_number, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts(name, picture_url))),
          receipts(id, receipt_no, pdf_url, generated_at)`,
       )
@@ -719,19 +932,14 @@ export async function getOrGenerateReceiptPdf(
     };
     const unitData = payment.bills.units as unknown as ExtendedUnit;
 
-    const billTo = await resolveBillingEntity(
-      {
-        bill_to: unitData.bill_to ?? 'auto',
-        owner_id: unitData.owner_id,
-        owner_is_company: unitData.owner_is_company ?? false,
-        owner_company_name: unitData.owner_company_name ?? null,
-        owner_company_address: unitData.owner_company_address ?? null,
-        owner_company_gstin: unitData.owner_company_gstin ?? null,
-      },
-      payment.bills.tenancy_id,
-    );
-
     const association = payment.bills.associations;
+    const paidByRole =
+      (payment as unknown as { paid_by_role: string | null }).paid_by_role ??
+      'Owner';
+    const [billTo, logoUrl] = await Promise.all([
+      resolvePayerEntity(paidByRole, unitData, payment.bills.tenancy_id),
+      preprocessLogoForPdf(association.accounts?.picture_url),
+    ]);
     type ExtendedAssoc = typeof association & {
       pan_number: string | null;
       email: string | null;
@@ -754,7 +962,7 @@ export async function getOrGenerateReceiptPdf(
           gstin: association.gstin,
           panNumber: assocData.pan_number ?? null,
           registrationNumber: association.registration_number ?? null,
-          logoUrl: association.accounts?.picture_url ?? null,
+          logoUrl,
           email: assocData.email ?? null,
           phone: assocData.phone ?? null,
           bankAccountName: assocData.bank_account_name ?? null,
@@ -780,7 +988,11 @@ export async function getOrGenerateReceiptPdf(
           paidAt: payment.paid_at,
           referenceNo:
             (payment as unknown as { reference_no: string | null })
-              .reference_no ?? null,
+              .reference_no ??
+            (payment.mode === 'Razorpay'
+              ? ((payment as unknown as { razorpay_payment_id: string | null })
+                  .razorpay_payment_id ?? null)
+              : null),
         },
       });
     } catch (error) {
@@ -965,17 +1177,63 @@ export async function getOrGenerateAdvanceApplicationPdf(
     const unitData = r.bills.units;
     const association = r.bills.associations;
 
-    const billTo = await resolveBillingEntity(
-      {
-        bill_to: unitData.bill_to ?? 'auto',
-        owner_id: unitData.owner_id,
-        owner_is_company: unitData.owner_is_company ?? false,
-        owner_company_name: unitData.owner_company_name ?? null,
-        owner_company_address: unitData.owner_company_address ?? null,
-        owner_company_gstin: unitData.owner_company_gstin ?? null,
-      },
-      r.bills.tenancy_id,
-    );
+    // Resolve "Received From" as whoever paid the advance into the ledger.
+    // The advance_application_receipts row is a debit; the original credit
+    // entries for that unit/bill_type carry paid_by_user_id and paid_by_name.
+    // Use the most recent advance credit as the attributed payer — it is the
+    // best approximation when multiple deposits exist.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cashLedgerAdmin = admin as any;
+    const advancePayerEntityPromise: Promise<BillingEntityData> =
+      Promise.resolve(
+        cashLedgerAdmin
+          .from('cash_ledger')
+          .select('paid_by_user_id, paid_by_name')
+          .eq('unit_id', meta.unit_id)
+          .eq('bill_type', r.bill_type)
+          .eq('entry_type', 'advance_payment')
+          .eq('direction', 'credit')
+          .order('entry_date', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ).then(async ({ data: creditEntry }: { data: unknown }) => {
+        if (!creditEntry) {
+          // No advance credit found — fall back to owner.
+          return resolvePayerEntity('Owner', unitData, null);
+        }
+        const entry = creditEntry as {
+          paid_by_user_id: string | null;
+          paid_by_name: string;
+        };
+        if (entry.paid_by_user_id) {
+          const { data: profile } = await admin
+            .from('profiles')
+            .select('full_name')
+            .eq('id', entry.paid_by_user_id)
+            .maybeSingle();
+          return {
+            isCompany: false,
+            name:
+              (profile as { full_name: string | null } | null)?.full_name ??
+              entry.paid_by_name ??
+              null,
+            companyAddress: null,
+            companyGstin: null,
+          } satisfies BillingEntityData;
+        }
+        // paid_by_user_id is null — admin entered free-text name
+        return {
+          isCompany: false,
+          name: entry.paid_by_name || null,
+          companyAddress: null,
+          companyGstin: null,
+        } satisfies BillingEntityData;
+      });
+
+    const [billTo, logoUrl] = await Promise.all([
+      advancePayerEntityPromise,
+      preprocessLogoForPdf(association.accounts?.picture_url),
+    ]);
 
     let bytes: Buffer;
     try {
@@ -986,7 +1244,7 @@ export async function getOrGenerateAdvanceApplicationPdf(
           gstin: association.gstin,
           panNumber: association.pan_number ?? null,
           registrationNumber: association.registration_number ?? null,
-          logoUrl: sanitizeLogoUrl(association.accounts?.picture_url),
+          logoUrl,
           email: association.email ?? null,
           phone: association.phone ?? null,
           bankAccountName: association.bank_account_name ?? null,

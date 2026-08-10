@@ -4,8 +4,15 @@ import * as z from 'zod';
 
 import { enhanceRouteHandler } from '@kit/next/routes';
 import { billTypeLabel, renderReceiptPdf } from '@kit/pdf-templates';
+import type { BillingEntityData } from '@kit/pdf-templates';
 import { getLogger } from '@kit/shared/logger';
+import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
+
+import { preprocessLogoForPdf } from '~/home/[account]/billing/_lib/server/pdf-generation';
+import { resolveOwnerEntity } from '~/lib/server/billing-entity';
+
+export const runtime = 'nodejs';
 
 export const GET = enhanceRouteHandler(
   async function ({ params, user }) {
@@ -22,8 +29,9 @@ export const GET = enhanceRouteHandler(
       .from('cash_ledger_payments')
       .select(
         `id, association_id, unit_id, bill_type, amount, mode, reference_no,
-         paid_at, receipt_no,
-         units(unit_no, door_no, floor, owner_id),
+         paid_at, receipt_no, paid_by_role, tenancy_id, razorpay_payment_id,
+         units(unit_no, door_no, floor, owner_id, owner_is_company,
+               owner_company_name, owner_company_address, owner_company_gstin),
          associations(account_id, address, gstin, pan_number,
                       registration_number, email, phone,
                       bank_account_name, bank_account_number,
@@ -71,6 +79,10 @@ export const GET = enhanceRouteHandler(
       door_no: string | null;
       floor: number | null;
       owner_id: string | null;
+      owner_is_company: boolean;
+      owner_company_name: string | null;
+      owner_company_address: string | null;
+      owner_company_gstin: string | null;
     };
 
     const unitData = payment.units as unknown as UnitData | null;
@@ -124,6 +136,64 @@ export const GET = enhanceRouteHandler(
     const paidAt = new Date(payment.paid_at);
     const period = `${paidAt.getFullYear()}-${String(paidAt.getMonth() + 1).padStart(2, '0')}`;
 
+    // Resolve "Received From" using the tenancy snapshot stored at payment time.
+    // tenancy_id was captured by the RPC at the moment of recording, so it
+    // survives tenant turnover and always refers to the correct historical tenant.
+    const paidByRole =
+      (payment as unknown as { paid_by_role: string | null }).paid_by_role ??
+      'Owner';
+    const storedTenancyId = (
+      payment as unknown as { tenancy_id: string | null }
+    ).tenancy_id;
+    const adminClient = getSupabaseServerAdminClient();
+
+    let receivedFrom: BillingEntityData;
+    if (paidByRole === 'Tenant' && storedTenancyId) {
+      const { data: tenancy } = await adminClient
+        .from('tenancies')
+        .select(
+          'tenant_id, is_company, company_name, company_address, company_gstin',
+        )
+        .eq('id', storedTenancyId)
+        .maybeSingle();
+
+      if (tenancy) {
+        if ((tenancy as unknown as { is_company: boolean }).is_company) {
+          receivedFrom = {
+            isCompany: true,
+            name: (tenancy as unknown as { company_name: string | null })
+              .company_name,
+            companyAddress: (
+              tenancy as unknown as { company_address: string | null }
+            ).company_address,
+            companyGstin: (
+              tenancy as unknown as { company_gstin: string | null }
+            ).company_gstin,
+          };
+        } else {
+          const { data: profile } = await adminClient
+            .from('profiles')
+            .select('full_name')
+            .eq('id', (tenancy as unknown as { tenant_id: string }).tenant_id)
+            .maybeSingle();
+          receivedFrom = {
+            isCompany: false,
+            name:
+              (profile as { full_name: string | null } | null)?.full_name ??
+              null,
+            companyAddress: null,
+            companyGstin: null,
+          };
+        }
+      } else {
+        receivedFrom = await resolveOwnerEntity(unitData, adminClient);
+      }
+    } else {
+      receivedFrom = await resolveOwnerEntity(unitData, adminClient);
+    }
+
+    const logoUrl = await preprocessLogoForPdf(assoc.accounts.picture_url);
+
     let bytes: Buffer;
     try {
       bytes = await renderReceiptPdf({
@@ -133,7 +203,7 @@ export const GET = enhanceRouteHandler(
           gstin: assoc.gstin,
           panNumber: assoc.pan_number ?? null,
           registrationNumber: assoc.registration_number ?? null,
-          logoUrl: assoc.accounts.picture_url ?? null,
+          logoUrl,
           email: assoc.email ?? null,
           phone: assoc.phone ?? null,
           bankAccountName: assoc.bank_account_name ?? null,
@@ -147,6 +217,7 @@ export const GET = enhanceRouteHandler(
           doorNo: unitData.door_no ?? null,
           floor: unitData.floor ?? null,
         },
+        billTo: receivedFrom,
         bill: { billNo: receiptNo, period },
         receipt: {
           receiptNo,
@@ -156,7 +227,12 @@ export const GET = enhanceRouteHandler(
           amount: payment.amount,
           mode: payment.mode,
           paidAt: payment.paid_at,
-          referenceNo: payment.reference_no ?? null,
+          referenceNo:
+            payment.reference_no ??
+            (payment.mode === 'Razorpay'
+              ? ((payment as unknown as { razorpay_payment_id: string | null })
+                  .razorpay_payment_id ?? null)
+              : null),
         },
         paymentContext: {
           type: 'due_payment',

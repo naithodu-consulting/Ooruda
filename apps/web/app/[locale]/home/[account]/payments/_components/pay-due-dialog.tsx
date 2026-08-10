@@ -43,6 +43,7 @@ const PAYMENT_MODES = ['Cash', 'Bank Transfer', 'UPI', 'Cheque'] as const;
 const Schema = z.object({
   amount: z.coerce.number().positive('Amount must be greater than 0'),
   mode: z.enum(PAYMENT_MODES),
+  paid_by_role: z.enum(['Owner', 'Tenant']),
   reference_no: z.string().optional(),
 });
 
@@ -54,6 +55,7 @@ interface Props {
   unitNo: string;
   billType: string;
   outstanding: number;
+  hasTenancy: boolean;
   onSuccess: () => void;
 }
 
@@ -65,6 +67,7 @@ export function PayDueDialog({
   unitNo,
   billType,
   outstanding,
+  hasTenancy,
   onSuccess,
 }: Props) {
   const [isPending, startTransition] = useTransition();
@@ -75,6 +78,7 @@ export function PayDueDialog({
     defaultValues: {
       amount: outstanding,
       mode: 'Cash',
+      paid_by_role: 'Owner' as const,
       reference_no: '',
     },
   });
@@ -89,6 +93,7 @@ export function PayDueDialog({
         bill_type: billType,
         amount: values.amount,
         mode: values.mode,
+        paid_by_role: values.paid_by_role,
         reference_no: values.reference_no?.trim() || undefined,
       });
       if (result.success) {
@@ -162,6 +167,38 @@ export function PayDueDialog({
                           {m}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="paid_by_role"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Paid by</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-test="paid-by-role-trigger">
+                        <span className="truncate">
+                          {field.value || 'Select payer'}
+                        </span>
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem data-test="paid-by-role-owner" value="Owner">
+                        Owner
+                      </SelectItem>
+                      <SelectItem
+                        data-test="paid-by-role-tenant"
+                        value="Tenant"
+                        disabled={!hasTenancy}
+                      >
+                        Tenant{!hasTenancy ? ' (no active tenant)' : ''}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

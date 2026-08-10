@@ -6,6 +6,7 @@ import { Bell, Mail, MessageSquare } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@kit/ui/alert';
 import { Badge } from '@kit/ui/badge';
+import { Button } from '@kit/ui/button';
 import {
   Card,
   CardContent,
@@ -13,6 +14,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@kit/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@kit/ui/dialog';
 import { Label } from '@kit/ui/label';
 import { Switch } from '@kit/ui/switch';
 
@@ -43,6 +51,8 @@ const CHANNEL_META: Record<
   },
 };
 
+type PendingToggle = { channel: string; newValue: boolean };
+
 export function NotificationSettingsClient({
   initialSettings,
 }: {
@@ -51,8 +61,23 @@ export function NotificationSettingsClient({
   const [settings, setSettings] = useState(initialSettings);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [pendingToggle, setPendingToggle] = useState<PendingToggle | null>(
+    null,
+  );
 
-  function handleToggle(channel: string, newValue: boolean) {
+  function requestToggle(channel: string, newValue: boolean) {
+    if (pending) return;
+    setPendingToggle({ channel, newValue });
+  }
+
+  function cancelToggle() {
+    setPendingToggle(null);
+  }
+
+  function confirmToggle() {
+    if (!pendingToggle) return;
+    const { channel, newValue } = pendingToggle;
+    setPendingToggle(null);
     setError(null);
     startTransition(async () => {
       const result = await toggleNotificationChannelAction(channel, newValue);
@@ -68,6 +93,10 @@ export function NotificationSettingsClient({
     });
   }
 
+  const meta = pendingToggle ? CHANNEL_META[pendingToggle.channel] : null;
+  const action = pendingToggle?.newValue ? 'enable' : 'disable';
+  const channelLabel = meta?.label ?? pendingToggle?.channel ?? '';
+
   return (
     <div className="space-y-4">
       {error && (
@@ -78,15 +107,15 @@ export function NotificationSettingsClient({
 
       <div className="grid gap-4 sm:grid-cols-2">
         {settings.map((setting) => {
-          const meta = CHANNEL_META[setting.channel];
+          const channelMeta = CHANNEL_META[setting.channel];
           return (
             <Card key={setting.channel} className="bg-card">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-4">
                   <div className="text-muted-foreground flex items-center gap-2">
-                    {meta?.icon ?? <Bell className="h-5 w-5" />}
+                    {channelMeta?.icon ?? <Bell className="h-5 w-5" />}
                     <CardTitle className="text-base leading-none">
-                      {meta?.label ?? setting.channel}
+                      {channelMeta?.label ?? setting.channel}
                     </CardTitle>
                   </div>
                   <div className="flex items-center gap-3">
@@ -106,7 +135,7 @@ export function NotificationSettingsClient({
                         disabled={pending}
                         data-test={`toggle-${setting.channel.toLowerCase()}-notifications`}
                         onCheckedChange={(checked) =>
-                          handleToggle(setting.channel, checked)
+                          requestToggle(setting.channel, checked)
                         }
                       />
                     </div>
@@ -115,7 +144,7 @@ export function NotificationSettingsClient({
               </CardHeader>
               <CardContent>
                 <CardDescription className="text-sm">
-                  {meta?.description ??
+                  {channelMeta?.description ??
                     `Configure ${setting.channel} notifications.`}
                 </CardDescription>
                 <p className="text-muted-foreground mt-2 text-xs">
@@ -139,6 +168,61 @@ export function NotificationSettingsClient({
           </p>
         </CardContent>
       </Card>
+
+      {/* Confirmation dialog */}
+      <Dialog
+        open={!!pendingToggle}
+        onOpenChange={(open) => {
+          if (!open) cancelToggle();
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {action === 'enable' ? 'Enable' : 'Disable'} {channelLabel}{' '}
+              Notifications?
+            </DialogTitle>
+            <DialogDescription className="pt-1">
+              {action === 'enable' ? (
+                <>
+                  This will <strong>start sending {channelLabel} alerts</strong>{' '}
+                  (bill generated, payment confirmed, reminders) to all owners
+                  and tenants across every association. Make sure your{' '}
+                  {channelLabel} provider is correctly configured before
+                  enabling.
+                </>
+              ) : (
+                <>
+                  This will <strong>stop all {channelLabel} alerts</strong> for
+                  every association immediately. Owners and tenants will no
+                  longer receive automated {channelLabel} notifications until
+                  this is re-enabled.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={cancelToggle}
+              data-test="confirm-channel-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={action === 'enable' ? 'default' : 'destructive'}
+              onClick={confirmToggle}
+              disabled={pending}
+              data-test="confirm-channel-confirm"
+            >
+              {action === 'enable'
+                ? `Enable ${channelLabel}`
+                : `Disable ${channelLabel}`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

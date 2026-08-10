@@ -4,6 +4,131 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4.4 — PDF Logo Fix, Razorpay Reference on Receipts, Historical Tenancy Snapshot — 2026-08-10
+
+### PDF Logo — Transparent Background Fix
+
+- PNG logos with an alpha channel were rendering with a **black background** on receipts and bills because JPEG has no alpha support and sharp filled dropped pixels with opaque black by default.
+- Fix: `preprocessLogoForPdf` now reads image metadata via `sharp.metadata()` and conditionally applies `.flatten({ background: '#ffffff' })` before JPEG encoding — only when `hasAlpha` is true. Non-transparent images are unaffected; the in-memory logo cache is preserved.
+
+### Razorpay Payment ID on Receipts
+
+- `razorpay_payment_id` (`pay_*`) is now surfaced as the **Reference No.** on payment receipts when `mode = 'Razorpay'` and no manual reference number was entered. Previously this field was stored in the DB but never reached the PDF template.
+- Applied to bill payment receipts (`pdf-generation.ts`) and cash ledger due payment receipts (both PDF routes).
+
+### Historical Tenancy Snapshot on Cash Ledger Payments
+
+- Cash ledger due payment receipts previously resolved the tenant with a live `WHERE status = 'active'` query, which breaks after tenant turnover on a unit (wrong tenant name on historical receipts).
+- New migration adds `tenancy_id uuid` to `cash_ledger_payments` and the `record_due_payment` RPC now snapshots the active tenancy at payment time (mirrors how `bills.tenancy_id` works). PDF routes use the stored `tenancy_id` instead of a live lookup.
+
+### UI Polish
+
+- **Admin overview panel**: removed "Pending actions" card (overdue alert + mescom reminder); cleaned up unused imports.
+- **Audit log**: removed EventType tab bar; renamed heading from "Activity Log" → "Audit Log".
+- **Bill detail panel**: "Download PDF" label → "Download Bill".
+- **Auth layout**: increased padding (`py-8 sm:px-10 sm:py-10`) for better breathing room.
+- **Import dialogs**: cash ledger import dialog responsive margin fix (`mx-4 sm:mx-auto`); meter readings help text whitespace fix (missing space before "Leave blank").
+- **Electricity report tooltip**: `allowEscapeViewBox` + fixed `x` position to prevent clipping on narrow viewports.
+
+| Migration | Change |
+|---|---|
+| `20260809000002_receipt_paid_by_role` | Adds `paid_by_role` to `cash_ledger_payments`; updates `record_due_payment` RPC |
+| `20260810000001_cash_ledger_payment_tenancy_id` | Adds `tenancy_id` to `cash_ledger_payments`; updates `record_due_payment` RPC to snapshot active tenancy |
+
+---
+
+## v1.4.3 — Payments: Bulk Receipt Download, Advance Payment Receipts, PDF Speed — 2026-08-10
+
+### Bulk Receipt Download
+
+- **"Download Receipts (N)" button** added to the Payments page (admin/operator only), mirroring the bulk bill ZIP download. Respects all active filters. Includes both cash/card payment receipts and advance credit vouchers.
+- **`apps/web/app/api/billing/payments/export/zip/route.ts`** (new): POST endpoint accepting `paymentIds` (bill payment receipts) and `advanceVoucherNos` (advance vouchers) — scoped to the caller's association via `association_id` filter to prevent cross-association data access.
+- **`apps/web/app/api/billing/payments/export/zip/bulk-render.ts`** (new): `fetchBulkReceiptData` batches all payment + join queries; `renderReceiptFromPrefetch` renders each receipt with zero extra DB calls.
+- **ExportMenu removed** from Payments page.
+
+### Advance Payment Receipts
+
+- Bills fully or partially paid via advance credit now show an **"Advance Applied"** entry in the payments dialog alongside cash payments, with a downloadable Advance Credit Voucher PDF.
+- `BILL_WITH_PAYMENTS_SELECT` extended to join `advance_application_receipts` per bill.
+- `PaymentRow` extended with `is_advance` flag; PDF URL routes accordingly (`/api/billing/advance-applications/[voucherNo]/pdf` vs `/api/billing/receipts/[id]/pdf`).
+- **Advance Credit Voucher description** updated from "Advance credit - {type}" to "Advance applied — {type}" for clarity.
+
+### PDF Generation Speed
+
+- **Logo in-memory cache** (`logoCache` Map in `pdf-generation.ts`): logo download + sharp resize runs once per process lifetime per association. Eliminates repeated Storage downloads on every PDF request.
+- **Receipt fast-path**: `getOrGenerateReceiptPdf` now does a lightweight `receipts(receipt_no, pdf_url)` query first; if a cached PDF exists, returns a signed URL immediately without executing the full association/unit/accounts join. Matches the pattern that made bill PDFs fast.
+- **Logo style fix** (`cash-ledger-payments` routes): both cash ledger PDF routes were passing the raw Storage URL instead of a preprocessed JPEG data URI — react-pdf cannot fetch Supabase Storage URLs directly. Both now call `preprocessLogoForPdf`.
+
+### Bug Fixes
+
+- **Bulk receipt payer name**: `resolveReceivedFrom` was using `bill_to` preference to pick the payer when `paid_by_role = 'Owner'`, returning the tenant's name instead of the owner's. Fixed to match `resolvePayerEntity` (owner is always the fallback when not paid by Tenant).
+- **Bulk receipt period**: Period was derived from `paid_at` timestamp (payment month) instead of `bill_period` (billing month). A payment in August for a July bill now correctly prints July on the receipt.
+- **`paymentContext` removed** from bulk receipt render path — this field is for cash ledger dues receipts only; passing it on bill payment receipts produced spurious text in the PDF.
+
+| Migration | Change |
+|---|---|
+| — | No migrations |
+
+---
+
+## v1.4.2 — Bulk Bill Download Optimisation & Billing UX Cleanup — 2026-08-10
+
+### Bulk ZIP Download — Batch Query Optimisation
+
+The ZIP download was making ~6 DB queries per bill (N×6 queries for N bills), causing 10s+ response times for 30+ bills.
+
+- **`apps/web/app/api/billing/bills/export/zip/bulk-render.ts`** (new): `fetchBulkBillData` replaces per-bill queries with 6 fixed `IN(...)` batch queries for all bills at once, building lookup Maps for O(1) per-bill access. `renderBillFromPrefetch` renders each PDF from those Maps with zero DB calls. Result: 55 bills in ~4.6s.
+- **`route.ts`** rewritten: `withConcurrency` limiter (render: 12, download: 30) prevents socket exhaustion. Cached PDF downloads are throttled instead of unbounded `Promise.all`. Cache-miss fallbacks collected cleanly and merged into the render queue.
+- All 6 Supabase batch queries have explicit error checking — failures throw a 500 instead of producing silently corrupt PDFs.
+- `bill_to` field respected in bulk render: units with `bill_to = 'owner'` always bill the owner even when a tenancy exists.
+- `renderBillPdfBuffer` removed from `pdf-generation.ts` (superseded by `renderBillFromPrefetch`).
+
+### Billing UI Cleanup
+
+- **Single "Download Bills (N)" button**: replaces the previous dual-button layout (ExportMenu + separate ZIP button). Shows a count reflecting the current selection (or all visible bills when nothing is selected).
+- **ExportMenu ZIP option removed**: ZIP was the only billing export; the dropdown is now reserved for future Reports use. `export-menu.tsx` and `export-csv.ts` preserved as-is — documented in `TECH_DEBT.md` for potential Reports reuse.
+- **Checkbox visual bug fixed** (`unit-row.tsx`): `e.preventDefault()` on the parent div suppressed the browser's native checkbox toggle, causing checked state to not render visually even though React state updated correctly. Fixed by moving `e.stopPropagation()` directly onto the checkbox's `onClick` and removing `preventDefault`.
+- **Overdue filter fixed** (`unit-billing-table.tsx`): export filter used client-side `due_date < today` (diverges from DB-stamped overdue status; also has IST UTC-midnight shift bug). Replaced with `b.status === 'Overdue'`.
+
+### PDF Logo Fix
+
+- **`packages/pdf-templates/src/components/styles.ts`**: Removed `height: 104` and `objectFit: 'contain'` from the logo style — react-pdf ignores `objectFit`, causing the fixed height to crop non-square logos. Now uses `width: 80` only; react-pdf scales proportionally from the image's natural dimensions.
+
+| Migration | Change |
+|---|---|
+| — | No migrations |
+
+---
+
+## v1.4.1 — Electricity Billing Period Alignment — 2026-08-09
+
+### Electricity Billing: Period Alignment with Other Bill Types
+
+**Breaking change in billing workflow semantics** (data migrated automatically).
+
+Previously, electricity data was stored under the *reading month*: a July collection bill had `period = 2026-06` and `due_date = 2026-07-10`, forcing the billing operator to run two separate "Generate bills" passes to assemble a full month's collection. All other bill types use the billing month as `period`.
+
+From this release, electricity bills share the same period semantics as maintenance, other charges, and sinking fund:
+
+- **Billing month** = the month payment is collected = `bills.period` / `mescom_bills.period`
+- **Reading dates** = captured in `mescom_bills.period_start` / `period_end` (unchanged source of truth for the PDF)
+- One "Generate bills for July" run now produces all bill types due in July
+
+**Changes:**
+
+- **`billing-actions.ts`**: Removed the `elecPeriod` next-month offset. Electricity `due_date` now uses the same `calculateDueDate(period, electricity_due_day)` as all other types.
+- **MESCOM bill upload form**: Default period is now the current month (was previous month). Period dropdown includes current month. Field labels updated: "Billing Month" (not "Billing Period"), "Reading from" / "Reading to" (not "Period start/end"). `period_start`/`period_end` now auto-populate to the previous month's date range (the reading month).
+- **Electricity bill PDF**: Line item description changed from *"Electricity Charges for June 2026"* to *"Electricity Charges — Jun 2026 Readings"* (reading month, not billing month). Metadata label changed from *"Billing Period"* to *"Reading Period"*. `period_start`/`period_end` display logic unchanged; falls back to `bill.period - 1 month` when not set.
+- **Migration `20260809000001_electricity_billing_period_alignment.sql`**: Shifts `mescom_bills.period`, `meter_readings.period`, and `bills.period` (electricity only) forward by one month. Backfills `period_start`/`period_end` on any MESCOM bills missing them. Includes a safety guard that aborts if the shift would cause a unique-constraint collision (e.g., consecutive-month test data).
+
+**Prod note**: One month of electricity data in production — collision guard will pass. Run `./scripts/db-push.sh --production` as usual.
+
+| Migration | Change |
+|---|---|
+| `20260809000001_electricity_billing_period_alignment.sql` | Period +1 month shift for electricity data; period_start/period_end backfill |
+
+---
+
 ## v1.4 — Notifications, Reminders, Activity Tracking & Security Hardening — 2026-08-06
 
 ### Transactional SMS Notifications
@@ -58,6 +183,23 @@ This document covers all feature work, enhancements, and notable changes built o
 - `notify.ts` `getEmailAddresses()`: sequential `for` loop replaced with `Promise.all` (eliminates N+1 auth admin API calls).
 - `packages/next/src/routes/index.ts`: useless try/catch wrapper removed (oxlint `no-useless-catch`).
 - Migration `20260806000001`: `CREATE POLICY` statements now idempotent (guarded with `DROP POLICY IF EXISTS`).
+
+### send-reminders Edge Function — Fixes (2026-08-07)
+- **Associations query fixed**: `select('id, name, ...')` → `accounts!inner(name, slug)` — `name` column does not exist on `associations`; name lives on the linked `accounts` row.
+- **Status filter fixed**: `.eq('is_active', true)` → `.in('status', ['Active'])` — `is_active` column does not exist; correct column is `status` with value `'Active'`.
+- **Test mode**: allows `status = 'Setup'` associations when `test_association_id` is passed, so demo/staging associations can be tested without being fully activated.
+- **Tenancies relation normalised**: Supabase returns the embedded `tenancies` relation as a single object (not an array) when there is exactly one row. Added `Array.isArray` normalisation guard to prevent `TypeError: .find is not a function`.
+- **Deno `.catch()` incompatibility fixed**: all 5 `supabase.from(...).insert(...).catch(() => null)` patterns replaced with `try { await } catch {}` — Deno's Supabase client does not expose `.catch()` on insert promises.
+- **₹0 outstanding guard**: bills with `outstanding === 0` (fully settled but not yet stamped `Paid`) are now skipped — previously sent spurious reminders.
+- **Overdue detection in test mode**: `targetEntry` is never found when using `test_unit_id` (due-date filter is skipped), so `isOverdue` fell back to `false` for all bills. Now falls back to `new Date(bill.due_date) < today` date comparison.
+- **Email formatting**: raw `bill_type` (`other_charges`, `electricity`), `period` (`2026-07`), and `due_date` (`2026-07-10`) are now formatted as human-readable strings (`Other Charges`, `July 2026`, `10th July 2026`) in both the email body and in-app notification copy.
+- **Amount formatting**: standardised to `Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })` throughout (was mixing `toLocaleString` and `Intl.NumberFormat`).
+- **Subject line redesign**:
+  - Overdue: `Overdue Bill: Immediate Action Required` (no bill type, no date, no association name)
+  - Other Charges reminder: `Payment Reminder: Bill Due on 10th July 2026` (type omitted — "Other Charges" is confusing to residents)
+  - Maintenance / Electricity reminder: `Payment Reminder: Maintenance Bill Due on 10th June 2026`
+- **Date format**: all dates now use ordinal day + full month name (`10th July 2026`) instead of ISO strings.
+- **Bill Type row added** to email details table so recipients can identify the bill type within the email body even when the subject omits it.
 
 ### Migrations in This Release
 

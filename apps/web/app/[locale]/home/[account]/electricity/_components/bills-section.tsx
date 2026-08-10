@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
 import {
@@ -235,16 +235,17 @@ function AddBillDialog(props: { associationId: string }) {
 
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add a Electricity bill</DialogTitle>
+          <DialogTitle>Add Electricity Bill</DialogTitle>
           <DialogDescription>
-            Enter the amount and total consumption from this month's electricity
-            bill.
+            Enter the amount and consumption from the MESCOM bill. Select the{' '}
+            <strong>billing month</strong> i.e. the month you are collecting
+            payment (not the meter reading month).
           </DialogDescription>
         </DialogHeader>
 
         <AddBillForm
           associationId={props.associationId}
-          onDone={() => setOpen(false)}
+          onSuccess={() => setOpen(false)}
         />
       </DialogContent>
     </Dialog>
@@ -254,7 +255,9 @@ function AddBillDialog(props: { associationId: string }) {
 function getPeriodOptions() {
   const options = [];
   const now = new Date();
-  for (let i = -7; i <= -1; i++) {
+  // Include the current month (i = 0) because the operator uploads the MESCOM
+  // bill in the same month they collect payment (billing month semantics).
+  for (let i = -6; i <= 0; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const label = d.toLocaleDateString('en-US', {
@@ -266,22 +269,28 @@ function getPeriodOptions() {
   return options;
 }
 
-function AddBillForm(props: { associationId: string; onDone: () => void }) {
+function AddBillForm(props: { associationId: string; onSuccess: () => void }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const now = new Date();
-  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const defaultPeriod = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`;
+  // Default to the current month — the operator uploads the MESCOM bill in the
+  // same month they are collecting payment (billing month = current month).
+  const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   const periodOptions = useMemo(() => getPeriodOptions(), []);
 
-  function defaultDatesForPeriod(p: string) {
-    const [y, m] = p.split('-').map(Number);
-    const lastDay = new Date(y!, m!, 0).getDate();
+  // Reading period = the month *before* the billing period.
+  // e.g., billing month July → reading dates are Jun 01 – Jun 30.
+  function defaultDatesForPeriod(billingPeriod: string) {
+    const [y, m] = billingPeriod.split('-').map(Number) as [number, number];
+    const readingMonthFirst = new Date(Date.UTC(y, m - 2, 1)); // m-2: month before billing month, 0-indexed
+    const readingMonthLast = new Date(Date.UTC(y, m - 1, 0)); // last day of reading month
+    const fmt = (d: Date) =>
+      `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
     return {
-      periodStart: `${p}-01`,
-      periodEnd: `${p}-${String(lastDay).padStart(2, '0')}`,
+      periodStart: fmt(readingMonthFirst),
+      periodEnd: fmt(readingMonthLast),
     };
   }
 
@@ -295,7 +304,7 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
     },
   });
 
-  const watchedPeriod = form.watch('period');
+  const watchedPeriod = useWatch({ control: form.control, name: 'period' });
 
   useEffect(() => {
     if (/^\d{4}-(0[1-9]|1[0-2])$/.test(watchedPeriod)) {
@@ -303,7 +312,6 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
       form.setValue('periodStart', periodStart);
       form.setValue('periodEnd', periodEnd);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedPeriod, form]);
 
   const onSubmit = form.handleSubmit((values) => {
@@ -320,7 +328,7 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
 
       toast.success(`Bill for ${values.period} added.`);
       form.reset();
-      props.onDone();
+      props.onSuccess();
       router.refresh();
     });
   });
@@ -332,7 +340,7 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
           name="period"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Billing Period</FormLabel>
+              <FormLabel>Billing Month</FormLabel>
               <Select
                 items={periodOptions}
                 onValueChange={field.onChange}
@@ -340,7 +348,7 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
               >
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a period" />
+                    <SelectValue placeholder="Select a month" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -351,10 +359,6 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription>
-                Select the month for which electricity was consumed. One bill
-                per calendar month.
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -382,7 +386,7 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
                 <Input type="number" step="1" min="1" {...field} />
               </FormControl>
               <FormDescription>
-                The total units Electricity billed you for, from the invoice.
+                The total Electricity units billed, from the invoice.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -394,7 +398,7 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
             name="periodStart"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Period start</FormLabel>
+                <FormLabel>Reading Start Date</FormLabel>
                 <FormControl>
                   <Input type="date" {...field} />
                 </FormControl>
@@ -406,7 +410,7 @@ function AddBillForm(props: { associationId: string; onDone: () => void }) {
             name="periodEnd"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Period end</FormLabel>
+                <FormLabel>Reading End Date</FormLabel>
                 <FormControl>
                   <Input type="date" {...field} />
                 </FormControl>

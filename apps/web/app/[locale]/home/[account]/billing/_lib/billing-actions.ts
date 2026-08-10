@@ -166,14 +166,11 @@ export async function generateBillsAction(
   const accountSlug = assocAccounts?.slug ?? '';
   const calculateDueDate = (billingPeriod: string, day: number) =>
     `${billingPeriod}-${String(day).padStart(2, '0')}`;
-  // Electricity bills are due in the NEXT calendar month after the billing period.
-  const elecPeriod = (() => {
-    const [y, m] = period.split('-').map(Number);
-    const d = new Date(y!, m!, 1); // JS months are 0-indexed, so m (1-based) = next month
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  })();
+  // Electricity bills share the same billing period and due-date semantics as
+  // maintenance bills. Readings belong to the previous month but are billed
+  // and collected in `period` (the current billing month).
   const elecDueDate = calculateDueDate(
-    elecPeriod,
+    period,
     billingSettings?.electricity_due_day ?? 10,
   );
   const maintDueDate = calculateDueDate(

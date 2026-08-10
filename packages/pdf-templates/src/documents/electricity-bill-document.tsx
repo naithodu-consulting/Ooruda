@@ -11,9 +11,10 @@ import { CREAM, NAVY, styles as sharedStyles } from '../components/styles';
 import {
   formatINR,
   formatPeriodDateRange,
-  formatPeriodLabel,
   formatShortDate,
+  formatShortMonthYear,
   ordinalFloorLabel,
+  previousPeriod,
 } from '../lib/format';
 import type { BillingEntityData } from './bill-document';
 
@@ -42,6 +43,7 @@ export interface ElectricityBillPdfData {
     generatedAt: string;
     totalAmount: number;
     paidAmount: number;
+    advanceApplied?: number | null;
   };
   meters: ElectricityBillMeterRow[];
   minimumCharge: number;
@@ -149,11 +151,28 @@ function buildAddressLines(
   return lines;
 }
 
-function periodLabel(bill: ElectricityBillPdfData['bill']): string {
+/**
+ * Returns the reading date range for display.
+ * Prefers explicit period_start/period_end from the MESCOM bill.
+ * Falls back to the full date range of the previous month (bill.period - 1).
+ */
+function readingPeriodLabel(bill: ElectricityBillPdfData['bill']): string {
   if (bill.periodStart && bill.periodEnd) {
     return `${formatShortDate(bill.periodStart)} - ${formatShortDate(bill.periodEnd)}`;
   }
-  return formatPeriodDateRange(bill.period);
+  return formatPeriodDateRange(previousPeriod(bill.period));
+}
+
+/**
+ * Returns "Jun 2026" for use in line item descriptions.
+ * Derived from period_start if set, otherwise from bill.period - 1 month.
+ */
+function readingMonthLabel(bill: ElectricityBillPdfData['bill']): string {
+  if (bill.periodStart) {
+    // Extract YYYY-MM from the period_start date string
+    return formatShortMonthYear(bill.periodStart.substring(0, 7));
+  }
+  return formatShortMonthYear(previousPeriod(bill.period));
 }
 
 export function ElectricityBillDocument({
@@ -185,8 +204,10 @@ export function ElectricityBillDocument({
               <Text style={sharedStyles.metaValue}>{bill.billNo}</Text>
             </View>
             <View style={sharedStyles.metaRow}>
-              <Text style={sharedStyles.metaLabel}>Billing Period:</Text>
-              <Text style={sharedStyles.metaValue}>{periodLabel(bill)}</Text>
+              <Text style={sharedStyles.metaLabel}>Reading Period:</Text>
+              <Text style={sharedStyles.metaValue}>
+                {readingPeriodLabel(bill)}
+              </Text>
             </View>
           </View>
           <View style={sharedStyles.metaGridRow}>
@@ -239,7 +260,7 @@ export function ElectricityBillDocument({
             <View style={i % 2 === 0 ? s.tableRow : s.tableRowAlt} key={i}>
               <Text style={s.colSl}>{i + 1}</Text>
               <Text style={[s.colMeter, { fontWeight: 'bold' }]}>
-                Electricity Charges for {formatPeriodLabel(bill.period)}
+                Electricity Charges for {readingMonthLabel(bill)} Readings
               </Text>
               <Text style={s.colReading}>{m.previousReading}</Text>
               <Text style={s.colReading}>{m.currentReading}</Text>
@@ -289,10 +310,23 @@ export function ElectricityBillDocument({
             <Text>Paid</Text>
             <Text>{formatINR(bill.paidAmount)}</Text>
           </View>
+          {(bill.advanceApplied ?? 0) > 0 ? (
+            <View style={sharedStyles.summaryRow}>
+              <Text>Advance Applied</Text>
+              <Text>− {formatINR(bill.advanceApplied!)}</Text>
+            </View>
+          ) : null}
           <View style={sharedStyles.summaryRow}>
             <Text>Outstanding</Text>
             <Text>
-              {formatINR(Math.max(0, bill.totalAmount - bill.paidAmount))}
+              {formatINR(
+                Math.max(
+                  0,
+                  bill.totalAmount -
+                    bill.paidAmount -
+                    (bill.advanceApplied ?? 0),
+                ),
+              )}
             </Text>
           </View>
         </View>

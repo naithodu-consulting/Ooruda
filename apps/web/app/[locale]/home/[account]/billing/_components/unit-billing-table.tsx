@@ -23,13 +23,11 @@ import {
 import { toast } from '@kit/ui/sonner';
 import { cn } from '@kit/ui/utils';
 
-import { ExportMenu } from '~/components/export-menu';
 import {
   BILL_TYPE_FILTER_ITEMS,
   getDurationItems,
 } from '~/lib/bill-filter-items';
 import { getPeriodsForDuration } from '~/lib/bill-period-filter';
-import { exportBillsCsv } from '~/lib/export-csv';
 import { formatINR } from '~/lib/format-inr';
 
 import type { BillRow } from '../_lib/billing-queries';
@@ -195,23 +193,26 @@ export function UnitBillingTable({
   // and the status pill filter so the download count always matches.
   const exportBills = useMemo(() => {
     const visible = new Set(filtered.map((n) => n.unit.id));
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
     return billRows.filter((b) => {
       if (!visible.has(b.unit_id) || !billMatches(b)) return false;
       if (filter === 'outstanding')
         return b.status !== 'Paid' && b.status !== 'Reversed';
-      if (filter === 'overdue')
-        return (
-          b.status !== 'Paid' &&
-          b.status !== 'Reversed' &&
-          new Date(b.due_date) < today
-        );
+      if (filter === 'overdue') return b.status === 'Overdue';
       if (filter === 'all_paid')
         return b.status === 'Paid' || b.status === 'Reversed';
       return true;
     });
   }, [billRows, filtered, billMatches, filter]);
+
+  const zipBillIds = useMemo(
+    () =>
+      selectedUnitIds.size > 0
+        ? exportBills
+            .filter((b) => selectedUnitIds.has(b.unit_id))
+            .map((b) => b.id)
+        : exportBills.map((b) => b.id),
+    [selectedUnitIds, exportBills],
+  );
 
   const allOnPageSelected =
     paged.length > 0 && paged.every((n) => selectedUnitIds.has(n.unit.id));
@@ -265,17 +266,25 @@ export function UnitBillingTable({
     });
   };
 
-  const handleZipExport = async () => {
+  const handleZipExport = async (billIds: string[]) => {
+    if (billIds.length === 0) {
+      toast.error('No bills match the current filters.');
+      return;
+    }
     setIsExporting(true);
+    const toastId = toast.loading(
+      `Generating ${billIds.length} bill${billIds.length === 1 ? '' : 's'}…`,
+    );
     try {
       const res = await fetch('/api/billing/bills/export/zip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unitIds: [...selectedUnitIds], accountSlug }),
+        body: JSON.stringify({ billIds, accountSlug }),
       });
 
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.dismiss(toastId);
         toast.error(data.error ?? 'Download failed. Please try again.');
         return;
       }
@@ -291,7 +300,9 @@ export function UnitBillingTable({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      toast.dismiss(toastId);
     } catch {
+      toast.dismiss(toastId);
       toast.error('Download failed. Please try again.');
     } finally {
       setIsExporting(false);
@@ -436,31 +447,21 @@ export function UnitBillingTable({
             ))}
 
             <div className="ml-auto flex items-center gap-2">
-              {selectedUnitIds.size > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleZipExport}
-                  disabled={isExporting}
-                  className="h-8 gap-1.5 text-sm"
-                >
-                  {isExporting ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <Download className="h-3 w-3" />
-                  )}
-                  Download PDFs ({selectedUnitIds.size})
-                </Button>
-              )}
-
-              <ExportMenu
-                ids={exportBills.map((b) => b.id)}
-                count={exportBills.length}
-                noun="bills"
-                onCsvExport={() => exportBillsCsv(exportBills)}
-                pdfEndpoint="/api/billing/bills/export/pdf"
-                pdfFilename="bills.pdf"
-              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleZipExport(zipBillIds)}
+                disabled={isExporting || zipBillIds.length === 0}
+                className="h-8 gap-1.5 text-sm"
+                data-test="download-bills"
+              >
+                {isExporting ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Download className="h-3 w-3" />
+                )}
+                Download Bills ({zipBillIds.length})
+              </Button>
             </div>
           </div>
         )}

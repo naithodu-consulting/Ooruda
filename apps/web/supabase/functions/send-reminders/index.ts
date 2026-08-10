@@ -140,6 +140,39 @@ async function sendEmail(
 }
 
 // Minimal reminder email HTML (no react-email in Deno — plain inline HTML)
+function formatBillType(raw: string): string {
+  return raw
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+function formatPeriod(raw: string): string {
+  // "2026-07" → "July 2026"
+  const [year, month] = raw.split('-');
+  if (!year || !month) return raw;
+  const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+  return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+}
+
+function formatDate(raw: string): string {
+  // "2026-08-20" → "20th August 2026"
+  const [year, month, day] = raw.split('-');
+  if (!year || !month || !day) return raw;
+  const d = parseInt(day);
+  const suffix =
+    d === 1 || d === 21 || d === 31
+      ? 'st'
+      : d === 2 || d === 22
+        ? 'nd'
+        : d === 3 || d === 23
+          ? 'rd'
+          : 'th';
+  const date = new Date(parseInt(year), parseInt(month) - 1, d);
+  const monthName = date.toLocaleDateString('en-IN', { month: 'long' });
+  return `${d}${suffix} ${monthName} ${year}`;
+}
+
 function buildReminderEmailHtml(params: {
   recipientName: string;
   unitNo: string;
@@ -151,21 +184,28 @@ function buildReminderEmailHtml(params: {
   associationName: string;
   accountSlug: string;
 }): { html: string; subject: string } {
+  const billTypeLabel = formatBillType(params.billType);
+  const periodLabel = formatPeriod(params.period);
+  const dueDateLabel = formatDate(params.dueDate);
+
   const amountStr = new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
   }).format(params.outstandingAmount);
   const accentColor = params.isOverdue ? '#dc2626' : '#d97706';
   const headingText = params.isOverdue
-    ? 'Overdue Bill – Action Required'
-    : `Payment Reminder`;
+    ? 'Overdue Bill – Immediate Action Required'
+    : 'Payment Reminder';
   const bodyText = params.isOverdue
-    ? `Your ${params.billType} bill for ${params.period} (Unit ${params.unitNo}) is past its due date. Please clear ${amountStr} immediately.`
-    : `Friendly reminder: Your ${params.billType} bill for ${params.period} (Unit ${params.unitNo}) of ${amountStr} is due on ${params.dueDate}.`;
+    ? `Your ${billTypeLabel} bill for ${periodLabel} (Unit ${params.unitNo}) is past its due date. Please clear ${amountStr} immediately to avoid further penalties.`
+    : `This is a friendly reminder that your ${billTypeLabel} bill for ${periodLabel} (Unit ${params.unitNo}) of ${amountStr} is due on ${dueDateLabel}.`;
 
+  const isOtherCharges = params.billType === 'other_charges';
   const subject = params.isOverdue
-    ? `Action Required: Overdue ${params.billType} Bill – ${params.associationName}`
-    : `Reminder: ${params.billType} Bill Due ${params.dueDate} – ${params.associationName}`;
+    ? 'Overdue Bill: Immediate Action Required'
+    : isOtherCharges
+      ? `Payment Reminder: Bill Due on ${dueDateLabel}`
+      : `Payment Reminder: ${billTypeLabel} Bill Due on ${dueDateLabel}`;
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="color-scheme" content="light"></head>
 <body style="margin:0;padding:0;background:#f8f5ee;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
@@ -186,8 +226,9 @@ function buildReminderEmailHtml(params: {
   </table>
   <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #ede9df">
     <tr><td style="padding:11px 0;font-size:13px;color:#6b6b5e;width:42%">Unit</td><td style="padding:11px 0;font-size:13px;color:#2d2d2d">${params.unitNo}</td></tr>
-    <tr><td style="padding:11px 0;font-size:13px;color:#6b6b5e;border-top:1px solid #ede9df">Period</td><td style="padding:11px 0;font-size:13px;color:#2d2d2d;border-top:1px solid #ede9df">${params.period}</td></tr>
-    <tr><td style="padding:11px 0;font-size:13px;color:#6b6b5e;border-top:1px solid #ede9df">Due Date</td><td style="padding:11px 0;font-size:${params.isOverdue ? '15px;font-weight:600' : '13px'};color:${params.isOverdue ? accentColor : '#2d2d2d'};border-top:1px solid #ede9df">${params.dueDate}</td></tr>
+    <tr><td style="padding:11px 0;font-size:13px;color:#6b6b5e;border-top:1px solid #ede9df">Bill Type</td><td style="padding:11px 0;font-size:13px;color:#2d2d2d;border-top:1px solid #ede9df">${billTypeLabel}</td></tr>
+    <tr><td style="padding:11px 0;font-size:13px;color:#6b6b5e;border-top:1px solid #ede9df">Period</td><td style="padding:11px 0;font-size:13px;color:#2d2d2d;border-top:1px solid #ede9df">${periodLabel}</td></tr>
+    <tr><td style="padding:11px 0;font-size:13px;color:#6b6b5e;border-top:1px solid #ede9df">Due Date</td><td style="padding:11px 0;font-size:${params.isOverdue ? '15px;font-weight:600' : '13px'};color:${params.isOverdue ? accentColor : '#2d2d2d'};border-top:1px solid #ede9df">${dueDateLabel}</td></tr>
   </table>
   <div style="text-align:center;margin:24px 0">
     <a href="${APP_URL}/home/${params.accountSlug}/billing" style="display:inline-block;background:${accentColor};color:#fff;font-size:15px;font-weight:600;text-decoration:none;border-radius:6px;padding:12px 28px">${params.isOverdue ? 'Pay Now' : 'View & Pay Bill'}</a>
@@ -202,9 +243,20 @@ function buildReminderEmailHtml(params: {
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
-Deno.serve(async (_req) => {
+Deno.serve(async (req) => {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+    // Optional test filters — pass in request body to restrict to one unit/association
+    let testUnitId: string | null = null;
+    let testAssociationId: string | null = null;
+    try {
+      const body = await req.json().catch(() => ({}));
+      testUnitId = body.test_unit_id ?? null;
+      testAssociationId = body.test_association_id ?? null;
+    } catch {
+      /* no body — cron invocation */
+    }
 
     // Check which channels are enabled (platform defaults, association_id IS NULL)
     const { data: channelConfigs } = await supabase
@@ -226,9 +278,7 @@ Deno.serve(async (_req) => {
     if (!smsEnabled && !emailEnabled) {
       return new Response(
         JSON.stringify({ skipped: true, reason: 'all channels disabled' }),
-        {
-          headers: { 'Content-Type': 'application/json' },
-        },
+        { headers: { 'Content-Type': 'application/json' } },
       );
     }
 
@@ -238,10 +288,12 @@ Deno.serve(async (_req) => {
     today.setHours(0, 0, 0, 0);
 
     // Fetch all associations with their reminder schedules
-    const { data: associations } = await supabase
+    let assocQuery = supabase
       .from('associations')
-      .select('id, name, accounts!inner(slug)')
-      .eq('is_active', true);
+      .select('id, accounts!inner(name, slug)')
+      .in('status', testAssociationId ? ['Active', 'Setup'] : ['Active']);
+    if (testAssociationId) assocQuery = assocQuery.eq('id', testAssociationId);
+    const { data: associations } = await assocQuery;
 
     if (!associations?.length) {
       return new Response(JSON.stringify({ processed: 0 }), {
@@ -274,8 +326,7 @@ Deno.serve(async (_req) => {
 
     for (const assoc of associations as {
       id: string;
-      name: string;
-      accounts: { slug: string };
+      accounts: { name: string; slug: string };
     }[]) {
       const schedule = settingsMap.get(assoc.id) ?? {
         days_before: [3, 1],
@@ -305,7 +356,7 @@ Deno.serve(async (_req) => {
 
       if (!targetDates.length) continue;
 
-      const { data: bills } = await supabase
+      let billsQuery = supabase
         .from('bills')
         .select(`
           id, bill_no, bill_type, period, total_amount, paid_amount, advance_applied, due_date,
@@ -318,6 +369,20 @@ Deno.serve(async (_req) => {
           'due_date',
           targetDates.map((t) => t.date),
         );
+      // In test mode: skip due-date filter and restrict to the specified unit
+      if (testUnitId) {
+        billsQuery = supabase
+          .from('bills')
+          .select(`
+            id, bill_no, bill_type, period, total_amount, paid_amount, advance_applied, due_date,
+            units!inner(id, unit_no, owner_id),
+            tenancies(tenant_id, status)
+          `)
+          .eq('association_id', assoc.id)
+          .in('status', ['Unpaid', 'Partial', 'Overdue'])
+          .eq('unit_id', testUnitId);
+      }
+      const { data: bills } = await billsQuery;
 
       if (!bills?.length) continue;
 
@@ -333,7 +398,10 @@ Deno.serve(async (_req) => {
         units:
           | { id: string; unit_no: string; owner_id: string }
           | { id: string; unit_no: string; owner_id: string }[];
-        tenancies: { tenant_id: string; status: string }[];
+        tenancies:
+          | { tenant_id: string; status: string }[]
+          | { tenant_id: string; status: string }
+          | null;
       }[]) {
         const unit = Array.isArray(bill.units) ? bill.units[0] : bill.units;
         if (!unit) continue;
@@ -342,12 +410,20 @@ Deno.serve(async (_req) => {
           0,
           bill.total_amount - bill.paid_amount - (bill.advance_applied ?? 0),
         );
-        const targetEntry = targetDates.find((t) => t.date === bill.due_date);
-        const isOverdue = targetEntry?.isOverdue ?? false;
+        if (outstanding === 0) continue; // fully settled — no reminder needed
 
-        const activeTenancy = (bill.tenancies ?? []).find(
-          (t) => t.status === 'active',
-        );
+        const targetEntry = targetDates.find((t) => t.date === bill.due_date);
+        // In test mode targetDates may not include this bill's due_date — fall back to date comparison
+        const isOverdue = targetEntry
+          ? targetEntry.isOverdue
+          : new Date(bill.due_date) < today;
+
+        const tenanciesArr = Array.isArray(bill.tenancies)
+          ? bill.tenancies
+          : bill.tenancies
+            ? [bill.tenancies]
+            : [];
+        const activeTenancy = tenanciesArr.find((t) => t.status === 'active');
         const recipientIds = [unit.owner_id, activeTenancy?.tenant_id].filter(
           Boolean,
         ) as string[];
@@ -385,22 +461,31 @@ Deno.serve(async (_req) => {
           const recipientName = profile?.full_name ?? 'Resident';
 
           // In-app bell notification via Makerkit notifications table
+          const billTypeLabel = formatBillType(bill.bill_type);
+          const periodLabel = formatPeriod(bill.period);
+          const dueDateLabel = formatDate(bill.due_date);
+
           const notifTitle = isOverdue
             ? `Overdue Bill — Unit ${unit.unit_no}`
             : `Bill Reminder — Unit ${unit.unit_no}`;
+          const outstandingStr = new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+          }).format(outstanding);
           const notifBody = isOverdue
-            ? `Your ${bill.period} bill of ₹${outstanding.toLocaleString('en-IN')} is overdue (due ${bill.due_date}). Pay now.`
-            : `Reminder: Your ${bill.period} bill of ₹${outstanding.toLocaleString('en-IN')} is due on ${bill.due_date}.`;
-          await supabase
-            .from('notifications')
-            .insert({
+            ? `Your ${billTypeLabel} bill for ${periodLabel} of ${outstandingStr} is overdue (due ${dueDateLabel}). Pay now.`
+            : `Reminder: Your ${billTypeLabel} bill for ${periodLabel} of ${outstandingStr} is due on ${dueDateLabel}.`;
+          try {
+            await supabase.from('notifications').insert({
               account_id: userId,
               type: isOverdue ? 'warning' : 'info',
               body: `**${notifTitle}**\n${notifBody}`.slice(0, 500),
               link: `/home/${assoc.accounts.slug}/billing`,
               channel: 'in_app',
-            })
-            .catch(() => null);
+            });
+          } catch {
+            /* non-fatal */
+          }
 
           // SMS
           if (smsEnabled && profile?.mobile_number) {
@@ -410,13 +495,12 @@ Deno.serve(async (_req) => {
               {
                 unit_no: unit.unit_no,
                 amount: `₹${outstanding.toLocaleString('en-IN')}`,
-                due_date: bill.due_date,
-                period: bill.period,
+                due_date: dueDateLabel,
+                period: periodLabel,
               },
             );
-            await supabase
-              .from('notifications_log')
-              .insert({
+            try {
+              await supabase.from('notifications_log').insert({
                 association_id: assoc.id,
                 type: isOverdue ? 'overdue' : 'reminder',
                 recipient_user_id: userId,
@@ -424,8 +508,10 @@ Deno.serve(async (_req) => {
                 provider_key: SMS_PROVIDER,
                 status: result.success ? 'Sent' : 'Failed',
                 provider_ref: result.messageId ?? null,
-              })
-              .catch(() => null);
+              });
+            } catch {
+              /* non-fatal */
+            }
             if (result.success) totalSent++;
             else totalFailed++;
           }
@@ -441,13 +527,12 @@ Deno.serve(async (_req) => {
               outstandingAmount: outstanding,
               dueDate: bill.due_date,
               isOverdue,
-              associationName: assoc.name,
+              associationName: assoc.accounts.name,
               accountSlug: assoc.accounts.slug,
             });
             const result = await sendEmail(email, subject, html);
-            await supabase
-              .from('notifications_log')
-              .insert({
+            try {
+              await supabase.from('notifications_log').insert({
                 association_id: assoc.id,
                 type: isOverdue ? 'overdue' : 'reminder',
                 recipient_user_id: userId,
@@ -455,8 +540,10 @@ Deno.serve(async (_req) => {
                 provider_key: 'resend',
                 status: result.success ? 'Sent' : 'Failed',
                 provider_ref: result.messageId ?? null,
-              })
-              .catch(() => null);
+              });
+            } catch {
+              /* non-fatal */
+            }
             if (result.success) totalSent++;
             else totalFailed++;
           }
@@ -465,17 +552,18 @@ Deno.serve(async (_req) => {
     }
 
     // Log the cron run to audit_logs as a system event
-    await supabase
-      .from('audit_logs')
-      .insert({
+    try {
+      await supabase.from('audit_logs').insert({
         association_id: null,
         actor_user_id: null,
         action: 'reminders.cron.completed',
         entity_type: 'system',
         summary: `Reminder cron: ${totalSent} sent, ${totalFailed} failed`,
         event_type: 'system_event',
-      })
-      .catch(() => null);
+      });
+    } catch {
+      /* non-fatal */
+    }
 
     return new Response(
       JSON.stringify({ sent: totalSent, failed: totalFailed }),
