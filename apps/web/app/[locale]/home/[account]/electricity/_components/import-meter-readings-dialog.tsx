@@ -316,9 +316,8 @@ export function ImportMeterReadingsDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-muted-foreground text-xs">
-                  Select the month for which electricity was consumed. Previous
-                  reading and minimum charge are auto-filled from sub-meter
-                  defaults.
+                  Select the billing month. Previous reading and minimum charge
+                  are auto-filled from sub-meter defaults.
                 </p>
               </div>
             )}
@@ -361,8 +360,8 @@ export function ImportMeterReadingsDialog({
                 </span>
                 <br />
                 Optional:{' '}
-                <span className="font-medium">LOAD_KVA, MIN_CHARGES</span> —
-                leave blank to carry forward last month&apos;s values
+                <span className="font-medium">LOAD_KVA, MIN_CHARGES.</span>{' '}
+                Leave blank to carry forward last month&apos;s values
                 automatically (0 for brand-new meters).
                 <br />
                 Sub-meter labels must match those registered in the system.

@@ -239,7 +239,7 @@ export function ImportCashLedgerDialog({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="mx-4 max-w-3xl sm:mx-auto">
         <DialogHeader>
           <DialogTitle>Import Cash Ledger Entries</DialogTitle>
           <DialogDescription>
