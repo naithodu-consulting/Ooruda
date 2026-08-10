@@ -135,7 +135,7 @@ export function ElectricityTab({ mescomRows, consumptionByPeriod }: Props) {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Cost & Consumption Trend</CardTitle>
           <CardDescription>
-            Invoice amount and block units — spot rate changes visually
+            Invoice amount and block units. Spot rate changes visually
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -278,6 +278,8 @@ export function ElectricityTab({ mescomRows, consumptionByPeriod }: Props) {
                   />
                   <Tooltip
                     formatter={(val: any) => [`${val} kWh`, 'Consumed']}
+                    allowEscapeViewBox={{ x: false, y: true }}
+                    position={{ x: 60 }}
                     contentStyle={{
                       fontSize: 12,
                       borderRadius: 8,

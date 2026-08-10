@@ -52,7 +52,10 @@ export async function preprocessLogoForPdf(
     let buffer: Buffer | null = null;
 
     const res = await fetch(rawUrl, { cache: 'no-store' }).catch((err) => {
-      logger.warn({ rawUrl, err }, 'preprocessLogoForPdf: direct fetch failed, trying admin SDK');
+      logger.warn(
+        { rawUrl, err },
+        'preprocessLogoForPdf: direct fetch failed, trying admin SDK',
+      );
       return null;
     });
 
@@ -83,11 +86,18 @@ export async function preprocessLogoForPdf(
     if (!buffer) return null;
 
     const sharp = (await import('sharp')).default;
-    const jpeg = await sharp(buffer)
+    // Check for alpha channel before JPEG conversion — JPEG has no transparency
+    // support, so any alpha pixels map to black by default. Flatten against white
+    // when the source has an alpha channel (PNG, WEBP, etc.) so the logo renders
+    // on the white PDF background as intended.
+    const instance = sharp(buffer);
+    const { hasAlpha } = await instance.metadata();
+    const jpeg = await instance
       .resize(LOGO_MAX_PX, LOGO_MAX_PX, {
         fit: 'inside',
         withoutEnlargement: true,
       })
+      .flatten(hasAlpha ? { background: '#ffffff' } : false)
       .jpeg({ quality: 75 })
       .toBuffer();
     const dataUri = `data:image/jpeg;base64,${jpeg.toString('base64')}`;
@@ -832,7 +842,10 @@ export async function getOrGenerateReceiptPdf(
         .from(BUCKET)
         .createSignedUrl(existingPdfUrl, 300);
       if (signed?.signedUrl) {
-        return { signedUrl: signed.signedUrl, filename: `${existingReceiptNo}.pdf` };
+        return {
+          signedUrl: signed.signedUrl,
+          filename: `${existingReceiptNo}.pdf`,
+        };
       }
       // Object missing from storage — fall through to regenerate.
     }

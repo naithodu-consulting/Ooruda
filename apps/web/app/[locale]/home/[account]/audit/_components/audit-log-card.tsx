@@ -16,9 +16,7 @@ import {
 import {
   ActionIcon,
   actionLabel,
-  ASSOC_EVENT_TYPE_TABS,
   AuditSearchBar,
-  EventTypeTabs,
   StatusBadge,
   truncateSummary,
 } from './audit-shared';
@@ -108,14 +106,6 @@ export function AuditLogCard(props: {
   const pathname = usePathname();
   const basePath = pathname.split('?')[0]!;
 
-  function tabHref(et: string) {
-    const sp = new URLSearchParams();
-    if (search) sp.set('search', search);
-    if (et) sp.set('eventType', et);
-    const qs = sp.toString();
-    return qs ? `${basePath}?${qs}` : basePath;
-  }
-
   function pageHref(p: number) {
     const sp = new URLSearchParams();
     if (search) sp.set('search', search);
@@ -128,7 +118,7 @@ export function AuditLogCard(props: {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold">Activity Log</h2>
+          <h2 className="text-xl font-bold">Audit Log</h2>
           <p className="text-muted-foreground text-sm">
             All events, actions, and system events
           </p>
@@ -139,12 +129,6 @@ export function AuditLogCard(props: {
           eventType={eventType}
         />
       </div>
-
-      <EventTypeTabs
-        eventType={eventType}
-        tabHref={tabHref}
-        tabs={ASSOC_EVENT_TYPE_TABS}
-      />
 
       <div className="bg-card rounded-xl border">
         {rows.length === 0 ? (
