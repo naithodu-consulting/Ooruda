@@ -4,6 +4,39 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4.4 — PDF Logo Fix, Razorpay Reference on Receipts, Historical Tenancy Snapshot — 2026-08-10
+
+### PDF Logo — Transparent Background Fix
+
+- PNG logos with an alpha channel were rendering with a **black background** on receipts and bills because JPEG has no alpha support and sharp filled dropped pixels with opaque black by default.
+- Fix: `preprocessLogoForPdf` now reads image metadata via `sharp.metadata()` and conditionally applies `.flatten({ background: '#ffffff' })` before JPEG encoding — only when `hasAlpha` is true. Non-transparent images are unaffected; the in-memory logo cache is preserved.
+
+### Razorpay Payment ID on Receipts
+
+- `razorpay_payment_id` (`pay_*`) is now surfaced as the **Reference No.** on payment receipts when `mode = 'Razorpay'` and no manual reference number was entered. Previously this field was stored in the DB but never reached the PDF template.
+- Applied to bill payment receipts (`pdf-generation.ts`) and cash ledger due payment receipts (both PDF routes).
+
+### Historical Tenancy Snapshot on Cash Ledger Payments
+
+- Cash ledger due payment receipts previously resolved the tenant with a live `WHERE status = 'active'` query, which breaks after tenant turnover on a unit (wrong tenant name on historical receipts).
+- New migration adds `tenancy_id uuid` to `cash_ledger_payments` and the `record_due_payment` RPC now snapshots the active tenancy at payment time (mirrors how `bills.tenancy_id` works). PDF routes use the stored `tenancy_id` instead of a live lookup.
+
+### UI Polish
+
+- **Admin overview panel**: removed "Pending actions" card (overdue alert + mescom reminder); cleaned up unused imports.
+- **Audit log**: removed EventType tab bar; renamed heading from "Activity Log" → "Audit Log".
+- **Bill detail panel**: "Download PDF" label → "Download Bill".
+- **Auth layout**: increased padding (`py-8 sm:px-10 sm:py-10`) for better breathing room.
+- **Import dialogs**: cash ledger import dialog responsive margin fix (`mx-4 sm:mx-auto`); meter readings help text whitespace fix (missing space before "Leave blank").
+- **Electricity report tooltip**: `allowEscapeViewBox` + fixed `x` position to prevent clipping on narrow viewports.
+
+| Migration | Change |
+|---|---|
+| `20260809000002_receipt_paid_by_role` | Adds `paid_by_role` to `cash_ledger_payments`; updates `record_due_payment` RPC |
+| `20260810000001_cash_ledger_payment_tenancy_id` | Adds `tenancy_id` to `cash_ledger_payments`; updates `record_due_payment` RPC to snapshot active tenancy |
+
+---
+
 ## v1.4.3 — Payments: Bulk Receipt Download, Advance Payment Receipts, PDF Speed — 2026-08-10
 
 ### Bulk Receipt Download
