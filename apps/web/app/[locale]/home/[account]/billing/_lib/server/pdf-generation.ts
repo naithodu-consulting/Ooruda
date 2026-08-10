@@ -32,6 +32,7 @@ export async function preprocessLogoForPdf(
   if (!rawUrl) return null;
   const cached = logoCache.get(rawUrl);
   if (cached) return cached;
+
   // Extract the storage object path from the URL.
   // Local:  http://127.0.0.1:54321/storage/v1/object/public/account_image/<path>
   // Remote: https://<ref>.supabase.co/storage/v1/object/public/account_image/<path>
@@ -40,13 +41,47 @@ export async function preprocessLogoForPdf(
   if (markerIdx === -1) return null;
   const storagePath = rawUrl.slice(markerIdx + marker.length).split('?')[0];
   if (!storagePath) return null;
+
+  const logger = await getLogger();
   try {
-    const admin = getSupabaseServerAdminClient();
-    const { data, error } = await admin.storage
-      .from(LOGO_BUCKET)
-      .download(storagePath);
-    if (error || !data) return null;
-    const buffer = Buffer.from(await data.arrayBuffer());
+    // account_image is a public bucket — prefer a direct HTTP fetch so that
+    // cross-environment URLs resolve correctly (e.g. dev DB storing a
+    // production Storage URL, which the dev admin client cannot access).
+    // Fall back to the admin SDK download for cases where the direct fetch
+    // fails (network policy, etc.).
+    let buffer: Buffer | null = null;
+
+    const res = await fetch(rawUrl, { cache: 'no-store' }).catch((err) => {
+      logger.warn({ rawUrl, err }, 'preprocessLogoForPdf: direct fetch failed, trying admin SDK');
+      return null;
+    });
+
+    if (res?.ok) {
+      buffer = Buffer.from(await res.arrayBuffer());
+    } else {
+      if (res) {
+        logger.warn(
+          { rawUrl, status: res.status },
+          'preprocessLogoForPdf: direct fetch non-OK, trying admin SDK',
+        );
+      }
+      const admin = getSupabaseServerAdminClient();
+      const { data, error } = await admin.storage
+        .from(LOGO_BUCKET)
+        .download(storagePath);
+      if (error) {
+        logger.error(
+          { rawUrl, storagePath, error },
+          'preprocessLogoForPdf: admin SDK download failed',
+        );
+        return null;
+      }
+      if (!data) return null;
+      buffer = Buffer.from(await data.arrayBuffer());
+    }
+
+    if (!buffer) return null;
+
     const sharp = (await import('sharp')).default;
     const jpeg = await sharp(buffer)
       .resize(LOGO_MAX_PX, LOGO_MAX_PX, {
@@ -58,7 +93,8 @@ export async function preprocessLogoForPdf(
     const dataUri = `data:image/jpeg;base64,${jpeg.toString('base64')}`;
     logoCache.set(rawUrl, dataUri);
     return dataUri;
-  } catch {
+  } catch (err) {
+    logger.error({ rawUrl, err }, 'preprocessLogoForPdf: unexpected error');
     return null;
   }
 }
