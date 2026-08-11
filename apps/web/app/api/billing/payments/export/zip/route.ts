@@ -52,10 +52,6 @@ function buildPath(payment: BulkPaymentRecord): string {
   return `unit-${payment.unit_no}/${receiptSafe}.pdf`;
 }
 
-function buildAdvancePath(voucherNo: string, unitNo: string): string {
-  return `unit-${unitNo}/${voucherNo.replace(/\//g, '-')}.pdf`;
-}
-
 export const POST = enhanceRouteHandler(
   async function ({ request }) {
     const t0 = performance.now();

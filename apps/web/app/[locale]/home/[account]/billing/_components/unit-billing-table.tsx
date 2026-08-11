@@ -203,9 +203,7 @@ export function UnitBillingTable({
       if (!visible.has(b.unit_id) || !billMatches(b)) return false;
       if (filter === 'outstanding')
         return (
-          b.status !== 'Paid' &&
-          b.status !== 'Reversed' &&
-          b.status !== 'Void'
+          b.status !== 'Paid' && b.status !== 'Reversed' && b.status !== 'Void'
         );
       if (filter === 'overdue') return b.status === 'Overdue';
       if (filter === 'all_paid')

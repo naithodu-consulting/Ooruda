@@ -37,29 +37,23 @@ The Auth Hooks page only exposes: Send Email hook, JWT Claims hook, Before User 
 3. URL: `https://bcdosjrbkkemsqowhigj.supabase.co/functions/v1/auth-events-hook`
 4. Set `AUTH_HOOK_SECRET` in Dashboard → Edge Functions → auth-events-hook → Secrets
 
-### Step 3 — Wire send-reminders scheduling (blocked — migrate to Vercel cron)
+### Step 3 — Wire send-reminders scheduling
 
-⚠️ **Blocked — Supabase free/pro plan restriction.**  
-The `send-reminders` pg_cron job calls the Edge Function via `pg_net`, which requires `app.supabase_project_url` and `app.supabase_service_key` to be set via `alter database postgres set …`. This requires superuser, which Supabase never exposes on hosted projects (free or pro). Both the SQL Editor and `supabase db query --linked` return `42501: permission denied`.
+✅ **Unblocked (2026-08-11).** The `alter database postgres set app.supabase_project_url / app.supabase_service_key` approach works via the Supabase Dashboard SQL Editor — earlier assumption that it required superuser was incorrect.
 
-The `overdue-recompute` pg_cron job works fine (pure SQL, no secrets).
-
-**Recommended fix: move `send-reminders` trigger to a Vercel cron job.**
-
-1. Add to `apps/web/vercel.json`:
-```json
-{
-  "crons": [{
-    "path": "/api/cron/send-reminders",
-    "schedule": "30 3 * * *"
-  }]
-}
+Setup steps (once per environment, done via Supabase Dashboard SQL Editor):
+```sql
+alter database postgres set app.supabase_project_url = 'https://<ref>.supabase.co';
+alter database postgres set app.supabase_service_key = '<service_role_key>';
+select pg_reload_conf();
 ```
-2. Create `apps/web/app/api/cron/send-reminders/route.ts` — verify `Authorization: Bearer $CRON_SECRET` header, then call the `send-reminders` Edge Function (or inline the reminder logic directly).
-3. Set `CRON_SECRET` in Vercel env vars.
-4. Remove the `send-reminders` pg_cron job from `20260806000002` (or unschedule via SQL).
 
-The `overdue-recompute` job can remain in pg_cron — it needs no secrets.
+Then set Edge Function secrets for `send-reminders`:
+- `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `SMS_PROVIDER=mock`, `NEXT_PUBLIC_SITE_URL`
+
+**SMS reminders: not yet active.** The `send-reminders` function supports SMS via Kaleyra but requires two DLT-approved template IDs: `KALEYRA_SMS_TEMPLATE_REMINDER` and `KALEYRA_SMS_TEMPLATE_OVERDUE`. These are separate from the OTP template (`KALEYRA_SMS_TEMPLATE_ID`). Until these are registered and approved with Kaleyra, keep `SMS_PROVIDER=mock` in the Edge Function secrets — email reminders work fully. Enable SMS by setting `SMS_PROVIDER=kaleyra` and adding both template IDs once approved.
+
+The `overdue-recompute` job works fine (pure SQL, no secrets).
 
 ### Step 4 — Smoke-test auth events
 

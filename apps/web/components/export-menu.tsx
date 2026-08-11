@@ -24,7 +24,6 @@ interface ExportMenuProps {
   /** Total row count — controls button label and warning threshold */
   count: number;
   /** Noun shown in button label, e.g. "bills" or "payments" */
-  noun: string;
   /** Called when user picks CSV — caller performs the actual download */
   onCsvExport: () => void;
   /** POST endpoint for PDF, e.g. /api/billing/bills/export/pdf */
@@ -36,7 +35,6 @@ interface ExportMenuProps {
 export function ExportMenu({
   ids,
   count,
-  noun,
   onCsvExport,
   pdfEndpoint,
   pdfFilename = 'export.pdf',
