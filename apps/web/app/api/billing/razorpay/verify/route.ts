@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
+import { getLogger } from '@kit/shared/logger';
 
 import crypto from 'crypto';
 
@@ -130,16 +131,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Fetch bills scoped to the caller's units.
+  // Fetch bills scoped to the caller's units. Exclude voided bills — a
+  // payment should never be recorded against a cancelled bill.
   const { data: bills } = await client
     .from('bills')
     .select('id, total_amount, paid_amount')
     .in('id', billIds)
     .in('unit_id', allowedUnitIds)
-    .eq('association_id', associationId);
+    .eq('association_id', associationId)
+    .neq('status', 'Void');
 
   if (!bills || bills.length === 0) {
-    return NextResponse.json({ error: 'Bills not found.' }, { status: 404 });
+    // Race window: bill was voided after the Razorpay order was created but
+    // before payment was completed. Log for admin visibility — Razorpay has
+    // captured the money and a manual refund from the dashboard may be needed.
+    const logger = await getLogger();
+    logger.warn(
+      { razorpayOrderId, razorpayPaymentId, billIds, associationId },
+      'Razorpay verify: bills not found or all voided after payment captured — manual refund may be required',
+    );
+    return NextResponse.json(
+      {
+        error:
+          'One or more bills have been cancelled. Please contact your association admin — your payment will be reviewed.',
+      },
+      { status: 422 },
+    );
   }
 
   const paymentBatchId = billIds.length > 1 ? crypto.randomUUID() : null;

@@ -311,10 +311,23 @@ export async function POST(req: NextRequest) {
     .from('bills')
     .select('id, total_amount, paid_amount')
     .in('id', billIds)
-    .eq('association_id', associationId);
+    .eq('association_id', associationId)
+    .neq('status', 'Void');
 
   if (!bills || bills.length === 0) {
-    return NextResponse.json({ error: 'Bills not found' }, { status: 404 });
+    // Bills are missing or all voided. Return 200 so Razorpay stops retrying —
+    // a non-2xx response would cause up to 15 retries over 24 hours while the
+    // money sits unconciled. Log so the admin can issue a manual refund.
+    void logAuditEvent({
+      associationId,
+      action: 'razorpay.payment.void_bill',
+      entityType: 'payment',
+      eventType: 'error',
+      summary: `Razorpay webhook payment arrived for voided or missing bill(s) — not recorded. Manual refund may be required.`,
+      metadata: { razorpayPaymentId, razorpayOrderId, billIds },
+      useAdminClient: true,
+    });
+    return new Response('OK', { status: 200 });
   }
 
   const paymentBatchId = billIds.length > 1 ? crypto.randomUUID() : null;

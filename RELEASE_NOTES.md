@@ -4,6 +4,35 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4.5 — Mobile UX Polish, Report Charts, Import Month Fix — 2026-08-11
+
+### Import Meter Readings — Current Month Included
+
+- The period selector in **Import Meter Readings** was excluding the current month, showing only past months. Fixed to include the current month so readings can be imported as soon as the billing cycle starts.
+
+### Reports — Chart & UX Fixes
+
+- **Payments tab**: timeline chart now sorts oldest→newest; payment mode donut shows mode name in tooltip; tooltip overflow fixed with `allowEscapeViewBox`; legend amounts rounded to whole rupees.
+- **Electricity tab**: period selector shows human-readable month name (was raw `YYYY-MM`); unit-wise bar chart tooltip escapes viewport.
+- **Outstanding tab**: Overdue by Age chart uses dynamic height + barSize cap so bars don't fill the container when few buckets exist; Oldest Unpaid date formatted as readable "5 Aug 2026"; added subtitle for context.
+- **Reports tabs**: horizontal tab bar gets a right-fade mask to signal scrollability; Export button constrained to auto-width on mobile.
+
+### Billing — Mobile UX
+
+- **Bill detail panel**: due date formatted as "5 Aug 2026" (was DD-MM-YYYY); Download Bill button stacks below date on narrow screens; Total row gets a top border separator.
+- **Unit billing page**: singular/plural fix — "1 Overdue Bills" → "1 Overdue Bill".
+
+### Auth — OTP Screen
+
+- Phone number masked on the OTP confirmation screen (`98xxxxxx06` instead of full number) for privacy.
+- Increased vertical gap around OTP input for better breathing room.
+
+| Migration | Change |
+|---|---|
+| _(none)_ | UI-only fixes; no schema changes |
+
+---
+
 ## v1.4.4 — PDF Logo Fix, Razorpay Reference on Receipts, Historical Tenancy Snapshot — 2026-08-10
 
 ### PDF Logo — Transparent Background Fix

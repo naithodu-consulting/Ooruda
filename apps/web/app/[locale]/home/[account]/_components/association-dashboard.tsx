@@ -134,7 +134,8 @@ async function loadAdminOverview(associationId: string) {
       let q = client
         .from('bills')
         .select('total_amount, paid_amount, status, due_date')
-        .eq('association_id', associationId);
+        .eq('association_id', associationId)
+        .neq('status', 'Void');
       const periods = getPeriodsForDuration(dur);
       if (periods) q = q.in('period', periods);
       return q;
@@ -278,6 +279,10 @@ async function loadMyBillSummary(
           )
         : billsQuery.is('tenancy_id', null);
   }
+
+  // Void bills are cancelled — owners and tenants should never see them
+  // as active items in their dashboard.
+  billsQuery = billsQuery.neq('status', 'Void');
 
   const { data: allBills } = await billsQuery;
 

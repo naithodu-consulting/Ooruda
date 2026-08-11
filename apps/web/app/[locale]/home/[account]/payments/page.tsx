@@ -208,6 +208,10 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     query = query.eq('association_id', association.id);
   }
 
+  // Void bills have no payments and carry no active obligation — exclude them
+  // from both the admin metrics and the owner/tenant payment view.
+  query = query.neq('status', 'Void');
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const uc = (c: unknown) => c as any;
 

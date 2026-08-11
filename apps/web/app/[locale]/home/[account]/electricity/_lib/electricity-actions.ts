@@ -334,7 +334,8 @@ export async function bulkImportMeterReadingsAction(
         .select('id', { count: 'exact', head: true })
         .eq('association_id', associationId)
         .eq('period', firstPeriod)
-        .eq('bill_type', 'electricity'),
+        .eq('bill_type', 'electricity')
+        .neq('status', 'Void'),
     ]);
 
   if ((generatedBillCount ?? 0) > 0) {
@@ -618,7 +619,8 @@ export async function recordMeterReadingsAction(
     .select('id', { count: 'exact', head: true })
     .eq('association_id', associationId)
     .eq('period', bill.period)
-    .eq('bill_type', 'electricity');
+    .eq('bill_type', 'electricity')
+    .neq('status', 'Void');
 
   if ((generatedBillCount ?? 0) > 0) {
     return {

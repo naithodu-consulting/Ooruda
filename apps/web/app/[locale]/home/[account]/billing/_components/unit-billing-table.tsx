@@ -155,19 +155,25 @@ export function UnitBillingTable({
     return isNarrowed ? full.filter((n) => n.billCount > 0) : full;
   }, [units, scopedBills, drafts, isNarrowed]);
 
-  // Counts are computed over the whole tree, not the filtered view, so the
-  // pills always show how many units each filter would actually reveal.
+  // When units are selected (for download), counts update to reflect only
+  // the selection so the user can see what each filter pill would yield
+  // for the bills they're about to download. Without a selection, counts
+  // span the whole tree as before.
   const counts = useMemo(() => {
+    const source =
+      selectedUnitIds.size > 0
+        ? tree.filter((n) => selectedUnitIds.has(n.unit.id))
+        : tree;
     let outstanding = 0,
       overdue = 0,
       all_paid = 0;
-    for (const n of tree) {
+    for (const n of source) {
       if (n.outstanding > 0) outstanding++;
       if (n.overdue > 0) overdue++;
       if (n.status === 'all_paid') all_paid++;
     }
-    return { all: tree.length, outstanding, overdue, all_paid };
-  }, [tree]);
+    return { all: source.length, outstanding, overdue, all_paid };
+  }, [tree, selectedUnitIds]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -196,11 +202,17 @@ export function UnitBillingTable({
     return billRows.filter((b) => {
       if (!visible.has(b.unit_id) || !billMatches(b)) return false;
       if (filter === 'outstanding')
-        return b.status !== 'Paid' && b.status !== 'Reversed';
+        return (
+          b.status !== 'Paid' &&
+          b.status !== 'Reversed' &&
+          b.status !== 'Void'
+        );
       if (filter === 'overdue') return b.status === 'Overdue';
       if (filter === 'all_paid')
         return b.status === 'Paid' || b.status === 'Reversed';
-      return true;
+      // Default "all": exclude voided bills — they carry no active obligation
+      // and would confuse export recipients.
+      return b.status !== 'Void';
     });
   }, [billRows, filtered, billMatches, filter]);
 
@@ -313,16 +325,20 @@ export function UnitBillingTable({
     !!search || filter !== 'all' || typeFilter !== 'all' || duration !== 'all';
 
   const metrics = useMemo(() => {
+    const source =
+      selectedUnitIds.size > 0
+        ? filtered.filter((n) => selectedUnitIds.has(n.unit.id))
+        : filtered;
     let billed = 0,
       outstanding = 0,
       overdueUnits = 0;
-    for (const n of filtered) {
+    for (const n of source) {
       billed += n.billed;
       outstanding += n.outstanding;
       if (n.overdue > 0) overdueUnits++;
     }
-    return { units: filtered.length, billed, outstanding, overdueUnits };
-  }, [filtered]);
+    return { units: source.length, billed, outstanding, overdueUnits };
+  }, [filtered, selectedUnitIds]);
 
   return (
     <div className="bg-card overflow-hidden rounded-xl border">

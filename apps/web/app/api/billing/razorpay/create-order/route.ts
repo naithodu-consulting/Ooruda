@@ -86,7 +86,8 @@ export async function POST(req: NextRequest) {
       .from('bills')
       .select('id, total_amount, paid_amount, unit_id')
       .in('id', billIds)
-      .eq('association_id', associationId),
+      .eq('association_id', associationId)
+      .neq('status', 'Void'),
   ]);
 
   if (allowedUnitIds.length === 0) {
