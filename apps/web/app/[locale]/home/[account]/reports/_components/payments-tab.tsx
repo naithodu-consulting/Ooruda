@@ -112,10 +112,18 @@ export function PaymentsTab({ payments }: Props) {
       const key = useWeek ? weekKey(p.paid_at) : shortDate(p.paid_at);
       byKey.set(key, (byKey.get(key) ?? 0) + p.amount);
     }
-    return Array.from(byKey.entries()).map(([date, amount]) => ({
-      date,
-      amount,
-    }));
+    return Array.from(byKey.entries())
+      .sort((a, b) => {
+        // Sort ascending: parse the date label back using the original payments
+        const aDate = payments.find(
+          (p) => (useWeek ? weekKey(p.paid_at) : shortDate(p.paid_at)) === a[0],
+        )?.paid_at ?? '';
+        const bDate = payments.find(
+          (p) => (useWeek ? weekKey(p.paid_at) : shortDate(p.paid_at)) === b[0],
+        )?.paid_at ?? '';
+        return aDate.localeCompare(bDate);
+      })
+      .map(([date, amount]) => ({ date, amount }));
   }, [payments]);
 
   // Mode donut
@@ -266,7 +274,11 @@ export function PaymentsTab({ payments }: Props) {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(val: any) => [formatINR(Number(val)), 'Amount']}
+                  formatter={(val: any, _key: any, props: any) => [
+                    formatINR(Number(val)),
+                    props?.payload?.name ?? 'Amount',
+                  ]}
+                  allowEscapeViewBox={{ x: true, y: true }}
                   {...TOOLTIP_STYLE}
                 />
               </PieChart>
@@ -285,7 +297,7 @@ export function PaymentsTab({ payments }: Props) {
                     {d.name}
                   </span>
                   <span className="text-muted-foreground tabular-nums">
-                    {formatINR(d.value)}
+                    {formatINR(Math.round(d.value))}
                   </span>
                 </div>
               ))}

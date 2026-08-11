@@ -214,7 +214,7 @@ export default async function UnitBillingPage({ params }: Props) {
           />
           {node.overdueCount > 0 && (
             <Stat
-              label="Overdue Bills"
+              label={`Overdue Bill${node.overdueCount !== 1 ? 's' : ''}`}
               value={String(node.overdueCount)}
               tone="danger"
             />

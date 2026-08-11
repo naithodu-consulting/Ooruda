@@ -38,7 +38,7 @@ import {
   billStatusBadgeClassName,
   displayBillStatus,
 } from '~/lib/bill-status';
-import { formatDateDMY } from '~/lib/format-date';
+import { formatDateDMY, formatDateReadable } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
@@ -201,8 +201,9 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
         />
         <KpiTile
           label="Oldest Unpaid"
-          value={oldestDue ? formatDateDMY(oldestDue) : '—'}
+          value={oldestDue ? formatDateReadable(oldestDue) : '—'}
           highlight={oldestDue ? 'red' : undefined}
+          sub="Earliest unpaid due date"
         />
       </div>
 
@@ -217,11 +218,15 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer
+              width="100%"
+              height={Math.max(100, ageingData.length * 64)}
+            >
               <BarChart
                 data={ageingData}
                 layout="vertical"
-                margin={{ top: 4, right: 16, bottom: 0, left: 0 }}
+                margin={{ top: 4, right: 16, bottom: 4, left: 0 }}
+                barSize={32}
               >
                 <CartesianGrid
                   strokeDasharray="3 3"
@@ -249,6 +254,7 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
                     formatINR(Number(val)),
                     'Outstanding',
                   ]}
+                  allowEscapeViewBox={{ x: false, y: true }}
                   {...TOOLTIP_STYLE}
                 />
                 <Bar dataKey="amount" radius={[0, 4, 4, 0]}>

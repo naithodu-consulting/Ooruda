@@ -10,7 +10,7 @@ import { Skeleton } from '@kit/ui/skeleton';
 
 import { billOutstanding } from '~/lib/bill-status';
 import { todayInBillingZone } from '~/lib/billing-dates';
-import { formatDateDMY } from '~/lib/format-date';
+import { formatDateReadable } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
@@ -154,7 +154,7 @@ export function BillDetailPanel({
   return (
     <div className="border-b px-4 py-4 pl-20">
       {/* Action bar: period + due date + download + void */}
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
           <span className="text-muted-foreground text-xs">
             {formatPeriod(bill.period)}
@@ -170,7 +170,7 @@ export function BillDetailPanel({
                     : 'text-foreground font-medium'
               }
             >
-              {formatDateDMY(bill.due_date)}
+              {formatDateReadable(bill.due_date)}
             </span>
             {dueSoon && daysUntilDue !== null && (
               <span className="ml-1.5 text-xs text-[var(--color-warning)]">
@@ -180,7 +180,7 @@ export function BillDetailPanel({
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start sm:self-center">
           {showVoidButton && (
             <Button
               variant="outline"
@@ -270,7 +270,7 @@ export function BillDetailPanel({
                 </div>
               )}
 
-              <div className="flex items-baseline justify-between gap-4 pt-2 text-sm font-semibold">
+              <div className="mt-1 flex items-baseline justify-between gap-4 border-t pt-2.5 text-sm font-bold">
                 <span>Total</span>
                 <span className="tabular-nums">
                   {formatINR(bill.total_amount)}

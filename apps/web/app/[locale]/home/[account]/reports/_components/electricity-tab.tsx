@@ -215,7 +215,7 @@ export function ElectricityTab({ mescomRows, consumptionByPeriod }: Props) {
       {/* Per-unit consumption */}
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle className="text-base">Unit-wise Consumption</CardTitle>
               <CardDescription>
@@ -223,11 +223,12 @@ export function ElectricityTab({ mescomRows, consumptionByPeriod }: Props) {
               </CardDescription>
             </div>
             <Select
+              items={periods.map((p) => ({ value: p, label: formatPeriod(p) }))}
               value={selectedPeriod}
               onValueChange={(v) => setSelectedPeriod(v ?? '')}
             >
               <SelectTrigger className="h-8 w-40 text-sm">
-                <SelectValue />
+                <SelectValue placeholder="Select period" />
               </SelectTrigger>
               <SelectContent>
                 {periods.map((p) => (
@@ -278,15 +279,8 @@ export function ElectricityTab({ mescomRows, consumptionByPeriod }: Props) {
                   />
                   <Tooltip
                     formatter={(val: any) => [`${val} kWh`, 'Consumed']}
-                    allowEscapeViewBox={{ x: false, y: true }}
-                    position={{ x: 60 }}
-                    contentStyle={{
-                      fontSize: 12,
-                      borderRadius: 8,
-                      border: '1px solid hsl(var(--border))',
-                      background: 'hsl(var(--card))',
-                      color: 'hsl(var(--card-foreground))',
-                    }}
+                    allowEscapeViewBox={{ x: true, y: true }}
+                    {...TOOLTIP_STYLE}
                   />
                   <Bar
                     dataKey="consumed_units"
