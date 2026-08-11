@@ -128,23 +128,29 @@ export function ReportsTabs({
     <Tabs value={activeTab} onValueChange={(tab) => onTabChange(tab as TabKey)}>
       {/* Header row: tabs + export */}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="overflow-x-auto pb-0.5">
-          <TabsList className="w-max">
-            {TABS.map((t) => (
-              <TabsTrigger key={t.value} value={t.value}>
-                {t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+        <div className="relative">
+          {/* Fade mask signals horizontal scrollability */}
+          <div className="pointer-events-none absolute top-0 right-0 z-10 h-full w-8 bg-gradient-to-l from-background to-transparent" />
+          <div className="no-scrollbar overflow-x-auto pb-0.5">
+            <TabsList className="w-max">
+              {TABS.map((t) => (
+                <TabsTrigger key={t.value} value={t.value}>
+                  {t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
         </div>
 
-        <ExportButton
-          associationId={associationId}
-          from={from}
-          to={to}
-          activeTab={activeTab}
-          filters={filters}
-        />
+        <div className="flex shrink-0 justify-end">
+          <ExportButton
+            associationId={associationId}
+            from={from}
+            to={to}
+            activeTab={activeTab}
+            filters={filters}
+          />
+        </div>
       </div>
 
       {/* Per-tab filter bar */}

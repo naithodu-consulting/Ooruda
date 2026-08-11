@@ -443,6 +443,7 @@ export function ReportsClientPage({
                 .select('period, unit_id, total_amount')
                 .eq('association_id', associationId)
                 .eq('bill_type', 'electricity')
+                .neq('status', 'Void')
                 .in('period', periods),
             ]);
 

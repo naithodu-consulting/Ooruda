@@ -112,7 +112,8 @@ export default async function BillingDraftsPage({ params }: Props) {
       .from('bills')
       .select('period, bill_type')
       .eq('association_id', association.id)
-      .in('bill_type', ['electricity', 'maintenance']),
+      .in('bill_type', ['electricity', 'maintenance'])
+      .neq('status', 'Void'),
   ]);
 
   // Only for super admins — these drive the danger-zone summary and would be

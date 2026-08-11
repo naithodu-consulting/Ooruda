@@ -116,7 +116,8 @@ export default async function BillingPage({ params, searchParams }: Props) {
       client
         .from('bills')
         .select(BILL_AMOUNTS_SELECT)
-        .eq('association_id', association.id),
+        .eq('association_id', association.id)
+        .neq('status', 'Void'),
       client
         .from('pending_other_charges')
         .select('id', { count: 'exact', head: true })

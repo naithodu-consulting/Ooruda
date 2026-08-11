@@ -367,12 +367,14 @@ export function PhoneOtpSignInContainer() {
   }
 
   const displayTarget =
-    channel === 'phone' ? sentTo.replace('+91', '') : sentTo;
+    channel === 'phone'
+      ? sentTo.replace('+91', '').replace(/^(\d{2})\d{6}(\d{2})$/, '$1xxxxxx$2')
+      : sentTo;
   const tooManyAttempts = verifyAttempts >= config.maxVerifyAttempts;
 
   return (
     <Form {...otpForm}>
-      <div className="flex w-full flex-col items-center gap-y-6">
+      <div className="flex w-full flex-col items-center gap-y-8">
         <p className="text-center text-sm font-medium text-[#6f6a5a]">
           <Trans
             i18nKey={
@@ -413,7 +415,7 @@ export function PhoneOtpSignInContainer() {
             name="token"
             control={otpForm.control}
             render={({ field }) => (
-              <FormItem className="flex flex-col items-center gap-y-2">
+              <FormItem className="flex flex-col items-center gap-y-3">
                 <FormControl>
                   <InputOTP
                     maxLength={6}
