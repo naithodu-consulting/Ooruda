@@ -4,8 +4,11 @@ import { revalidatePath } from 'next/cache';
 
 import * as z from 'zod';
 
+import { getLogger } from '@kit/shared/logger';
+import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
 import { getAssociationRole } from '~/lib/rbac';
 
 const ASSOCIATION_SETTINGS_PATH = '/home/[account]/settings/association';
@@ -109,6 +112,11 @@ export async function updateAssociationAction(
   const role = await getAssociationRole(associationId);
 
   if (role !== 'assoc_admin') {
+    const logger = await getLogger();
+    logger.warn(
+      { associationId, role, action: 'updateAssociation' },
+      'Permission denied',
+    );
     return {
       success: false,
       error: 'You are not authorized to update this association.',
@@ -163,7 +171,11 @@ export async function updateAssociationAction(
     .eq('id', associationId);
 
   if (assocError) {
-    return { success: false, error: assocError.message };
+    const { userMessage } = await sanitizeActionError(assocError, {
+      action: 'updateAssociation',
+      associationId,
+    });
+    return { success: false, error: userMessage };
   }
 
   const { error: billingError } = await client
@@ -174,7 +186,11 @@ export async function updateAssociationAction(
     );
 
   if (billingError) {
-    return { success: false, error: billingError.message };
+    const { userMessage } = await sanitizeActionError(billingError, {
+      action: 'updateAssociationBillingSettings',
+      associationId,
+    });
+    return { success: false, error: userMessage };
   }
 
   revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
@@ -190,7 +206,16 @@ export async function updateChargeTypeRateAction(
   const role = await getAssociationRole(associationId);
 
   if (role !== 'assoc_admin' && role !== 'billing_operator') {
-    return { success: false, error: 'Not authorized.' };
+    const logger = await getLogger();
+    logger.warn(
+      { associationId, role, action: 'updateChargeTypeRate', chargeTypeId: id },
+      'Permission denied',
+    );
+    return {
+      success: false,
+      error:
+        "You don't have the required permission. Contact your association admin.",
+    };
   }
 
   const client = getSupabaseServerClient();
@@ -202,7 +227,12 @@ export async function updateChargeTypeRateAction(
     .eq('association_id', associationId);
 
   if (error) {
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'updateChargeTypeRate',
+      associationId,
+      chargeTypeId: id,
+    });
+    return { success: false, error: userMessage };
   }
 
   revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
@@ -219,9 +249,14 @@ export async function updateChargeTypeCalcMethodAction(
   const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
   if (!isSuperAdmin) {
+    const logger = await getLogger();
+    logger.warn(
+      { associationId, action: 'updateChargeTypeCalcMethod', chargeTypeId: id },
+      'Permission denied — super admin required',
+    );
     return {
       success: false,
-      error: 'Not authorized. Super admin access required.',
+      error: "You don't have the required permission.",
     };
   }
 
@@ -232,7 +267,12 @@ export async function updateChargeTypeCalcMethodAction(
     .eq('association_id', associationId);
 
   if (error) {
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'updateChargeTypeCalcMethod',
+      associationId,
+      chargeTypeId: id,
+    });
+    return { success: false, error: userMessage };
   }
 
   revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
@@ -248,7 +288,21 @@ export async function updateChargeTypeGstApplicableAction(
   const role = await getAssociationRole(associationId);
 
   if (role !== 'assoc_admin' && role !== 'billing_operator') {
-    return { success: false, error: 'Not authorized.' };
+    const logger = await getLogger();
+    logger.warn(
+      {
+        associationId,
+        role,
+        action: 'updateChargeTypeGstApplicable',
+        chargeTypeId: id,
+      },
+      'Permission denied',
+    );
+    return {
+      success: false,
+      error:
+        "You don't have the required permission. Contact your association admin.",
+    };
   }
 
   const client = getSupabaseServerClient();
@@ -260,7 +314,12 @@ export async function updateChargeTypeGstApplicableAction(
     .eq('association_id', associationId);
 
   if (error) {
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'updateChargeTypeGstApplicable',
+      associationId,
+      chargeTypeId: id,
+    });
+    return { success: false, error: userMessage };
   }
 
   revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
@@ -278,7 +337,16 @@ export async function toggleChargeTypeAction(
   const role = await getAssociationRole(associationId);
 
   if (role !== 'assoc_admin' && role !== 'billing_operator') {
-    return { success: false, error: 'Not authorized.' };
+    const logger = await getLogger();
+    logger.warn(
+      { associationId, role, action: 'toggleChargeType', chargeTypeId: id },
+      'Permission denied',
+    );
+    return {
+      success: false,
+      error:
+        "You don't have the required permission. Contact your association admin.",
+    };
   }
 
   const client = getSupabaseServerClient();
@@ -290,10 +358,205 @@ export async function toggleChargeTypeAction(
     .eq('association_id', associationId);
 
   if (error) {
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'toggleChargeType',
+      associationId,
+      chargeTypeId: id,
+    });
+    return { success: false, error: userMessage };
   }
 
   revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
 
+  return { success: true };
+}
+
+// ─── Payment Gateway ──────────────────────────────────────────────────────────
+
+const CreateGatewaySchema = z.object({
+  key_id: z.string().min(1, 'Key ID is required').max(255),
+  key_secret: z.string().min(1, 'Key Secret is required').max(255),
+  webhook_secret: z.string().max(255).optional(),
+});
+
+export type GatewayActionState = { success?: boolean; error?: string } | null;
+
+// Insert-only — credentials cannot be edited after creation.
+// To rotate keys, delete and re-create.
+export async function createPaymentGatewayAction(
+  associationId: string,
+  _prevState: GatewayActionState,
+  formData: FormData,
+): Promise<GatewayActionState> {
+  const role = await getAssociationRole(associationId);
+  if (role !== 'assoc_admin') {
+    const logger = await getLogger();
+    logger.warn(
+      { associationId, role, action: 'createPaymentGateway' },
+      'Permission denied',
+    );
+    return {
+      success: false,
+      error: 'Only association admins can configure the payment gateway.',
+    };
+  }
+
+  const trim = (v: FormDataEntryValue | null) =>
+    typeof v === 'string' ? v.trim() || undefined : undefined;
+
+  const parsed = CreateGatewaySchema.safeParse({
+    key_id: formData.get('key_id'),
+    key_secret: trim(formData.get('key_secret')),
+    webhook_secret: trim(formData.get('webhook_secret')),
+  });
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Invalid input.',
+    };
+  }
+
+  const admin = getSupabaseServerAdminClient();
+
+  const { data: existing, error: lookupError } = await admin
+    .from('association_payment_gateways')
+    .select('id')
+    .eq('association_id', associationId)
+    .maybeSingle();
+
+  if (lookupError) {
+    const { userMessage } = await sanitizeActionError(lookupError, {
+      action: 'createPaymentGateway.lookup',
+      associationId,
+    });
+    return { success: false, error: userMessage };
+  }
+
+  if (existing) {
+    return {
+      success: false,
+      error:
+        'A gateway is already configured. Delete it first to set up new credentials.',
+    };
+  }
+
+  const { error } = await admin.from('association_payment_gateways').insert({
+    association_id: associationId,
+    provider: 'razorpay',
+    key_id: parsed.data.key_id,
+    key_secret: parsed.data.key_secret,
+    webhook_secret: parsed.data.webhook_secret,
+    is_active: true,
+  });
+
+  if (error) {
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'createPaymentGateway',
+      associationId,
+    });
+    return { success: false, error: userMessage };
+  }
+
+  revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
+  return { success: true };
+}
+
+export async function toggleGatewayActiveAction(
+  associationId: string,
+  isActive: boolean,
+): Promise<GatewayActionState> {
+  const role = await getAssociationRole(associationId);
+  if (role !== 'assoc_admin') {
+    const logger = await getLogger();
+    logger.warn(
+      { associationId, role, action: 'toggleGatewayActive' },
+      'Permission denied',
+    );
+    return {
+      success: false,
+      error:
+        "You don't have the required permission. Contact your association admin.",
+    };
+  }
+
+  const admin = getSupabaseServerAdminClient();
+  const { error } = await admin
+    .from('association_payment_gateways')
+    .update({ is_active: isActive })
+    .eq('association_id', associationId);
+
+  if (error) {
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'toggleGatewayActive',
+      associationId,
+    });
+    return { success: false, error: userMessage };
+  }
+
+  revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
+  return { success: true };
+}
+
+export async function deletePaymentGatewayAction(
+  associationId: string,
+): Promise<GatewayActionState> {
+  const role = await getAssociationRole(associationId);
+  if (role !== 'assoc_admin') {
+    const logger = await getLogger();
+    logger.warn(
+      { associationId, role, action: 'deletePaymentGateway' },
+      'Permission denied',
+    );
+    return {
+      success: false,
+      error:
+        "You don't have the required permission. Contact your association admin.",
+    };
+  }
+
+  const admin = getSupabaseServerAdminClient();
+  const { error } = await admin
+    .from('association_payment_gateways')
+    .delete()
+    .eq('association_id', associationId);
+
+  if (error) {
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'deletePaymentGateway',
+      associationId,
+    });
+    return { success: false, error: userMessage };
+  }
+
+  revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
+  return { success: true };
+}
+
+export async function toggleCashLedgerEnabledAction(
+  associationId: string,
+  enabled: boolean,
+): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseServerClient();
+  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+
+  if (!isSuperAdmin) {
+    return { success: false, error: 'Super admin permission required.' };
+  }
+
+  const { error } = await client
+    .from('associations')
+    .update({ cash_ledger_enabled: enabled })
+    .eq('id', associationId);
+
+  if (error) {
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'toggleCashLedgerEnabled',
+      associationId,
+    });
+    return { success: false, error: userMessage };
+  }
+
+  revalidatePath(ASSOCIATION_SETTINGS_PATH, 'page');
   return { success: true };
 }

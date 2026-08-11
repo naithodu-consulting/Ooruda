@@ -6,6 +6,20 @@ import { BILLING_TIME_ZONE } from './billing-dates';
  * day across timezones. Only safe for date-only strings (no time
  * component) — use `formatTimestampDMY` for full timestamps.
  */
+/**
+ * Format a `'YYYY-MM-DD'` string as `'5 Aug 2026'` — human-readable, no
+ * timezone conversion (date-only input is already local).
+ */
+export function formatDateReadable(ymd: string): string {
+  const [year, month, day] = ymd.slice(0, 10).split('-').map(Number);
+  if (!year || !month || !day) return ymd;
+  return new Date(year, month - 1, day).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export function formatDateDMY(ymd: string): string {
   const [year, month, day] = ymd.slice(0, 10).split('-');
 

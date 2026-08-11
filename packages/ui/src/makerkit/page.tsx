@@ -194,7 +194,9 @@ export function PageHeader({
         </div>
 
         <If condition={title}>
-          <PageTitle>{title}</PageTitle>
+          <div className={cn(displaySidebarTrigger && 'pl-7')}>
+            <PageTitle>{title}</PageTitle>
+          </div>
         </If>
       </div>
 

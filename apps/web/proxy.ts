@@ -30,9 +30,69 @@ const EMAIL_GATE_EXEMPT_PHONES = new Set([
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|images|locales|assets|sitemap.xml|robots.txt|api/*).*)',
+    '/((?!_next/static|_next/image|images|locales|assets|sitemap.xml|robots.txt).*)',
   ],
 };
+
+// ── In-process rate limiter ───────────────────────────────────────────────────
+// Simple sliding-window counter keyed by IP. Works per-instance; sufficient
+// for current single-instance scale. Replace with Upstash Redis for multi-instance.
+
+interface RateLimitBucket {
+  count: number;
+  resetAt: number; // epoch ms
+}
+
+// Map key: "<route-group>:<ip>"
+const rateLimitStore = new Map<string, RateLimitBucket>();
+
+const RATE_LIMIT_RULES = [
+  // Auth routes (sign-in, OTP, password reset) — 5 per minute
+  { pathPrefix: '/auth', limit: 5, windowMs: 60_000, group: 'auth' },
+  // API routes — 30 per 10 seconds
+  { pathPrefix: '/api', limit: 30, windowMs: 10_000, group: 'api' },
+];
+
+function checkRateLimit(
+  ip: string,
+  pathname: string,
+): { limited: boolean; retryAfter?: number } {
+  const normalized = getNormalizedPathname(pathname);
+  const rule = RATE_LIMIT_RULES.find((r) =>
+    normalized.startsWith(r.pathPrefix),
+  );
+  if (!rule) return { limited: false };
+
+  const key = `${rule.group}:${ip}`;
+  const now = Date.now();
+  const bucket = rateLimitStore.get(key);
+
+  if (!bucket || now > bucket.resetAt) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + rule.windowMs });
+    return { limited: false };
+  }
+
+  if (bucket.count >= rule.limit) {
+    return {
+      limited: true,
+      retryAfter: Math.ceil((bucket.resetAt - now) / 1000),
+    };
+  }
+
+  bucket.count += 1;
+  return { limited: false };
+}
+
+// Periodically prune expired buckets to prevent unbounded memory growth.
+// Runs every 5 minutes; safe to skip if the runtime hasn't warmed up yet.
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, bucket] of rateLimitStore.entries()) {
+      if (now > bucket.resetAt) rateLimitStore.delete(key);
+    }
+  }, 5 * 60_000);
+}
 
 // create i18n middleware once at module scope
 const handleI18nRouting = createNextIntlMiddleware(routing);
@@ -44,6 +104,28 @@ const getUser = (request: NextRequest, response: NextResponse) => {
 };
 
 export default async function proxy(request: NextRequest) {
+  // ── Rate limiting ───────────────────────────────────────────────────────────
+  const ip =
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    request.headers.get('x-real-ip') ??
+    '0.0.0.0';
+
+  const { limited, retryAfter } = checkRateLimit(ip, request.nextUrl.pathname);
+  if (limited) {
+    return new NextResponse('Too Many Requests', {
+      status: 429,
+      headers: {
+        'Content-Type': 'text/plain',
+        'Retry-After': String(retryAfter ?? 60),
+      },
+    });
+  }
+
+  // ── Skip non-page routes (API) — no i18n/session middleware needed ──────────
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+
   // run next-intl middleware first to get the i18n-aware response
   const response = handleI18nRouting(request);
 

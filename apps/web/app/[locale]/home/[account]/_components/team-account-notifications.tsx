@@ -5,6 +5,7 @@ import featuresFlagConfig from '~/config/feature-flags.config';
 export function TeamAccountNotifications(params: {
   userId: string;
   accountId: string;
+  accountSlug: string;
 }) {
   if (!featuresFlagConfig.enableNotifications) {
     return null;
@@ -14,6 +15,7 @@ export function TeamAccountNotifications(params: {
     <NotificationsPopover
       accountIds={[params.userId, params.accountId]}
       realtime={featuresFlagConfig.realtimeNotifications}
+      accountSlug={params.accountSlug}
     />
   );
 }

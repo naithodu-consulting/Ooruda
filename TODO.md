@@ -4,6 +4,164 @@ Items that are scoped and understood but not yet implemented. Each entry include
 
 ---
 
+## Dev DB sync — pending steps (do before next release push)
+
+**Priority:** High — must complete before pushing v1.4 to dev/staging  
+**Linked Supabase project:** `bcdosjrbkkemsqowhigj` (dev)
+
+### Step 1 — Push pending migrations
+
+4 migrations are not yet on dev. Run:
+
+```bash
+cd apps/web && supabase migration list --linked   # verify these 4 show blank remote column
+./scripts/db-push.sh
+```
+
+Pending migrations:
+| Migration | Purpose |
+|---|---|
+| `20260805000002_missing_fk_indexes.sql` | FK index performance |
+| `20260806000001_activity_tracking_and_notifications.sql` | audit_logs enhancements, notification schema |
+| `20260806000002_reminder_cron.sql` | pg_cron schedule for `send-reminders` Edge Function |
+| `20260806000003_drop_in_app_notifications.sql` | Drop legacy in-app notification tables |
+
+### Step 2 — Register auth-events-hook in Supabase Dashboard
+
+⚠️ **Blocked — Supabase free/pro plan limitation.**  
+The Auth Hooks page only exposes: Send Email hook, JWT Claims hook, Before User Created hook. A generic post-auth-event webhook (needed to log login/logout/OTP to `audit_logs`) requires **Team or Enterprise plan**. The `auth-events-hook` Edge Function is deployed and ready — registration is blocked by plan tier.
+
+**When upgraded to Team plan:**
+1. Go to Supabase Dashboard → **Authentication → Hooks**
+2. Add a new **HTTP** hook for auth events
+3. URL: `https://bcdosjrbkkemsqowhigj.supabase.co/functions/v1/auth-events-hook`
+4. Set `AUTH_HOOK_SECRET` in Dashboard → Edge Functions → auth-events-hook → Secrets
+
+### Step 3 — Wire send-reminders scheduling
+
+✅ **Unblocked (2026-08-11).** The `alter database postgres set app.supabase_project_url / app.supabase_service_key` approach works via the Supabase Dashboard SQL Editor — earlier assumption that it required superuser was incorrect.
+
+Setup steps (once per environment, done via Supabase Dashboard SQL Editor):
+```sql
+alter database postgres set app.supabase_project_url = 'https://<ref>.supabase.co';
+alter database postgres set app.supabase_service_key = '<service_role_key>';
+select pg_reload_conf();
+```
+
+Then set Edge Function secrets for `send-reminders`:
+- `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `SMS_PROVIDER=mock`, `NEXT_PUBLIC_SITE_URL`
+
+**SMS reminders: not yet active.** The `send-reminders` function supports SMS via Kaleyra but requires two DLT-approved template IDs: `KALEYRA_SMS_TEMPLATE_REMINDER` and `KALEYRA_SMS_TEMPLATE_OVERDUE`. These are separate from the OTP template (`KALEYRA_SMS_TEMPLATE_ID`). Until these are registered and approved with Kaleyra, keep `SMS_PROVIDER=mock` in the Edge Function secrets — email reminders work fully. Enable SMS by setting `SMS_PROVIDER=kaleyra` and adding both template IDs once approved.
+
+The `overdue-recompute` job works fine (pure SQL, no secrets).
+
+### Step 4 — Smoke-test auth events
+
+Log out and log back in, then check the super-admin Activity Log → Auth Events tab. A `auth.login` row should appear.
+
+---
+
+## Activity Log — Phase 4 deferred items
+
+**Feature:** Activity Log / Audit Log (v1.4)  
+**Context:** Phase 1–3 shipped in v1.4 (audit_logs table, UI with tabs/icons/search/pagination, error instrumentation, Edge Function hooks). These items were descoped to keep scope manageable.
+
+### P4-A: Tab count badges
+
+Show event counts on each filter tab so users can spot anomalies at a glance (e.g. "Errors (12)").
+
+**Approach:** Run a single aggregation query alongside the main log query:
+```sql
+select event_type, count(*) from audit_logs
+where association_id = $1
+group by event_type;
+```
+Map the counts to the tab keys and render as a `<Badge>` inside each `EventTypeTabs` entry.
+
+**Files:** `audit-shared.tsx` (EventTypeTabs needs a `counts` prop), `audit/page.tsx` (add count query), `admin/activity/page.tsx` (same).
+
+### P4-B: CSV export
+
+Allow admins to download the current filtered view as CSV for compliance/reporting.
+
+**Approach:** Add a "Download CSV" button to `audit-log-card.tsx` and `admin-activity-card.tsx`. On click, fire a server action or route handler that re-runs the same filtered query (no pagination) and streams a CSV response.
+
+**Files:** New route `app/api/audit/export/route.ts`, button in both card components.
+
+### P4-C: Audit log retention policy (90-day pruning)
+
+Prevent unbounded table growth. Rows older than 90 days should be pruned automatically.
+
+**Approach:** Add a pg_cron job in a new migration:
+```sql
+select cron.schedule(
+  'prune-audit-logs',
+  '0 2 * * *',  -- 2 AM UTC daily
+  $$delete from audit_logs where created_at < now() - interval '90 days'$$
+);
+```
+
+Consider whether auth_event and error rows should have a longer retention (180 days) for compliance.
+
+---
+
+## Known gap: Admin action errors not logged to Activity Log
+
+**Priority:** Low  
+**File:** `packages/features/admin/src/lib/server/admin-server-actions.ts`
+
+Safe-action failures (e.g. duplicate email on Edit User, invalid phone) throw and return a typed error to the UI but never write to `audit_logs`. The Errors tab in the super-admin Activity Log only shows rows explicitly written with `event_type: 'error'` via `lib/audit-log.ts` — unhandled safe-action throws are invisible there.
+
+**Fix:** Add a `catch` block in each admin action that writes a failure row:
+
+```ts
+} catch (err) {
+  await logAuditEvent({
+    action: 'admin.update_user.failed',
+    eventType: 'error',
+    summary: err instanceof Error ? err.message : String(err),
+    entityType: 'user',
+    entityId: userId,
+  });
+  throw err; // re-throw so safe-action still returns the error to the UI
+}
+```
+
+Affects all actions in `admin-server-actions.ts`. Consider a shared `withAuditError()` wrapper to avoid repetition.
+
+---
+
+## Enhancement: URL sync for Payments page type/unit filters
+
+**Priority:** Low  
+**File:** `apps/web/app/[locale]/home/[account]/payments/_components/payments-section.tsx:102-117`
+
+**Context:** `typeFilter` and `unitFilter` are client-side state only. The `statusFilter` already syncs from the `?status=` URL param (used by billing overview "Outstanding" links), but `typeFilter` and `unitFilter` don't persist in the URL. This means you can't bookmark or share a filtered payments view for type or unit.
+
+**Fix:** Add `?type=` and `?unit=` query params to the URL using `useRouter`/`useSearchParams`, similar to how `?status=` is handled. The payments-section will need to read initial values from `searchParams` passed as props from the page server component.
+
+---
+
+## Bug: "Partial" payment status filter returns no results when all partial bills are overdue
+
+**Priority:** Medium  
+**File:** `apps/web/app/[locale]/home/[account]/payments/_components/payments-section.tsx:133`
+
+**Root cause:** The Partial filter gates on `b.due_date >= today`, so it only finds partially paid bills still within their due date. Once a partial bill crosses its due date, `displayBillStatus()` promotes its badge to "Overdue" and the Partial filter stops matching it. In a live association where most partial bills have aged past due, the filter returns nothing — which looks broken to the admin.
+
+**Fix:** Remove the date restriction from the Partial filter:
+```typescript
+// Before
+rows = rows.filter((b) => b.status === 'Partial' && b.due_date >= today);
+
+// After
+rows = rows.filter((b) => b.status === 'Partial');
+```
+
+"Partial" should mean any bill with a payment received but not fully paid, regardless of due date. The row-level badge already distinguishes Partial vs Overdue per bill. This is consistent with how the Paid and Collected filters work (no date restriction). The overlap between Partial and Overdue filters is acceptable — the badge tells the full story at row level.
+
+---
+
 ## Feature: assoc_admin personal bill view + Razorpay self-service
 
 **Priority:** High  
@@ -75,3 +233,21 @@ UPDATE sub_meters SET initial_reading = <actual_value> WHERE meter_label = '<lab
 ```
 
 ---
+
+## Known risk: Razorpay partial refund webhook not idempotent
+
+**Priority:** Low (low-probability in practice)
+**Introduced in:** `20260725000001_partial_refund.sql` + webhook route change (2026-07-22)
+
+**Risk:** The `record_payment_reversal(payment_id, refund_amount)` function accumulates `refunded_amount` on each call. If Razorpay delivers the same partial refund webhook event twice (e.g., our server returned non-200 on first delivery, triggering Razorpay retry), the refunded amount gets double-counted.
+
+**Example:** ₹300 partial refund on a ₹1,000 payment.
+- First delivery: `refunded_amount` → ₹300 ✓
+- Duplicate delivery: `refunded_amount` → ₹600 ✗ (bill incorrectly shows Partial with ₹400 outstanding instead of ₹700)
+
+**Why it is low-risk now:** The webhook handler returns 200 on success, so Razorpay does not retry for the same event. Retries only happen on network failure or a non-2xx response from our side.
+
+**Proper fix:** Store the Razorpay refund ID (`rfnd_xxx`, available in the refund entity payload) in a `payments.razorpay_refund_id` column and add a unique constraint. The `record_payment_reversal` function should skip already-processed refund IDs. Requires a migration to add the column and a webhook change to pass `refundEntity.id`.
+
+---
+

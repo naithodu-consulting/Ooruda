@@ -126,7 +126,7 @@ export const enhanceRouteHandler = <
       }
     }
 
-    return handler({
+    return await handler({
       request,
       body,
       user,

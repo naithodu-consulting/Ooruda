@@ -34,6 +34,8 @@ export interface PaymentRow {
   paid_by_role: string;
   paid_at: string;
   receipt_no: string | null;
+  /** True for advance application entries (voucher_no stored in receipt_no). */
+  is_advance?: boolean;
 }
 
 export function BillPaymentsDialog(props: {
@@ -41,6 +43,7 @@ export function BillPaymentsDialog(props: {
   billNo: string;
   associationId: string;
   payments: PaymentRow[];
+  hidePayerColumn?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -52,9 +55,14 @@ export function BillPaymentsDialog(props: {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button size="sm" variant="outline">
+          <Button
+            size="sm"
+            variant="ghost"
+            title="View payment history for this bill"
+          >
             <Eye className="h-4 w-4" />
-            View payments ({props.payments.length})
+            {props.payments.length}{' '}
+            {props.payments.length === 1 ? 'payment' : 'payments'}
           </Button>
         }
       />
@@ -75,11 +83,15 @@ export function BillPaymentsDialog(props: {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Mode</TableHead>
-                <TableHead>Paid by</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Receipt</TableHead>
+                <TableHead scope="col">Date</TableHead>
+                <TableHead scope="col">Mode</TableHead>
+                {!props.hidePayerColumn && (
+                  <TableHead scope="col">Paid by</TableHead>
+                )}
+                <TableHead scope="col" className="text-right">
+                  Amount
+                </TableHead>
+                <TableHead scope="col">Receipt</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -98,17 +110,29 @@ export function BillPaymentsDialog(props: {
                       ) : null}
                     </div>
                   </TableCell>
-                  <TableCell>{payment.paid_by_role}</TableCell>
+                  {!props.hidePayerColumn && (
+                    <TableCell>{payment.paid_by_role}</TableCell>
+                  )}
                   <TableCell className="text-right tabular-nums">
                     {formatINR(payment.amount)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
-                      <span>{payment.receipt_no ?? '—'}</span>
+                      <span className="font-mono text-xs">
+                        {payment.receipt_no ?? '—'}
+                      </span>
                       {payment.receipt_no ? (
                         <DownloadPdfButton
-                          href={`/api/billing/receipts/${payment.id}/pdf`}
-                          label="Download receipt PDF"
+                          href={
+                            payment.is_advance
+                              ? `/api/billing/advance-applications/${encodeURIComponent(payment.receipt_no)}/pdf`
+                              : `/api/billing/receipts/${payment.id}/pdf`
+                          }
+                          label={
+                            payment.is_advance
+                              ? 'Download advance voucher'
+                              : 'Download receipt PDF'
+                          }
                           dataTest={`download-receipt-${payment.id}`}
                           variant="ghost"
                           iconSize="icon-xs"

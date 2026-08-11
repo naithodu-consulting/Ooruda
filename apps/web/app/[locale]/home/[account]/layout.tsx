@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 
 import * as z from 'zod';
 
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { TeamAccountWorkspaceContextProvider } from '@kit/team-accounts/components';
 import { Page, PageNavigation } from '@kit/ui/page';
 import { SidebarProvider } from '@kit/ui/sidebar';
@@ -53,6 +54,19 @@ async function SidebarLayout({
     image: picture_url,
   }));
 
+  // Load per-association feature flags for nav filtering.
+  const client = getSupabaseServerClient();
+  const { data: assocFlags } = await client
+    .from('associations')
+    .select('cash_ledger_enabled')
+    .eq('account_id', data.account.id)
+    .single();
+
+  const disabledNavKeys: string[] = [];
+  if (assocFlags?.cash_ledger_enabled === false) {
+    disabledNavKeys.push('association.nav.cashLedger');
+  }
+
   return (
     <TeamAccountWorkspaceContextProvider value={data}>
       <SidebarProvider defaultOpen={state.open}>
@@ -64,6 +78,7 @@ async function SidebarLayout({
               accounts={accounts}
               user={data.user}
               role={data.account.role}
+              disabledNavKeys={disabledNavKeys}
             />
           </PageNavigation>
 

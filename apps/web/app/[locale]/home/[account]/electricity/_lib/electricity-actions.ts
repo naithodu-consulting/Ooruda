@@ -5,6 +5,7 @@ import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client'
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
+import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
 import { getAssociationRole } from '~/lib/rbac';
 
 import {
@@ -24,7 +25,7 @@ async function requireAssocAdmin(
   const role = await getAssociationRole(associationId);
 
   if (role !== 'assoc_admin') {
-    return 'Only an association admin can do that.';
+    return "You don't have permission to do this. Contact your association admin if you think this is incorrect.";
   }
 
   return null;
@@ -77,7 +78,11 @@ export async function createSubMeterAction(
   });
 
   if (error) {
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'createSubMeter',
+      associationId,
+    });
+    return { success: false, error: userMessage };
   }
 
   await logAuditEvent({
@@ -113,7 +118,12 @@ export async function setSubMeterActiveAction(
     .eq('id', subMeterId);
 
   if (error) {
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'setSubMeterActive',
+      associationId,
+      subMeterId,
+    });
+    return { success: false, error: userMessage };
   }
 
   await logAuditEvent({
@@ -168,13 +178,19 @@ export async function createElectricityBillAction(
         error: `A bill for ${parsed.data.period} already exists.`,
       };
     }
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'createElectricityBill',
+      associationId,
+      period: parsed.data.period,
+    });
     await logAuditEvent({
       associationId,
       action: 'mescom_bill.create.failed',
       entityType: 'mescom_bill',
+      eventType: 'error',
       summary: `Failed to create electricity bill for ${parsed.data.period}: ${error.message}`,
     });
-    return { success: false, error: error.message };
+    return { success: false, error: userMessage };
   }
 
   await logAuditEvent({
@@ -201,7 +217,7 @@ export async function deleteElectricityBillAction(
   if (!isSuperAdmin) {
     return {
       success: false,
-      error: 'Only a super admin can delete electricity bills.',
+      error: "You don't have permission to delete electricity bills.",
     };
   }
 
@@ -212,14 +228,20 @@ export async function deleteElectricityBillAction(
     .eq('association_id', associationId);
 
   if (error) {
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'deleteElectricityBill',
+      associationId,
+      electricityBillId,
+    });
     await logAuditEvent({
       associationId,
       action: 'mescom_bill.delete.failed',
       entityType: 'mescom_bill',
       entityId: electricityBillId,
+      eventType: 'error',
       summary: `Failed to delete electricity bill: ${error.message}`,
     });
-    return { success: false, error: error.message };
+    return { success: false, error: userMessage };
   }
 
   await logAuditEvent({
@@ -298,11 +320,36 @@ export async function bulkImportMeterReadingsAction(
 
   const client = getSupabaseServerClient();
 
-  // Fetch all units for this association
-  const { data: units } = await client
-    .from('units')
-    .select('id')
-    .eq('association_id', associationId);
+  // Fetch units, mescom bills, and generated-bill count in parallel — none
+  // of these depend on each other.
+  const [{ data: units }, { data: bills }, { count: generatedBillCount }] =
+    await Promise.all([
+      client.from('units').select('id').eq('association_id', associationId),
+      client
+        .from('mescom_bills')
+        .select('id, period')
+        .eq('association_id', associationId),
+      client
+        .from('bills')
+        .select('id', { count: 'exact', head: true })
+        .eq('association_id', associationId)
+        .eq('period', firstPeriod)
+        .eq('bill_type', 'electricity')
+        .neq('status', 'Void'),
+    ]);
+
+  if ((generatedBillCount ?? 0) > 0) {
+    return {
+      success: false,
+      imported: 0,
+      skipped: [],
+      error: `Electricity bills have already been generated for ${firstPeriod}. Readings cannot be changed after billing.`,
+    };
+  }
+
+  const billByPeriod = new Map<string, string>(
+    (bills ?? []).map((b) => [b.period, b.id]),
+  );
 
   const unitIds = (units ?? []).map((u) => u.id);
 
@@ -329,16 +376,6 @@ export async function bulkImportMeterReadingsAction(
       smByLabel.set(key, sm);
     }
   }
-
-  // Fetch all bills for this association (period → bill lookup)
-  const { data: bills } = await client
-    .from('mescom_bills')
-    .select('id, period')
-    .eq('association_id', associationId);
-
-  const billByPeriod = new Map<string, string>(
-    (bills ?? []).map((b) => [b.period, b.id]),
-  );
 
   // Fetch last known reading per sub_meter (to carry forward previous_reading,
   // minimum_charge, and load_kva when the CSV leaves those fields blank).
@@ -374,25 +411,6 @@ export async function bulkImportMeterReadingsAction(
       minimum_charge: r.minimum_charge,
       load_kva: r.load_kva,
     });
-  }
-
-  // Block import if unit bills have already been generated for this period —
-  // overwriting readings after billing would silently alter historical unit rates.
-  // Check unconditionally: unit bills can exist even if the MESCOM bill was later deleted.
-  const { count: generatedBillCount } = await client
-    .from('bills')
-    .select('id', { count: 'exact', head: true })
-    .eq('association_id', associationId)
-    .eq('period', firstPeriod)
-    .eq('bill_type', 'electricity');
-
-  if ((generatedBillCount ?? 0) > 0) {
-    return {
-      success: false,
-      imported: 0,
-      skipped: [],
-      error: `Electricity bills have already been generated for ${firstPeriod}. Readings cannot be changed after billing.`,
-    };
   }
 
   const targetBillId = billByPeriod.get(firstPeriod);
@@ -530,9 +548,14 @@ export async function bulkImportMeterReadingsAction(
         associationId,
         action: 'meter_readings.bulk_import.failed',
         entityType: 'mescom_bill',
+        eventType: 'error',
         summary: `Failed to bulk import meter readings: ${error.message}`,
       });
-      return { success: false, error: error.message, imported: 0, skipped };
+      const { userMessage } = await sanitizeActionError(error, {
+        action: 'bulkImportMeterReadings',
+        associationId,
+      });
+      return { success: false, error: userMessage, imported: 0, skipped };
     }
 
     imported = toUpsert.length;
@@ -596,7 +619,8 @@ export async function recordMeterReadingsAction(
     .select('id', { count: 'exact', head: true })
     .eq('association_id', associationId)
     .eq('period', bill.period)
-    .eq('bill_type', 'electricity');
+    .eq('bill_type', 'electricity')
+    .neq('status', 'Void');
 
   if ((generatedBillCount ?? 0) > 0) {
     return {
@@ -624,9 +648,15 @@ export async function recordMeterReadingsAction(
       action: 'meter_readings.record.failed',
       entityType: 'mescom_bill',
       entityId: bill.id,
+      eventType: 'error',
       summary: `Failed to record meter readings for ${bill.period}: ${upsertError.message}`,
     });
-    return { success: false, error: upsertError.message };
+    const { userMessage } = await sanitizeActionError(upsertError, {
+      action: 'recordMeterReadings',
+      associationId,
+      billId: bill.id,
+    });
+    return { success: false, error: userMessage };
   }
 
   await logAuditEvent({
@@ -678,7 +708,7 @@ export async function bulkImportSubMetersAction(
       success: false,
       imported: 0,
       skipped: [],
-      error: 'Only a super admin can bulk-import sub-meters.',
+      error: "You don't have permission to bulk-import sub-meters.",
     };
   }
 
@@ -797,9 +827,14 @@ export async function bulkImportSubMetersAction(
       associationId,
       action: 'sub_meter.bulk_import.failed',
       entityType: 'sub_meter',
+      eventType: 'error',
       summary: `Failed to bulk import sub-meters: ${error.message}`,
     });
-    return { success: false, imported: 0, skipped, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'bulkImportSubMeters',
+      associationId,
+    });
+    return { success: false, imported: 0, skipped, error: userMessage };
   }
 
   await logAuditEvent({

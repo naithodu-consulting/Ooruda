@@ -53,3 +53,6 @@ node-compile-cache/
 .prds/
 .bug-hunt/
 .claude/
+
+# internal knowledge base (session learnings — not for git)
+OORUDA_KNOWLEDGE.md

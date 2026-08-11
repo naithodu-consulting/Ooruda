@@ -1,8 +1,6 @@
 import { Building2, DoorClosed, DoorOpen, Ruler } from 'lucide-react';
 
-import { AdminBulkInviteDialog } from '@kit/admin/components/admin-bulk-invite-dialog';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
-import { Button } from '@kit/ui/button';
 import { MetricCard } from '@kit/ui/metric-card';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
@@ -38,15 +36,14 @@ export default async function UnitsPage({ params }: Props) {
   ]);
 
   const client = getSupabaseServerClient();
-  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
-  const [{ data: association }, { data: accountData }] = await Promise.all([
+  const [{ data: isSuperAdmin }, { data: association }] = await Promise.all([
+    client.rpc('is_super_admin'),
     client
       .from('associations')
       .select('id')
       .eq('account_id', accountId)
       .single(),
-    client.from('accounts').select('name').eq('id', accountId).single(),
   ]);
 
   if (!association) {
@@ -65,13 +62,31 @@ export default async function UnitsPage({ params }: Props) {
   const unitRows = (units ?? []) as UnitRow[];
   const unitIds = unitRows.map((u) => u.id);
 
-  const { data: tenancies } = unitIds.length
-    ? await client
-        .from('tenancies')
-        .select('id, unit_id, tenant_id, start_date')
-        .in('unit_id', unitIds)
-        .eq('status', 'active')
-    : { data: [] };
+  const [{ data: tenancies }, { data: openBills }] = await Promise.all([
+    unitIds.length
+      ? client
+          .from('tenancies')
+          .select('id, unit_id, tenant_id, start_date')
+          .in('unit_id', unitIds)
+          .eq('status', 'active')
+      : Promise.resolve({
+          data: [] as {
+            id: string;
+            unit_id: string;
+            tenant_id: string;
+            start_date: string;
+          }[],
+        }),
+    unitIds.length
+      ? client
+          .from('bills')
+          .select(
+            'unit_id, status, due_date, total_amount, paid_amount, advance_applied',
+          )
+          .in('unit_id', unitIds)
+          .in('status', ['Unpaid', 'Partial', 'Overdue'])
+      : Promise.resolve({ data: null }),
+  ]);
 
   const activeTenancies = tenancies ?? [];
   const tenancyByUnit: Record<string, (typeof activeTenancies)[number]> =
@@ -103,14 +118,6 @@ export default async function UnitsPage({ params }: Props) {
       ]),
     );
   }
-
-  const { data: openBills } = unitIds.length
-    ? await client
-        .from('bills')
-        .select('unit_id, status, due_date')
-        .in('unit_id', unitIds)
-        .eq('status', 'Unpaid')
-    : { data: [] };
 
   const overdueUnitIds = new Set(
     (openBills ?? [])
@@ -220,15 +227,6 @@ export default async function UnitsPage({ params }: Props) {
         ) : null}
 
         <div className="flex items-center justify-end gap-4">
-          {isSuperAdmin ? (
-            <AdminBulkInviteDialog
-              associationName={accountData?.name ?? undefined}
-            >
-              <Button variant="outline" data-test="admin-bulk-invite-button">
-                Invite Members
-              </Button>
-            </AdminBulkInviteDialog>
-          ) : null}
           {canManage ? (
             <>
               <ImportUnitsDialog associationId={association.id} />

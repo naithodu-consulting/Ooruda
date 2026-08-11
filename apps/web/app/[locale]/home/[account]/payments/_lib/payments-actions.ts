@@ -1,11 +1,14 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
+import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
+import { sendPaymentConfirmedNotification } from '~/lib/notify';
 import { getAssociationRole } from '~/lib/rbac';
 
 import {
@@ -23,7 +26,7 @@ async function requireBillingAccess(
   const role = await getAssociationRole(associationId);
 
   if (role !== 'assoc_admin' && role !== 'billing_operator') {
-    return 'Only an association admin or billing operator can do that.';
+    return "You don't have permission to do this. Contact your association admin if you think this is incorrect.";
   }
 
   return null;
@@ -56,7 +59,7 @@ export async function recordPaymentAction(
   const { amount, mode, paid_by_role, reference_no } = parsed.data;
   const client = getSupabaseServerClient();
 
-  const { data: paymentId, error } = await client.rpc('record_payment' as any, {
+  const { data: paymentId, error } = await client.rpc('record_payment', {
     p_bill_id: billId,
     p_association_id: associationId,
     p_amount: amount,
@@ -68,13 +71,19 @@ export async function recordPaymentAction(
   });
 
   if (error) {
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'recordPayment',
+      associationId,
+      billId,
+    });
     await logAuditEvent({
       associationId,
       action: 'payment.record.failed',
       entityType: 'payment',
+      eventType: 'error',
       summary: `Failed to record payment for bill ${billId}: ${error.message}`,
     });
-    return { success: false, error: error.message };
+    return { success: false, error: userMessage };
   }
 
   // Persist reference_no if provided. The RPC doesn't accept it and uses
@@ -90,17 +99,54 @@ export async function recordPaymentAction(
 
   const { data: bill } = await client
     .from('bills')
-    .select('bill_no, units!inner(unit_no)')
+    .select('bill_no, bill_type, period, units!inner(unit_no, owner_id)')
     .eq('id', billId)
     .single();
+
+  const unit = Array.isArray(bill?.units) ? bill.units[0] : bill?.units;
 
   await logAuditEvent({
     associationId,
     action: 'payment.recorded',
     entityType: 'payment',
     entityId: paymentId as unknown as string,
-    summary: `Unit ${bill?.units?.unit_no ?? '?'} — ₹${amount.toLocaleString('en-IN')} collected via ${mode}`,
+    summary: `Unit ${unit?.unit_no ?? '?'} — ₹${amount.toLocaleString('en-IN')} collected via ${mode}`,
   });
+
+  // Fire payment-confirmed notification non-blocking via after()
+  if (bill && unit?.owner_id) {
+    const ownerUserId = unit.owner_id;
+    const billNo = bill.bill_no;
+    const billType = bill.bill_type;
+    const period = bill.period;
+    const unitNo = unit.unit_no;
+    const paidAmount = amount;
+
+    after(async () => {
+      const adminClient = getSupabaseServerAdminClient();
+      const { data: assoc } = await adminClient
+        .from('associations')
+        .select('accounts!inner(name, slug)')
+        .eq('id', associationId)
+        .single();
+
+      const assocAccounts = assoc?.accounts as {
+        name?: string;
+        slug?: string;
+      } | null;
+      await sendPaymentConfirmedNotification({
+        associationId,
+        associationName: assocAccounts?.name ?? '',
+        accountSlug: assocAccounts?.slug ?? '',
+        recipientUserId: ownerUserId,
+        unitNo,
+        billNo,
+        billType,
+        period,
+        paidAmount,
+      });
+    });
+  }
 
   revalidatePath(PAYMENTS_PATH, 'page');
 
@@ -119,7 +165,11 @@ export async function voidPaymentAction(
   const role = await getAssociationRole(associationId);
 
   if (role !== 'assoc_admin') {
-    return { success: false, error: 'Only an association admin can do that.' };
+    return {
+      success: false,
+      error:
+        "You don't have the required permission. Contact your association admin.",
+    };
   }
 
   const client = getSupabaseServerClient();
@@ -130,14 +180,20 @@ export async function voidPaymentAction(
     .eq('id', paymentId);
 
   if (deleteError) {
+    const { userMessage } = await sanitizeActionError(deleteError, {
+      action: 'voidPayment',
+      associationId,
+      paymentId,
+    });
     await logAuditEvent({
       associationId,
       action: 'payment.void.failed',
       entityType: 'payment',
       entityId: paymentId,
+      eventType: 'error',
       summary: `Failed to void payment ${paymentId}: ${deleteError.message}`,
     });
-    return { success: false, error: deleteError.message };
+    return { success: false, error: userMessage };
   }
 
   await logAuditEvent({
@@ -177,7 +233,10 @@ export async function deleteAllPaymentsAction(
 
   const { data: isSuperAdmin } = await client.rpc('is_super_admin');
   if (!isSuperAdmin) {
-    return { success: false, error: 'Only a super admin can do that.' };
+    return {
+      success: false,
+      error: "You don't have the required permission.",
+    };
   }
 
   const { data, error } = await client
@@ -187,7 +246,11 @@ export async function deleteAllPaymentsAction(
     .single();
 
   if (error) {
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'deleteAllPayments',
+      associationId,
+    });
+    return { success: false, error: userMessage };
   }
 
   // Best-effort cleanup of orphaned cached receipt PDFs.

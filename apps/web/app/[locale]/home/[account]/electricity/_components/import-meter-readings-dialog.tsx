@@ -64,11 +64,11 @@ function toDbPeriod(mmYyyy: string): string {
   return `${yyyy}-${mm}`;
 }
 
-/** Generates the last N months excluding current month, as MM/YYYY strings */
+/** Generates the current month + last N-1 months, as MM/YYYY strings */
 function getPeriodOptions(count = 7): { value: string; label: string }[] {
   const options = [];
   const now = new Date();
-  for (let i = 1; i <= count; i++) {
+  for (let i = 0; i < count; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const yyyy = String(d.getFullYear());
@@ -163,20 +163,20 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
 
     let error: string | undefined;
     if (!sub_meter_no) {
-      error = 'sub_meter_no is required';
+      error = 'Sub-meter number is missing — add it and re-upload.';
     } else if (duplicates.has(sub_meter_no.toLowerCase())) {
-      error = `Duplicate sub_meter_no "${sub_meter_no}" in this file`;
+      error = `"${sub_meter_no}" appears more than once — remove the duplicate and re-upload.`;
     } else if (currentRaw === '' || Number.isNaN(currentReading)) {
-      error = 'current_meter_reading must be a number';
+      error = 'Current reading must be a number — fix it and re-upload.';
     } else if (currentReading < 0) {
-      error = 'current_meter_reading must be ≥ 0';
+      error = 'Current reading must be 0 or greater.';
     } else if (load_kva !== null && (Number.isNaN(load_kva) || load_kva <= 0)) {
-      error = 'load_kva must be a positive number';
+      error = 'Load (kVA) must be a positive number.';
     } else if (
       minimum_charge !== null &&
       (Number.isNaN(minimum_charge) || minimum_charge < 0)
     ) {
-      error = 'min_charges must be ≥ 0';
+      error = 'Minimum charge must be 0 or greater.';
     }
 
     return {
@@ -316,9 +316,8 @@ export function ImportMeterReadingsDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-muted-foreground text-xs">
-                  Select the month for which electricity was consumed. Previous
-                  reading and minimum charge are auto-filled from sub-meter
-                  defaults.
+                  Select the billing month. Previous reading and minimum charge
+                  are auto-filled from sub-meter defaults.
                 </p>
               </div>
             )}
@@ -361,8 +360,8 @@ export function ImportMeterReadingsDialog({
                 </span>
                 <br />
                 Optional:{' '}
-                <span className="font-medium">LOAD_KVA, MIN_CHARGES</span> —
-                leave blank to carry forward last month&apos;s values
+                <span className="font-medium">LOAD_KVA, MIN_CHARGES.</span>{' '}
+                Leave blank to carry forward last month&apos;s values
                 automatically (0 for brand-new meters).
                 <br />
                 Sub-meter labels must match those registered in the system.

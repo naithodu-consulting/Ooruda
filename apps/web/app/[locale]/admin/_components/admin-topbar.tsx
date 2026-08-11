@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-import { LayoutDashboard, LogOut, Menu, Users } from 'lucide-react';
+import { LogOut, Menu, Send, Users } from 'lucide-react';
 
 import { usePersonalAccountData } from '@kit/accounts/hooks/use-personal-account-data';
 import { useSignOut } from '@kit/supabase/hooks/use-sign-out';
@@ -91,17 +91,6 @@ export function AdminTopbar() {
               <DropdownMenuItem
                 render={
                   <Link
-                    href="/admin"
-                    className="flex h-12 w-full items-center gap-3"
-                  >
-                    <LayoutDashboard className="h-4 w-4" />
-                    <span>Dashboard</span>
-                  </Link>
-                }
-              />
-              <DropdownMenuItem
-                render={
-                  <Link
                     href="/admin/accounts"
                     className="flex h-12 w-full items-center gap-3"
                   >
@@ -110,6 +99,19 @@ export function AdminTopbar() {
                   </Link>
                 }
               />
+              {process.env.NEXT_PUBLIC_ENABLE_BILL_DISPATCH === 'true' && (
+                <DropdownMenuItem
+                  render={
+                    <Link
+                      href="/admin/bill-dispatch"
+                      className="flex h-12 w-full items-center gap-3"
+                    >
+                      <Send className="h-4 w-4" />
+                      <span>Bill Dispatch</span>
+                    </Link>
+                  }
+                />
+              )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem

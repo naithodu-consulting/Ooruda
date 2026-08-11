@@ -1,3 +1,4 @@
+import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import pathsConfig from '~/config/paths.config';
@@ -7,6 +8,8 @@ import { AssociationForm } from './_components/association-form';
 import { AssociationLogoUploader } from './_components/association-logo-uploader';
 import { AssociationNameCard } from './_components/association-name-card';
 import { ChargeTypesCard } from './_components/charge-types-card';
+import { PaymentGatewayCard } from './_components/payment-gateway-card';
+import { WorkspaceFeaturesCard } from './_components/workspace-features-card';
 
 interface Props {
   params: Promise<{ account: string }>;
@@ -58,11 +61,14 @@ export default async function AssociationSettingsPage({ params }: Props) {
     );
   }
 
+  const admin = getSupabaseServerAdminClient();
+
   // Fire all remaining independent queries in parallel.
   const [
     { data: isSuperAdmin },
     { data: billingSettings },
     { data: chargeTypes },
+    { data: gatewayRow },
   ] = await Promise.all([
     client.rpc('is_super_admin'),
     client
@@ -78,7 +84,23 @@ export default async function AssociationSettingsPage({ params }: Props) {
       .eq('association_id', association.id)
       .order('is_builtin', { ascending: false })
       .order('name'),
+    // Admin client required — association_payment_gateways has no authenticated policies.
+    admin
+      .from('association_payment_gateways')
+      .select('key_id, is_active, key_secret, webhook_secret, created_at')
+      .eq('association_id', association.id)
+      .maybeSingle(),
   ]);
+
+  const gatewayConfig = gatewayRow
+    ? {
+        key_id: gatewayRow.key_id,
+        is_active: gatewayRow.is_active,
+        has_secret: !!gatewayRow.key_secret,
+        has_webhook_secret: !!gatewayRow.webhook_secret,
+        created_at: gatewayRow.created_at,
+      }
+    : null;
 
   return (
     <div className="flex max-w-2xl flex-1 flex-col gap-6">
@@ -129,6 +151,18 @@ export default async function AssociationSettingsPage({ params }: Props) {
         isSuperAdmin={!!isSuperAdmin}
         gstEnabled={!!association.gst_enabled}
       />
+
+      <PaymentGatewayCard
+        associationId={association.id}
+        gateway={gatewayConfig}
+      />
+
+      {isSuperAdmin && (
+        <WorkspaceFeaturesCard
+          associationId={association.id}
+          cashLedgerEnabled={association.cash_ledger_enabled ?? true}
+        />
+      )}
     </div>
   );
 }

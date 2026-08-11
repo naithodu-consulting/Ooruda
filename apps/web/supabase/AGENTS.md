@@ -36,6 +36,18 @@ pnpm --filter web supabase migrations up
 pnpm supabase:web:typegen
 ```
 
+### Three-Environment Architecture
+
+| Environment | Supabase Project | Project Ref | Used By |
+|---|---|---|---|
+| **Local** | Docker (local) | — | `pnpm supabase:web:start` |
+| **Dev/Staging** | Ooruda Development | `bcdosjrbkkemsqowhigj` | `release` branch → ooruda.vercel.app |
+| **Production** | Ooruda Production | `vkxchopjqakvftcnxwie` | `main` branch → ooruda.com |
+
+`.env.local` controls which remote project the app points to locally. Currently defaults to **Ooruda Development**. To switch to production, swap the commented block in `.env.local`.
+
+The currently linked Supabase project (for CLI commands) is stored in `apps/web/supabase/.temp/project-ref`.
+
 ### Remote Sync (CRITICAL — do not skip)
 
 `apps/web/.env.local` points the app at a **remote, hosted** Supabase project, not the local instance. `pnpm --filter web supabase migrations up` only applies migrations **locally** — it does NOT touch the remote/linked project. Running, testing, and verifying a feature entirely against local Supabase can pass completely while the same feature is broken in the real app, because the remote database never received the new migration(s).
@@ -45,17 +57,35 @@ This already happened once: a full PDF-generation feature (new columns, new tabl
 **Before considering any schema-changing feature done:**
 
 ```bash
-# Check whether local migrations are missing on the linked remote project
+# Check which migrations are pending on the linked remote project
 cd apps/web && supabase migration list --linked
 
-# If anything is missing, push to remote — ask the user for confirmation first,
-# since this touches a live/shared database, not just your local sandbox.
-# If the CLI reports out-of-order migrations, it will ask for --include-all;
-# read each pending migration's SQL before agreeing to that flag.
-supabase db push --linked
+# Push to remote using the guardrail script (NEVER run supabase db push --linked directly)
+./scripts/db-push.sh              # push to Ooruda Development (default)
+./scripts/db-push.sh --production # push to Ooruda Production (requires confirmation)
 ```
 
+The guardrail script (`scripts/db-push.sh`) detects which project is linked and blocks accidental pushes to production. Always use it. If the CLI reports out-of-order migrations, it will ask for `--include-all` — read each pending migration's SQL before agreeing.
+
 Always run `supabase migration list --linked` as part of verifying a schema change, not just `supabase migrations up`.
+
+### Standard Migration Workflow (end-to-end)
+
+```bash
+# 1. Create and apply locally
+pnpm --filter web run supabase migrations new feature_name
+pnpm --filter web supabase migrations up
+pnpm supabase:web:typegen
+
+# 2. Verify locally, then check what's pending on remote
+cd apps/web && supabase migration list --linked
+
+# 3. Push to Ooruda Development (linked by default)
+./scripts/db-push.sh
+
+# 4. When merging to main → push to Ooruda Production
+./scripts/db-push.sh --production
+```
 
 ## Security Rules
 

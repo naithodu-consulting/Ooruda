@@ -120,16 +120,17 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
     const initial_reading = initial_reading_parsed ?? 0;
 
     let error: string | undefined;
-    if (!unit_no) error = 'unit_no is required';
-    else if (!sub_meter_no) error = 'sub_meter_no is required';
+    if (!unit_no) error = 'Unit number is missing — add it and re-upload.';
+    else if (!sub_meter_no)
+      error = 'Sub-meter number is missing — add it and re-upload.';
     else if (!meter_type)
-      error = `meter_type must be "Unit" or "CommonArea" (got "${meter_type_raw}")`;
+      error = `"${meter_type_raw}" is not a valid meter type — use "Unit" or "CommonArea".`;
     else if (meter_type === 'CommonArea' && unit_no.toUpperCase() !== 'COMMON')
-      error =
-        'For CommonArea meters, unit_no must be "COMMON" (it is ignored by the system)';
+      error = 'Common area meters must have "COMMON" as the unit number.';
     else if (initial_reading_raw !== '' && initial_reading_parsed === null)
-      error = 'initial_meter_reading must be a number';
-    else if (initial_reading < 0) error = 'initial_meter_reading must be ≥ 0';
+      error = 'Initial reading must be a number — fix it and re-upload.';
+    else if (initial_reading < 0)
+      error = 'Initial reading must be 0 or greater.';
 
     return {
       _row: i + 1,

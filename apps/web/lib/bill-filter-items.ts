@@ -5,11 +5,11 @@ import {
 
 export const BILL_STATUS_ITEMS = {
   all: 'All Statuses',
-  collected: 'Collected',
-  unpaid: 'Unpaid',
-  paid: 'Paid',
-  partial: 'Partial',
+  outstanding: 'Outstanding',
   overdue: 'Overdue',
+  unpaid: 'Unpaid',
+  partial: 'Partial',
+  paid: 'Paid',
 };
 
 export const BILL_TYPE_FILTER_ITEMS = {
@@ -17,6 +17,7 @@ export const BILL_TYPE_FILTER_ITEMS = {
   electricity: 'Electricity',
   maintenance: 'Maintenance',
   other_charges: 'Other Charges',
+  sinking_fund: 'Sinking Fund',
 };
 
 export function getDurationItems() {

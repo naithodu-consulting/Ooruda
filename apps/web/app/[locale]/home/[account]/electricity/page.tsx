@@ -57,17 +57,36 @@ export default async function MescomPage({ params }: Props) {
 
   const unitIds = unitRows.map((u) => u.id);
 
-  const { data: subMeters } = unitIds.length
-    ? await client
-        .from('sub_meters')
-        .select(
-          'id, meter_label, meter_type, is_active, unit_id, load_kva, units(unit_no)',
-        )
-        .in('unit_id', unitIds)
-        .order('meter_label')
-    : { data: [] };
+  const [subMetersResult, billsResult] = await Promise.all([
+    unitIds.length
+      ? client
+          .from('sub_meters')
+          .select(
+            'id, meter_label, meter_type, is_active, unit_id, load_kva, units(unit_no)',
+          )
+          .in('unit_id', unitIds)
+          .order('meter_label')
+      : Promise.resolve({
+          data: [] as {
+            id: string;
+            meter_label: string;
+            meter_type: string;
+            is_active: boolean;
+            unit_id: string;
+            load_kva: number | null;
+            units: { unit_no: string } | null;
+          }[],
+        }),
+    client
+      .from('mescom_bills')
+      .select(
+        'id, period, invoice_amount, block_consumption_units, period_start, period_end',
+      )
+      .eq('association_id', association.id)
+      .order('period', { ascending: false }),
+  ]);
 
-  const subMeterRows: SubMeterRow[] = (subMeters ?? []).map((m) => {
+  const subMeterRows: SubMeterRow[] = (subMetersResult.data ?? []).map((m) => {
     // CommonArea sub-meters are stored with unit_id pointing to a placeholder
     // unit (the first unit by unit_no). For display, redirect them to the
     // actual Common Area unit's unit_no so they appear under the right label.
@@ -90,15 +109,7 @@ export default async function MescomPage({ params }: Props) {
   const activeSubMeters = subMeterRows.filter((m) => m.is_active);
   const activeSubMeterIds = activeSubMeters.map((m) => m.id);
 
-  const { data: bills } = await client
-    .from('mescom_bills')
-    .select(
-      'id, period, invoice_amount, block_consumption_units, period_start, period_end',
-    )
-    .eq('association_id', association.id)
-    .order('period', { ascending: false });
-
-  const billRows: ElectricityBillRow[] = bills ?? [];
+  const billRows: ElectricityBillRow[] = billsResult.data ?? [];
 
   const { data: readings } = activeSubMeterIds.length
     ? await client
@@ -156,15 +167,35 @@ export default async function MescomPage({ params }: Props) {
     string,
     Record<string, number>
   > = {};
+  // Build per-subMeter sorted arrays (readings already sorted asc by period)
+  // then for each bill, find the latest reading strictly before bill.period
+  // in O(readings + bills × subMeters) rather than O(bills × readings).
+  const readingsByMeter = new Map<
+    string,
+    { period: string; current_reading: number; minimum_charge: number }[]
+  >();
+  for (const r of allReadings) {
+    const list = readingsByMeter.get(r.sub_meter_id) ?? [];
+    list.push({
+      period: r.period,
+      current_reading: r.current_reading,
+      minimum_charge: r.minimum_charge ?? 0,
+    });
+    readingsByMeter.set(r.sub_meter_id, list);
+  }
   for (const bill of billRows) {
     lastReadingBeforePeriodByBill[bill.id] = {};
     lastMinChargeBeforePeriodByBill[bill.id] = {};
-    for (const r of allReadings) {
-      if (r.period < bill.period) {
-        lastReadingBeforePeriodByBill[bill.id]![r.sub_meter_id] =
-          r.current_reading;
-        lastMinChargeBeforePeriodByBill[bill.id]![r.sub_meter_id] =
-          r.minimum_charge ?? 0;
+    for (const [meterId, mReadings] of readingsByMeter) {
+      // mReadings is sorted asc by period; walk backwards to find latest < bill.period
+      for (let i = mReadings.length - 1; i >= 0; i--) {
+        if (mReadings[i]!.period < bill.period) {
+          lastReadingBeforePeriodByBill[bill.id]![meterId] =
+            mReadings[i]!.current_reading;
+          lastMinChargeBeforePeriodByBill[bill.id]![meterId] =
+            mReadings[i]!.minimum_charge;
+          break;
+        }
       }
     }
   }

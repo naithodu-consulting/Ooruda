@@ -7,6 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
+import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
 import { getAssociationRole } from '~/lib/rbac';
 
 import {
@@ -28,7 +29,7 @@ async function requireAssocAdmin(
   const role = await getAssociationRole(associationId);
 
   if (role !== 'assoc_admin') {
-    return 'Only an association admin can do that.';
+    return "You don't have the required permission. Contact your association admin.";
   }
 
   return null;
@@ -74,18 +75,22 @@ export async function createUnitAction(
     .single();
 
   if (error) {
-    // Unique (association_id, unit_no) violation
     if (error.code === '23505') {
       return {
         success: false,
-        error: `Unit "${parsed.data.unit_no}" already exists.`,
+        error: `Unit "${parsed.data.unit_no}" already exists. Use a different unit number.`,
       };
     }
 
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'createUnit',
+      associationId,
+      unitNo: parsed.data.unit_no,
+    });
+    return { success: false, error: userMessage };
   }
 
-  await logAuditEvent({
+  void logAuditEvent({
     associationId,
     action: 'unit.created',
     entityType: 'unit',
@@ -141,6 +146,23 @@ export async function updateUnitAction(
     }
   }
 
+  // Derive occupancy status from owner + tenancy:
+  //   active tenant     → Rented (never overridden here)
+  //   owner, no tenant  → Self Occupied
+  //   no owner          → Vacant
+  const { count: activeTenancyCount } = await client
+    .from('tenancies')
+    .select('id', { count: 'exact', head: true })
+    .eq('unit_id', unitId)
+    .eq('status', 'active');
+
+  const status =
+    (activeTenancyCount ?? 0) > 0
+      ? 'Rented'
+      : ownerId
+        ? 'Self Occupied'
+        : 'Vacant';
+
   const { error } = await client
     .from('units')
     .update({
@@ -150,6 +172,7 @@ export async function updateUnitAction(
       area_sqft: parsed.data.area_sqft,
       door_no: parsed.data.door_no ?? null,
       owner_id: ownerId,
+      status,
       bill_to: parsed.data.bill_to ?? 'auto',
       owner_is_company: parsed.data.owner_is_company ?? false,
       owner_company_name: parsed.data.owner_company_name ?? null,
@@ -163,11 +186,16 @@ export async function updateUnitAction(
     if (error.code === '23505') {
       return {
         success: false,
-        error: `Unit "${parsed.data.unit_no}" already exists.`,
+        error: `Unit "${parsed.data.unit_no}" already exists. Use a different unit number.`,
       };
     }
 
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'updateUnit',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
   }
 
   await logAuditEvent({
@@ -195,7 +223,10 @@ export async function deleteUnitAction(
   const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
   if (!isSuperAdmin) {
-    return { success: false, error: 'Only a super admin can delete units.' };
+    return {
+      success: false,
+      error: "You don't have permission to delete units.",
+    };
   }
 
   const { data: unit } = await client
@@ -211,7 +242,12 @@ export async function deleteUnitAction(
     .eq('association_id', associationId);
 
   if (error) {
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'deleteUnit',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
   }
 
   await logAuditEvent({
@@ -263,14 +299,33 @@ export async function assignOwnerAction(
     }
   }
 
+  // Keep occupancy status in sync (see updateUnitAction for the rules).
+  const { count: activeTenancyCount } = await client
+    .from('tenancies')
+    .select('id', { count: 'exact', head: true })
+    .eq('unit_id', unitId)
+    .eq('status', 'active');
+
+  const status =
+    (activeTenancyCount ?? 0) > 0
+      ? 'Rented'
+      : ownerId
+        ? 'Self Occupied'
+        : 'Vacant';
+
   const { error } = await client
     .from('units')
-    .update({ owner_id: ownerId })
+    .update({ owner_id: ownerId, status })
     .eq('id', unitId)
     .eq('association_id', associationId);
 
   if (error) {
-    return { success: false, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'assignOwner',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
   }
 
   const { data: unit } = await client
@@ -350,11 +405,16 @@ export async function assignTenantAction(
       return {
         success: false,
         error:
-          'This unit already has an active tenant. End that tenancy first.',
+          'This unit already has an active tenant. End the current tenancy before assigning a new one.',
       };
     }
 
-    return { success: false, error: tenancyError.message };
+    const { userMessage } = await sanitizeActionError(tenancyError, {
+      action: 'assignTenant',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
   }
 
   const { error: statusError } = await client
@@ -364,7 +424,12 @@ export async function assignTenantAction(
     .eq('association_id', associationId);
 
   if (statusError) {
-    return { success: false, error: statusError.message };
+    const { userMessage } = await sanitizeActionError(statusError, {
+      action: 'assignTenant.updateStatus',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
   }
 
   const { data: unit } = await client
@@ -414,17 +479,36 @@ export async function endTenancyAction(
     .eq('unit_id', unitId);
 
   if (tenancyError) {
-    return { success: false, error: tenancyError.message };
+    const { userMessage } = await sanitizeActionError(tenancyError, {
+      action: 'endTenancy',
+      associationId,
+      unitId,
+      tenancyId,
+    });
+    return { success: false, error: userMessage };
   }
+
+  // After the tenant leaves: owner-owned units revert to Self Occupied,
+  // owner-less units to Vacant.
+  const { data: unitOwner } = await client
+    .from('units')
+    .select('owner_id')
+    .eq('id', unitId)
+    .single();
 
   const { error: statusError } = await client
     .from('units')
-    .update({ status: 'Self Occupied' })
+    .update({ status: unitOwner?.owner_id ? 'Self Occupied' : 'Vacant' })
     .eq('id', unitId)
     .eq('association_id', associationId);
 
   if (statusError) {
-    return { success: false, error: statusError.message };
+    const { userMessage } = await sanitizeActionError(statusError, {
+      action: 'endTenancy.updateStatus',
+      associationId,
+      unitId,
+    });
+    return { success: false, error: userMessage };
   }
 
   const { data: unit } = await client
@@ -520,9 +604,38 @@ export async function bulkImportUnitsAction(
     return { success: true, imported: 0, skipped };
   }
 
+  // Pre-check for existing unit_nos in a single query instead of falling back
+  // to serial row-by-row inserts on conflict (which is O(n) round-trips).
+  const { data: existing } = await client
+    .from('units')
+    .select('unit_no')
+    .eq('association_id', associationId)
+    .in(
+      'unit_no',
+      toInsert.map((r) => r.unit_no),
+    );
+
+  const existingNos = new Set((existing ?? []).map((u) => u.unit_no));
+  const actualInserts = toInsert.filter((r) => !existingNos.has(r.unit_no));
+
+  for (const r of toInsert) {
+    if (existingNos.has(r.unit_no)) {
+      const originalIdx = rows.findIndex((orig) => orig.unit_no === r.unit_no);
+      skipped.push({
+        row: originalIdx + 1,
+        unit_no: r.unit_no,
+        reason: `Unit "${r.unit_no}" already exists`,
+      });
+    }
+  }
+
+  if (actualInserts.length === 0) {
+    return { success: true, imported: 0, skipped };
+  }
+
   const { data: inserted, error } = await client
     .from('units')
-    .insert(toInsert)
+    .insert(actualInserts)
     .select('id, unit_no');
 
   if (error) {
@@ -569,7 +682,11 @@ export async function bulkImportUnitsAction(
       return { success: true, imported, skipped: rowByRowSkipped };
     }
 
-    return { success: false, imported: 0, skipped, error: error.message };
+    const { userMessage } = await sanitizeActionError(error, {
+      action: 'bulkImportUnits',
+      associationId,
+    });
+    return { success: false, imported: 0, skipped, error: userMessage };
   }
 
   const imported = inserted?.length ?? 0;

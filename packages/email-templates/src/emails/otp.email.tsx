@@ -1,6 +1,5 @@
 import {
   Body,
-  Button,
   Head,
   Html,
   Preview,
@@ -32,21 +31,11 @@ export async function renderOtpEmail(props: Props) {
     namespace,
   });
 
-  const subject = t(`subject`, {
-    productName: props.productName,
-  });
-
-  const previewText = subject;
-
-  const heading = t(`heading`, {
-    productName: props.productName,
-  });
-
-  const otpText = t(`otpText`, {
-    otp: props.otp,
-  });
-
+  const subject = t(`subject`);
+  const previewText = t(`previewText`);
+  const heading = t(`heading`);
   const mainText = t(`mainText`);
+  const expiryText = t(`expiryText`);
   const footerText = t(`footerText`);
 
   const html = await render(
@@ -65,22 +54,76 @@ export async function renderOtpEmail(props: Props) {
             </EmailHeader>
 
             <EmailContent>
-              <Text className="text-[16px] text-[#242424]">{mainText}</Text>
+              <Text
+                style={{
+                  fontSize: '15px',
+                  lineHeight: '24px',
+                  color: '#4a4a4a',
+                  margin: '0 0 24px',
+                }}
+              >
+                {mainText}
+              </Text>
 
-              <Text className="text-[16px] text-[#242424]">{otpText}</Text>
-
-              <Section className="mt-[16px] mb-[16px] text-center">
-                <Button className={'w-full rounded bg-neutral-950 text-center'}>
-                  <Text className="text-[16px] leading-[16px] font-medium font-semibold text-white">
-                    {props.otp}
-                  </Text>
-                </Button>
+              {/* OTP code box */}
+              <Section
+                style={{
+                  backgroundColor: '#FCD469',
+                  borderRadius: '10px',
+                  padding: '20px',
+                  textAlign: 'center' as const,
+                  margin: '0 0 24px',
+                }}
+              >
+                <Text
+                  style={{
+                    margin: '0 0 4px',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    letterSpacing: '0.12em',
+                    color: '#5a4a10',
+                    textTransform: 'uppercase' as const,
+                  }}
+                >
+                  Your sign-in code
+                </Text>
+                <Text
+                  style={{
+                    margin: '0',
+                    fontSize: '36px',
+                    fontWeight: '800',
+                    letterSpacing: '0.25em',
+                    color: '#1d1e20',
+                    fontFamily: 'monospace',
+                  }}
+                >
+                  {props.otp}
+                </Text>
               </Section>
 
               <Text
-                className="text-[16px] text-[#242424]"
-                dangerouslySetInnerHTML={{ __html: footerText }}
-              />
+                style={{
+                  fontSize: '13px',
+                  lineHeight: '20px',
+                  color: '#9a9a8a',
+                  margin: '0 0 8px',
+                  textAlign: 'center' as const,
+                }}
+              >
+                {expiryText}
+              </Text>
+
+              <Text
+                style={{
+                  fontSize: '13px',
+                  lineHeight: '20px',
+                  color: '#9a9a8a',
+                  margin: '0',
+                  textAlign: 'center' as const,
+                }}
+              >
+                {footerText}
+              </Text>
             </EmailContent>
 
             <EmailFooter>{props.productName}</EmailFooter>

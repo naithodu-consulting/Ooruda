@@ -62,7 +62,6 @@ async function loadAccountMembers(
   });
 
   if (error) {
-    console.error(error);
     throw error;
   }
 
@@ -81,7 +80,11 @@ async function loadAccountMembers(
       .in('id', userIds);
 
     if (profilesError) {
-      console.error(profilesError);
+      // non-fatal — phone numbers degrade to null; log for visibility
+      console.warn(
+        '[members-loader] profiles query failed:',
+        profilesError.message,
+      );
     }
 
     for (const profile of profiles ?? []) {
@@ -109,7 +112,6 @@ async function loadInvitations(
   });
 
   if (error) {
-    console.error(error);
     throw error;
   }
 

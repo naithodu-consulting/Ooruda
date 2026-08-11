@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useWatch } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -107,9 +107,10 @@ export function OtherChargesDialog(props: Props) {
         render={
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             data-test="other-charges-dialog-trigger"
           >
+            <Plus className="h-4 w-4" />
             Other Charges
           </Button>
         }
@@ -174,6 +175,7 @@ function AddChargeForm(props: {
   });
 
   const scope = useWatch({ control: form.control, name: 'scope' });
+  const splitMode = useWatch({ control: form.control, name: 'split_mode' });
   const periodOptions = getPeriodOptions(props.periods);
 
   const onSubmit = form.handleSubmit((values) => {
@@ -228,7 +230,7 @@ function AddChargeForm(props: {
                 <FormLabel>Apply to</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
-                    <SelectTrigger className="h-9 text-sm">
+                    <SelectTrigger className="h-9 text-base">
                       <SelectValue>
                         {(value: string) => {
                           if (value === 'unit') return 'Specific Unit';
@@ -256,7 +258,7 @@ function AddChargeForm(props: {
                 <FormLabel>Period</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
-                    <SelectTrigger className="h-9 text-sm">
+                    <SelectTrigger className="h-9 text-base">
                       <SelectValue>
                         {(value: string) =>
                           periodOptions.find((opt) => opt.value === value)
@@ -290,7 +292,7 @@ function AddChargeForm(props: {
                   onValueChange={(v) => v && field.onChange(v)}
                 >
                   <FormControl>
-                    <SelectTrigger className="h-9 text-sm">
+                    <SelectTrigger className="h-9 text-base">
                       <SelectValue placeholder="Select a unit">
                         {(value: string) =>
                           props.units.find((u) => u.id === value)?.unit_no ??
@@ -324,7 +326,7 @@ function AddChargeForm(props: {
                   onValueChange={field.onChange}
                 >
                   <FormControl>
-                    <SelectTrigger className="h-9 text-sm">
+                    <SelectTrigger className="h-9 text-base">
                       <SelectValue>
                         {(value: string) => {
                           if (value === 'flat') return 'Flat Amount';
@@ -354,7 +356,7 @@ function AddChargeForm(props: {
                 <FormControl>
                   <Input
                     placeholder="e.g. Lift Repair"
-                    className="h-9 text-sm"
+                    className="h-9 text-base"
                     {...field}
                   />
                 </FormControl>
@@ -368,7 +370,13 @@ function AddChargeForm(props: {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Amount (₹{scope === 'all' ? '/unit' : ''})
+                  Amount (₹
+                  {scope === 'all'
+                    ? splitMode === 'per_sqft'
+                      ? '/sqft'
+                      : '/unit'
+                    : ''}
+                  )
                 </FormLabel>
                 <FormControl>
                   <Input
@@ -376,7 +384,7 @@ function AddChargeForm(props: {
                     min="0"
                     step="0.01"
                     placeholder="0.00"
-                    className="h-9 text-sm"
+                    className="h-9 text-base"
                     {...field}
                   />
                 </FormControl>
@@ -399,7 +407,7 @@ function AddChargeForm(props: {
               <FormControl>
                 <Input
                   type="date"
-                  className="h-9 text-sm"
+                  className="h-9 text-base"
                   {...field}
                   value={field.value ?? ''}
                 />
@@ -462,13 +470,13 @@ function PendingChargesList(props: {
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+      <p className="text-muted-foreground text-sm font-medium tracking-wide uppercase">
         Staged charges
       </p>
 
       {sortedPeriods.map((period) => (
         <div key={period} className="flex flex-col gap-1">
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-sm">
             {new Date(`${period}-01T00:00:00`).toLocaleString('en-IN', {
               month: 'long',
               year: 'numeric',
@@ -478,18 +486,18 @@ function PendingChargesList(props: {
           {byPeriod[period]!.map((c) => (
             <div
               key={c.id}
-              className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+              className="flex items-center justify-between rounded-md border px-3 py-2 text-base"
             >
               <div className="flex min-w-0 flex-col">
                 <div className="flex items-center gap-1.5">
                   <span className="font-medium">{c.label}</span>
                   {c.billed && (
-                    <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                    <Badge variant="secondary" className="h-4 px-1 text-xs">
                       Billed
                     </Badge>
                   )}
                 </div>
-                <span className="text-muted-foreground text-xs">
+                <span className="text-muted-foreground text-sm">
                   {c.unit_id
                     ? (c.unit_no ?? 'Unit')
                     : c.split_mode === 'per_sqft'

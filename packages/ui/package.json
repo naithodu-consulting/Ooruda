@@ -92,6 +92,7 @@
     "./metric-card": "./src/makerkit/metric-card.tsx",
     "./marketing": "./src/makerkit/marketing/index.tsx",
     "./oauth-provider-logo-image": "./src/makerkit/oauth-provider-logo-image.tsx",
+    "./multi-select": "./src/makerkit/multi-select.tsx",
     "./copy-to-clipboard": "./src/makerkit/copy-to-clipboard.tsx",
     "./error-boundary": "./src/makerkit/error-boundary.tsx",
     "./hooks/use-async-dialog": "./src/hooks/use-async-dialog.ts",

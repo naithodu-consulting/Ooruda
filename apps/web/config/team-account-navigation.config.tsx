@@ -6,8 +6,10 @@ import {
   CreditCard,
   FileText,
   LayoutDashboard,
+  ScrollText,
   Settings,
   Users,
+  Wallet,
   Zap,
 } from 'lucide-react';
 
@@ -15,7 +17,7 @@ import { NavigationConfigSchema } from '@kit/ui/navigation-schema';
 
 import pathsConfig from '~/config/paths.config';
 
-const iconClasses = 'w-4';
+const iconClasses = 'w-4 h-4 shrink-0';
 
 const getRoutes = (account: string) => [
   {
@@ -51,6 +53,16 @@ const getRoutes = (account: string) => [
         label: 'association.nav.payments',
         path: `${pathsConfig.app.accountHome.replace('[account]', account)}/payments`,
         Icon: <CreditCard className={iconClasses} />,
+      },
+      {
+        label: 'association.nav.cashLedger',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/cash-ledger`,
+        Icon: <Wallet className={iconClasses} />,
+      },
+      {
+        label: 'association.nav.statement',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/statement`,
+        Icon: <ScrollText className={iconClasses} />,
       },
     ],
   },
@@ -106,17 +118,38 @@ export function getTeamAccountSidebarConfig(account: string) {
 // assoc_admin sees everything. The platform super admin uses /admin, not this
 // team-workspace nav, so it isn't listed here.
 const ROLE_NAV_ALLOWLIST: Record<string, readonly string[] | '*'> = {
-  assoc_admin: '*',
+  assoc_admin: [
+    'association.nav.dashboard',
+    'association.nav.units',
+    'association.nav.billing',
+    'association.nav.mescom',
+    'association.nav.payments',
+    'association.nav.cashLedger',
+    'association.nav.reports',
+    'association.nav.notifications',
+    'association.nav.audit',
+    'association.nav.members',
+    'association.nav.settings',
+  ],
   billing_operator: [
     'association.nav.dashboard',
     'association.nav.units',
     'association.nav.billing',
     'association.nav.mescom',
     'association.nav.payments',
+    'association.nav.cashLedger',
     'association.nav.reports',
   ],
-  prop_owner: ['association.nav.dashboard', 'association.nav.payments'],
-  tenant: ['association.nav.dashboard', 'association.nav.payments'],
+  prop_owner: [
+    'association.nav.dashboard',
+    'association.nav.payments',
+    'association.nav.statement',
+  ],
+  tenant: [
+    'association.nav.dashboard',
+    'association.nav.payments',
+    'association.nav.statement',
+  ],
 };
 
 type SidebarConfig = ReturnType<typeof getTeamAccountSidebarConfig>;
@@ -129,13 +162,9 @@ type SidebarConfig = ReturnType<typeof getTeamAccountSidebarConfig>;
 export function filterSidebarConfigByRole(
   config: SidebarConfig,
   role: string | null | undefined,
+  disabledNavKeys: string[] = [],
 ): SidebarConfig {
   const allowed = role ? ROLE_NAV_ALLOWLIST[role] : undefined;
-
-  // unknown role or full access → return as-is
-  if (!allowed || allowed === '*') {
-    return config;
-  }
 
   const routes = config.routes
     .map((section) => {
@@ -145,9 +174,14 @@ export function filterSidebarConfigByRole(
 
       return {
         ...section,
-        children: section.children.filter((item) =>
-          'label' in item ? allowed.includes(item.label as string) : false,
-        ),
+        children: section.children.filter((item) => {
+          if (!('label' in item)) return false;
+          const label = item.label as string;
+          if (disabledNavKeys.includes(label)) return false;
+          // unknown role or full access → only apply disabled keys filter
+          if (!allowed || allowed === '*') return true;
+          return allowed.includes(label);
+        }),
       };
     })
     .filter(

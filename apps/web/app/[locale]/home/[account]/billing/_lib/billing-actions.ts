@@ -1,15 +1,26 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 
 import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
+import { sendBillGeneratedNotifications } from '~/lib/notify';
 import { getAssociationRole } from '~/lib/rbac';
 
-import { type GenerateBillsInput, GenerateBillsSchema } from './billing-schema';
+import { getCashLedgerBalance } from '../../cash-ledger/_lib/cash-ledger-service';
+import {
+  type GenerateBillsInput,
+  GenerateBillsSchema,
+  type VoidBillInput,
+  VoidBillSchema,
+  type VoidBillsBulkInput,
+  VoidBillsBulkSchema,
+} from './billing-schema';
+import { preRenderBillPdf } from './server/pdf-generation';
 
 const BILLING_PATH = '/home/[account]/billing';
 
@@ -26,6 +37,18 @@ async function requireBillingAccess(
 
   if (role !== 'assoc_admin' && role !== 'billing_operator') {
     return 'Only an association admin or billing operator can do that.';
+  }
+
+  return null;
+}
+
+async function requireAdminAccess(
+  associationId: string,
+): Promise<string | null> {
+  const role = await getAssociationRole(associationId);
+
+  if (role !== 'assoc_admin') {
+    return 'Only an association admin can do that.';
   }
 
   return null;
@@ -101,14 +124,15 @@ export async function generateBillsAction(
       .single(),
     client
       .from('associations')
-      .select('gst_enabled, gst_rate')
+      .select('gst_enabled, gst_rate, accounts!inner(name, slug)')
       .eq('id', associationId)
       .single(),
     client
       .from('bills')
       .select('unit_id, bill_no')
       .eq('association_id', associationId)
-      .eq('period', period),
+      .eq('period', period)
+      .neq('status', 'Void'),
   ]);
 
   const activeChargeTypes = chargeTypes ?? [];
@@ -134,16 +158,19 @@ export async function generateBillsAction(
 
   const gstEnabled = association.gst_enabled ?? false;
   const gstRate = association.gst_rate ?? 0;
+  const assocAccounts = association.accounts as {
+    name?: string;
+    slug?: string;
+  } | null;
+  const associationName = assocAccounts?.name ?? '';
+  const accountSlug = assocAccounts?.slug ?? '';
   const calculateDueDate = (billingPeriod: string, day: number) =>
     `${billingPeriod}-${String(day).padStart(2, '0')}`;
-  // Electricity bills are due in the NEXT calendar month after the billing period.
-  const elecPeriod = (() => {
-    const [y, m] = period.split('-').map(Number);
-    const d = new Date(y!, m!, 1); // JS months are 0-indexed, so m (1-based) = next month
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  })();
+  // Electricity bills share the same billing period and due-date semantics as
+  // maintenance bills. Readings belong to the previous month but are billed
+  // and collected in `period` (the current billing month).
   const elecDueDate = calculateDueDate(
-    elecPeriod,
+    period,
     billingSettings?.electricity_due_day ?? 10,
   );
   const maintDueDate = calculateDueDate(
@@ -158,13 +185,26 @@ export async function generateBillsAction(
   const otherChargesCT = activeChargeTypes.find(
     (c) => c.key === 'other_charges',
   );
+  const sinkingFundCT = activeChargeTypes.find((c) => c.key === 'sinking_fund');
   const hasElectricityChargeType = activeChargeTypes.some(
     (c) => c.calc_method === 'electricity',
   );
 
-  // Fetch pending other charges and the MESCOM bill in parallel — both are
-  // independent of each other and only need chargeTypes (resolved above).
-  const [{ data: pendingCharges }, { data: mescomBill }] = await Promise.all([
+  type PendingRow = {
+    id: string;
+    unit_id: string | null;
+    label: string;
+    amount: number;
+    split_mode: string | null;
+    due_date: string | null;
+  };
+
+  // Fetch pending other/sinking charges and the MESCOM bill in parallel.
+  const [
+    { data: pendingCharges },
+    { data: pendingSinkingCharges },
+    { data: mescomBill },
+  ] = await Promise.all([
     otherChargesCT
       ? client
           .from('pending_other_charges')
@@ -172,16 +212,15 @@ export async function generateBillsAction(
           .eq('association_id', associationId)
           .eq('period', period)
           .eq('billed', false)
-      : Promise.resolve({
-          data: [] as {
-            id: string;
-            unit_id: string | null;
-            label: string;
-            amount: number;
-            split_mode: string | null;
-            due_date: string | null;
-          }[],
-        }),
+      : Promise.resolve({ data: [] as PendingRow[] }),
+    sinkingFundCT
+      ? client
+          .from('pending_sinking_fund_charges')
+          .select('id, unit_id, label, amount, split_mode, due_date')
+          .eq('association_id', associationId)
+          .eq('period', period)
+          .eq('billed', false)
+      : Promise.resolve({ data: [] as PendingRow[] }),
     hasElectricityChargeType
       ? client
           .from('mescom_bills')
@@ -193,6 +232,7 @@ export async function generateBillsAction(
   ]);
 
   const pendingRows = pendingCharges ?? [];
+  const pendingSinkingRows = (pendingSinkingCharges ?? []) as PendingRow[];
 
   let blockRate: number | null = null;
   const consumedByUnit: Record<string, number> = {};
@@ -205,9 +245,7 @@ export async function generateBillsAction(
       .in('unit_id', unitIds);
 
     const subMeterIds = (subMeters ?? []).map((m) => m.id);
-    const subMeterMap = new Map(
-      (subMeters ?? []).map((m) => [m.id, m]),
-    );
+    const subMeterMap = new Map((subMeters ?? []).map((m) => [m.id, m]));
     // CommonArea sub-meters are stored with unit_id pointing to the first unit
     // (FK placeholder). During billing we redirect their consumption to whichever
     // unit has type = 'Common Area' so the amounts land in the right bill.
@@ -257,340 +295,505 @@ export async function generateBillsAction(
 
   let created = 0;
   let skipped = 0;
+  let sinkingCreated = 0;
 
   const roundToTwoDecimals = (val: number) => Math.round(val * 100) / 100;
 
   const shouldGenElec = billType === 'All' || billType === 'Electricity';
   const shouldGenMaint = billType === 'All' || billType === 'Maintenance';
   const shouldGenOther = billType === 'All' || billType === 'Other Charges';
+  const shouldGenSinking = billType === 'All' || billType === 'Sinking Fund';
 
-  for (const unit of unitRows) {
-    const existing = existingByUnit.get(unit.id) || [];
-    const hasElec = existing.some(
-      (b: string) => b.includes('-ELEC-') || b.includes('/ELT/'),
-    );
-    const hasMaint = existing.some(
-      (b: string) => b.includes('-MANT-') || b.includes('/MNT/'),
-    );
-    const hasOther = existing.some(
-      (b: string) => b.includes('-OTHR-') || b.includes('/OTH/'),
-    );
+  // Process units in concurrent batches so bill-type RPCs (allocate_bill_no,
+  // create_bill_with_items) run in parallel across units rather than serially.
+  // Each bill type hits a separate sequence counter so there is no DB-level
+  // contention between types; different units with the same type do serialize
+  // on that counter, but the I/O overlap from batching still cuts wall-clock
+  // time substantially (e.g. 100 units × 3 types: ~13 batches vs 300 serial).
+  const UNIT_BATCH_SIZE = 8;
+  let firstBatchError: string | null = null;
 
-    // Does this unit have any staged (unbilled) pending charges? Ad-hoc
-    // charges are always billable, even if the unit already has an OTH bill,
-    // so their presence must prevent the "already fully billed" skip below.
-    const hasPendingForUnit =
-      shouldGenOther &&
-      pendingRows.some(
-        (pc) => pc.unit_id === null || pc.unit_id === unit.id,
-      );
+  for (
+    let batchStart = 0;
+    batchStart < unitRows.length;
+    batchStart += UNIT_BATCH_SIZE
+  ) {
+    if (firstBatchError) break;
+    const batch = unitRows.slice(batchStart, batchStart + UNIT_BATCH_SIZE);
 
-    if (unit.type === 'Common Area') {
-      if (hasElec) {
-        skipped++;
-        continue;
-      }
-    } else {
-      if (hasElec && hasMaint && hasOther && !hasPendingForUnit) {
-        skipped++;
-        continue;
-      }
-    }
+    const batchErrors = await Promise.all(
+      batch.map(async (unit) => {
+        const existing = existingByUnit.get(unit.id) || [];
+        const hasElec = existing.some(
+          (b: string) => b.includes('-ELEC-') || b.includes('/ELT/'),
+        );
+        const hasMaint = existing.some(
+          (b: string) => b.includes('-MANT-') || b.includes('/MNT/'),
+        );
+        const hasOther = existing.some(
+          (b: string) => b.includes('-OTHR-') || b.includes('/OTH/'),
+        );
+        const hasSinking = existing.some((b: string) => b.includes('/SNK/'));
 
-    type LineItem = {
-      charge_type_id: string;
-      description: string;
-      payer: string;
-      gst_applicable: boolean;
-      amount: number;
-      area_sqft?: number;
-      rate_per_sqft?: number;
-    };
+        // Does this unit have any staged (unbilled) pending charges? Ad-hoc
+        // charges are always billable, even if the unit already has an OTH/SNK bill,
+        // so their presence must prevent the "already fully billed" skip below.
+        const hasPendingForUnit =
+          shouldGenOther &&
+          pendingRows.some(
+            (pc) => pc.unit_id === null || pc.unit_id === unit.id,
+          );
+        const hasPendingSinkingForUnit =
+          shouldGenSinking &&
+          pendingSinkingRows.some(
+            (pc) => pc.unit_id === null || pc.unit_id === unit.id,
+          );
 
-    const elecItems: LineItem[] = [];
-    const maintItems: LineItem[] = [];
-    const otherItems: LineItem[] = [];
-
-    // Map charge types to correct bill type
-    for (const chargeType of activeChargeTypes) {
-      const override = overrideByKey.get(`${unit.id}:${chargeType.id}`);
-
-      if (override?.is_excluded) {
-        continue;
-      }
-
-      const payer = override?.payer_override ?? chargeType.default_payer;
-      let amount: number;
-
-      if (chargeType.calc_method === 'electricity') {
-        if (blockRate === null) continue;
-        const consumed = consumedByUnit[unit.id] ?? 0;
-        const minCharge = minimumChargeByUnit[unit.id] ?? 0;
-        amount = consumed * blockRate + minCharge;
-
-        elecItems.push({
-          charge_type_id: chargeType.id,
-          description: chargeType.name,
-          payer,
-          gst_applicable: chargeType.gst_applicable,
-          amount: roundToTwoDecimals(amount),
-        });
-      } else {
-        const rate =
-          override?.rate_or_amount_override ?? chargeType.rate_or_amount;
-
-        if (rate === null || rate === undefined) {
-          continue;
-        }
-
-        const isPerSqft = chargeType.calc_method === 'per_sqft';
-        amount = isPerSqft ? rate * unit.area_sqft : rate;
-
-        const item: LineItem = {
-          charge_type_id: chargeType.id,
-          description: chargeType.name,
-          payer,
-          gst_applicable: chargeType.gst_applicable,
-          amount: roundToTwoDecimals(amount),
-          ...(isPerSqft
-            ? { area_sqft: unit.area_sqft, rate_per_sqft: rate }
-            : {}),
-        };
-
-        if (chargeType.key === 'maintenance') {
-          maintItems.push(item);
-        } else if (chargeType.key !== 'other_charges') {
-          // e.g. water, penalties, or custom types map to Other Charges bill
-          otherItems.push(item);
-        }
-      }
-    }
-
-    // Build per-due-date groups of pending charges for this unit.
-    // null key = use the default otherDueDate (merged with base otherItems).
-    const pendingByDueDate = new Map<string | null, LineItem[]>();
-    if (otherChargesCT) {
-      for (const pc of pendingRows) {
-        if (pc.unit_id !== null && pc.unit_id !== unit.id) continue;
-
-        let pcAmount: number;
-        if (pc.unit_id === null) {
-          if (pc.split_mode === 'per_sqft') {
-            if (unit.area_sqft == null) continue;
-            pcAmount = roundToTwoDecimals(pc.amount * unit.area_sqft);
-          } else {
-            pcAmount = roundToTwoDecimals(pc.amount);
+        if (unit.type === 'Common Area') {
+          if (hasElec) {
+            skipped++;
+            return null; // already billed, skip this unit
           }
         } else {
-          pcAmount = roundToTwoDecimals(pc.amount);
+          if (
+            hasElec &&
+            hasMaint &&
+            hasOther &&
+            hasSinking &&
+            !hasPendingForUnit &&
+            !hasPendingSinkingForUnit
+          ) {
+            skipped++;
+            return null; // already fully billed, skip this unit
+          }
         }
 
-        const key = pc.due_date ?? null;
-        const group = pendingByDueDate.get(key) ?? [];
-        group.push({
-          charge_type_id: otherChargesCT.id,
-          description: pc.label,
-          payer: otherChargesCT.default_payer ?? 'Owner',
-          gst_applicable: otherChargesCT.gst_applicable ?? false,
-          amount: pcAmount,
-        });
-        pendingByDueDate.set(key, group);
-      }
-    }
+        type LineItem = {
+          charge_type_id: string;
+          description: string;
+          payer: string;
+          gst_applicable: boolean;
+          amount: number;
+          area_sqft?: number;
+          rate_per_sqft?: number;
+        };
 
-    // Null-date pending charges use the default `otherDueDate`. They are kept
-    // separate from the base recurring `otherItems` so that ad-hoc charges
-    // added after the first OTH bill can still be billed (see generation below).
-    const nullDatePending = pendingByDueDate.get(null) ?? [];
+        const elecItems: LineItem[] = [];
+        const maintItems: LineItem[] = [];
+        const otherItems: LineItem[] = [];
+        const sinkingItems: LineItem[] = [];
 
-    // Helper to generate bill
-    const generateSpecificBill = async (
-      type: string,
-      typePrefix: string,
-      items: LineItem[],
-      dueDate: string,
-    ) => {
-      if (items.length === 0) return true; // nothing to bill
+        // Map charge types to correct bill type
+        for (const chargeType of activeChargeTypes) {
+          const override = overrideByKey.get(`${unit.id}:${chargeType.id}`);
 
-      const { data: billNo, error: seqError } = await client.rpc(
-        'allocate_bill_no',
-        {
-          p_association_id: associationId,
-          p_bill_type: typePrefix,
-          p_period: period,
-        },
-      );
-      if (seqError || !billNo) {
-        await logAuditEvent({
-          associationId,
-          action: 'bills.generation.failed',
-          entityType: 'bill',
-          summary: `Failed to allocate bill number for ${typePrefix} in period ${period}: ${seqError?.message ?? 'no bill number returned'}`,
-        });
-        return false;
-      }
+          if (override?.is_excluded) {
+            continue;
+          }
 
-      const baseTotal = roundToTwoDecimals(
-        items.reduce((sum, li) => sum + li.amount, 0),
-      );
+          const payer = override?.payer_override ?? chargeType.default_payer;
+          let amount: number;
 
-      // Compute GST on taxable line items when the association is GST-registered.
-      let gstAmount: number | null = null;
-      if (gstEnabled && gstRate > 0) {
-        const taxableBase = items
-          .filter((li) => li.gst_applicable)
-          .reduce((sum, li) => sum + li.amount, 0);
-        if (taxableBase > 0) {
-          gstAmount = roundToTwoDecimals((taxableBase * gstRate) / 100);
+          if (chargeType.calc_method === 'electricity') {
+            if (blockRate === null) continue;
+            const consumed = consumedByUnit[unit.id] ?? 0;
+            const minCharge = minimumChargeByUnit[unit.id] ?? 0;
+            amount = consumed * blockRate + minCharge;
+
+            elecItems.push({
+              charge_type_id: chargeType.id,
+              description: chargeType.name,
+              payer,
+              gst_applicable: chargeType.gst_applicable,
+              amount: roundToTwoDecimals(amount),
+            });
+          } else {
+            const rate =
+              override?.rate_or_amount_override ?? chargeType.rate_or_amount;
+
+            if (rate === null || rate === undefined) {
+              continue;
+            }
+
+            const isPerSqft = chargeType.calc_method === 'per_sqft';
+            amount = isPerSqft ? rate * unit.area_sqft : rate;
+
+            const item: LineItem = {
+              charge_type_id: chargeType.id,
+              description: chargeType.name,
+              payer,
+              gst_applicable: chargeType.gst_applicable,
+              amount: roundToTwoDecimals(amount),
+              ...(isPerSqft
+                ? { area_sqft: unit.area_sqft, rate_per_sqft: rate }
+                : {}),
+            };
+
+            if (chargeType.key === 'maintenance') {
+              maintItems.push(item);
+            } else if (chargeType.key === 'sinking_fund') {
+              // sinking_fund is ad-hoc (no rate set); items come from
+              // pending_sinking_fund_charges below, not from the charge type rate.
+              // Skip here to avoid double-counting.
+            } else if (chargeType.key !== 'other_charges') {
+              // e.g. water or custom types map to Other Charges bill
+              otherItems.push(item);
+            }
+          }
         }
-      }
 
-      const totalAmount = roundToTwoDecimals(baseTotal + (gstAmount ?? 0));
+        // Build per-due-date groups of pending charges for this unit.
+        // null key = use the default otherDueDate (merged with base otherItems).
+        const pendingByDueDate = new Map<string | null, LineItem[]>();
+        if (otherChargesCT) {
+          for (const pc of pendingRows) {
+            if (pc.unit_id !== null && pc.unit_id !== unit.id) continue;
 
-      const billCategory =
-        typePrefix === 'ELT'
-          ? 'electricity'
-          : typePrefix === 'OTH'
-            ? 'other_charges'
-            : 'maintenance';
+            let pcAmount: number;
+            if (pc.unit_id === null) {
+              if (pc.split_mode === 'per_sqft') {
+                if (unit.area_sqft == null) continue;
+                pcAmount = roundToTwoDecimals(pc.amount * unit.area_sqft);
+              } else {
+                pcAmount = roundToTwoDecimals(pc.amount);
+              }
+            } else {
+              pcAmount = roundToTwoDecimals(pc.amount);
+            }
 
-      const { error: rpcError } = await client.rpc('create_bill_with_items', {
-        p_association_id: associationId,
-        p_unit_id: unit.id,
-        p_period: period,
-        p_bill_no: billNo,
-        p_due_date: dueDate,
-        p_total_amount: totalAmount,
-        p_line_items: items,
-        p_bill_type: billCategory,
-        p_gst_amount: gstAmount,
-        p_tenancy_id: tenancyIdByUnit.get(unit.id) ?? null,
-        p_advance_applied: null,
-      });
+            const key = pc.due_date ?? null;
+            const group = pendingByDueDate.get(key) ?? [];
+            group.push({
+              charge_type_id: otherChargesCT.id,
+              description: pc.label,
+              payer: otherChargesCT.default_payer ?? 'Owner',
+              gst_applicable: otherChargesCT.gst_applicable ?? false,
+              amount: pcAmount,
+            });
+            pendingByDueDate.set(key, group);
+          }
+        }
 
-      if (rpcError) {
-        console.error(
-          `Error generating ${type} bill for unit ${unit.id}:`,
-          rpcError,
-        );
-        await logAuditEvent({
-          associationId,
-          action: 'bills.generation.failed',
-          entityType: 'bill',
-          summary: `Failed to generate ${type} bill for period ${period} (unit ${unit.id}): ${rpcError.message}`,
-        });
-        return false;
-      }
+        // Null-date pending charges use the default `otherDueDate`. They are kept
+        // separate from the base recurring `otherItems` so that ad-hoc charges
+        // added after the first OTH bill can still be billed (see generation below).
+        const nullDatePending = pendingByDueDate.get(null) ?? [];
 
-      created += 1;
-      return true;
-    };
+        // Build sinking fund line items from pending_sinking_fund_charges.
+        if (sinkingFundCT) {
+          for (const pc of pendingSinkingRows) {
+            if (pc.unit_id !== null && pc.unit_id !== unit.id) continue;
 
-    // Build the list of bill types to generate for this unit, then fire them
-    // in parallel. Each type hits a different sequence counter so there's no
-    // DB-level contention between them.
-    const billsToGenerate: { type: string; promise: Promise<boolean> }[] = [];
+            let pcAmount: number;
+            if (pc.unit_id === null) {
+              if (pc.split_mode === 'per_sqft') {
+                if (unit.area_sqft == null) continue;
+                pcAmount = roundToTwoDecimals(pc.amount * unit.area_sqft);
+              } else {
+                pcAmount = roundToTwoDecimals(pc.amount);
+              }
+            } else {
+              pcAmount = roundToTwoDecimals(pc.amount);
+            }
 
-    if (unit.type === 'Common Area') {
-      if (!hasElec && shouldGenElec)
-        billsToGenerate.push({
-          type: 'electricity',
-          promise: generateSpecificBill(
-            'Electricity',
-            'ELT',
-            elecItems,
-            elecDueDate,
-          ),
-        });
-    } else {
-      if (!hasElec && shouldGenElec)
-        billsToGenerate.push({
-          type: 'electricity',
-          promise: generateSpecificBill(
-            'Electricity',
-            'ELT',
-            elecItems,
-            elecDueDate,
-          ),
-        });
-      if (!hasMaint && shouldGenMaint)
-        billsToGenerate.push({
-          type: 'maintenance',
-          promise: generateSpecificBill(
-            'Maintenance',
-            'MNT',
-            maintItems,
-            maintDueDate,
-          ),
-        });
-      if (shouldGenOther) {
-        if (!hasOther) {
-          // First OTH bill for this unit/period: bill base recurring charges
-          // together with any default-due-date (null) pending charges.
-          const firstBillItems = [...otherItems, ...nullDatePending];
-          if (firstBillItems.length > 0)
+            sinkingItems.push({
+              charge_type_id: sinkingFundCT.id,
+              description: pc.label,
+              payer: sinkingFundCT.default_payer ?? 'Owner',
+              gst_applicable: sinkingFundCT.gst_applicable ?? false,
+              amount: pcAmount,
+            });
+          }
+        }
+
+        // Helper to generate bill
+        const generateSpecificBill = async (
+          type: string,
+          typePrefix: string,
+          items: LineItem[],
+          dueDate: string,
+        ) => {
+          if (items.length === 0) return true; // nothing to bill
+
+          const { data: billNo, error: seqError } = await client.rpc(
+            'allocate_bill_no',
+            {
+              p_association_id: associationId,
+              p_bill_type: typePrefix,
+              p_period: period,
+            },
+          );
+          if (seqError || !billNo) {
+            await logAuditEvent({
+              associationId,
+              action: 'bills.generation.failed',
+              entityType: 'bill',
+              eventType: 'error',
+              summary: `Failed to allocate bill number for ${typePrefix} in period ${period}: ${seqError?.message ?? 'no bill number returned'}`,
+            });
+            return false;
+          }
+
+          const baseTotal = roundToTwoDecimals(
+            items.reduce((sum, li) => sum + li.amount, 0),
+          );
+
+          // Compute GST on taxable line items when the association is GST-registered.
+          let gstAmount: number | null = null;
+          if (gstEnabled && gstRate > 0) {
+            const taxableBase = items
+              .filter((li) => li.gst_applicable)
+              .reduce((sum, li) => sum + li.amount, 0);
+            if (taxableBase > 0) {
+              gstAmount = roundToTwoDecimals((taxableBase * gstRate) / 100);
+            }
+          }
+
+          const totalAmount = roundToTwoDecimals(baseTotal + (gstAmount ?? 0));
+
+          const billCategory =
+            typePrefix === 'ELT'
+              ? 'electricity'
+              : typePrefix === 'OTH'
+                ? 'other_charges'
+                : typePrefix === 'SNK'
+                  ? 'sinking_fund'
+                  : 'maintenance';
+
+          // Check cash ledger for any advance credit for this unit + bill type.
+          let advanceApplied = 0;
+          try {
+            const balance = await getCashLedgerBalance(
+              client,
+              unit.id,
+              billCategory,
+            );
+            if (balance > 0) {
+              advanceApplied = roundToTwoDecimals(
+                Math.min(balance, totalAmount),
+              );
+            }
+          } catch {
+            // Non-fatal: proceed without advance if balance check fails.
+          }
+
+          const { error: rpcError } = await client
+            .rpc('create_bill_with_items', {
+              p_association_id: associationId,
+              p_unit_id: unit.id,
+              p_period: period,
+              p_bill_no: billNo,
+              p_due_date: dueDate,
+              p_total_amount: totalAmount,
+              p_line_items: items,
+              p_bill_type: billCategory,
+              p_gst_amount: gstAmount,
+              p_tenancy_id: tenancyIdByUnit.get(unit.id) ?? null,
+              p_advance_applied: advanceApplied,
+            })
+            .returns<string>();
+
+          if (rpcError) {
+            await logAuditEvent({
+              associationId,
+              action: 'bills.generation.failed',
+              entityType: 'bill',
+              eventType: 'error',
+              summary: `Failed to generate ${type} bill for period ${period} (unit ${unit.id}): ${rpcError.message}`,
+            });
+            return false;
+          }
+
+          // The advance_applied ledger debit is written atomically inside
+          // create_bill_with_items — no separate call needed here.
+
+          created += 1;
+          return true;
+        };
+
+        // Build the list of bill types to generate for this unit, then fire them
+        // in parallel. Each type hits a different sequence counter so there's no
+        // DB-level contention between them.
+        const billsToGenerate: { type: string; promise: Promise<boolean> }[] =
+          [];
+
+        if (unit.type === 'Common Area') {
+          if (!hasElec && shouldGenElec)
             billsToGenerate.push({
-              type: 'other charges',
+              type: 'electricity',
               promise: generateSpecificBill(
-                'Other Charges',
-                'OTH',
-                firstBillItems,
-                otherDueDate,
+                'Electricity',
+                'ELT',
+                elecItems,
+                elecDueDate,
               ),
             });
-        } else if (nullDatePending.length > 0) {
-          // An OTH bill already exists, so the base recurring charges are
-          // already billed. Bill only the newly-added default-due-date pending
-          // charges as a separate OTH bill (ad-hoc charges are always billable).
-          billsToGenerate.push({
-            type: 'other charges',
-            promise: generateSpecificBill(
-              'Other Charges',
-              'OTH',
-              nullDatePending,
-              otherDueDate,
-            ),
-          });
-        }
-        // Specific-due-date pending charge groups always generate a new bill,
-        // regardless of whether a prior OTH bill already exists for the period.
-        for (const [dueDate, items] of pendingByDueDate) {
-          if (dueDate === null) continue; // handled above
-          if (items.length === 0) continue;
-          billsToGenerate.push({
-            type: 'other charges',
-            promise: generateSpecificBill(
-              'Other Charges',
-              'OTH',
-              items,
-              dueDate,
-            ),
-          });
-        }
-      }
-    }
+        } else {
+          if (!hasElec && shouldGenElec)
+            billsToGenerate.push({
+              type: 'electricity',
+              promise: generateSpecificBill(
+                'Electricity',
+                'ELT',
+                elecItems,
+                elecDueDate,
+              ),
+            });
+          if (!hasMaint && shouldGenMaint)
+            billsToGenerate.push({
+              type: 'maintenance',
+              promise: generateSpecificBill(
+                'Maintenance',
+                'MNT',
+                maintItems,
+                maintDueDate,
+              ),
+            });
+          if (shouldGenOther) {
+            if (!hasOther) {
+              // First OTH bill for this unit/period: bill base recurring charges
+              // together with any default-due-date (null) pending charges.
+              const firstBillItems = [...otherItems, ...nullDatePending];
+              if (firstBillItems.length > 0)
+                billsToGenerate.push({
+                  type: 'other charges',
+                  promise: generateSpecificBill(
+                    'Other Charges',
+                    'OTH',
+                    firstBillItems,
+                    otherDueDate,
+                  ),
+                });
+            } else if (nullDatePending.length > 0) {
+              // An OTH bill already exists, so the base recurring charges are
+              // already billed. Bill only the newly-added default-due-date pending
+              // charges as a separate OTH bill (ad-hoc charges are always billable).
+              billsToGenerate.push({
+                type: 'other charges',
+                promise: generateSpecificBill(
+                  'Other Charges',
+                  'OTH',
+                  nullDatePending,
+                  otherDueDate,
+                ),
+              });
+            }
+            // Specific-due-date pending charge groups always generate a new bill,
+            // regardless of whether a prior OTH bill already exists for the period.
+            for (const [dueDate, items] of pendingByDueDate) {
+              if (dueDate === null) continue; // handled above
+              if (items.length === 0) continue;
+              billsToGenerate.push({
+                type: 'other charges',
+                promise: generateSpecificBill(
+                  'Other Charges',
+                  'OTH',
+                  items,
+                  dueDate,
+                ),
+              });
+            }
+          }
 
-    const results = await Promise.all(billsToGenerate.map((b) => b.promise));
-    const failedTypes = billsToGenerate
-      .filter((_, i) => !results[i])
-      .map((b) => b.type);
-    if (failedTypes.length > 0) {
-      return {
-        success: false,
-        error: `Failed to generate ${failedTypes.join(', ')} bill${failedTypes.length > 1 ? 's' : ''}`,
-      };
+          // Sinking Fund — ad-hoc. Each distinct collection generates a new SNK bill.
+          // If an SNK bill already exists for this period, skip silently — the admin
+          // should void the existing bill before re-collecting for the same period.
+          if (shouldGenSinking && sinkingItems.length > 0) {
+            if (!hasSinking) {
+              const snkDueDate =
+                pendingSinkingRows.find(
+                  (pc) => pc.unit_id === unit.id && pc.due_date,
+                )?.due_date ??
+                pendingSinkingRows.find(
+                  (pc) => pc.unit_id === null && pc.due_date,
+                )?.due_date ??
+                otherDueDate;
+              billsToGenerate.push({
+                type: 'sinking fund',
+                promise: generateSpecificBill(
+                  'Sinking Fund',
+                  'SNK',
+                  sinkingItems,
+                  snkDueDate,
+                ),
+              });
+            }
+            // hasSinking=true: bill already exists for this period; staged charges
+            // remain unbilled so the admin can act intentionally (void + re-generate).
+          }
+        }
+
+        const results = await Promise.all(
+          billsToGenerate.map((b) => b.promise),
+        );
+        const failedTypes = billsToGenerate
+          .filter((_, i) => !results[i])
+          .map((b) => b.type);
+        if (failedTypes.length > 0) {
+          return `Failed to generate ${failedTypes.join(', ')} bill${failedTypes.length > 1 ? 's' : ''}`;
+        }
+
+        // Track how many SNK bills were generated in this run (separate from `created`
+        // which spans all types — needed to gate the mark-billed step accurately).
+        if (billsToGenerate.some((b) => b.type === 'sinking fund')) {
+          sinkingCreated += 1;
+        }
+        return null; // success for this unit
+      }),
+    ); // end batch.map
+
+    firstBatchError = batchErrors.find((e) => e !== null) ?? null;
+  } // end batch loop
+
+  if (firstBatchError) {
+    return { success: false, error: firstBatchError };
+  }
+
+  // Schedule background PDF pre-render so every first download is a cache hit (~0.8s vs 7-8s).
+  // Runs after the action response is sent; Vercel extends the lambda lifetime for `after` callbacks.
+  // Best-effort: a failed render is logged and the bill falls back to on-demand rendering.
+  {
+    const { data: unrenderedBills } = await client
+      .from('bills')
+      .select('id')
+      .eq('association_id', associationId)
+      .eq('period', period)
+      .is('pdf_url', null);
+
+    const preRenderIds = (unrenderedBills ?? []).map((b) => b.id);
+    if (preRenderIds.length > 0) {
+      const PDF_PRE_RENDER_CONCURRENCY = 3;
+      after(async () => {
+        for (
+          let i = 0;
+          i < preRenderIds.length;
+          i += PDF_PRE_RENDER_CONCURRENCY
+        ) {
+          await Promise.allSettled(
+            preRenderIds
+              .slice(i, i + PDF_PRE_RENDER_CONCURRENCY)
+              .map(preRenderBillPdf),
+          );
+        }
+      });
     }
   }
 
   // Mark unbilled pending charges as billed now that bills are generated.
-  // Only do this when Other Charges were actually part of this run — otherwise
-  // an Electricity-only run would wrongly mark ad-hoc charges as billed.
+  // Only do this when the relevant type was actually part of this run.
   if (shouldGenOther && created > 0 && pendingRows.length > 0) {
     const pendingIds = pendingRows.map((r) => r.id);
     await client
       .from('pending_other_charges')
       .update({ billed: true })
       .in('id', pendingIds);
+  }
+  if (shouldGenSinking && sinkingCreated > 0 && pendingSinkingRows.length > 0) {
+    const sinkingIds = pendingSinkingRows.map((r) => r.id);
+    await client
+      .from('pending_sinking_fund_charges')
+      .update({ billed: true })
+      .in('id', sinkingIds);
   }
 
   if (created > 0) {
@@ -599,11 +802,80 @@ export async function generateBillsAction(
       { month: 'long' },
     );
     const [periodYear] = period.split('-');
-    await logAuditEvent({
-      associationId,
-      action: 'bills.generated',
-      entityType: 'bill',
-      summary: `Generated ${created} bill${created === 1 ? '' : 's'} for ${monthName} ${periodYear}`,
+    try {
+      await logAuditEvent({
+        associationId,
+        action: 'bills.generated',
+        entityType: 'bill',
+        summary: `Generated ${created} bill${created === 1 ? '' : 's'} for ${monthName} ${periodYear}`,
+      });
+    } catch {
+      // non-fatal: bills are committed; audit log failure must not shadow the result
+    }
+
+    // Fire bill-generated notifications for all newly created bills via after()
+    // so it never blocks the response.
+    after(async () => {
+      const adminClient = getSupabaseServerAdminClient();
+
+      // Bills with units — no tenancies join (no FK from bills→tenancies)
+      const { data: newBills } = await adminClient
+        .from('bills')
+        .select(`
+          id, bill_no, bill_type, total_amount, due_date,
+          units!inner(id, unit_no, owner_id)
+        `)
+        .eq('association_id', associationId)
+        .eq('period', period)
+        .neq('status', 'Void')
+        .order('bill_no', { ascending: true })
+        .limit(500);
+
+      if (!newBills?.length) return;
+
+      // Fetch active tenancies for these units separately
+      const unitIds = [
+        ...new Set(
+          newBills
+            .map((b) => {
+              const unit = Array.isArray(b.units) ? b.units[0] : b.units;
+              return unit?.id;
+            })
+            .filter(Boolean),
+        ),
+      ] as string[];
+
+      const { data: activeTenancies } = await adminClient
+        .from('tenancies')
+        .select('unit_id, tenant_id')
+        .in('unit_id', unitIds)
+        .eq('status', 'active');
+
+      const tenancyByUnit = new Map(
+        (activeTenancies ?? []).map((t) => [t.unit_id, t.tenant_id]),
+      );
+
+      const billedUnits = newBills.map((b) => {
+        const unit = Array.isArray(b.units) ? b.units[0] : b.units;
+        return {
+          unitId: unit?.id ?? '',
+          unitNo: unit?.unit_no ?? '',
+          ownerUserId: unit?.owner_id ?? null,
+          activeTenantUserId: tenancyByUnit.get(unit?.id ?? '') ?? null,
+          billNo: b.bill_no,
+          billType: b.bill_type,
+          period,
+          totalAmount: b.total_amount,
+          dueDate: b.due_date,
+        };
+      });
+
+      await sendBillGeneratedNotifications({
+        associationId,
+        associationName,
+        accountSlug,
+        billedUnits,
+      });
     });
   }
 
@@ -685,6 +957,8 @@ export async function bulkAddOtherChargeAction(
     return { success: false, error: 'Label is required.' };
   if (input.amount <= 0)
     return { success: false, error: 'Amount must be positive.' };
+  if (input.split_mode !== 'flat' && input.split_mode !== 'per_sqft')
+    return { success: false, error: 'Invalid split mode.' };
 
   const client = getSupabaseServerClient();
   const { error } = await client.from('pending_other_charges').insert({
@@ -827,6 +1101,136 @@ export async function bulkImportOtherChargesAction(
   return { success: true, imported: toInsert.length, skipped };
 }
 
+// ── Sinking Fund CRUD ────────────────────────────────────────────────────────
+
+export interface PendingSinkingFundCharge {
+  id: string;
+  unit_id: string | null;
+  label: string;
+  amount: number;
+  split_mode: string | null;
+  due_date: string | null;
+  billed: boolean;
+}
+
+export async function addSinkingFundChargeToUnitAction(
+  associationId: string,
+  input: {
+    unit_id: string;
+    period: string;
+    label: string;
+    amount: number;
+    due_date?: string | null;
+  },
+): Promise<ActionResult> {
+  const roleError = await requireBillingAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  if (!/^\d{4}-\d{2}$/.test(input.period))
+    return { success: false, error: 'Invalid period format.' };
+  if (!input.label.trim())
+    return { success: false, error: 'Label is required.' };
+  if (input.amount <= 0)
+    return { success: false, error: 'Amount must be positive.' };
+
+  const client = getSupabaseServerClient();
+
+  const { data: unit, error: unitError } = await client
+    .from('units')
+    .select('id')
+    .eq('id', input.unit_id)
+    .eq('association_id', associationId)
+    .single();
+
+  if (unitError || !unit)
+    return { success: false, error: 'Unit not found in this association.' };
+
+  const { error } = await client.from('pending_sinking_fund_charges').insert({
+    association_id: associationId,
+    unit_id: input.unit_id,
+    period: input.period,
+    label: input.label.trim(),
+    amount: input.amount,
+    split_mode: null,
+    due_date: input.due_date ?? null,
+  });
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(BILLING_PATH, 'page');
+  return { success: true };
+}
+
+export async function bulkAddSinkingFundChargeAction(
+  associationId: string,
+  input: {
+    period: string;
+    label: string;
+    amount: number;
+    split_mode: 'flat' | 'per_sqft';
+    due_date?: string | null;
+  },
+): Promise<ActionResult> {
+  const roleError = await requireBillingAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  if (!/^\d{4}-\d{2}$/.test(input.period))
+    return { success: false, error: 'Invalid period format.' };
+  if (!input.label.trim())
+    return { success: false, error: 'Label is required.' };
+  if (input.amount <= 0)
+    return { success: false, error: 'Amount must be positive.' };
+
+  const client = getSupabaseServerClient();
+  const { error } = await client.from('pending_sinking_fund_charges').insert({
+    association_id: associationId,
+    unit_id: null,
+    period: input.period,
+    label: input.label.trim(),
+    amount: input.amount,
+    split_mode: input.split_mode,
+    due_date: input.due_date ?? null,
+  });
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(BILLING_PATH, 'page');
+  return { success: true };
+}
+
+export async function removePendingSinkingFundChargeAction(
+  associationId: string,
+  chargeId: string,
+): Promise<ActionResult> {
+  const roleError = await requireBillingAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  const client = getSupabaseServerClient();
+
+  const { data: charge } = await client
+    .from('pending_sinking_fund_charges')
+    .select('billed')
+    .eq('id', chargeId)
+    .eq('association_id', associationId)
+    .single();
+
+  if (charge?.billed) {
+    return {
+      success: false,
+      error: 'This charge has already been billed and cannot be removed.',
+    };
+  }
+
+  const { error } = await client
+    .from('pending_sinking_fund_charges')
+    .delete()
+    .eq('id', chargeId)
+    .eq('association_id', associationId)
+    .eq('billed', false);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(BILLING_PATH, 'page');
+  return { success: true };
+}
+
 const BILLING_DOCUMENTS_BUCKET = 'billing-documents';
 
 /**
@@ -896,4 +1300,95 @@ export async function deleteAllBillsAction(associationId: string): Promise<
     deletedPayments: data.deleted_payments,
     deletedReceipts: data.deleted_receipts,
   };
+}
+
+// ── Void bill ─────────────────────────────────────────────────────────────────
+
+export async function voidBillAction(
+  associationId: string,
+  input: VoidBillInput,
+): Promise<ActionResult> {
+  const roleError = await requireAdminAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  const parsed = VoidBillSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Please check the form.',
+    };
+  }
+
+  const { billId, reason } = parsed.data;
+  const client = getSupabaseServerClient();
+
+  const { error } = await client.rpc('void_bill', {
+    p_bill_id: billId,
+    p_reason: reason,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  after(() =>
+    logAuditEvent({
+      associationId,
+      action: 'bill.voided',
+      entityType: 'bill',
+      entityId: billId,
+      summary: `Bill cancelled. Reason: ${reason}`,
+    }),
+  );
+
+  revalidatePath(BILLING_PATH, 'page');
+  revalidatePath('/home/[account]/payments', 'page');
+
+  return { success: true };
+}
+
+export async function voidBillsBulkAction(
+  associationId: string,
+  input: VoidBillsBulkInput,
+): Promise<ActionResult & { voided?: number }> {
+  const roleError = await requireAdminAccess(associationId);
+  if (roleError) return { success: false, error: roleError };
+
+  const parsed = VoidBillsBulkSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Please check the form.',
+    };
+  }
+
+  const { period, billType, reason } = parsed.data;
+  const client = getSupabaseServerClient();
+
+  const { data, error } = await client.rpc('void_bills_bulk', {
+    p_association_id: associationId,
+    p_period: period,
+    p_bill_type: billType,
+    p_reason: reason,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const voided = data as unknown as number;
+
+  after(() =>
+    logAuditEvent({
+      associationId,
+      action: 'bill.bulk_voided',
+      entityType: 'bill',
+      summary: `Bulk cancelled ${voided} bills for ${period} (type: ${billType}). Reason: ${reason}`,
+    }),
+  );
+
+  revalidatePath(BILLING_PATH, 'page');
+  revalidatePath('/home/[account]/payments', 'page');
+
+  return { success: true, voided };
 }

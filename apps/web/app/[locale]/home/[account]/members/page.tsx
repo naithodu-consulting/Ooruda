@@ -1,6 +1,7 @@
 import { PlusCircle } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
+import { AdminBulkInviteDialog } from '@kit/admin/components/admin-bulk-invite-dialog';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import {
   AccountInvitationsTable,
@@ -42,14 +43,12 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
   const slug = (await params).account;
 
   const [
-    members,
-    invitations,
-    canAddMember,
-    { user, account },
-    assocPermissions,
-  ] = await loadMembersPageData(client, slug);
-
-  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
+    [members, invitations, canAddMember, { user, account }, assocPermissions],
+    { data: isSuperAdmin },
+  ] = await Promise.all([
+    loadMembersPageData(client, slug),
+    client.rpc('is_super_admin'),
+  ]);
 
   const canManageRoles =
     !!isSuperAdmin || account.permissions.includes('roles.manage');
@@ -99,26 +98,42 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
               </CardDescription>
             </div>
 
-            <If
-              condition={
-                canManageInvitations && canAddMember && hasInvitableRoles
-              }
-            >
-              <InviteMembersDialogContainer
-                userRoleHierarchy={currentUserRoleHierarchy}
-                accountSlug={account.slug}
-                isSuperAdmin={!!isSuperAdmin}
-                allowedRoles={effectiveAssocPermissions.allowedInviteRoles}
-              >
-                <Button size={'sm'} data-test={'invite-members-form-trigger'}>
-                  <PlusCircle className={'w-4'} />
+            <div className={'flex items-center gap-2'}>
+              {isSuperAdmin ? (
+                <AdminBulkInviteDialog
+                  associationName={account.name ?? undefined}
+                >
+                  <Button
+                    variant={'outline'}
+                    size={'sm'}
+                    data-test={'admin-bulk-invite-button'}
+                  >
+                    Bulk Invite Members
+                  </Button>
+                </AdminBulkInviteDialog>
+              ) : null}
 
-                  <span>
-                    <Trans i18nKey={'teams.inviteMembersButton'} />
-                  </span>
-                </Button>
-              </InviteMembersDialogContainer>
-            </If>
+              <If
+                condition={
+                  canManageInvitations && canAddMember && hasInvitableRoles
+                }
+              >
+                <InviteMembersDialogContainer
+                  userRoleHierarchy={currentUserRoleHierarchy}
+                  accountSlug={account.slug}
+                  isSuperAdmin={!!isSuperAdmin}
+                  allowedRoles={effectiveAssocPermissions.allowedInviteRoles}
+                >
+                  <Button size={'sm'} data-test={'invite-members-form-trigger'}>
+                    <PlusCircle className={'w-4'} />
+
+                    <span>
+                      <Trans i18nKey={'teams.inviteMembersButton'} />
+                    </span>
+                  </Button>
+                </InviteMembersDialogContainer>
+              </If>
+            </div>
           </CardHeader>
 
           <CardContent>

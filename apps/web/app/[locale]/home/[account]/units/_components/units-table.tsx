@@ -27,14 +27,7 @@ import { TypeToConfirmDialog } from '../../_components/type-to-confirm-dialog';
 import { deleteUnitAction } from '../_lib/units-actions';
 import { EditUnitDialog } from './edit-unit-dialog';
 
-type UnitFilter =
-  | 'all'
-  | 'occupied'
-  | 'self_occupied'
-  | 'rented'
-  | 'vacant'
-  | 'ground'
-  | 'overdue';
+type UnitFilter = 'all' | 'occupied' | 'self_occupied' | 'rented' | 'vacant';
 
 const FILTERS: { id: UnitFilter; label: string }[] = [
   { id: 'all', label: 'All units' },
@@ -42,8 +35,6 @@ const FILTERS: { id: UnitFilter; label: string }[] = [
   { id: 'self_occupied', label: 'Self Occupied' },
   { id: 'rented', label: 'Rented' },
   { id: 'vacant', label: 'Vacant' },
-  { id: 'ground', label: 'Ground floor' },
-  { id: 'overdue', label: 'Overdue' },
 ];
 
 export interface UnitRow {
@@ -81,8 +72,6 @@ export interface TenancyInfo {
 
 const areaFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
-// removed duplicate personLabel
-
 export function UnitsTable({
   units,
   people,
@@ -91,7 +80,7 @@ export function UnitsTable({
   associationId,
   eligibleOwners,
   eligibleTenants,
-  overdueUnitIds,
+  overdueUnitIds: _overdueUnitIds,
   accountSlug,
   isSuperAdmin = false,
 }: {
@@ -108,7 +97,6 @@ export function UnitsTable({
   isSuperAdmin?: boolean;
 }) {
   const [filter, setFilter] = useState<UnitFilter>('all');
-  const overdueSet = new Set(overdueUnitIds);
 
   const filteredUnits = units.filter((unit) => {
     switch (filter) {
@@ -120,10 +108,6 @@ export function UnitsTable({
         return unit.status === 'Rented';
       case 'vacant':
         return unit.status === 'Vacant';
-      case 'ground':
-        return unit.floor === 0;
-      case 'overdue':
-        return overdueSet.has(unit.id);
       default:
         return true;
     }
@@ -153,15 +137,20 @@ export function UnitsTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Unit</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Floor</TableHead>
-              <TableHead className="text-right">Area (sq.ft)</TableHead>
-              <TableHead>Owner</TableHead>
-              <TableHead>Tenant</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead scope="col">Unit</TableHead>
+              <TableHead scope="col">Door No</TableHead>
+              <TableHead scope="col">Type</TableHead>
+              <TableHead scope="col">Floor</TableHead>
+              <TableHead scope="col" className="text-right">
+                Area (sq.ft)
+              </TableHead>
+              <TableHead scope="col">Status</TableHead>
+              <TableHead scope="col">Owner</TableHead>
+              <TableHead scope="col">Tenant</TableHead>
               {canManage ? (
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead scope="col" className="text-right">
+                  Actions
+                </TableHead>
               ) : null}
             </TableRow>
           </TableHeader>
@@ -187,20 +176,13 @@ export function UnitsTable({
                       {unit.unit_no}
                     </Link>
                   </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {unit.door_no ?? '—'}
+                  </TableCell>
                   <TableCell>{unit.type}</TableCell>
                   <TableCell>{unit.floor ?? '—'}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {areaFmt.format(unit.area_sqft)}
-                  </TableCell>
-                  <TableCell>
-                    {ownerLabel ?? (
-                      <span className="text-muted-foreground">Unassigned</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {tenantLabel ?? (
-                      <span className="text-muted-foreground">—</span>
-                    )}
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -213,6 +195,16 @@ export function UnitsTable({
                     >
                       {unit.status}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {ownerLabel ?? (
+                      <span className="text-muted-foreground">Unassigned</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {tenantLabel ?? (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   {canManage ? (
                     <TableCell>
@@ -283,6 +275,7 @@ function DeleteUnitButton({
           variant="ghost"
           className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8"
           data-test="delete-unit-trigger"
+          aria-label={`Delete unit ${unit.unit_no}`}
         >
           <Trash2 className="h-4 w-4" />
         </Button>

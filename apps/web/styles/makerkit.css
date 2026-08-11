@@ -4,6 +4,12 @@
 * Makerkit-specific global styles
 * Use this file to add any global styles that are specific to Makerkit's components
  */
+
+/* Browsers default <button> to cursor:default — make every button show the
+   pointer so users understand the elements are clickable. */
+button:not(:disabled) {
+  cursor: pointer;
+}
 .site-header > .container:before,
 .site-footer > .container:before {
   background: radial-gradient(

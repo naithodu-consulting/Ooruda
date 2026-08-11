@@ -54,6 +54,7 @@ export function RecordPaymentDialog(props: {
   billNo: string;
   associationId: string;
   outstanding: number;
+  hasTenancy: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -61,7 +62,11 @@ export function RecordPaymentDialog(props: {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button size="sm" data-test={`record-payment-${props.billId}`}>
+          <Button
+            size="sm"
+            variant="outline"
+            data-test={`record-payment-${props.billId}`}
+          >
             Record Payment
           </Button>
         }
@@ -78,6 +83,7 @@ export function RecordPaymentDialog(props: {
         <RecordPaymentForm
           billId={props.billId}
           associationId={props.associationId}
+          hasTenancy={props.hasTenancy}
           onDone={() => setOpen(false)}
         />
       </DialogContent>
@@ -88,6 +94,7 @@ export function RecordPaymentDialog(props: {
 function RecordPaymentForm(props: {
   billId: string;
   associationId: string;
+  hasTenancy: boolean;
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -144,7 +151,7 @@ function RecordPaymentForm(props: {
           name="mode"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Mode</FormLabel>
+              <FormLabel>Payment Method</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger>
@@ -170,7 +177,7 @@ function RecordPaymentForm(props: {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Reference No{' '}
+                  Transaction Reference{' '}
                   <span className="text-muted-foreground font-normal">
                     (optional)
                   </span>
@@ -203,7 +210,9 @@ function RecordPaymentForm(props: {
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="Owner">Owner</SelectItem>
-                  <SelectItem value="Tenant">Tenant</SelectItem>
+                  <SelectItem value="Tenant" disabled={!props.hasTenancy}>
+                    Tenant{!props.hasTenancy ? ' (no active tenant)' : ''}
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />

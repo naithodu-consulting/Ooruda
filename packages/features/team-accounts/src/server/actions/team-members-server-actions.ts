@@ -19,8 +19,9 @@ import { createAccountMembersService } from '../services/account-members.service
  */
 export const removeMemberFromAccountAction = authActionClient
   .inputSchema(RemoveMemberSchema)
-  .action(async ({ parsedInput: { accountId, userId } }) => {
+  .action(async ({ parsedInput: { accountId, userId }, ctx: { user } }) => {
     const client = getSupabaseServerClient();
+    const logger = await getLogger();
 
     const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
@@ -34,18 +35,35 @@ export const removeMemberFromAccountAction = authActionClient
         .maybeSingle();
 
       if (membership) {
-        const { data: perm } = await client
+        // Load all permission rows for this association (RLS restricts to assoc_admin).
+        // Mirror the loader logic: if no rows are configured at all, fall back to
+        // hierarchy-based access (allow). If rows exist, check the specific role flag.
+        const { data: allPerms } = await client
           .from('assoc_admin_permissions')
-          .select('can_delete')
-          .eq('association_id', accountId)
-          .eq('target_role', membership.account_role)
-          .maybeSingle();
+          .select('target_role, can_delete')
+          .eq('association_id', accountId);
 
-        if (!perm?.can_delete) {
-          throw new Error(
-            'You do not have permission to remove members with this role',
+        if (allPerms && allPerms.length > 0) {
+          const perm = allPerms.find(
+            (p) => p.target_role === membership.account_role,
           );
+
+          if (!perm?.can_delete) {
+            logger.warn(
+              {
+                accountId,
+                targetUserId: userId,
+                actorId: user.id,
+                targetRole: membership.account_role,
+              },
+              'removeMemberFromAccount: permission denied — can_delete not set for role',
+            );
+            throw new Error(
+              'You do not have permission to remove members with this role',
+            );
+          }
         }
+        // No rows configured → no per-role restriction; hierarchy-based access applies
       }
     }
 
@@ -70,22 +88,34 @@ export const updateMemberRoleAction = authActionClient
   .inputSchema(UpdateMemberRoleSchema)
   .action(async ({ parsedInput: data, ctx: { user } }) => {
     const client = getSupabaseServerClient();
+    const logger = await getLogger();
 
     const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
     if (!isSuperAdmin) {
-      const { data: perm } = await client
+      const { data: allPerms } = await client
         .from('assoc_admin_permissions')
-        .select('can_edit')
-        .eq('association_id', data.accountId)
-        .eq('target_role', data.role)
-        .maybeSingle();
+        .select('target_role, can_edit')
+        .eq('association_id', data.accountId);
 
-      if (!perm?.can_edit) {
-        throw new Error(
-          'You do not have permission to assign this role to members',
-        );
+      if (allPerms && allPerms.length > 0) {
+        const perm = allPerms.find((p) => p.target_role === data.role);
+
+        if (!perm?.can_edit) {
+          logger.warn(
+            {
+              accountId: data.accountId,
+              actorId: user.id,
+              targetRole: data.role,
+            },
+            'updateMemberRole: permission denied — can_edit not set for role',
+          );
+          throw new Error(
+            'You do not have permission to assign this role to members',
+          );
+        }
       }
+      // No rows configured → no per-role restriction; hierarchy-based access applies
     }
 
     const service = createAccountMembersService(client);

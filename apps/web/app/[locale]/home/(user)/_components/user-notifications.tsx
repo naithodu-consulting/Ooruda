@@ -11,6 +11,7 @@ export function UserNotifications(props: { userId: string }) {
     <NotificationsPopover
       accountIds={[props.userId]}
       realtime={featuresFlagConfig.realtimeNotifications}
+      accountSlug=""
     />
   );
 }

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { LayoutDashboard, Users } from 'lucide-react';
+import { Activity, Bell, Send, Users } from 'lucide-react';
 
 import { usePersonalAccountData } from '@kit/accounts/hooks/use-personal-account-data';
 import { useUser } from '@kit/supabase/hooks/use-user';
@@ -63,25 +63,61 @@ export function AdminSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuButton
-                isActive={path === '/admin'}
-                render={<Link className={'flex gap-2.5'} href={'/admin'} />}
-              >
-                <LayoutDashboard className={'h-4'} />
-                <span>Dashboard</span>
-              </SidebarMenuButton>
-
-              <SidebarMenuButton
                 isActive={path.includes('/admin/accounts')}
                 render={
                   <Link
                     className={'flex size-full gap-2.5'}
                     href={'/admin/accounts'}
                   >
-                    <Users className={'h-4'} />
+                    <Users className={'h-4 w-4 shrink-0'} />
                     <span>Accounts</span>
                   </Link>
                 }
               />
+
+              {process.env.NEXT_PUBLIC_ENABLE_SMS_EMAIL_NOTIFICATIONS ===
+                'true' && (
+                <SidebarMenuButton
+                  isActive={path.includes('/admin/channels')}
+                  render={
+                    <Link
+                      className={'flex size-full gap-2.5'}
+                      href={'/admin/channels'}
+                    >
+                      <Bell className={'h-4 w-4 shrink-0'} />
+                      <span>Channels</span>
+                    </Link>
+                  }
+                />
+              )}
+
+              <SidebarMenuButton
+                isActive={path.includes('/admin/activity')}
+                render={
+                  <Link
+                    className={'flex size-full gap-2.5'}
+                    href={'/admin/activity'}
+                  >
+                    <Activity className={'h-4 w-4 shrink-0'} />
+                    <span>Activity Log</span>
+                  </Link>
+                }
+              />
+
+              {process.env.NEXT_PUBLIC_ENABLE_BILL_DISPATCH === 'true' && (
+                <SidebarMenuButton
+                  isActive={path.includes('/admin/bill-dispatch')}
+                  render={
+                    <Link
+                      className={'flex size-full gap-2.5'}
+                      href={'/admin/bill-dispatch'}
+                    >
+                      <Send className={'h-4 w-4 shrink-0'} />
+                      <span>Bill Dispatch</span>
+                    </Link>
+                  }
+                />
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

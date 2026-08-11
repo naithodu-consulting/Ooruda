@@ -1,3 +1,8 @@
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+
+import { ArrowRight, FilePlus2 } from 'lucide-react';
+
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
@@ -6,34 +11,49 @@ import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import {
-  BillsSection,
-  type BillRow,
-  type PendingElectricityBill,
-} from './_components/bills-section';
+  BillingOverview,
+  type BillKpiRow,
+} from './_components/billing-overview';
+import { BILL_AMOUNTS_SELECT } from './_lib/billing-queries';
 
 interface Props {
   params: Promise<{ account: string }>;
-  searchParams: Promise<{ duration?: string; status?: string }>;
+  searchParams: Promise<{
+    duration?: string;
+    status?: string;
+    period?: string;
+    bills?: string;
+    unit?: string;
+    filter?: string;
+  }>;
 }
 
 export const metadata = { title: 'Billing' };
 
+const STATUS_TO_FILTER: Record<string, string> = {
+  overdue: 'overdue',
+  unpaid: 'outstanding',
+  outstanding: 'outstanding',
+  partial: 'outstanding',
+  paid: 'all_paid',
+};
+
+/**
+ * Level 1: the Billing landing page — KPI tiles and nothing else.
+ *
+ * This page used to render the tiles, the full unit tree and a bills card with
+ * draft/generated tabs all at once, which meant loading every bill for the
+ * association (with line items) before anything could paint. It now runs a
+ * single narrow, join-free query and hands off to the drill-down routes.
+ */
 export default async function BillingPage({ params, searchParams }: Props) {
-  const [{ account }, { duration, status }] = await Promise.all([
-    params,
-    searchParams,
-  ]);
-  const { accountId, role } = await requireRole(account, [
+  const [{ account }, sp] = await Promise.all([params, searchParams]);
+  const { accountId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
   ]);
 
   const client = getSupabaseServerClient();
-
-  // isSuperAdmin gates the "Delete all bills" danger-zone action — a super
-  // admin viewing an "opened workspace" resolves `role` to 'assoc_admin'
-  // too, so this must be checked independently rather than via `role`.
-  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
 
   const { data: association } = await client
     .from('associations')
@@ -45,146 +65,100 @@ export default async function BillingPage({ params, searchParams }: Props) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  // Fetch all independent data in parallel — no filter logic here.
-  const [
-    billsResult,
-    unitsResult,
-    otherChargesCTResult,
-    pendingChargesResult,
-    mescomBillsResult,
-  ] = await Promise.all([
-    client
-      .from('bills')
-      .select(
-        'id, period, bill_no, bill_type, total_amount, paid_amount, status, due_date, gst_amount, units(unit_no), bill_line_items(id, description, payer, gst_applicable, amount, area_sqft, rate_per_sqft)',
-      )
-      .eq('association_id', association.id)
-      .order('period', { ascending: false })
-      .order('bill_no'),
-    client
-      .from('units')
-      .select('id, unit_no')
-      .eq('association_id', association.id)
-      .order('unit_no'),
-    client
-      .from('charge_types')
-      .select('is_active')
-      .eq('association_id', association.id)
-      .eq('key', 'other_charges')
-      .maybeSingle(),
-    client
-      .from('pending_other_charges')
-      .select('id, unit_id, period, label, amount, split_mode, due_date, billed')
-      .eq('association_id', association.id)
-      .eq('billed', false)
-      .order('created_at', { ascending: false }),
-    client
-      .from('mescom_bills')
-      .select(
-        'id, period, invoice_amount, block_consumption_units, uploaded_at',
-      )
-      .eq('association_id', association.id)
-      .order('period', { ascending: false }),
-  ]);
+  // ── Legacy URL compatibility ──────────────────────────────────────────────
+  // Dashboard tiles, owner views and old bookmarks still point at /billing with
+  // these params. Redirect rather than ignore them, so an inbound link never
+  // silently lands on an unfiltered page.
+  const unitsHref = `/home/${account}/billing/units`;
 
-  // Only fetch these counts for super admins — they drive the danger-zone
-  // "Delete all bills" summary and would be wasted work for everyone else.
-  let deletionCounts: {
-    bills: number;
-    payments: number;
-    receipts: number;
-  } | null = null;
-  if (isSuperAdmin) {
-    const [{ count: paymentsCount }, { count: receiptsCount }] =
-      await Promise.all([
-        client
-          .from('payments')
-          .select('id', { count: 'exact', head: true })
-          .eq('association_id', association.id),
-        client
-          .from('receipts')
-          .select('id, payments!inner(association_id)', {
-            count: 'exact',
-            head: true,
-          })
-          .eq('payments.association_id', association.id),
-      ]);
-    deletionCounts = {
-      bills: billsResult.data?.length ?? 0,
-      payments: paymentsCount ?? 0,
-      receipts: receiptsCount ?? 0,
-    };
+  if (sp.bills === 'draft' || sp.bills === 'open') {
+    redirect(`/home/${account}/billing/drafts`);
   }
 
-  const unitRows = (unitsResult.data ?? []) as {
-    id: string;
-    unit_no: string;
-  }[];
-  const unitNoById = new Map(unitRows.map((u) => [u.id, u.unit_no]));
+  if (sp.unit) {
+    // `?unit=` carried a unit *number*; level 3 is keyed by id. Resolve it so
+    // the link lands on that unit rather than dumping the user in the list.
+    const { data: match } = await client
+      .from('units')
+      .select('id')
+      .eq('association_id', association.id)
+      .eq('unit_no', sp.unit)
+      .maybeSingle();
 
-  const isOtherChargesActive = otherChargesCTResult.data?.is_active ?? false;
+    redirect(match ? `${unitsHref}/${match.id}` : unitsHref);
+  }
 
-  const pendingCharges = (pendingChargesResult.data ?? []).map((pc) => ({
-    ...pc,
-    unit_no: pc.unit_id ? (unitNoById.get(pc.unit_id) ?? null) : null,
-  }));
+  const legacy = new URLSearchParams();
+
+  if (sp.filter) legacy.set('filter', sp.filter);
+  else if (sp.status && STATUS_TO_FILTER[sp.status]) {
+    legacy.set('filter', STATUS_TO_FILTER[sp.status]!);
+  }
+
+  if (sp.duration) legacy.set('duration', sp.duration);
 
   const now = new Date();
   const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  // Generate period options for the OtherCharges dialog (last 7 months).
-  const periodOptions: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    periodOptions.push(
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-    );
+  // An arbitrary period isn't expressible as a duration key; only the current
+  // month maps cleanly, and anything else falls back to the unfiltered list.
+  if (sp.period && !legacy.has('duration')) {
+    if (sp.period === currentPeriod) legacy.set('duration', 'current_month');
   }
 
-  // Periods that already have generated electricity / maintenance bills.
-  const generatedElecPeriods = new Set(
-    (billsResult.data ?? [])
-      .filter((b) => b.bill_type === 'electricity')
-      .map((b) => b.period),
-  );
-  const generatedMaintPeriods = new Set(
-    (billsResult.data ?? [])
-      .filter((b) => b.bill_type === 'maintenance')
-      .map((b) => b.period),
-  );
+  if ([...legacy].length > 0) {
+    redirect(`${unitsHref}?${legacy.toString()}`);
+  }
 
-  // Pending electricity: mescom_bills whose period has no generated unit bills yet.
-  const pendingElectricityBills: PendingElectricityBill[] = (
-    mescomBillsResult.data ?? []
-  )
-    .filter((mb) => !generatedElecPeriods.has(mb.period))
-    .map((mb) => ({
-      id: mb.id,
-      period: mb.period,
-      invoice_amount: Number(mb.invoice_amount),
-      block_consumption_units: Number(mb.block_consumption_units),
-      uploaded_at: mb.uploaded_at,
-    }));
+  // ── Tiles ─────────────────────────────────────────────────────────────────
+  const [billsResult, otherChargesCount, sinkingChargesCount, mescomResult] =
+    await Promise.all([
+      client
+        .from('bills')
+        .select(BILL_AMOUNTS_SELECT)
+        .eq('association_id', association.id)
+        .neq('status', 'Void'),
+      client
+        .from('pending_other_charges')
+        .select('id', { count: 'exact', head: true })
+        .eq('association_id', association.id)
+        .eq('billed', false),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (client as any)
+        .from('pending_sinking_fund_charges')
+        .select('id', { count: 'exact', head: true })
+        .eq('association_id', association.id)
+        .eq('billed', false),
+      client
+        .from('mescom_bills')
+        .select('period')
+        .eq('association_id', association.id),
+    ]);
 
-  // Pending maintenance: show current month if no maintenance bills exist yet.
-  const maintenancePending = !generatedMaintPeriods.has(currentPeriod);
+  const rawBills = billsResult.data ?? [];
 
-  const billRows: BillRow[] = (billsResult.data ?? []).map((b) => ({
-    id: b.id,
-    period: b.period,
-    bill_no: b.bill_no,
-    bill_type: b.bill_type ?? 'maintenance',
+  const bills: BillKpiRow[] = rawBills.map((b) => ({
     total_amount: Number(b.total_amount),
     paid_amount: Number(b.paid_amount),
+    advance_applied: b.advance_applied != null ? Number(b.advance_applied) : 0,
     status: b.status,
     due_date: b.due_date,
-    unit_no: (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
-    gst_amount: b.gst_amount != null ? Number(b.gst_amount) : null,
-    lineItems: b.bill_line_items,
+    period: b.period,
   }));
 
-  const canManage = role === 'assoc_admin' || role === 'billing_operator';
-  const canDelete = role === 'assoc_admin';
+  const generatedElecPeriods = new Set(
+    rawBills.filter((b) => b.bill_type === 'electricity').map((b) => b.period),
+  );
+  const pendingElectricity = (mescomResult.data ?? []).filter(
+    (mb) => !generatedElecPeriods.has(mb.period),
+  ).length;
+
+  // Maintenance is an informational alert, not a stageable item — exclude it
+  // so the badge count reflects actual billable charges only.
+  const draftCount =
+    (otherChargesCount.count ?? 0) +
+    (sinkingChargesCount.count ?? 0) +
+    pendingElectricity;
 
   return (
     <PageBody>
@@ -192,28 +166,71 @@ export default async function BillingPage({ params, searchParams }: Props) {
         account={account}
         title={<Trans i18nKey="association.nav.billing" />}
         description={
-          billRows.length === 0 ? 'No bills yet' : `${billRows.length} bills`
+          bills.length === 0 ? 'No bills yet' : `${bills.length} bills`
         }
       />
 
-      <BillsSection
-        associationId={association.id}
-        bills={billRows}
-        canManage={canManage}
-        canDelete={canDelete}
-        isSuperAdmin={!!isSuperAdmin}
-        deletionCounts={deletionCounts}
-        units={unitRows}
-        pendingCharges={pendingCharges}
-        periodOptions={periodOptions}
-        isOtherChargesActive={isOtherChargesActive}
-        accountSlug={account}
-        initialDuration={duration}
-        initialStatus={status}
-        pendingElectricityBills={pendingElectricityBills}
-        maintenancePending={maintenancePending}
-        currentPeriod={currentPeriod}
-      />
+      <div className="mt-2 flex flex-col gap-6">
+        <BillingOverview
+          bills={bills}
+          accountSlug={account}
+          currentPeriod={currentPeriod}
+        />
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <NavCard
+            href={`${unitsHref}`}
+            title="Bills by Unit"
+            description="Review what each unit owes, drill into any period, and download bills."
+          />
+          <NavCard
+            href={`/home/${account}/billing/drafts`}
+            title="Drafts"
+            description={
+              draftCount > 0
+                ? `${draftCount} charge${draftCount !== 1 ? 's' : ''} waiting to be billed.`
+                : 'Nothing waiting — all charges have been billed.'
+            }
+            badge={draftCount > 0 ? draftCount : undefined}
+            icon={<FilePlus2 className="h-4 w-4" />}
+          />
+        </div>
+      </div>
     </PageBody>
+  );
+}
+
+function NavCard({
+  href,
+  title,
+  description,
+  badge,
+  icon,
+}: {
+  href: string;
+  title: string;
+  description: string;
+  badge?: number;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className="bg-card hover:bg-accent/40 focus-visible:ring-ring group flex items-center justify-between gap-4 rounded-xl border px-4 py-3.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+    >
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-sm font-semibold">{title}</span>
+          {badge !== undefined && (
+            <span className="bg-primary text-primary-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold">
+              {badge}
+            </span>
+          )}
+        </div>
+        <p className="text-muted-foreground mt-0.5 text-xs">{description}</p>
+      </div>
+      <ArrowRight className="text-muted-foreground group-hover:text-foreground h-4 w-4 shrink-0 transition-colors" />
+    </Link>
   );
 }
