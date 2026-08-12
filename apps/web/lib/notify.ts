@@ -6,7 +6,7 @@ import {
 import { getSmsProvider } from '@kit/sms';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 
-const SENDER_EMAIL = 'hello@ooruda.com';
+const SENDER_EMAIL = process.env.EMAIL_SENDER ?? 'hello@ooruda.com';
 
 // ── Channel enablement ────────────────────────────────────────────────────────
 // Reads notification_providers_config for platform defaults (association_id IS NULL).

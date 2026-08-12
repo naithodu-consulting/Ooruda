@@ -10,7 +10,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
-const SENDER_EMAIL = 'hello@ooruda.com';
+const SENDER_EMAIL = Deno.env.get('EMAIL_SENDER') ?? 'hello@ooruda.com';
 const APP_URL = Deno.env.get('NEXT_PUBLIC_SITE_URL') ?? 'https://ooruda.com';
 const SMS_PROVIDER = (Deno.env.get('SMS_PROVIDER') ?? 'mock').toLowerCase();
 

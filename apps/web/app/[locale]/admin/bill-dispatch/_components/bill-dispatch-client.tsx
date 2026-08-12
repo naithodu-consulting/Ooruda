@@ -37,7 +37,7 @@ import { Spinner } from '@kit/ui/spinner';
 
 import { sendBillEmailsAction } from '../_lib/dispatch-actions';
 import {
-  DISPATCH_SENDER_EMAIL,
+  DISPATCH_SENDER_DISPLAY,
   VALID_BILL_TYPES,
 } from '../_lib/dispatch-config';
 import type {
@@ -502,7 +502,7 @@ export function BillDispatchClient({ associations }: Props) {
                     </span>
                   )}
                   <span className="text-muted-foreground text-xs">
-                    Sender: <strong>{DISPATCH_SENDER_EMAIL}</strong>
+                    Sender: <strong>{DISPATCH_SENDER_DISPLAY}</strong>
                   </span>
                 </div>
                 <Button
@@ -816,7 +816,7 @@ export function BillDispatchClient({ associations }: Props) {
                   value: mode === 'bills' ? 'Bills' : 'Receipts',
                 },
                 { label: 'Period', value: periodLabel },
-                { label: 'From', value: DISPATCH_SENDER_EMAIL },
+                { label: 'From', value: DISPATCH_SENDER_DISPLAY },
               ].map(({ label, value }) => (
                 <div
                   key={label}
