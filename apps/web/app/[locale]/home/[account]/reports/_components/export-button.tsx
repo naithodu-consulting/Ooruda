@@ -139,7 +139,7 @@ export function ExportButton({
           >
             <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
             <div className="flex flex-col">
-              <span className="font-medium">Export CSV</span>
+              <span className="font-medium">Download CSV</span>
               <span className="text-muted-foreground text-xs">
                 Current tab ·{' '}
                 {hasFilters ? 'applies active filters' : 'all data'}
@@ -154,7 +154,7 @@ export function ExportButton({
           >
             <FileText className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
             <div className="flex flex-col">
-              <span className="font-medium">Export PDF</span>
+              <span className="font-medium">Download PDF</span>
               <span className="text-muted-foreground text-xs">
                 Current tab ·{' '}
                 {hasFilters ? 'applies active filters' : 'all data'}

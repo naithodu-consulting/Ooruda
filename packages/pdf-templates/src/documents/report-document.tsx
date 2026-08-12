@@ -76,6 +76,7 @@ const rStyles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     flex: 1,
+    paddingRight: 6,
   },
   theadCellRight: {
     fontSize: 7.5,
@@ -83,6 +84,7 @@ const rStyles = StyleSheet.create({
     fontWeight: 'bold',
     flex: 1,
     textAlign: 'right',
+    paddingRight: 8,
   },
   row: {
     flexDirection: 'row',
@@ -95,8 +97,8 @@ const rStyles = StyleSheet.create({
     padding: '3 6',
     backgroundColor: CREAM,
   },
-  cell: { flex: 1, fontSize: 8, color: '#222' },
-  cellRight: { flex: 1, fontSize: 8, color: '#222', textAlign: 'right' },
+  cell: { flex: 1, fontSize: 8, color: '#222', paddingRight: 6 },
+  cellRight: { flex: 1, fontSize: 8, color: '#222', textAlign: 'right', paddingRight: 8 },
   footer: {
     position: 'absolute',
     bottom: 24,
@@ -291,7 +293,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
         {/* ── Section: Collection Summary ── */}
         {showSection('collection') && (
           <>
-            <Text style={rStyles.sectionTitle}>
+            <Text style={rStyles.sectionTitle} minPresenceAhead={60}>
               {sectionLabel('collection', 'Collection Summary')}
             </Text>
             <View style={rStyles.kpiRow}>
@@ -355,7 +357,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
         {/* ── Section 2: Outstanding Dues ── */}
         {showSection('outstanding') && (
           <>
-            <Text style={rStyles.sectionTitle}>
+            <Text style={rStyles.sectionTitle} minPresenceAhead={60}>
               {sectionLabel('outstanding', 'Outstanding Dues')}
             </Text>
             <View style={rStyles.kpiRow}>
@@ -410,10 +412,10 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
         {/* ── Section 3: Payments ── */}
         {showSection('payments') && (
           <>
-            <Text style={rStyles.sectionTitle}>
+            <Text style={rStyles.sectionTitle} minPresenceAhead={60}>
               {sectionLabel('payments', 'Payments Received')}
             </Text>
-            <View style={rStyles.kpiRow}>
+            <View style={rStyles.kpiRow} wrap={false}>
               <View style={rStyles.kpiBox}>
                 <Text style={rStyles.kpiLabel}>Total Collected</Text>
                 <Text style={rStyles.kpiValue}>
@@ -424,7 +426,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                 <Text style={rStyles.kpiLabel}>Transactions</Text>
                 <Text style={rStyles.kpiValue}>{data.payments.count}</Text>
               </View>
-              {data.payments.byMode.slice(0, 3).map((m) => (
+              {data.payments.byMode.slice(0, 5).map((m) => (
                 <View key={m.mode} style={rStyles.kpiBox}>
                   <Text style={rStyles.kpiLabel}>{m.mode}</Text>
                   <Text style={rStyles.kpiValue}>{formatINR(m.amount)}</Text>
@@ -461,7 +463,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
         {/* ── Section 4: Electricity ── */}
         {showSection('electricity') && data.electricity.byPeriod.length > 0 && (
           <>
-            <Text style={rStyles.sectionTitle}>
+            <Text style={rStyles.sectionTitle} minPresenceAhead={60}>
               {sectionLabel('electricity', 'Electricity Summary')}
             </Text>
             <View style={rStyles.kpiRow}>

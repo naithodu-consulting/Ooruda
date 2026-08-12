@@ -1,9 +1,18 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
 
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Filter,
+} from 'lucide-react';
+
+import { Button } from '@kit/ui/button';
 import {
   Table,
   TableBody,
@@ -19,32 +28,22 @@ import {
   ADMIN_EVENT_TYPE_TABS,
   AuditSearchBar,
   EventTypeTabs,
-  StatusBadge,
   truncateSummary,
+  TypeBadge,
 } from '../../../home/[account]/audit/_components/audit-shared';
 
 function formatAuditDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  const day = date.toLocaleString('en-IN', {
+  return date.toLocaleString('en-IN', {
     day: 'numeric',
-    timeZone: 'Asia/Kolkata',
-  });
-  const month = date.toLocaleString('en-IN', {
     month: 'short',
-    timeZone: 'Asia/Kolkata',
-  });
-  const year = date.toLocaleString('en-IN', {
     year: 'numeric',
-    timeZone: 'Asia/Kolkata',
-  });
-  const time = date.toLocaleString('en-IN', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
     timeZone: 'Asia/Kolkata',
   });
-  return `${day} ${month} ${year}, ${time}`;
 }
 
 export interface AdminActivityRow {
@@ -60,6 +59,11 @@ export interface AdminActivityRow {
   path: string | null;
 }
 
+export interface AssocOption {
+  id: string;
+  name: string;
+}
+
 export function AdminActivityCard(props: {
   rows: AdminActivityRow[];
   page: number;
@@ -68,33 +72,127 @@ export function AdminActivityCard(props: {
   pageSize: number;
   search: string;
   eventType: string;
+  dateFrom: string;
+  dateTo: string;
+  isDefaultRange: boolean;
+  assocId: string;
+  associations: AssocOption[];
 }) {
-  const { rows, page, totalPages, totalCount, pageSize, search, eventType } =
-    props;
+  const {
+    rows,
+    page,
+    totalPages,
+    totalCount,
+    pageSize,
+    search,
+    eventType,
+    dateFrom,
+    dateTo,
+    isDefaultRange,
+    assocId,
+    associations,
+  } = props;
+
   const pathname = usePathname();
+  const router = useRouter();
   const basePath = pathname.split('?')[0]!;
+
+  const [localFrom, setLocalFrom] = useState(dateFrom);
+  const [localTo, setLocalTo] = useState(dateTo);
+
+  // Keep local date state in sync when server-rendered defaults change
+  const prevDateFrom = useRef(dateFrom);
+  const prevDateTo = useRef(dateTo);
+  useEffect(() => {
+    if (prevDateFrom.current !== dateFrom) {
+      setLocalFrom(dateFrom);
+      prevDateFrom.current = dateFrom;
+    }
+    if (prevDateTo.current !== dateTo) {
+      setLocalTo(dateTo);
+      prevDateTo.current = dateTo;
+    }
+  }, [dateFrom, dateTo]);
+
+  function buildParams(overrides: Record<string, string> = {}) {
+    const sp = new URLSearchParams();
+    if (search) sp.set('search', search);
+    if (eventType) sp.set('eventType', eventType);
+    if (assocId) sp.set('assocId', assocId);
+    sp.set('dateFrom', localFrom);
+    sp.set('dateTo', localTo);
+    Object.entries(overrides).forEach(([k, v]) => {
+      if (v) sp.set(k, v);
+      else sp.delete(k);
+    });
+    return sp.toString();
+  }
 
   function tabHref(et: string) {
     const sp = new URLSearchParams();
     if (search) sp.set('search', search);
     if (et) sp.set('eventType', et);
-    const qs = sp.toString();
-    return qs ? `${basePath}?${qs}` : basePath;
+    if (assocId) sp.set('assocId', assocId);
+    sp.set('dateFrom', localFrom);
+    sp.set('dateTo', localTo);
+    return `${basePath}?${sp.toString()}`;
   }
 
   function pageHref(p: number) {
+    return `${basePath}?${buildParams({ page: String(p) })}`;
+  }
+
+  function applyDateRange() {
     const sp = new URLSearchParams();
     if (search) sp.set('search', search);
     if (eventType) sp.set('eventType', eventType);
-    sp.set('page', String(p));
-    return `${basePath}?${sp.toString()}`;
+    if (assocId) sp.set('assocId', assocId);
+    sp.set('dateFrom', localFrom);
+    sp.set('dateTo', localTo);
+    router.push(`${basePath}?${sp.toString()}`);
+  }
+
+  function onAssocChange(id: string) {
+    const sp = new URLSearchParams();
+    if (search) sp.set('search', search);
+    if (eventType) sp.set('eventType', eventType);
+    if (id) sp.set('assocId', id);
+    sp.set('dateFrom', localFrom);
+    sp.set('dateTo', localTo);
+    router.push(`${basePath}?${sp.toString()}`);
+  }
+
+  function csvHref() {
+    const sp = new URLSearchParams();
+    if (search) sp.set('search', search);
+    if (eventType) sp.set('eventType', eventType);
+    if (assocId) sp.set('assocId', assocId);
+    sp.set('dateFrom', localFrom);
+    sp.set('dateTo', localTo);
+    return `/api/admin/activity/export?${sp.toString()}`;
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Top bar: description + search */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-muted-foreground text-sm">
-          All events across every association — most recent first
+          {isDefaultRange ? (
+            <>
+              Showing last 7 days by default.{' '}
+              <span className="text-foreground font-medium">
+                {totalCount} event{totalCount === 1 ? '' : 's'}
+              </span>{' '}
+              matched.
+            </>
+          ) : (
+            <>
+              <span className="text-foreground font-medium">
+                {totalCount} event{totalCount === 1 ? '' : 's'}
+              </span>{' '}
+              from {dateFrom} to {dateTo}.
+            </>
+          )}
         </p>
         <AuditSearchBar
           defaultValue={search}
@@ -102,6 +200,84 @@ export function AdminActivityCard(props: {
           eventType={eventType}
           testId="admin-activity-search"
         />
+      </div>
+
+      {/* Filter row */}
+      <div className="flex flex-wrap items-end gap-3">
+        <Filter className="text-muted-foreground mb-1.5 h-4 w-4 shrink-0" />
+
+        {/* Date range */}
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-muted-foreground text-xs font-medium">
+              From
+            </label>
+            <input
+              type="date"
+              value={localFrom}
+              max={localTo}
+              onChange={(e) => setLocalFrom(e.target.value)}
+              className="border-input bg-background h-9 rounded-md border px-2 text-sm focus:outline-none focus:ring-2"
+              data-test="activity-date-from"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-muted-foreground text-xs font-medium">
+              To
+            </label>
+            <input
+              type="date"
+              value={localTo}
+              min={localFrom}
+              onChange={(e) => setLocalTo(e.target.value)}
+              className="border-input bg-background h-9 rounded-md border px-2 text-sm focus:outline-none focus:ring-2"
+              data-test="activity-date-to"
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={applyDateRange}
+            className="h-9"
+            data-test="activity-date-apply"
+          >
+            Apply
+          </Button>
+        </div>
+
+        {/* Association filter */}
+        <div className="flex flex-col gap-1">
+          <label className="text-muted-foreground text-xs font-medium">
+            Association
+          </label>
+          <div className="relative">
+            <select
+              value={assocId}
+              onChange={(e) => onAssocChange(e.target.value)}
+              className="border-input bg-background h-9 w-full appearance-none rounded-md border px-2 pr-7 text-sm focus:outline-none focus:ring-2"
+              data-test="activity-assoc-filter"
+            >
+              <option value="">All associations</option>
+              {associations.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="text-muted-foreground pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
+          </div>
+        </div>
+
+        {/* CSV export */}
+        <a
+          href={csvHref()}
+          download
+          className="border-input bg-background hover:bg-accent ml-auto inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors"
+          data-test="activity-export-csv"
+        >
+          <Download className="h-4 w-4" />
+          Export CSV
+        </a>
       </div>
 
       <EventTypeTabs
@@ -114,30 +290,32 @@ export function AdminActivityCard(props: {
       <div className="bg-card rounded-xl border">
         {rows.length === 0 ? (
           <p className="text-muted-foreground py-16 text-center text-sm">
-            {search ? `No results for "${search}".` : 'No events logged yet.'}
+            {search
+              ? `No results for "${search}".`
+              : 'No events in this date range.'}
           </p>
         ) : (
           <>
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="min-w-[800px]">
                 <TableHeader>
                   <TableRow className="border-b">
-                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                    <TableHead className="text-muted-foreground w-48 text-xs font-semibold uppercase tracking-wider">
                       Event
                     </TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                    <TableHead className="text-muted-foreground w-32 text-xs font-semibold uppercase tracking-wider">
                       User
                     </TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                    <TableHead className="text-muted-foreground w-40 text-xs font-semibold uppercase tracking-wider">
                       Association
                     </TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                    <TableHead className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
                       Details
                     </TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                      Status
+                    <TableHead className="text-muted-foreground w-24 text-xs font-semibold uppercase tracking-wider">
+                      Type
                     </TableHead>
-                    <TableHead className="text-muted-foreground text-right text-xs font-semibold tracking-wider uppercase">
+                    <TableHead className="text-muted-foreground w-40 text-right text-xs font-semibold uppercase tracking-wider">
                       Date
                     </TableHead>
                   </TableRow>
@@ -153,7 +331,7 @@ export function AdminActivityCard(props: {
                               {actionLabel(row.action)}
                             </span>
                             {row.path && (
-                              <div className="text-muted-foreground mt-0.5 font-mono text-[10px]">
+                              <div className="text-muted-foreground mt-0.5 max-w-[176px] truncate font-mono text-[10px]">
                                 {row.path}
                               </div>
                             )}
@@ -175,7 +353,7 @@ export function AdminActivityCard(props: {
                         )}
                       </TableCell>
                       <TableCell className="py-3.5">
-                        <StatusBadge
+                        <TypeBadge
                           statusCode={row.statusCode}
                           eventType={row.eventType}
                         />
