@@ -18,7 +18,8 @@ import {
 } from '~/home/[account]/billing/_lib/server/pdf-generation';
 import { logAuditEvent } from '~/lib/audit-log';
 
-import { DISPATCH_SENDER_EMAIL } from './dispatch-config';
+const EMAIL_SENDER = process.env.EMAIL_SENDER;
+if (!EMAIL_SENDER) throw new Error('EMAIL_SENDER env var is not set');
 
 export interface SendBillEmailsInput {
   associationName: string;
@@ -180,7 +181,7 @@ async function sendViaResend(params: {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      from: DISPATCH_SENDER_EMAIL,
+      from: EMAIL_SENDER,
       to: [params.to],
       subject: params.subject,
       html: params.html,
