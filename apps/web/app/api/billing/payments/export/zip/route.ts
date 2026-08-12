@@ -1,5 +1,3 @@
-export const runtime = 'nodejs';
-
 import { NextResponse } from 'next/server';
 
 import { zip } from 'fflate';
@@ -18,6 +16,8 @@ import {
   renderReceiptFromPrefetch,
   type BulkPaymentRecord,
 } from './bulk-render';
+
+export const runtime = 'nodejs';
 
 const RENDER_CONCURRENCY = 12;
 
@@ -52,9 +52,6 @@ function buildPath(payment: BulkPaymentRecord): string {
   return `unit-${payment.unit_no}/${receiptSafe}.pdf`;
 }
 
-function buildAdvancePath(voucherNo: string, unitNo: string): string {
-  return `unit-${unitNo}/${voucherNo.replace(/\//g, '-')}.pdf`;
-}
 
 export const POST = enhanceRouteHandler(
   async function ({ request }) {

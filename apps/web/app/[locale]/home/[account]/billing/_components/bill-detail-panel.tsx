@@ -231,38 +231,40 @@ export function BillDetailPanel({
             </p>
           ) : (
             <div className="flex flex-col">
-              {lineItems.map((li) => (
-                <div
-                  key={li.id}
-                  className="flex items-baseline justify-between gap-4 border-b py-1.5 text-sm last:border-b-0"
-                >
-                  <div className="min-w-0">
-                    <span className="truncate">{li.description}</span>
-                    {li.area_sqft != null && li.rate_per_sqft != null && (
+              <div className="flex flex-col">
+                {lineItems.map((li) => (
+                  <div
+                    key={li.id}
+                    className="flex items-baseline justify-between gap-4 border-b py-1.5 text-sm last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <span className="truncate">{li.description}</span>
+                      {li.area_sqft != null && li.rate_per_sqft != null && (
+                        <span className="text-muted-foreground ml-1.5 text-[13px]">
+                          {li.area_sqft} sqft @ ₹{li.rate_per_sqft}
+                        </span>
+                      )}
+                      {gstCharged && li.gst_applicable && (
+                        <Badge
+                          variant="outline"
+                          className="ml-1.5 px-1 py-0 text-[11px]"
+                        >
+                          GST
+                        </Badge>
+                      )}
                       <span className="text-muted-foreground ml-1.5 text-[13px]">
-                        {li.area_sqft} sqft @ ₹{li.rate_per_sqft}
+                        · {li.payer}
                       </span>
-                    )}
-                    {gstCharged && li.gst_applicable && (
-                      <Badge
-                        variant="outline"
-                        className="ml-1.5 px-1 py-0 text-[11px]"
-                      >
-                        GST
-                      </Badge>
-                    )}
-                    <span className="text-muted-foreground ml-1.5 text-[13px]">
-                      · {li.payer}
+                    </div>
+                    <span className="shrink-0 tabular-nums">
+                      {formatINR(li.amount)}
                     </span>
                   </div>
-                  <span className="shrink-0 tabular-nums">
-                    {formatINR(li.amount)}
-                  </span>
-                </div>
-              ))}
+                ))}
+              </div>
 
               {bill.gst_amount != null && bill.gst_amount > 0 && (
-                <div className="text-muted-foreground flex items-baseline justify-between gap-4 border-b py-1.5 text-sm">
+                <div className="text-muted-foreground flex items-baseline justify-between gap-4 py-1.5 text-sm">
                   <span>GST</span>
                   <span className="tabular-nums">
                     {formatINR(bill.gst_amount)}

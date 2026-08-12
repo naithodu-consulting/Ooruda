@@ -8,6 +8,7 @@ import {
 } from '@kit/pdf-templates';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { preprocessLogoForPdf } from '~/home/[account]/billing/_lib/server/pdf-generation';
 import { getAssociationRole } from '~/lib/rbac';
 
 import type { ReportsFilters } from './reports-types';
@@ -33,7 +34,7 @@ async function resolveAssociation(associationId: string) {
     client
       .from('associations')
       .select(
-        'id, name: accounts(name), address, gstin, logo_url, registration_number, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch',
+        'id, accounts(name, picture_url), address, gstin, logo_url, registration_number, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch',
       )
       .eq('id', associationId)
       .single(),
@@ -67,7 +68,8 @@ function outstandingAmount(b: {
 function toCSV(headers: string[], rows: (string | number | null)[][]): string {
   const escape = (v: string | number | null) => {
     if (v === null || v === undefined) return '';
-    const s = String(v);
+    // Prefix formula-injection characters so spreadsheet apps don't evaluate them
+    const s = /^[=+\-@]/.test(String(v)) ? `'${String(v)}` : String(v);
     return s.includes(',') || s.includes('"') || s.includes('\n')
       ? `"${s.replace(/"/g, '""')}"`
       : s;
@@ -564,10 +566,18 @@ export async function downloadPdfAction(
     year: 'numeric',
   });
 
-  const assocName =
-    typeof association.name === 'object' && association.name !== null
-      ? ((association.name as { name?: string }).name ?? 'Association')
-      : String(association.name ?? 'Association');
+  const assocAccounts = association.accounts as {
+    name?: string | null;
+    picture_url?: string | null;
+  } | null;
+  const assocName = assocAccounts?.name ?? 'Association';
+
+  // Preprocess logo to a base64 data URI — react-pdf cannot pass auth headers
+  // when fetching raw Supabase Storage URLs, causing silent fallback to the
+  // OorudaMark placeholder. Use logo_url first, fall back to accounts.picture_url.
+  const rawLogoUrl =
+    (association.logo_url as string | null) ?? (assocAccounts?.picture_url ?? null);
+  const logoDataUri = await preprocessLogoForPdf(rawLogoUrl);
 
   const data: ReportPdfData = {
     association: {
@@ -575,7 +585,7 @@ export async function downloadPdfAction(
       address: association.address ?? null,
       gstin: association.gstin ?? null,
       registrationNumber: association.registration_number ?? null,
-      logoUrl: association.logo_url ?? null,
+      logoUrl: logoDataUri,
       email: association.email ?? null,
       phone: association.phone ?? null,
       bankAccountName: association.bank_account_name ?? null,
@@ -607,14 +617,16 @@ export async function downloadPdfAction(
         const due = new Date(b.due_date);
         return due < new Date() && b.status !== 'Paid';
       }).length,
-      topBills: outstandingBills.map((b) => ({
-        unit_no: (b.units as { unit_no: string } | null)?.unit_no ?? '—',
-        bill_no: b.bill_no,
-        bill_type: b.bill_type ?? 'maintenance',
-        period: b.period,
-        outstanding: outstandingAmount(b),
-        due_date: b.due_date,
-      })),
+      topBills: outstandingBills
+        .filter((b) => outstandingAmount(b) > 0)
+        .map((b) => ({
+          unit_no: (b.units as { unit_no: string } | null)?.unit_no ?? '—',
+          bill_no: b.bill_no,
+          bill_type: b.bill_type ?? 'maintenance',
+          period: b.period,
+          outstanding: outstandingAmount(b),
+          due_date: b.due_date,
+        })),
     },
     payments: {
       total: paymentRows.reduce((s: number, p: any) => s + Number(p.amount), 0),

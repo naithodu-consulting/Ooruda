@@ -115,7 +115,7 @@ export function AdminOverviewPanel({
       {/* Header row: meta-text + duration pills */}
       <div className="-mt-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground text-sm">
-          {`${metrics.periodDisplay} · ${staticData.totalUnits} units · ${staticData.occupiedUnits} occupied`}
+          {`${metrics.periodDisplay} · ${staticData.totalUnits} residential units · ${staticData.occupiedUnits} occupied`}
         </p>
 
         {/* Duration pill selector — purely client-side, no navigation */}
@@ -156,7 +156,7 @@ export function AdminOverviewPanel({
           />
         </Link>
         <Link
-          href={`/home/${account}/payments?duration=${activeDuration}&status=collected`}
+          href={`/home/${account}/payments?duration=${activeDuration}&status=paid`}
           className="block rounded-2xl ring-0 transition-shadow hover:ring-2 hover:ring-green-300 focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:outline-none dark:hover:ring-green-700"
         >
           <MetricCard
@@ -194,7 +194,7 @@ export function AdminOverviewPanel({
             variant="red"
             label="Overdue"
             value={formatINR(metrics.overdueAmount)}
-            sublabel={`${metrics.overdueCount} units`}
+            sublabel={`${metrics.overdueCount} bill${metrics.overdueCount !== 1 ? 's' : ''}`}
             className="h-full"
           />
         </Link>

@@ -4,6 +4,42 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v1.4.6 — Dashboard Accuracy, Admin Audit Log, PDF Fixes — 2026-08-12
+
+### Dashboard — Advance Payment Accounting Fix
+
+- **Outstanding, Collected, Overdue tiles** were ignoring `advance_applied` (advance ledger amounts settled against a bill). Bills fully paid via advance were incorrectly counted as Overdue, inflating the overdue count and outstanding total.
+- `collected = paid_amount + advance_applied`; `outstanding = max(0, total - paid - advance)` per bill. Ageing buckets and overdue amount use the same formula.
+- Result: arithmetic consistency restored — Billed − Collected = Outstanding holds exactly.
+- **Overdue sublabel** changed from `"N units"` (wrong — it counted bills, not units) to `"N bills"`.
+- **Collected tile link** fixed from `status=collected` (dead filter — `displayBillStatus` never returns "Collected") to `status=paid`.
+
+### Admin Activity Log
+
+- **Association dropdown** no longer shows demo/seed associations (e.g. "Makerkit"). Only associations with at least one audit log entry appear. Full-table scan capped at 2,000 rows to prevent unbounded query on large tables.
+- **Table overflow fix**: activity table now scrolls horizontally on narrow screens (`min-w-[800px]`) with explicit column widths; Event path text truncates at 176 px.
+- **Select styling**: native `<select>` border normalised with `appearance-none` + custom `ChevronDown` icon overlay — eliminates OS-default thick black border.
+- **Super-admin audit log coverage**: `impersonateUserAction` now writes an audit entry (was the only high-risk action with no log). `logAdminAudit` catch block now logs a `warn` instead of discarding errors silently.
+- **CSV export** (`/api/admin/activity/export`): new route exports up to 10,000 rows as CSV with IST timestamps, resolved actor/association names, and formula-injection protection.
+
+### PDF Report Fixes
+
+- **Bill No. / Type column concatenation**: adjacent left-aligned cells had no right padding, causing text from one column to visually bleed into the next (e.g. "SRT/26-27/MNT/000015Maintenance"). Fixed with `paddingRight: 6` on `cell` and `theadCell` styles.
+- **Amount / Mode column concatenation**: same issue on right-aligned amount cells. Fixed with `paddingRight: 8` on `cellRight` and `theadCellRight`.
+- **₹0 outstanding bills in Outstanding Dues**: bills fully settled by advance showed as outstanding in the PDF. Fixed with `filter(b => outstandingAmount(b) > 0)` before mapping `topBills`.
+- **Payments section stranded header**: page-break could leave the "Payments Received" heading alone at the bottom of a page. Fixed with `minPresenceAhead={60}` on all four section title elements.
+- **Payment mode KPI tiles**: capped at 5 modes (was unbounded after removing the `slice(0, 3)` cap) to prevent unreadably narrow tiles on A4 with many payment modes.
+
+### CSV Export — Security
+
+- Both CSV helpers (`reports-actions.ts`, `activity/export`) now prefix formula-injection characters (`=`, `+`, `-`, `@`) with a single quote so spreadsheet applications (Excel, LibreOffice) do not evaluate user-supplied data as formulas.
+
+| Migration | Change |
+|---|---|
+| _(none)_ | No schema changes; all fixes are application-layer |
+
+---
+
 ## v1.4.5 — Mobile UX Polish, Report Charts, Import Month Fix — 2026-08-11
 
 ### Import Meter Readings — Current Month Included

@@ -31,6 +31,37 @@ import { createAdminAuthUserService } from './services/admin-auth-user.service';
 import { adminActionClient } from './utils/admin-action-client';
 import { isSuperAdmin, isUserSuperAdmin } from './utils/is-super-admin';
 
+/**
+ * Best-effort audit log write for super-admin actions.
+ * Uses admin client to bypass RLS — super admins are not association members.
+ * Never throws; a logging failure must not block the action it describes.
+ */
+async function logAdminAudit(
+  actorUserId: string,
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  summary: string,
+  associationId?: string | null,
+): Promise<void> {
+  try {
+    await getSupabaseServerAdminClient()
+      .from('audit_logs')
+      .insert({
+        actor_user_id: actorUserId,
+        action,
+        entity_type: entityType,
+        entity_id: entityId,
+        summary,
+        event_type: 'user_action',
+        association_id: associationId ?? null,
+      });
+  } catch (err) {
+    const logger = await getLogger();
+    logger.warn({ err, action, entityId }, 'logAdminAudit: failed to write audit log — action proceeded unlogged');
+  }
+}
+
 function friendlyAuthError(message: string): string {
   const msg = message.toLowerCase();
   if (
@@ -61,7 +92,7 @@ function friendlyAuthError(message: string): string {
  */
 export const banUserAction = adminActionClient
   .inputSchema(BanUserSchema)
-  .action(async ({ parsedInput: { userId } }) => {
+  .action(async ({ parsedInput: { userId }, ctx }) => {
     const service = getAdminAuthService();
     const logger = await getLogger();
 
@@ -77,6 +108,14 @@ export const banUserAction = adminActionClient
     revalidateAdmin();
 
     logger.info({ userId }, `Super Admin has successfully banned user`);
+
+    void logAdminAudit(
+      ctx.user.id,
+      'admin.user.banned',
+      'user',
+      userId,
+      `User account banned`,
+    );
   });
 
 /**
@@ -85,7 +124,7 @@ export const banUserAction = adminActionClient
  */
 export const reactivateUserAction = adminActionClient
   .inputSchema(ReactivateUserSchema)
-  .action(async ({ parsedInput: { userId } }) => {
+  .action(async ({ parsedInput: { userId }, ctx }) => {
     const service = getAdminAuthService();
     const logger = await getLogger();
 
@@ -101,6 +140,14 @@ export const reactivateUserAction = adminActionClient
     revalidateAdmin();
 
     logger.info({ userId }, `Super Admin has successfully reactivated user`);
+
+    void logAdminAudit(
+      ctx.user.id,
+      'admin.user.reactivated',
+      'user',
+      userId,
+      `User account reactivated`,
+    );
   });
 
 /**
@@ -109,11 +156,19 @@ export const reactivateUserAction = adminActionClient
  */
 export const impersonateUserAction = adminActionClient
   .inputSchema(ImpersonateUserSchema)
-  .action(async ({ parsedInput: { userId } }) => {
+  .action(async ({ parsedInput: { userId }, ctx }) => {
     const service = getAdminAuthService();
     const logger = await getLogger();
 
     logger.info({ userId }, `Super Admin is impersonating user...`);
+
+    void logAdminAudit(
+      ctx.user.id,
+      'admin.user.impersonated',
+      'user',
+      userId,
+      `User session impersonated by super admin`,
+    );
 
     return await service.impersonateUser(userId);
   });
@@ -124,7 +179,7 @@ export const impersonateUserAction = adminActionClient
  */
 export const deleteUserAction = adminActionClient
   .inputSchema(DeleteUserSchema)
-  .action(async ({ parsedInput: { userId } }) => {
+  .action(async ({ parsedInput: { userId }, ctx }) => {
     const service = getAdminAuthService();
     const logger = await getLogger();
 
@@ -133,6 +188,14 @@ export const deleteUserAction = adminActionClient
     await service.deleteUser(userId);
 
     logger.info({ userId }, `Super Admin has successfully deleted user`);
+
+    await logAdminAudit(
+      ctx.user.id,
+      'admin.user.deleted',
+      'user',
+      userId,
+      `User account deleted`,
+    );
 
     revalidateAdmin();
 
@@ -145,7 +208,7 @@ export const deleteUserAction = adminActionClient
  */
 export const deleteAccountAction = adminActionClient
   .inputSchema(DeleteAccountSchema)
-  .action(async ({ parsedInput: { accountId } }) => {
+  .action(async ({ parsedInput: { accountId }, ctx }) => {
     const service = getAdminAccountsService();
     const logger = await getLogger();
 
@@ -153,9 +216,17 @@ export const deleteAccountAction = adminActionClient
 
     await service.deleteAccount(accountId);
 
-    revalidateAdmin();
-
     logger.info({ accountId }, `Super Admin has successfully deleted account`);
+
+    await logAdminAudit(
+      ctx.user.id,
+      'admin.account.deleted',
+      'account',
+      accountId,
+      `Account deleted`,
+    );
+
+    revalidateAdmin();
 
     redirect('/admin/accounts');
   });
@@ -243,6 +314,15 @@ export const createUserAction = adminActionClient
         `Super Admin has successfully created a new user`,
       );
 
+      void logAdminAudit(
+        ctx.user.id,
+        'admin.user.created',
+        'user',
+        data.user.id,
+        `New user created: ${fullName} (${normalisedPhone})${associationId ? ` — added to association as ${role}` : ''}`,
+        associationId,
+      );
+
       revalidatePath(`/admin/accounts`);
 
       return {
@@ -260,7 +340,7 @@ export const createUserAction = adminActionClient
  */
 export const createAssociationAction = adminActionClient
   .inputSchema(CreateAssociationSchema)
-  .action(async ({ parsedInput: { name, ownerId } }) => {
+  .action(async ({ parsedInput: { name, ownerId }, ctx }) => {
     const adminClient = getSupabaseServerAdminClient();
     const logger = await getLogger();
 
@@ -276,12 +356,20 @@ export const createAssociationAction = adminActionClient
       throw new Error(`Error creating association: ${error.message}`);
     }
 
-    revalidatePath(`/admin/accounts`);
-
     logger.info(
       { accountId: data?.id, name },
       `Super Admin has successfully created an association`,
     );
+
+    void logAdminAudit(
+      ctx.user.id,
+      'admin.association.created',
+      'account',
+      data?.id ?? null,
+      `Association created: ${name}`,
+    );
+
+    revalidatePath(`/admin/accounts`);
 
     return { success: true };
   });
@@ -321,12 +409,21 @@ export const setUserRoleAction = adminActionClient
       throw new Error(`Error setting user role: ${error.message}`);
     }
 
-    revalidatePath(`/admin/accounts`);
-
     logger.info(
       { userId, associationId, role },
       `Super Admin has successfully set the user's role`,
     );
+
+    void logAdminAudit(
+      ctx.user.id,
+      'admin.user.role_set',
+      'user',
+      userId,
+      `Role set to ${role} in association`,
+      associationId,
+    );
+
+    revalidatePath(`/admin/accounts`);
   });
 
 /**
@@ -336,7 +433,7 @@ export const setUserRoleAction = adminActionClient
  */
 export const removeUserRoleAction = adminActionClient
   .inputSchema(RemoveUserRoleSchema)
-  .action(async ({ parsedInput: { userId, associationId } }) => {
+  .action(async ({ parsedInput: { userId, associationId }, ctx }) => {
     const adminClient = getSupabaseServerAdminClient();
     const logger = await getLogger();
 
@@ -362,12 +459,21 @@ export const removeUserRoleAction = adminActionClient
       throw new Error(`Error removing user role: ${error.message}`);
     }
 
-    revalidatePath(`/admin/accounts`);
-
     logger.info(
       { userId, associationId },
       `Super Admin has successfully removed the user's role`,
     );
+
+    void logAdminAudit(
+      ctx.user.id,
+      'admin.user.role_removed',
+      'user',
+      userId,
+      `Membership removed from association`,
+      associationId,
+    );
+
+    revalidatePath(`/admin/accounts`);
   });
 
 /**
@@ -376,7 +482,7 @@ export const removeUserRoleAction = adminActionClient
  */
 export const resetPasswordAction = adminActionClient
   .inputSchema(ResetPasswordSchema)
-  .action(async ({ parsedInput: { userId } }) => {
+  .action(async ({ parsedInput: { userId }, ctx }) => {
     const service = getAdminAuthService();
     const logger = await getLogger();
 
@@ -387,6 +493,14 @@ export const resetPasswordAction = adminActionClient
     logger.info(
       { userId },
       `Super Admin has successfully sent password reset email`,
+    );
+
+    void logAdminAudit(
+      ctx.user.id,
+      'admin.user.password_reset',
+      'user',
+      userId,
+      `Password reset email sent`,
     );
 
     return result;
@@ -494,6 +608,15 @@ export const updateUserDetailsAction = adminActionClient
         `Super Admin has successfully updated user details`,
       );
 
+      void logAdminAudit(
+        ctx.user.id,
+        'admin.user.updated',
+        'user',
+        userId,
+        `User details updated: name="${fullName}", email="${normalisedEmail}", phone="${normalisedPhone}"${associationId && role ? `, role="${role}"` : ''}`,
+        associationId ?? null,
+      );
+
       revalidateAdmin();
       revalidatePath(`/admin/accounts`);
     },
@@ -533,6 +656,15 @@ export const setAssocAdminPermissionsAction = adminActionClient
       logger.error({ error }, `Error saving assoc_admin permissions`);
       throw new Error(`Error saving permissions: ${error.message}`);
     }
+
+    void logAdminAudit(
+      ctx.user.id,
+      'admin.permissions.updated',
+      'association',
+      associationId,
+      `Association admin permissions updated`,
+      associationId,
+    );
 
     revalidateAdmin();
 

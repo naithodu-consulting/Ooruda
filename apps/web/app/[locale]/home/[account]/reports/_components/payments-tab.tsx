@@ -115,12 +115,16 @@ export function PaymentsTab({ payments }: Props) {
     return Array.from(byKey.entries())
       .sort((a, b) => {
         // Sort ascending: parse the date label back using the original payments
-        const aDate = payments.find(
-          (p) => (useWeek ? weekKey(p.paid_at) : shortDate(p.paid_at)) === a[0],
-        )?.paid_at ?? '';
-        const bDate = payments.find(
-          (p) => (useWeek ? weekKey(p.paid_at) : shortDate(p.paid_at)) === b[0],
-        )?.paid_at ?? '';
+        const aDate =
+          payments.find(
+            (p) =>
+              (useWeek ? weekKey(p.paid_at) : shortDate(p.paid_at)) === a[0],
+          )?.paid_at ?? '';
+        const bDate =
+          payments.find(
+            (p) =>
+              (useWeek ? weekKey(p.paid_at) : shortDate(p.paid_at)) === b[0],
+          )?.paid_at ?? '';
         return aDate.localeCompare(bDate);
       })
       .map(([date, amount]) => ({ date, amount }));

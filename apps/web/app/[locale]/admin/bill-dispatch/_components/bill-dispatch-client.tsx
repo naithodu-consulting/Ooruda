@@ -803,7 +803,7 @@ export function BillDispatchClient({ associations }: Props) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4 overflow-hidden">
             {/* Summary grid */}
             <div
               className="space-y-2 rounded-lg p-4 text-sm"
@@ -825,7 +825,7 @@ export function BillDispatchClient({ associations }: Props) {
                   <span className="text-muted-foreground shrink-0">
                     {label}
                   </span>
-                  <span className="max-w-[320px] text-right font-semibold break-words">
+                  <span className="min-w-0 text-right font-semibold break-words">
                     {value}
                   </span>
                 </div>
@@ -845,7 +845,7 @@ export function BillDispatchClient({ associations }: Props) {
             </div>
 
             {/* Recipient list */}
-            <div className="max-h-52 divide-y overflow-y-auto rounded border text-xs">
+            <div className="max-h-52 divide-y overflow-x-hidden overflow-y-auto rounded border text-xs">
               {selectedRows.map((r) => {
                 const target = getTarget(r.billId);
                 const email = resolvedEmail(r, target);
@@ -877,8 +877,10 @@ export function BillDispatchClient({ associations }: Props) {
                         )}
                       </div>
                     </div>
-                    <div className="shrink-0 text-right">
-                      <div style={{ color: '#444' }}>{email}</div>
+                    <div className="min-w-0 shrink text-right">
+                      <div className="truncate" style={{ color: '#444' }}>
+                        {email}
+                      </div>
                       <div className="text-muted-foreground tabular-nums">
                         {formatBillType(r.billType)} ·{' '}
                         {formatCurrency(r.totalAmount)}

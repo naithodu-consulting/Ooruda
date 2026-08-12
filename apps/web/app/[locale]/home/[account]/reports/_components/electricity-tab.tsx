@@ -139,10 +139,10 @@ export function ElectricityTab({ mescomRows, consumptionByPeriod }: Props) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={280}>
             <ComposedChart
               data={trendData}
-              margin={{ top: 4, right: 16, bottom: 0, left: 0 }}
+              margin={{ top: 4, right: 16, bottom: 8, left: 0 }}
             >
               <CartesianGrid
                 strokeDasharray="3 3"
