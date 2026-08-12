@@ -1,5 +1,3 @@
-export const runtime = 'nodejs';
-
 import { NextResponse } from 'next/server';
 
 import { zip } from 'fflate';
@@ -18,6 +16,8 @@ import {
   renderReceiptFromPrefetch,
   type BulkPaymentRecord,
 } from './bulk-render';
+
+export const runtime = 'nodejs';
 
 const RENDER_CONCURRENCY = 12;
 

@@ -108,27 +108,27 @@ export function truncateSummary(summary: string | null, max = 90): string {
   return text.length > max ? text.slice(0, max - 1) + '…' : text;
 }
 
-export function StatusBadge({
+/** Shows an event-type label. HTTP status codes are shown in the Details cell. */
+export function TypeBadge({
   statusCode,
   eventType,
 }: {
   statusCode: number | null;
   eventType: string;
 }) {
-  if (statusCode !== null) {
-    return (
-      <Badge
-        variant={statusCode >= 400 ? 'destructive' : 'default'}
-        className="font-mono text-[10px]"
-      >
-        {statusCode}
-      </Badge>
-    );
-  }
-  if (eventType === 'error')
+  if ((statusCode !== null && statusCode >= 500) || eventType === 'error')
     return (
       <Badge variant="destructive" className="text-[10px]">
-        Error
+        Error{statusCode ? ` · ${statusCode}` : ''}
+      </Badge>
+    );
+  if (statusCode !== null && statusCode >= 400)
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-300 text-[10px] text-amber-700"
+      >
+        {statusCode}
       </Badge>
     );
   if (eventType === 'system_event')
@@ -145,6 +145,9 @@ export function StatusBadge({
     );
   return null;
 }
+
+/** @deprecated use TypeBadge */
+export const StatusBadge = TypeBadge;
 
 /** All tabs — used in super-admin view which can see auth + system events. */
 export const ADMIN_EVENT_TYPE_TABS = [

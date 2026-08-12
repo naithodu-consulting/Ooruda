@@ -48,6 +48,7 @@ function computeBillMetrics(
   bills: {
     total_amount: number;
     paid_amount: number;
+    advance_applied: number;
     status: string;
     due_date: string;
   }[],
@@ -55,19 +56,33 @@ function computeBillMetrics(
 ): OverviewMetrics {
   const periods = getPeriodsForDuration(duration);
   const billed = bills.reduce((sum, b) => sum + b.total_amount, 0);
-  const collected = bills.reduce((sum, b) => sum + b.paid_amount, 0);
-  const outstanding = billed - collected;
+  // collected = cash paid + advance applied (total settled amount, same basis as outstanding)
+  const collected = bills.reduce(
+    (sum, b) => sum + b.paid_amount + Number(b.advance_applied ?? 0),
+    0,
+  );
+  // outstanding must subtract advance_applied — same formula as per-bill outstanding
+  const outstanding = bills.reduce(
+    (sum, b) =>
+      sum +
+      Math.max(0, b.total_amount - b.paid_amount - Number(b.advance_applied ?? 0)),
+    0,
+  );
 
   const overdueBills = bills.filter((b) => displayBillStatus(b) === 'Overdue');
   const overdueCount = overdueBills.length;
   const overdueAmount = overdueBills.reduce(
-    (sum, b) => sum + (b.total_amount - b.paid_amount),
+    (sum, b) =>
+      sum + Math.max(0, b.total_amount - b.paid_amount - Number(b.advance_applied ?? 0)),
     0,
   );
 
   const ageing = { d0to7: 0, d8to30: 0, d30plus: 0 };
   for (const bill of bills) {
-    const outstandingAmount = bill.total_amount - bill.paid_amount;
+    const outstandingAmount = Math.max(
+      0,
+      bill.total_amount - bill.paid_amount - Number(bill.advance_applied ?? 0),
+    );
     if (outstandingAmount <= 0) continue;
     const daysOverdue = daysBetweenYmd(bill.due_date, today);
     if (daysOverdue <= 0) continue;
@@ -133,7 +148,7 @@ async function loadAdminOverview(associationId: string) {
     ...allDurations.map((dur) => {
       let q = client
         .from('bills')
-        .select('total_amount, paid_amount, status, due_date')
+        .select('total_amount, paid_amount, advance_applied, status, due_date')
         .eq('association_id', associationId)
         .neq('status', 'Void');
       const periods = getPeriodsForDuration(dur);
@@ -156,6 +171,7 @@ async function loadAdminOverview(associationId: string) {
     const bills = (billResults[i]?.data ?? []) as {
       total_amount: number;
       paid_amount: number;
+      advance_applied: number;
       status: string;
       due_date: string;
     }[];
