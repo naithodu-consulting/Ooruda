@@ -4,6 +4,36 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v2.1 — User Consent Gate + Owner/Tenant Advance Payments — 2026-08-15
+
+### User Consent Gate
+
+- First-login consent gate displayed to all non-super-admin users covering data consent, communications, payments, disclosure, rights, and governing law (matching the Ooruda User Consent document).
+- Scroll-to-bottom requirement: "I Agree" button locked with a progress bar and lock icon until the user scrolls to the end of the document. Unlocked state shows a centred, full-width button.
+- Consent stored as `consent_accepted_at timestamptz` in `profiles` — timestamp provides legal record of when consent was given.
+- Super-admin users are naturally exempt (redirected to `/admin`).
+- **Admin accounts table**: new "Consent" column on the Users tab — shows a green "Accepted" badge with a hover tooltip displaying the exact IST timestamp, or an amber "Pending" badge for users who have not yet consented.
+
+### Advance Payment (Owner / Tenant Self-Service)
+
+- **Owners and tenants can now make advance deposits online via Razorpay** for all four charge types: Maintenance, Electricity, Water, Other Charges (₹1 minimum, no upper limit).
+- New **"Advance credits" section** in the Payments page: shows existing credit balance per charge type and an "Add Advance" button (disabled when gateway inactive).
+- **Pay Advance dialog**: select unit (for multi-unit accounts), charge type, enter amount, checkout via Razorpay. After successful payment, a receipt download link appears immediately.
+- **Advance deposit receipt PDF** (`/api/billing/advance-payments/[id]/pdf`): format matches existing due payment receipts; includes Razorpay payment ID and a note explaining the credit will auto-apply to future bills.
+- **Idempotency**: unique index on `cash_ledger.razorpay_payment_id` prevents double-recording from concurrent `/verify` + webhook; 23505 error handled gracefully.
+- **Webhook safety net**: `payment.captured` webhook now handles `notes.type === 'advance'` so payments are recorded even if the browser closes before `/verify` completes.
+- **Cash ledger admin view**: advance entries now show `Online · Owner` / `Online · Tenant` (Razorpay-paid) vs `Manual · Admin` (admin-entered) in the Source column.
+- **Recent payments**: advance deposits appear in the owner/tenant "Recent payments" list alongside bill and due payments, with receipt download.
+- Auto-apply: `_apply_advance_internal` is called immediately after recording, settling any outstanding bills of that charge type.
+- Advance credits shown in the PDF receipt document under new `advance_deposit` type.
+
+| Migration | Change |
+|---|---|
+| `20260813000001_user_consent` | Adds `consent_accepted_at timestamptz` to `profiles` |
+| `20260815000001_advance_payment_razorpay` | Adds `razorpay_order_id`, `razorpay_payment_id`, `paid_by_role`, `tenancy_id` to `cash_ledger`; unique partial index; `record_advance_payment()` function |
+
+---
+
 ## v1.4.6 — Dashboard Accuracy, Admin Audit Log, PDF Fixes — 2026-08-12
 
 ### Dashboard — Advance Payment Accounting Fix

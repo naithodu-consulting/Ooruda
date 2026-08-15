@@ -77,7 +77,7 @@ export default async function CashLedgerPage({ params }: Props) {
     uc(client)
       .from('cash_ledger')
       .select(
-        'id, unit_id, entry_type, bill_type, amount, direction, entry_date, paid_by_name, notes, created_at, reference_bill_id',
+        'id, unit_id, entry_type, bill_type, amount, direction, entry_date, paid_by_name, paid_by_role, razorpay_payment_id, notes, created_at, reference_bill_id',
       )
       .eq('association_id', association.id)
       .gte('entry_date', defaultDateFrom)

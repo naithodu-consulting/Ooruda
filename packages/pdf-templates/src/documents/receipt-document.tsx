@@ -35,7 +35,7 @@ export interface ReceiptPdfData {
    * a regular bill receipt.
    */
   paymentContext?: {
-    type: 'due_payment' | 'advance_applied';
+    type: 'due_payment' | 'advance_applied' | 'advance_deposit';
     /** Human-readable category label, e.g. "Maintenance", "Electricity" */
     billTypeLabel: string;
     /** For advance_applied: the bill reference this was applied against */
@@ -97,12 +97,14 @@ export function ReceiptDocument({
               <Text style={styles.metaLabel}>Receipt Number:</Text>
               <Text style={styles.metaValue}>{receipt.receiptNo}</Text>
             </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Billing Period:</Text>
-              <Text style={styles.metaValue}>
-                {formatPeriodDateRange(bill.period)}
-              </Text>
-            </View>
+            {paymentContext?.type !== 'advance_deposit' && (
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Billing Period:</Text>
+                <Text style={styles.metaValue}>
+                  {formatPeriodDateRange(bill.period)}
+                </Text>
+              </View>
+            )}
           </View>
           <View style={styles.metaGridRow}>
             <View style={styles.metaRow}>
@@ -111,8 +113,10 @@ export function ReceiptDocument({
                   <Text style={styles.metaLabel}>Payment Type:</Text>
                   <Text style={styles.metaValue}>
                     {paymentContext.type === 'due_payment'
-                      ? `Cash Ledger Dues Payment - ${paymentContext.billTypeLabel}`
-                      : `Advance Applied - ${paymentContext.billTypeLabel}`}
+                      ? `Cash Ledger Dues Payment · ${paymentContext.billTypeLabel}`
+                      : paymentContext.type === 'advance_deposit'
+                        ? `Advance Deposit · ${paymentContext.billTypeLabel}`
+                        : `Advance Applied · ${paymentContext.billTypeLabel}`}
                   </Text>
                 </>
               ) : (
@@ -152,7 +156,7 @@ export function ReceiptDocument({
         {/* Payment details table */}
         <View style={styles.table}>
           <View style={styles.tableHeaderRow}>
-            <Text style={[styles.colDescription, styles.tableHeaderText]}>
+            <Text style={[styles.colMode, styles.tableHeaderText]}>
               Mode
             </Text>
             <Text style={[styles.colDescription, styles.tableHeaderText]}>
@@ -163,7 +167,7 @@ export function ReceiptDocument({
             </Text>
           </View>
           <View style={styles.tableRow}>
-            <Text style={styles.colDescription}>{payment.mode}</Text>
+            <Text style={styles.colMode}>{payment.mode}</Text>
             <Text style={styles.colDescription}>
               {payment.referenceNo ?? '—'}
             </Text>
@@ -184,7 +188,9 @@ export function ReceiptDocument({
             >
               {paymentContext.type === 'due_payment'
                 ? `This receipt confirms cash settlement of outstanding ${paymentContext.billTypeLabel} dues. No invoice was raised; payment was recorded directly against the unit cash ledger.`
-                : `This voucher confirms the application of pre-paid advance funds to ${paymentContext.appliedToBillNo ? `invoice ${paymentContext.appliedToBillNo}` : `a ${paymentContext.billTypeLabel} bill`}.`}
+                : paymentContext.type === 'advance_deposit'
+                  ? `This receipt confirms an advance credit for ${paymentContext.billTypeLabel}. The balance will be automatically applied to future ${paymentContext.billTypeLabel} bills.`
+                  : `This voucher confirms the application of pre-paid advance funds to ${paymentContext.appliedToBillNo ? `invoice ${paymentContext.appliedToBillNo}` : `a ${paymentContext.billTypeLabel} bill`}.`}
             </Text>
           </View>
         ) : null}
@@ -193,7 +199,11 @@ export function ReceiptDocument({
         <View style={styles.summaryBlock}>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRowTotal}>
-            <Text>Amount Received</Text>
+            <Text>
+              {paymentContext?.type === 'advance_deposit'
+                ? 'Amount Deposited'
+                : 'Amount Received'}
+            </Text>
             <Text>{formatINR(payment.amount)}</Text>
           </View>
         </View>

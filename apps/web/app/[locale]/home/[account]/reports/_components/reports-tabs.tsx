@@ -131,7 +131,7 @@ export function ReportsTabs({
         <div className="relative">
           {/* Fade mask signals horizontal scrollability */}
           <div className="from-background pointer-events-none absolute top-0 right-0 z-10 h-full w-8 bg-gradient-to-l to-transparent" />
-          <div className="no-scrollbar overflow-x-auto pb-0.5 pr-8">
+          <div className="no-scrollbar overflow-x-auto pr-8 pb-0.5">
             <TabsList className="w-max">
               {TABS.map((t) => (
                 <TabsTrigger key={t.value} value={t.value}>

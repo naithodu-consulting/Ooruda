@@ -172,16 +172,15 @@ async function sendViaKaleyra(phone: string, otp: string) {
     const templateId = Deno.env.get('KALEYRA_SMS_TEMPLATE_ID') ?? '';
 
     const url = `https://${host}/v1/${sid}/messages`;
-    const body = new URLSearchParams({ to, type: 'OTP', sender: senderId });
+    const smsBody = `${otp} is your login verification code for Ooruda. Do not share it with anyone. Valid for 10 minutes. - Habbaa Solutions`;
+    const body = new URLSearchParams({
+      to,
+      type: 'OTP',
+      sender: senderId,
+      body: smsBody,
+    });
     if (templateId) {
-      // Use template_id + template_data — Kaleyra substitutes {#num#} server-side.
       body.set('template_id', templateId);
-      body.set('template_data', JSON.stringify({ num: otp }));
-    } else {
-      body.set(
-        'body',
-        `${otp} is your login verification code for Ooruda. Do not share it with anyone. Valid for 10 minutes.`,
-      );
     }
 
     const res = await fetch(url, {
@@ -194,13 +193,16 @@ async function sendViaKaleyra(phone: string, otp: string) {
     });
     const data = (await res.json()) as {
       data?: { id?: string; message_id?: string } | null;
-      error?: { message?: string } | string;
+      message?: string;
+      error?: Record<string, string> | string;
     };
     if (!res.ok || !data.data) {
+      const errDetail =
+        typeof data.error === 'object' && data.error !== null
+          ? Object.values(data.error).join('; ')
+          : (data.error as string | undefined);
       const msg =
-        typeof data.error === 'string'
-          ? data.error
-          : (data.error?.message ?? `Kaleyra SMS failed (${res.status})`);
+        errDetail ?? data.message ?? `Kaleyra SMS failed (${res.status})`;
       throw new Error(msg);
     }
   }

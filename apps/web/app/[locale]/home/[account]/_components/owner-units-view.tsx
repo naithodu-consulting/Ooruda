@@ -14,6 +14,8 @@ import type { UnitCashLedgerBalance } from '~/lib/cash-ledger-aggregation';
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
+import { PayAdvanceDialog } from '../payments/_components/pay-advance-dialog';
+
 // ── Serializable data shapes ────────────────────────────────────────────────
 
 export interface SerializableBill {
@@ -49,14 +51,26 @@ export interface SerializableDuePayment {
   receipt_no: string | null;
 }
 
+export interface SerializableAdvancePayment {
+  id: string;
+  unit_id: string;
+  bill_type: string;
+  amount: number;
+  entry_date: string;
+  razorpay_payment_id: string | null;
+}
+
 interface Props {
   account: string;
   role: 'prop_owner' | 'tenant';
   assocName: string;
+  associationId: string;
+  canPay: boolean;
   units: { id: string; unit_no: string }[];
   bills: SerializableBill[];
   payments: SerializablePayment[];
   duePayments: SerializableDuePayment[];
+  advancePayments?: SerializableAdvancePayment[];
   ledgerBalances: UnitCashLedgerBalance[];
 }
 
@@ -73,10 +87,13 @@ export function OwnerUnitsView({
   account,
   role,
   assocName,
+  associationId,
+  canPay,
   units,
   bills,
   payments,
   duePayments,
+  advancePayments = [],
   ledgerBalances,
 }: Props) {
   const ALL = '__all__';
@@ -86,11 +103,18 @@ export function OwnerUnitsView({
     <div className="flex flex-col gap-8">
       {/* Page header + unit pill filter */}
       <div className="flex flex-col gap-3">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-            {role === 'prop_owner' ? 'Owner Dashboard' : 'Tenant Dashboard'}
-          </h1>
-          <p className="text-muted-foreground text-sm">{assocName}</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              {role === 'prop_owner' ? 'Owner Dashboard' : 'Tenant Dashboard'}
+            </h1>
+            <p className="text-muted-foreground text-sm">{assocName}</p>
+          </div>
+          <PayAdvanceDialog
+            associationId={associationId}
+            units={units}
+            canPay={canPay}
+          />
         </div>
 
         {units.length > 1 && (
@@ -134,14 +158,40 @@ export function OwnerUnitsView({
         const unitDuePayments = duePayments.filter(
           (dp) => dp.unit_id === unit.id,
         );
-        const totalPaymentCount = unitPayments.length + unitDuePayments.length;
+        const unitAdvancePayments = advancePayments.filter(
+          (a) => a.unit_id === unit.id,
+        );
+        const totalPaymentCount =
+          unitPayments.length +
+          unitDuePayments.length +
+          unitAdvancePayments.length;
 
         const sortedBills = [...unitBills].sort(
           (a, b) =>
             statusOrder(a) - statusOrder(b) || b.period.localeCompare(a.period),
         );
         const previewBills = sortedBills.slice(0, PREVIEW_COUNT);
-        const previewPayments = unitPayments.slice(0, PREVIEW_COUNT);
+
+        // Merge all payment types newest-first, cap at PREVIEW_COUNT
+        type AnyPayment =
+          | { kind: 'bill'; data: SerializablePayment }
+          | { kind: 'due'; data: SerializableDuePayment }
+          | { kind: 'advance'; data: SerializableAdvancePayment };
+        const allPaymentsSorted: AnyPayment[] = [
+          ...unitPayments.map((p) => ({ kind: 'bill' as const, data: p })),
+          ...unitDuePayments.map((p) => ({ kind: 'due' as const, data: p })),
+          ...unitAdvancePayments.map((p) => ({
+            kind: 'advance' as const,
+            data: p,
+          })),
+        ].sort((a, b) => {
+          const aDate =
+            a.kind === 'advance' ? a.data.entry_date : a.data.paid_at;
+          const bDate =
+            b.kind === 'advance' ? b.data.entry_date : b.data.paid_at;
+          return bDate.localeCompare(aDate);
+        });
+        const previewAllPayments = allPaymentsSorted.slice(0, PREVIEW_COUNT);
 
         const unpaidBills = unitBills.filter(
           (b) =>
@@ -443,14 +493,15 @@ export function OwnerUnitsView({
                       No payments recorded yet.
                     </p>
                   ) : (
-                    <>
-                      {previewPayments.map((p) => {
+                    previewAllPayments.map((item) => {
+                      if (item.kind === 'bill') {
+                        const p = item.data;
                         const receiptNo =
                           p.receipts?.receipt_no ||
                           `RCP-${p.id.slice(0, 4).toUpperCase()}`;
                         return (
                           <div
-                            key={p.id}
+                            key={`bill-${p.id}`}
                             className="border-border/40 flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
                           >
                             <div>
@@ -462,11 +513,7 @@ export function OwnerUnitsView({
                                 {p.mode} &middot;{' '}
                                 {new Date(p.paid_at).toLocaleDateString(
                                   'en-IN',
-                                  {
-                                    day: 'numeric',
-                                    month: 'short',
-                                    year: 'numeric',
-                                  },
+                                  { day: 'numeric', month: 'short', year: 'numeric' },
                                 )}
                               </span>
                             </div>
@@ -484,57 +531,91 @@ export function OwnerUnitsView({
                             </div>
                           </div>
                         );
-                      })}
-                      {unitDuePayments
-                        .slice(
-                          0,
-                          Math.max(0, PREVIEW_COUNT - previewPayments.length),
-                        )
-                        .map((dp) => {
-                          const receiptNo = dp.receipt_no ?? null;
-                          return (
-                            <div
-                              key={dp.id}
-                              className="border-border/40 flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
-                            >
-                              <div>
-                                <span className="text-foreground block text-sm font-semibold">
-                                  {billTypeLabel(dp.bill_type)}
-                                  {receiptNo ? (
-                                    <span className="text-muted-foreground font-normal">
-                                      {' '}
-                                      · {receiptNo}
-                                    </span>
-                                  ) : null}
-                                </span>
-                                <span className="text-muted-foreground block text-xs">
-                                  {dp.mode} &middot;{' '}
-                                  {new Date(dp.paid_at).toLocaleDateString(
-                                    'en-IN',
-                                    {
-                                      day: 'numeric',
-                                      month: 'short',
-                                      year: 'numeric',
-                                    },
-                                  )}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-foreground text-sm font-bold tabular-nums">
-                                  {formatINR(dp.amount)}
-                                </span>
-                                <DownloadPdfButton
-                                  href={`/api/billing/cash-ledger-payments/${dp.id}/pdf`}
-                                  label="Download receipt PDF"
-                                  dataTest={`download-due-receipt-${dp.id}`}
-                                  variant="ghost"
-                                  iconSize="icon-xs"
-                                />
-                              </div>
+                      }
+
+                      if (item.kind === 'due') {
+                        const dp = item.data;
+                        return (
+                          <div
+                            key={`due-${dp.id}`}
+                            className="border-border/40 flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
+                          >
+                            <div>
+                              <span className="text-foreground block text-sm font-semibold">
+                                {billTypeLabel(dp.bill_type)}
+                                {dp.receipt_no ? (
+                                  <span className="text-muted-foreground font-normal">
+                                    {' '}· {dp.receipt_no}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="text-muted-foreground block text-xs">
+                                {dp.mode} &middot;{' '}
+                                {new Date(dp.paid_at).toLocaleDateString(
+                                  'en-IN',
+                                  { day: 'numeric', month: 'short', year: 'numeric' },
+                                )}
+                              </span>
                             </div>
-                          );
-                        })}
-                    </>
+                            <div className="flex items-center gap-2">
+                              <span className="text-foreground text-sm font-bold tabular-nums">
+                                {formatINR(dp.amount)}
+                              </span>
+                              <DownloadPdfButton
+                                href={`/api/billing/cash-ledger-payments/${dp.id}/pdf`}
+                                label="Download receipt PDF"
+                                dataTest={`download-due-receipt-${dp.id}`}
+                                variant="ghost"
+                                iconSize="icon-xs"
+                              />
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // advance deposit
+                      const adv = item.data;
+                      return (
+                        <div
+                          key={`adv-${adv.id}`}
+                          className="border-border/40 flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
+                        >
+                          <div>
+                            <span className="text-foreground block text-sm font-semibold">
+                              {billTypeLabel(adv.bill_type)}{' '}
+                              <span className="text-muted-foreground font-normal">
+                                · Advance Deposit
+                              </span>
+                            </span>
+                            <span className="text-muted-foreground block text-xs">
+                              {adv.razorpay_payment_id
+                                ? `Razorpay · ${adv.razorpay_payment_id}`
+                                : 'Cash / Manual'}{' '}
+                              &middot;{' '}
+                              {new Date(
+                                adv.entry_date + 'T00:00:00',
+                              ).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-foreground text-sm font-bold tabular-nums">
+                              {formatINR(adv.amount)}
+                            </span>
+                            <DownloadPdfButton
+                              href={`/api/billing/advance-payments/${adv.id}/pdf`}
+                              label="Download receipt PDF"
+                              dataTest={`download-advance-receipt-${adv.id}`}
+                              variant="ghost"
+                              iconSize="icon-xs"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </CardContent>
               </Card>

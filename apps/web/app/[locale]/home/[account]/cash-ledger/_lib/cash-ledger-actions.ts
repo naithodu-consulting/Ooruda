@@ -387,7 +387,7 @@ export async function getCashLedgerEntriesAction(
   let query = (uc(client) as any)
     .from('cash_ledger')
     .select(
-      'id, unit_id, entry_type, bill_type, amount, direction, entry_date, paid_by_name, notes, created_at, reference_bill_id',
+      'id, unit_id, entry_type, bill_type, amount, direction, entry_date, paid_by_name, paid_by_role, notes, created_at, reference_bill_id, razorpay_payment_id',
     )
     .eq('association_id', associationId)
     .order('entry_date', { ascending: true })
@@ -500,7 +500,9 @@ export interface CashLedgerEntryRow {
   direction: string;
   entry_date: string;
   paid_by_name: string;
+  paid_by_role: string | null;
   notes: string | null;
   created_at: string;
   reference_bill_id: string | null;
+  razorpay_payment_id: string | null;
 }

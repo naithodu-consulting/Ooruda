@@ -424,13 +424,43 @@ export function CashLedgerSection({
                       <TableCell className="text-right text-sm font-semibold tabular-nums">
                         <AmountCell amount={e.amount} direction={e.direction} />
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
-                        {e.paid_by_name || (
-                          <span className="opacity-30">—</span>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {e.entry_type === 'advance_payment' ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-foreground font-medium">
+                              {e.paid_by_name || (e.paid_by_role ?? '—')}
+                            </span>
+                            {e.paid_by_role ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-success">
+                                <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                                Online · Self-paid
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">
+                                Manual · Recorded by admin
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {e.paid_by_name || (
+                              <span className="opacity-30">—</span>
+                            )}
+                          </span>
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground max-w-48 truncate text-sm">
-                        {e.notes || <span className="opacity-30">—</span>}
+                        {e.entry_type === 'advance_payment' &&
+                        e.razorpay_payment_id ? (
+                          <span title={e.razorpay_payment_id}>
+                            Online advance · ref:{' '}
+                            <span className="font-mono text-xs">
+                              {e.razorpay_payment_id}
+                            </span>
+                          </span>
+                        ) : (
+                          e.notes || <span className="opacity-30">—</span>
+                        )}
                       </TableCell>
                       {!isAllUnits && (
                         <TableCell className="pr-5 text-right text-sm font-semibold tabular-nums">
@@ -537,7 +567,7 @@ function AllUnitsSummary({
   if (!hasAdvance && !hasDues) {
     return (
       <div className="text-muted-foreground flex items-center gap-2 text-sm">
-        <CheckCircle2 className="h-4 w-4 text-green-500" />
+        <CheckCircle2 className="h-4 w-4 text-success" />
         All units are settled — no outstanding dues or advance balances.
       </div>
     );
@@ -586,7 +616,7 @@ function SummaryCard({
       className={cn(
         'inline-flex flex-col rounded-xl border px-5 py-3',
         isCredit
-          ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/40'
+          ? 'border-success/20 bg-success/5'
           : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40',
       )}
     >
@@ -594,7 +624,7 @@ function SummaryCard({
         className={cn(
           'text-[11px] font-semibold tracking-wide uppercase',
           isCredit
-            ? 'text-green-600 dark:text-green-400'
+            ? 'text-success'
             : 'text-red-600 dark:text-red-400',
         )}
       >
@@ -607,7 +637,7 @@ function SummaryCard({
         className={cn(
           'mt-1 text-xl font-bold tracking-tight tabular-nums',
           isCredit
-            ? 'text-green-700 dark:text-green-300'
+            ? 'text-success'
             : 'text-red-700 dark:text-red-300',
         )}
       >
@@ -649,7 +679,7 @@ function SingleUnitBalance({ balance }: { balance: number }) {
   }
   return (
     <div className="text-muted-foreground flex items-center gap-2 text-sm">
-      <CheckCircle2 className="h-4 w-4 text-green-500" />
+      <CheckCircle2 className="h-4 w-4 text-success" />
       Fully settled — no outstanding balance.
     </div>
   );
@@ -666,7 +696,7 @@ function AmountCell({
 }) {
   if (direction === 'credit') {
     return (
-      <span className="font-semibold text-green-600 dark:text-green-400">
+      <span className="font-semibold text-success">
         {formatINR(amount)}
       </span>
     );
@@ -681,7 +711,7 @@ function AmountCell({
 function BalanceCell({ value }: { value: number }) {
   if (value > 0)
     return (
-      <span className="font-semibold text-green-600 dark:text-green-400">
+      <span className="font-semibold text-success">
         {formatINR(value)}{' '}
         <span className="text-[10px] font-normal opacity-50">↑</span>
       </span>
@@ -703,9 +733,9 @@ function EntryTypeBadge({ type }: { type: string }) {
     type === 'due' &&
       'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
     type === 'advance_payment' &&
-      'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+      'bg-success/10 text-success',
     type === 'advance_applied' &&
-      'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+      'bg-warning/10 text-warning',
     type === 'due_payment' &&
       'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
   );

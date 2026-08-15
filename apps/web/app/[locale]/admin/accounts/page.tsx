@@ -93,6 +93,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
     { associationId: string; associationName: string; role: string }[]
   > = {};
   const phoneByAccountId: Record<string, string> = {};
+  const consentByAccountId: Record<string, string | null> = {};
   const effectiveTestIds = new Set(testAccountIds);
 
   if (personalIds.length > 0) {
@@ -107,7 +108,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
         .in('user_id', personalIds),
       adminClient
         .from('profiles')
-        .select('id, mobile_number')
+        .select('id, mobile_number, consent_accepted_at')
         .in('id', personalIds),
     ]);
 
@@ -124,6 +125,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
         phoneByAccountId[p.id] = p.mobile_number;
         if (isTestPhone(p.mobile_number)) effectiveTestIds.add(p.id);
       }
+      consentByAccountId[p.id] = p.consent_accepted_at ?? null;
     }
   }
 
@@ -136,6 +138,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
         users={userAccounts ?? []}
         membershipsByAccountId={membershipsByAccountId}
         phoneByAccountId={phoneByAccountId}
+        consentByAccountId={consentByAccountId}
         superAdminIds={superAdminIds}
         testAccountIds={effectiveTestIds}
         initialTab={initialTab}

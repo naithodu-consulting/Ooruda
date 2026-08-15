@@ -58,7 +58,10 @@ async function logAdminAudit(
       });
   } catch (err) {
     const logger = await getLogger();
-    logger.warn({ err, action, entityId }, 'logAdminAudit: failed to write audit log — action proceeded unlogged');
+    logger.warn(
+      { err, action, entityId },
+      'logAdminAudit: failed to write audit log — action proceeded unlogged',
+    );
   }
 }
 

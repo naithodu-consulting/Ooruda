@@ -13,7 +13,10 @@ import {
   type CashLedgerDueRow,
   CashLedgerDuesSection,
 } from './_components/cash-ledger-dues-section';
-import { OwnerPaymentsView } from './_components/owner-payments-view';
+import {
+  type AdvanceHistoryRow,
+  OwnerPaymentsView,
+} from './_components/owner-payments-view';
 import {
   type BillPaymentRow,
   PaymentsSection,
@@ -220,66 +223,82 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
   // For owners/tenants use the shared aggregation util (per-unit, no cross-unit
   // netting). For admins/operators use the association-wide RPC which covers all
   // units and includes the negative-balance filter already.
-  const [{ data: bills }, rawDues, { data: rawDuePaymentHistory }] =
-    await Promise.all([
-      query,
-      isUserRestricted
-        ? loadUnitLedgerBalances(
-            association.id,
-            allUnitIds.length > 0
-              ? await client
-                  .from('units')
-                  .select('id, unit_no')
-                  .in('id', allUnitIds)
-                  .then(
-                    ({ data }) =>
-                      (data ?? []) as { id: string; unit_no: string }[],
-                  )
-              : [],
-          ).then((balances) =>
-            balances.flatMap((b) =>
-              b.dues.map((d) => ({
-                unit_id: b.unit_id,
-                unit_no: b.unit_no,
-                bill_type: d.bill_type,
-                balance: -d.amount,
-              })),
-            ),
+
+  // Resolve unit info once (needed both for balances and advance history)
+  const unitsWithInfo: { id: string; unit_no: string }[] =
+    isUserRestricted && allUnitIds.length > 0
+      ? await client
+          .from('units')
+          .select('id, unit_no')
+          .in('id', allUnitIds)
+          .then(({ data }) => (data ?? []) as { id: string; unit_no: string }[])
+      : [];
+
+  const [
+    { data: bills },
+    rawDues,
+    { data: rawDuePaymentHistory },
+    { data: rawAdvanceHistory },
+  ] = await Promise.all([
+    query,
+    isUserRestricted
+      ? loadUnitLedgerBalances(association.id, unitsWithInfo).then((balances) =>
+          balances.flatMap((b) =>
+            b.dues.map((d) => ({
+              unit_id: b.unit_id,
+              unit_no: b.unit_no,
+              bill_type: d.bill_type,
+              balance: -d.amount,
+            })),
+          ),
+        )
+      : uc(client)
+          .rpc('get_association_cash_ledger_balances', {
+            p_association_id: association.id,
+          })
+          .then(
+            ({
+              data,
+            }: {
+              data:
+                | {
+                    unit_id: string;
+                    unit_no: string;
+                    bill_type: string;
+                    balance: number;
+                  }[]
+                | null;
+            }) =>
+              (data ?? [])
+                .filter((r) => r.balance < 0)
+                .map((r) => ({ ...r, balance: Number(r.balance) })),
+          ),
+    // Cash ledger payment history for owner/tenant recent payments
+    isUserRestricted && allUnitIds.length > 0
+      ? uc(client)
+          .from('cash_ledger_payments')
+          .select(
+            'id, unit_id, bill_type, amount, mode, paid_at, receipt_no, units(unit_no)',
           )
-        : uc(client)
-            .rpc('get_association_cash_ledger_balances', {
-              p_association_id: association.id,
-            })
-            .then(
-              ({
-                data,
-              }: {
-                data:
-                  | {
-                      unit_id: string;
-                      unit_no: string;
-                      bill_type: string;
-                      balance: number;
-                    }[]
-                  | null;
-              }) =>
-                (data ?? [])
-                  .filter((r) => r.balance < 0)
-                  .map((r) => ({ ...r, balance: Number(r.balance) })),
-            ),
-      // Cash ledger payment history for owner/tenant recent payments
-      isUserRestricted && allUnitIds.length > 0
-        ? uc(client)
-            .from('cash_ledger_payments')
-            .select(
-              'id, unit_id, bill_type, amount, mode, paid_at, receipt_no, units(unit_no)',
-            )
-            .in('unit_id', allUnitIds)
-            .eq('association_id', association.id)
-            .order('paid_at', { ascending: false })
-            .limit(10)
-        : Promise.resolve({ data: [] }),
-    ]);
+          .in('unit_id', allUnitIds)
+          .eq('association_id', association.id)
+          .order('paid_at', { ascending: false })
+          .limit(10)
+      : Promise.resolve({ data: [] }),
+    // Advance deposit history for owner/tenant
+    isUserRestricted && allUnitIds.length > 0
+      ? uc(client)
+          .from('cash_ledger')
+          .select(
+            'id, unit_id, bill_type, amount, entry_date, razorpay_payment_id, units(unit_no)',
+          )
+          .in('unit_id', allUnitIds)
+          .eq('association_id', association.id)
+          .eq('entry_type', 'advance_payment')
+          .order('entry_date', { ascending: false })
+          .limit(10)
+      : Promise.resolve({ data: [] }),
+  ]);
 
   type DuePaymentHistoryRow = {
     id: string;
@@ -300,6 +319,17 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
   ).map((dp) => ({
     ...dp,
     unit_no: (dp.units as { unit_no: string } | null)?.unit_no,
+  }));
+
+  const advanceHistory: AdvanceHistoryRow[] = (
+    (rawAdvanceHistory as
+      | (Omit<AdvanceHistoryRow, 'unit_no'> & {
+          units: { unit_no: string } | null;
+        })[]
+      | null) ?? []
+  ).map((a) => ({
+    ...a,
+    unit_no: (a.units as { unit_no: string } | null)?.unit_no,
   }));
 
   const rawDuesArray = Array.isArray(rawDues)
@@ -417,6 +447,8 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
           bills={rows}
           dues={cashLedgerDues}
           duePaymentHistory={duePaymentHistory}
+          advanceHistory={advanceHistory}
+          units={unitsWithInfo}
           canPay={gatewayActive}
           paidByRole={role === 'prop_owner' ? 'Owner' : 'Tenant'}
           account={account}

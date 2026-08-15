@@ -763,8 +763,12 @@ export type Database = {
           id: string
           notes: string | null
           paid_by_name: string
+          paid_by_role: string | null
           paid_by_user_id: string | null
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
           reference_bill_id: string | null
+          tenancy_id: string | null
           unit_id: string
         }
         Insert: {
@@ -779,8 +783,12 @@ export type Database = {
           id?: string
           notes?: string | null
           paid_by_name?: string
+          paid_by_role?: string | null
           paid_by_user_id?: string | null
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
           reference_bill_id?: string | null
+          tenancy_id?: string | null
           unit_id: string
         }
         Update: {
@@ -795,8 +803,12 @@ export type Database = {
           id?: string
           notes?: string | null
           paid_by_name?: string
+          paid_by_role?: string | null
           paid_by_user_id?: string | null
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
           reference_bill_id?: string | null
+          tenancy_id?: string | null
           unit_id?: string
         }
         Relationships: [
@@ -812,6 +824,13 @@ export type Database = {
             columns: ["reference_bill_id"]
             isOneToOne: false
             referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_ledger_tenancy_id_fkey"
+            columns: ["tenancy_id"]
+            isOneToOne: false
+            referencedRelation: "tenancies"
             referencedColumns: ["id"]
           },
           {
@@ -1677,6 +1696,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          consent_accepted_at: string | null
           created_at: string
           email: string | null
           full_name: string | null
@@ -1685,6 +1705,7 @@ export type Database = {
           mobile_number: string | null
         }
         Insert: {
+          consent_accepted_at?: string | null
           created_at?: string
           email?: string | null
           full_name?: string | null
@@ -1693,6 +1714,7 @@ export type Database = {
           mobile_number?: string | null
         }
         Update: {
+          consent_accepted_at?: string | null
           created_at?: string
           email?: string | null
           full_name?: string | null
@@ -2456,6 +2478,20 @@ export type Database = {
         Returns: boolean
       }
       recompute_overdue_bills: { Args: never; Returns: undefined }
+      record_advance_payment: {
+        Args: {
+          p_amount: number
+          p_association_id: string
+          p_bill_type: string
+          p_paid_by_name: string
+          p_paid_by_role: string
+          p_razorpay_order_id: string
+          p_razorpay_payment_id: string
+          p_tenancy_id: string
+          p_unit_id: string
+        }
+        Returns: Json
+      }
       record_due_payment: {
         Args: {
           p_amount: number

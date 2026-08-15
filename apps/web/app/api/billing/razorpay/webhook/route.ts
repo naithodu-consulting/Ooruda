@@ -15,6 +15,7 @@ interface PaymentEntity {
     association_id?: string;
     paid_by_role?: string;
     is_due?: string;
+    type?: string;
     unit_id?: string;
     bill_type?: string;
   };
@@ -203,10 +204,11 @@ export async function POST(req: NextRequest) {
     ? rawPaidByRole
     : 'Owner';
   const isDue = notes.is_due === 'true';
+  const isAdvance = notes.type === 'advance';
   const dueUnitId = notes.unit_id;
   const dueBillType = notes.bill_type;
 
-  if (!associationId || (billIds.length === 0 && !isDue)) {
+  if (!associationId || (billIds.length === 0 && !isDue && !isAdvance)) {
     return new Response('OK', { status: 200 });
   }
 
@@ -300,6 +302,69 @@ export async function POST(req: NextRequest) {
       action: 'razorpay.payment.captured',
       entityType: 'payment',
       summary: `Razorpay due-payment captured via webhook`,
+      metadata: { razorpayPaymentId, dueUnitId, dueBillType },
+      useAdminClient: true,
+    });
+
+    return new Response('OK', { status: 200 });
+  }
+
+  if (isAdvance) {
+    if (!dueUnitId || !dueBillType) {
+      return NextResponse.json(
+        { error: 'Missing unit_id or bill_type in advance payment notes' },
+        { status: 400 },
+      );
+    }
+
+    const { data: unitCheck } = await admin
+      .from('units')
+      .select('id')
+      .eq('id', dueUnitId)
+      .eq('association_id', associationId)
+      .maybeSingle();
+
+    if (!unitCheck) {
+      return NextResponse.json(
+        { error: 'Unit not found in association' },
+        { status: 400 },
+      );
+    }
+
+    const amountRupees = paymentEntity.amount / 100;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin as any).rpc('record_advance_payment', {
+      p_association_id: associationId,
+      p_unit_id: dueUnitId,
+      p_bill_type: dueBillType,
+      p_amount: amountRupees,
+      p_paid_by_name: null,
+      p_paid_by_role: paidByRole,
+      p_tenancy_id: null,
+      p_razorpay_order_id: razorpayOrderId,
+      p_razorpay_payment_id: razorpayPaymentId,
+    });
+
+    if (error) {
+      if (error.code === '23505') return new Response('OK', { status: 200 });
+      void logAuditEvent({
+        associationId,
+        action: 'razorpay.advance_payment.failed',
+        entityType: 'payment',
+        eventType: 'error',
+        summary: `Razorpay advance-payment webhook failed: ${error.message}`,
+        metadata: { razorpayPaymentId, dueUnitId, dueBillType },
+        useAdminClient: true,
+      });
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    void logAuditEvent({
+      associationId,
+      action: 'razorpay.advance_payment.captured',
+      entityType: 'payment',
+      summary: `Razorpay advance-payment captured via webhook`,
       metadata: { razorpayPaymentId, dueUnitId, dueBillType },
       useAdminClient: true,
     });

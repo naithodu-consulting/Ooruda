@@ -158,6 +158,8 @@ export const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   colDescription: { flexGrow: 1, flexBasis: 0, color: '#000000' },
+  // paddingLeft: 2 shifts text origin right to clear the overflow:hidden + borderRadius clip on Noto Sans curved glyphs (e.g. 'C' in 'Cash').
+  colMode: { width: 80, paddingLeft: 2, color: '#000000' },
   colArea: { width: 56, textAlign: 'right', color: '#000000' },
   colRate: { width: 56, textAlign: 'right', color: '#000000' },
   colGst: { width: 36, textAlign: 'center', color: '#000000' },

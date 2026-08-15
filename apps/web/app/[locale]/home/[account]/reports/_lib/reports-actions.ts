@@ -576,7 +576,9 @@ export async function downloadPdfAction(
   // when fetching raw Supabase Storage URLs, causing silent fallback to the
   // OorudaMark placeholder. Use logo_url first, fall back to accounts.picture_url.
   const rawLogoUrl =
-    (association.logo_url as string | null) ?? (assocAccounts?.picture_url ?? null);
+    (association.logo_url as string | null) ??
+    assocAccounts?.picture_url ??
+    null;
   const logoDataUri = await preprocessLogoForPdf(rawLogoUrl);
 
   const data: ReportPdfData = {

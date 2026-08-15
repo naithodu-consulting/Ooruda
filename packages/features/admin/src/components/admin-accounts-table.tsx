@@ -5,7 +5,7 @@ import { useRef, useState, useMemo } from 'react';
 import Link from 'next/link';
 
 import { ColumnDef } from '@tanstack/react-table';
-import { EllipsisVertical, Search } from 'lucide-react';
+import { CheckCircle2, Clock, EllipsisVertical, Search } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
 import { formatPhoneNumber } from '@kit/shared/utils';
@@ -24,6 +24,12 @@ import { DataTable } from '@kit/ui/enhanced-data-table';
 import { Form, FormControl, FormField, FormItem } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@kit/ui/tabs';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@kit/ui/tooltip';
 
 import { ROLE_LABELS } from '../lib/server/schema/create-user.schema';
 import { AdminCreateAssociationDialog } from './admin-create-association-dialog';
@@ -44,11 +50,29 @@ function roleLabel(role: string): string {
   return ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role;
 }
 
+function formatConsentDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const d = date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  });
+  const t = date.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Kolkata',
+  });
+  return `${d.replace(/\//g, '-')}, ${t}`;
+}
+
 export function AdminAccountsTable(props: {
   associations: Account[];
   users: Account[];
   membershipsByAccountId: Record<string, UserMembership[]>;
   phoneByAccountId: Record<string, string>;
+  consentByAccountId: Record<string, string | null>;
   superAdminIds: Set<string>;
   testAccountIds: Set<string>;
   initialTab?: 'team' | 'personal';
@@ -104,6 +128,7 @@ export function AdminAccountsTable(props: {
     activeTab,
     props.membershipsByAccountId,
     props.phoneByAccountId,
+    props.consentByAccountId,
     associationOptions,
     props.superAdminIds,
     props.testAccountIds,
@@ -247,6 +272,7 @@ function getColumns(
   type: 'team' | 'personal',
   membershipsByAccountId: Record<string, UserMembership[]>,
   phoneByAccountId: Record<string, string>,
+  consentByAccountId: Record<string, string | null>,
   associations: AssociationOption[],
   superAdminIds: Set<string>,
   testAccountIds: Set<string>,
@@ -263,7 +289,7 @@ function getColumns(
         <div className="flex min-w-0 items-center gap-1.5">
           {isTest && (
             <Badge
-              className="shrink-0 border-amber-400 bg-amber-50 px-1.5 py-0 text-[10px] whitespace-nowrap text-amber-700"
+              className="shrink-0 border-warning/40 bg-warning/10 px-1.5 py-0 text-[10px] whitespace-nowrap text-warning"
               variant="outline"
             >
               Test
@@ -385,6 +411,47 @@ function getColumns(
                 </span>
               ))}
             </div>
+          );
+        },
+      },
+      {
+        id: 'consent',
+        header: 'Consent',
+        cell: ({ row }) => {
+          const ts = consentByAccountId[row.original.id];
+          if (ts) {
+            return (
+              <TooltipProvider delay={200}>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Badge
+                        variant="outline"
+                        className="cursor-default gap-1 border-success/40 bg-success/10 px-2 py-0.5 text-[11px] whitespace-nowrap text-success"
+                      >
+                        <CheckCircle2 className="h-3 w-3 shrink-0" />
+                        Accepted
+                      </Badge>
+                    }
+                  />
+                  <TooltipContent side="top">
+                    <span className="font-medium">Consent accepted</span>
+                    <span className="opacity-75 before:mx-1.5 before:content-['·']">
+                      {formatConsentDate(ts)}
+                    </span>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            );
+          }
+          return (
+            <Badge
+              variant="outline"
+              className="cursor-default gap-1 border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] whitespace-nowrap text-warning"
+            >
+              <Clock className="h-3 w-3 shrink-0" />
+              Pending
+            </Badge>
           );
         },
       },

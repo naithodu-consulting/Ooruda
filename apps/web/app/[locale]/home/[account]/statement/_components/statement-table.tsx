@@ -116,9 +116,9 @@ function entryDescription(entry: StatementEntry): string {
     case 'due':
       return `${bt} bill`;
     case 'advance_payment':
-      return `Advance paid — ${bt}`;
+      return `Advance paid for ${bt}`;
     case 'advance_applied':
-      return `Advance used — ${bt}`;
+      return `Advance used for ${bt}`;
     case 'due_payment':
       return `${bt} paid`;
     case 'reversal':
@@ -177,9 +177,20 @@ function entryDownloadUrl(entry: StatementEntry): string | null {
       ? `/api/billing/advance-applications/${encodeURIComponent(voucherNo)}/pdf`
       : null;
   }
+  if (entry.entry_type === 'advance_payment') {
+    // id is "ledger-{uuid}"
+    const ledgerId = entry.id.startsWith('ledger-')
+      ? entry.id.slice('ledger-'.length)
+      : null;
+    return ledgerId ? `/api/billing/advance-payments/${ledgerId}/pdf` : null;
+  }
   if (entry.entry_type === 'due_payment') {
-    // Receipt number may come from notes ("Receipt: PRM/26-27/MNT/000001")
-    // for cash ledger payments, or from bill_no for regular bill payments.
+    // Bill payment: id is "payment-{uuid}" — use the receipts endpoint directly.
+    if (entry.id.startsWith('payment-')) {
+      const paymentId = entry.id.slice('payment-'.length);
+      return `/api/billing/receipts/${paymentId}/pdf`;
+    }
+    // Cash ledger due payment: receipt number stored in notes.
     const receiptNo = entry.notes?.match(/·\s*Receipt:\s*(\S+)/)?.[1] ?? null;
     return receiptNo
       ? `/api/billing/cash-ledger-payments/by-receipt?receipt_no=${encodeURIComponent(receiptNo)}`

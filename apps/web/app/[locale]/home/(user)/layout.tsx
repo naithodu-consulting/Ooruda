@@ -17,6 +17,7 @@ import pathsConfig from '~/config/paths.config';
 import { personalAccountNavigationConfig } from '~/config/personal-account-navigation.config';
 
 // home imports
+import { ConsentGate } from '../_components/consent-gate';
 import { HomeMenuNavigation } from './_components/home-menu-navigation';
 import { HomeMobileNavigation } from './_components/home-mobile-navigation';
 import { HomeSidebar } from './_components/home-sidebar';
@@ -47,6 +48,13 @@ async function SidebarLayout({ children }: React.PropsWithChildren) {
   await redirectIfSuperAdmin();
   await redirectIfTeamsOnly(workspace);
 
+  const client = getSupabaseServerClient();
+  const { data: consentProfile } = await client
+    .from('profiles')
+    .select('consent_accepted_at')
+    .eq('id', workspace.user.id)
+    .single();
+
   return (
     <UserWorkspaceContextProvider value={workspace}>
       <SidebarProvider defaultOpen={state.open}>
@@ -62,6 +70,8 @@ async function SidebarLayout({ children }: React.PropsWithChildren) {
           {children}
         </Page>
       </SidebarProvider>
+
+      <ConsentGate consentRequired={!consentProfile?.consent_accepted_at} />
     </UserWorkspaceContextProvider>
   );
 }

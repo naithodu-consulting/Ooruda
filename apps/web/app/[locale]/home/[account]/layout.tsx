@@ -13,6 +13,7 @@ import { SidebarProvider } from '@kit/ui/sidebar';
 import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.config';
 
 // local imports
+import { ConsentGate } from '../_components/consent-gate';
 import { TeamAccountLayoutSidebar } from './_components/team-account-layout-sidebar';
 import { TeamAccountNavigationMenu } from './_components/team-account-navigation-menu';
 import { TeamAccountTopbar } from './_components/team-account-topbar';
@@ -54,13 +55,20 @@ async function SidebarLayout({
     image: picture_url,
   }));
 
-  // Load per-association feature flags for nav filtering.
+  // Load per-association feature flags and consent status in parallel.
   const client = getSupabaseServerClient();
-  const { data: assocFlags } = await client
-    .from('associations')
-    .select('cash_ledger_enabled')
-    .eq('account_id', data.account.id)
-    .single();
+  const [{ data: assocFlags }, { data: consentProfile }] = await Promise.all([
+    client
+      .from('associations')
+      .select('cash_ledger_enabled')
+      .eq('account_id', data.account.id)
+      .single(),
+    client
+      .from('profiles')
+      .select('consent_accepted_at')
+      .eq('id', data.user.id)
+      .single(),
+  ]);
 
   const disabledNavKeys: string[] = [];
   if (assocFlags?.cash_ledger_enabled === false) {
@@ -98,6 +106,8 @@ async function SidebarLayout({
           </div>
         </Page>
       </SidebarProvider>
+
+      <ConsentGate consentRequired={!consentProfile?.consent_accepted_at} />
     </TeamAccountWorkspaceContextProvider>
   );
 }

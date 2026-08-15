@@ -217,7 +217,7 @@ export function AdminActivityCard(props: {
               value={localFrom}
               max={localTo}
               onChange={(e) => setLocalFrom(e.target.value)}
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm focus:outline-none focus:ring-2"
+              className="border-input bg-background h-9 rounded-md border px-2 text-sm focus:ring-2 focus:outline-none"
               data-test="activity-date-from"
             />
           </div>
@@ -230,7 +230,7 @@ export function AdminActivityCard(props: {
               value={localTo}
               min={localFrom}
               onChange={(e) => setLocalTo(e.target.value)}
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm focus:outline-none focus:ring-2"
+              className="border-input bg-background h-9 rounded-md border px-2 text-sm focus:ring-2 focus:outline-none"
               data-test="activity-date-to"
             />
           </div>
@@ -254,7 +254,7 @@ export function AdminActivityCard(props: {
             <select
               value={assocId}
               onChange={(e) => onAssocChange(e.target.value)}
-              className="border-input bg-background h-9 w-full appearance-none rounded-md border px-2 pr-7 text-sm focus:outline-none focus:ring-2"
+              className="border-input bg-background h-9 w-full appearance-none rounded-md border px-2 pr-7 text-sm focus:ring-2 focus:outline-none"
               data-test="activity-assoc-filter"
             >
               <option value="">All associations</option>
@@ -264,7 +264,7 @@ export function AdminActivityCard(props: {
                 </option>
               ))}
             </select>
-            <ChevronDown className="text-muted-foreground pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
+            <ChevronDown className="text-muted-foreground pointer-events-none absolute top-1/2 right-2 h-3.5 w-3.5 -translate-y-1/2" />
           </div>
         </div>
 
@@ -300,22 +300,22 @@ export function AdminActivityCard(props: {
               <Table className="min-w-[800px]">
                 <TableHeader>
                   <TableRow className="border-b">
-                    <TableHead className="text-muted-foreground w-48 text-xs font-semibold uppercase tracking-wider">
+                    <TableHead className="text-muted-foreground w-48 text-xs font-semibold tracking-wider uppercase">
                       Event
                     </TableHead>
-                    <TableHead className="text-muted-foreground w-32 text-xs font-semibold uppercase tracking-wider">
+                    <TableHead className="text-muted-foreground w-32 text-xs font-semibold tracking-wider uppercase">
                       User
                     </TableHead>
-                    <TableHead className="text-muted-foreground w-40 text-xs font-semibold uppercase tracking-wider">
+                    <TableHead className="text-muted-foreground w-40 text-xs font-semibold tracking-wider uppercase">
                       Association
                     </TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                       Details
                     </TableHead>
-                    <TableHead className="text-muted-foreground w-24 text-xs font-semibold uppercase tracking-wider">
+                    <TableHead className="text-muted-foreground w-24 text-xs font-semibold tracking-wider uppercase">
                       Type
                     </TableHead>
-                    <TableHead className="text-muted-foreground w-40 text-right text-xs font-semibold uppercase tracking-wider">
+                    <TableHead className="text-muted-foreground w-40 text-right text-xs font-semibold tracking-wider uppercase">
                       Date
                     </TableHead>
                   </TableRow>

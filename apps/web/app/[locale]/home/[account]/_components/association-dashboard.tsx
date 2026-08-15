@@ -1,5 +1,6 @@
 import { Building2, DoorOpen } from 'lucide-react';
 
+import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Card, CardContent } from '@kit/ui/card';
 
@@ -65,7 +66,10 @@ function computeBillMetrics(
   const outstanding = bills.reduce(
     (sum, b) =>
       sum +
-      Math.max(0, b.total_amount - b.paid_amount - Number(b.advance_applied ?? 0)),
+      Math.max(
+        0,
+        b.total_amount - b.paid_amount - Number(b.advance_applied ?? 0),
+      ),
     0,
   );
 
@@ -73,7 +77,11 @@ function computeBillMetrics(
   const overdueCount = overdueBills.length;
   const overdueAmount = overdueBills.reduce(
     (sum, b) =>
-      sum + Math.max(0, b.total_amount - b.paid_amount - Number(b.advance_applied ?? 0)),
+      sum +
+      Math.max(
+        0,
+        b.total_amount - b.paid_amount - Number(b.advance_applied ?? 0),
+      ),
     0,
   );
 
@@ -215,6 +223,15 @@ interface DuePaymentRow {
   receipt_no: string | null;
 }
 
+interface AdvancePaymentRow {
+  id: string;
+  unit_id: string;
+  bill_type: string;
+  amount: number;
+  entry_date: string;
+  razorpay_payment_id: string | null;
+}
+
 async function loadMyBillSummary(
   accountId: string,
   associationId: string,
@@ -330,24 +347,36 @@ async function loadMyBillSummary(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [ledgerBalances, duePaymentsResult] = await Promise.all([
-    loadUnitLedgerBalances(associationId, units),
-    (client as any)
-      .from('cash_ledger_payments')
-      .select('id, unit_id, bill_type, amount, mode, paid_at, receipt_no')
-      .in('unit_id', unitIds)
-      .eq('association_id', associationId)
-      .order('paid_at', { ascending: false }),
-  ]);
+  const uc = (c: unknown) => c as any;
+  const [ledgerBalances, duePaymentsResult, advancePaymentsResult] =
+    await Promise.all([
+      loadUnitLedgerBalances(associationId, units),
+      uc(client)
+        .from('cash_ledger_payments')
+        .select('id, unit_id, bill_type, amount, mode, paid_at, receipt_no')
+        .in('unit_id', unitIds)
+        .eq('association_id', associationId)
+        .order('paid_at', { ascending: false }),
+      uc(client)
+        .from('cash_ledger')
+        .select('id, unit_id, bill_type, amount, entry_date, razorpay_payment_id')
+        .in('unit_id', unitIds)
+        .eq('association_id', associationId)
+        .eq('entry_type', 'advance_payment')
+        .order('entry_date', { ascending: false }),
+    ]);
 
   const duePayments: DuePaymentRow[] =
     (duePaymentsResult.data as DuePaymentRow[] | null) ?? [];
+  const advancePayments: AdvancePaymentRow[] =
+    (advancePaymentsResult.data as AdvancePaymentRow[] | null) ?? [];
 
   return {
     units,
     bills,
     payments,
     duePayments,
+    advancePayments,
     assocName,
     ledgerBalances,
   };
@@ -375,12 +404,15 @@ export async function AssociationDashboard({
   const isPersonal = role === 'prop_owner' || role === 'tenant';
 
   if (isPersonal) {
-    const summary = await loadMyBillSummary(
-      accountId,
-      associationId,
-      assocName,
-      userId,
-    );
+    const admin = getSupabaseServerAdminClient();
+    const [summary, { data: gateway }] = await Promise.all([
+      loadMyBillSummary(accountId, associationId, assocName, userId),
+      admin
+        .from('association_payment_gateways')
+        .select('is_active')
+        .eq('association_id', associationId)
+        .maybeSingle(),
+    ]);
 
     if (!summary) {
       return (
@@ -396,17 +428,20 @@ export async function AssociationDashboard({
       );
     }
 
-    const { units, bills, payments, duePayments, ledgerBalances } = summary;
+    const { units, bills, payments, duePayments, advancePayments, ledgerBalances } = summary;
 
     return (
       <OwnerUnitsView
         account={account}
         role={role as 'prop_owner' | 'tenant'}
         assocName={assocName}
+        associationId={associationId}
+        canPay={gateway?.is_active ?? false}
         units={units}
         bills={bills as Parameters<typeof OwnerUnitsView>[0]['bills']}
         payments={payments as Parameters<typeof OwnerUnitsView>[0]['payments']}
         duePayments={duePayments}
+        advancePayments={advancePayments}
         ledgerBalances={ledgerBalances}
       />
     );

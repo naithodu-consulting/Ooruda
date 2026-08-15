@@ -98,7 +98,13 @@ const rStyles = StyleSheet.create({
     backgroundColor: CREAM,
   },
   cell: { flex: 1, fontSize: 8, color: '#222', paddingRight: 6 },
-  cellRight: { flex: 1, fontSize: 8, color: '#222', textAlign: 'right', paddingRight: 8 },
+  cellRight: {
+    flex: 1,
+    fontSize: 8,
+    color: '#222',
+    textAlign: 'right',
+    paddingRight: 8,
+  },
   footer: {
     position: 'absolute',
     bottom: 24,
