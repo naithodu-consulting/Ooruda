@@ -214,7 +214,7 @@ export function PayAdvanceDialog({
                     <FormLabel>Amount (₹)</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <span className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm select-none">
+                        <span className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm select-none">
                           ₹
                         </span>
                         <Input

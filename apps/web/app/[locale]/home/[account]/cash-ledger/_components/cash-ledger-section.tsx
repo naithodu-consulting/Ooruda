@@ -431,8 +431,8 @@ export function CashLedgerSection({
                               {e.paid_by_name || (e.paid_by_role ?? '—')}
                             </span>
                             {e.paid_by_role ? (
-                              <span className="inline-flex items-center gap-1 text-xs text-success">
-                                <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                              <span className="text-success inline-flex items-center gap-1 text-xs">
+                                <span className="bg-success h-1.5 w-1.5 rounded-full" />
                                 Online · Self-paid
                               </span>
                             ) : (
@@ -567,7 +567,7 @@ function AllUnitsSummary({
   if (!hasAdvance && !hasDues) {
     return (
       <div className="text-muted-foreground flex items-center gap-2 text-sm">
-        <CheckCircle2 className="h-4 w-4 text-success" />
+        <CheckCircle2 className="text-success h-4 w-4" />
         All units are settled — no outstanding dues or advance balances.
       </div>
     );
@@ -623,9 +623,7 @@ function SummaryCard({
       <span
         className={cn(
           'text-[11px] font-semibold tracking-wide uppercase',
-          isCredit
-            ? 'text-success'
-            : 'text-red-600 dark:text-red-400',
+          isCredit ? 'text-success' : 'text-red-600 dark:text-red-400',
         )}
       >
         {label}
@@ -636,9 +634,7 @@ function SummaryCard({
       <span
         className={cn(
           'mt-1 text-xl font-bold tracking-tight tabular-nums',
-          isCredit
-            ? 'text-success'
-            : 'text-red-700 dark:text-red-300',
+          isCredit ? 'text-success' : 'text-red-700 dark:text-red-300',
         )}
       >
         {formatINR(amount)}
@@ -679,7 +675,7 @@ function SingleUnitBalance({ balance }: { balance: number }) {
   }
   return (
     <div className="text-muted-foreground flex items-center gap-2 text-sm">
-      <CheckCircle2 className="h-4 w-4 text-success" />
+      <CheckCircle2 className="text-success h-4 w-4" />
       Fully settled — no outstanding balance.
     </div>
   );
@@ -696,9 +692,7 @@ function AmountCell({
 }) {
   if (direction === 'credit') {
     return (
-      <span className="font-semibold text-success">
-        {formatINR(amount)}
-      </span>
+      <span className="text-success font-semibold">{formatINR(amount)}</span>
     );
   }
   return (
@@ -711,7 +705,7 @@ function AmountCell({
 function BalanceCell({ value }: { value: number }) {
   if (value > 0)
     return (
-      <span className="font-semibold text-success">
+      <span className="text-success font-semibold">
         {formatINR(value)}{' '}
         <span className="text-[10px] font-normal opacity-50">↑</span>
       </span>
@@ -732,10 +726,8 @@ function EntryTypeBadge({ type }: { type: string }) {
     'text-xs font-medium',
     type === 'due' &&
       'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
-    type === 'advance_payment' &&
-      'bg-success/10 text-success',
-    type === 'advance_applied' &&
-      'bg-warning/10 text-warning',
+    type === 'advance_payment' && 'bg-success/10 text-success',
+    type === 'advance_applied' && 'bg-warning/10 text-warning',
     type === 'due_payment' &&
       'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
   );

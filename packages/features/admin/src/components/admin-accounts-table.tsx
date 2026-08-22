@@ -289,7 +289,7 @@ function getColumns(
         <div className="flex min-w-0 items-center gap-1.5">
           {isTest && (
             <Badge
-              className="shrink-0 border-warning/40 bg-warning/10 px-1.5 py-0 text-[10px] whitespace-nowrap text-warning"
+              className="border-warning/40 bg-warning/10 text-warning shrink-0 px-1.5 py-0 text-[10px] whitespace-nowrap"
               variant="outline"
             >
               Test
@@ -427,7 +427,7 @@ function getColumns(
                     render={
                       <Badge
                         variant="outline"
-                        className="cursor-default gap-1 border-success/40 bg-success/10 px-2 py-0.5 text-[11px] whitespace-nowrap text-success"
+                        className="border-success/40 bg-success/10 text-success cursor-default gap-1 px-2 py-0.5 text-[11px] whitespace-nowrap"
                       >
                         <CheckCircle2 className="h-3 w-3 shrink-0" />
                         Accepted
@@ -447,7 +447,7 @@ function getColumns(
           return (
             <Badge
               variant="outline"
-              className="cursor-default gap-1 border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] whitespace-nowrap text-warning"
+              className="border-warning/40 bg-warning/10 text-warning cursor-default gap-1 px-2 py-0.5 text-[11px] whitespace-nowrap"
             >
               <Clock className="h-3 w-3 shrink-0" />
               Pending

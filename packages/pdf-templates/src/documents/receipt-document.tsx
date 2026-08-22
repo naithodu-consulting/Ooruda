@@ -156,9 +156,7 @@ export function ReceiptDocument({
         {/* Payment details table */}
         <View style={styles.table}>
           <View style={styles.tableHeaderRow}>
-            <Text style={[styles.colMode, styles.tableHeaderText]}>
-              Mode
-            </Text>
+            <Text style={[styles.colMode, styles.tableHeaderText]}>Mode</Text>
             <Text style={[styles.colDescription, styles.tableHeaderText]}>
               Reference
             </Text>

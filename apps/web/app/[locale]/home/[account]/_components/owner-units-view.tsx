@@ -513,7 +513,11 @@ export function OwnerUnitsView({
                                 {p.mode} &middot;{' '}
                                 {new Date(p.paid_at).toLocaleDateString(
                                   'en-IN',
-                                  { day: 'numeric', month: 'short', year: 'numeric' },
+                                  {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                  },
                                 )}
                               </span>
                             </div>
@@ -545,7 +549,8 @@ export function OwnerUnitsView({
                                 {billTypeLabel(dp.bill_type)}
                                 {dp.receipt_no ? (
                                   <span className="text-muted-foreground font-normal">
-                                    {' '}· {dp.receipt_no}
+                                    {' '}
+                                    · {dp.receipt_no}
                                   </span>
                                 ) : null}
                               </span>
@@ -553,7 +558,11 @@ export function OwnerUnitsView({
                                 {dp.mode} &middot;{' '}
                                 {new Date(dp.paid_at).toLocaleDateString(
                                   'en-IN',
-                                  { day: 'numeric', month: 'short', year: 'numeric' },
+                                  {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                  },
                                 )}
                               </span>
                             </div>

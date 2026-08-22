@@ -1,5 +1,3 @@
-import crypto from 'crypto';
-
 import { NextResponse } from 'next/server';
 
 import { enhanceRouteHandler } from '@kit/next/routes';
@@ -7,6 +5,8 @@ import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client'
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
+
+import crypto from 'crypto';
 
 export const POST = enhanceRouteHandler(
   async function ({ request, user }) {

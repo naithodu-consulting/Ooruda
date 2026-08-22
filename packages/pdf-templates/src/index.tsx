@@ -17,6 +17,10 @@ import {
   type ElectricityBillPdfData,
 } from './documents/electricity-bill-document';
 import {
+  ExpensesExportDocument,
+  type ExpensesExportPdfData,
+} from './documents/expenses-export-document';
+import {
   PaymentsExportDocument,
   type PaymentsExportPdfData,
 } from './documents/payments-export-document';
@@ -59,6 +63,10 @@ export type {
   PaymentsExportPdfData,
   PaymentsExportRow,
 } from './documents/payments-export-document';
+export type {
+  ExpensesExportPdfData,
+  ExpenseExportRow,
+} from './documents/expenses-export-document';
 
 export async function renderAdvanceApplicationPdf(
   data: AdvanceApplicationPdfData,
@@ -101,6 +109,13 @@ export async function renderStatementPdf(
 ): Promise<Buffer> {
   registerPdfFonts();
   return renderToBuffer(<StatementDocument {...data} />);
+}
+
+export async function renderExpensesExportPdf(
+  data: ExpensesExportPdfData,
+): Promise<Buffer> {
+  registerPdfFonts();
+  return renderToBuffer(<ExpensesExportDocument data={data} />);
 }
 
 export async function renderPaymentsExportPdf(

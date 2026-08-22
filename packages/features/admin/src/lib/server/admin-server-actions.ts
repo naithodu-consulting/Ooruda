@@ -21,6 +21,7 @@ import {
   CreateUserSchema,
   UpdateUserSchema,
 } from './schema/create-user.schema';
+import { FeatureFlagSchema } from './schema/feature-flags.schema';
 import {
   RemoveUserRoleSchema,
   SetUserRoleSchema,
@@ -28,6 +29,7 @@ import {
 import { ResetPasswordSchema } from './schema/reset-password.schema';
 import { createAdminAccountsService } from './services/admin-accounts.service';
 import { createAdminAuthUserService } from './services/admin-auth-user.service';
+import { createFeatureFlagsService } from './services/feature-flags.service';
 import { adminActionClient } from './utils/admin-action-client';
 import { isSuperAdmin, isUserSuperAdmin } from './utils/is-super-admin';
 
@@ -1178,3 +1180,14 @@ function getAdminAccountsService() {
 
   return createAdminAccountsService(adminClient, client);
 }
+
+// ── Feature Flags ─────────────────────────────────────────────────────────────
+
+export const toggleAssociationFeatureFlagAction = adminActionClient
+  .inputSchema(FeatureFlagSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const adminClient = getSupabaseServerAdminClient();
+    const service = createFeatureFlagsService(adminClient);
+    await service.upsertFlag(ctx.user.id, input);
+    revalidatePath(`/admin/accounts/[id]`, 'page');
+  });

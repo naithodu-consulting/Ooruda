@@ -453,7 +453,7 @@ export function OwnerPaymentsView({
                               </span>
                             )}
                             {item.kind === 'bill' && !item.isOverdue && (
-                              <span className="inline-flex items-center rounded bg-warning/10 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-warning">
+                              <span className="bg-warning/10 text-warning inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-semibold">
                                 Due
                               </span>
                             )}
@@ -616,7 +616,7 @@ export function OwnerPaymentsView({
                               year: 'numeric',
                             })}
                           </TableCell>
-                          <TableCell className="py-3 pr-2 text-right text-sm font-semibold text-success tabular-nums">
+                          <TableCell className="text-success py-3 pr-2 text-right text-sm font-semibold tabular-nums">
                             {formatINR(fp.amount)}
                           </TableCell>
                           <TableCell className="py-3 pr-3">
@@ -667,7 +667,7 @@ export function OwnerPaymentsView({
                               year: 'numeric',
                             })}
                           </TableCell>
-                          <TableCell className="py-3 pr-2 text-right text-sm font-semibold text-success tabular-nums">
+                          <TableCell className="text-success py-3 pr-2 text-right text-sm font-semibold tabular-nums">
                             {formatINR(adv.amount)}
                           </TableCell>
                           <TableCell className="py-3 pr-3">
@@ -714,7 +714,7 @@ export function OwnerPaymentsView({
                             year: 'numeric',
                           })}
                         </TableCell>
-                        <TableCell className="py-3 pr-2 text-right text-sm font-semibold text-success tabular-nums">
+                        <TableCell className="text-success py-3 pr-2 text-right text-sm font-semibold tabular-nums">
                           {formatINR(dp.amount)}
                         </TableCell>
                         <TableCell className="py-3 pr-3">

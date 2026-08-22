@@ -60,7 +60,7 @@ async function SidebarLayout({
   const [{ data: assocFlags }, { data: consentProfile }] = await Promise.all([
     client
       .from('associations')
-      .select('cash_ledger_enabled')
+      .select('id, cash_ledger_enabled')
       .eq('account_id', data.account.id)
       .single(),
     client
@@ -70,9 +70,31 @@ async function SidebarLayout({
       .single(),
   ]);
 
+  // Feature flags keyed to this association only
+  const associationId = assocFlags?.id ?? '';
+  const { data: featureFlags } = associationId
+    ? await (client as any)
+        .from('association_feature_flags')
+        .select('feature, enabled')
+        .eq('association_id', associationId)
+        .in('feature', ['expense_tracker', 'amc_reminder'])
+    : { data: [] };
+
+  const enabledFeatures = new Set<string>(
+    (featureFlags ?? [])
+      .filter((f: { enabled: boolean }) => f.enabled)
+      .map((f: { feature: string }) => f.feature),
+  );
+
   const disabledNavKeys: string[] = [];
   if (assocFlags?.cash_ledger_enabled === false) {
     disabledNavKeys.push('association.nav.cashLedger');
+  }
+  if (!enabledFeatures.has('expense_tracker')) {
+    disabledNavKeys.push('association.nav.expenses');
+  }
+  if (!enabledFeatures.has('amc_reminder')) {
+    disabledNavKeys.push('association.nav.amc');
   }
 
   return (

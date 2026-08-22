@@ -4,6 +4,64 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v2.2 — Expense Tracker + AMC Reminder — 2026-08-20
+
+### Expense Tracker (assoc_admin + billing_operator)
+
+- **Expense log**: record completed payments with title, category, amount, GST amount, payor, payee / vendor, mode of payment (Cash, UPI, NEFT/RTGS/IMPS, Cheque, Demand Draft, Credit Card, Debit Card, NetBanking), reference number, invoice number, date of payment, notes, recurring flag, and attachment URL.
+- **14 default system categories**: Maintenance & Repairs, Utilities, Security, Housekeeping, Landscaping, AMC Payments, Administrative, Legal & Professional, Insurance, Events & Community, Capital Expenditure, Salaries & Wages, Taxes & Govt Fees, Miscellaneous.
+- **Vendor master**: vendor autocomplete via datalist on payee field.
+- **List view**: date preset filters (This Month, Last Month, This Quarter, This FY, All Time), category filter, payment mode filter, full-text search. Checkbox selection for bulk delete. CSV export of filtered set.
+- **Analytics tab**: KPI row (spend this month, spend this FY, entry count, top category); four Recharts charts — category donut, monthly trend bar, top-10 payees horizontal bar, payment mode donut. Data served by `/api/expenses/analytics` route.
+- Soft-delete pattern (`deleted_at`) for audit trail.
+- **Feature-gated**: only visible when super admin enables "Expense Tracker" flag for the association.
+
+### AMC Reminder (assoc_admin only)
+
+- **Contract management**: record AMC contracts with name, vendor details (contact person, phone, email), category (20 system categories covering all common building services), start/end date, contract value, payment frequency (Annual/Bi-annual/Quarterly/Monthly), notice period, auto-renewal flag, priority (critical/high/medium/low), coverage scope, SLA terms, and document URL.
+- **Computed status**: active (>90d), due_soon (≤90d), urgent (≤30d), critical (≤7d), expired (<0d), terminated — computed at application layer from expiry date.
+- **Dashboard tab**: 4 KPI tiles (Active, Due Soon, Urgent+Critical, Total Annual Cost ₹). "Needs Attention" panel lists urgent/critical/expired contracts with days-remaining and status badge. Category spend donut chart.
+- **All Contracts tab**: colour-coded rows by urgency (left border stripe), sortable by expiry or contract value, filterable by status and category, free-text search by contract name or vendor.
+- **Contract detail page** (`/amc/[contractId]`): all fields displayed. "Mark as Renewed" CTA → modal (new end date, value, notes) records renewal in `amc_renewal_history` and updates the contract. "Terminate" CTA → modal captures reason and soft-terminates via `terminated_at`.
+- **Renewal history timeline**: chronological list of past renewals with dates and amounts.
+- **Reminder Settings tab**: simple dropdown — "Remind X days before expiry" (90/60/30/15/7, default 30). Setting stored per association in `amc_reminder_settings`.
+- **Daily email reminders** (Supabase cron): `send_amc_reminders()` DB function runs daily, strictly scoped by association — no cross-association data leak. Sends to all `assoc_admin` members of that specific association only.
+- **Feature-gated**: only visible when super admin enables "AMC Reminder" flag for the association.
+
+### Feature Flag Infrastructure
+
+- New `association_feature_flags(association_id, feature, enabled, enabled_at, enabled_by)` table — clean per-feature toggles without schema changes for each feature.
+- Super admin association detail page: "Features" section with toggle switches for Expense Tracker and AMC Reminder.
+- Layout reads flags and passes to sidebar — nav entries only appear when the feature is enabled for that association.
+
+### Navigation
+
+- Two new sidebar entries under Operations: "Expense Tracker" (Receipt icon) and "AMC Reminder" (CalendarClock icon).
+- Role visibility: `assoc_admin` sees both; `billing_operator` sees Expense Tracker only; `prop_owner`/`tenant` see neither.
+
+### Polish & Fixes (2026-08-22)
+
+- **Expense PDF logo**: association logo now fetched and embedded correctly via `sanitizeLogoUrl`; was hardcoded null.
+- **Expense PDF UX**: immediate toast + spinner shown on export button while PDF renders.
+- **Analytics — monthly trend**: all 12 FY months now pre-seeded with zero so the bar chart always shows a full year, not just months with data.
+- **Analytics — X-axis**: removed ambiguous year suffix ("Aug 26" → "Aug") on the monthly trend chart.
+- **Analytics — Top Payees tooltip**: tooltip now labels the value "Amount" instead of the raw dataKey name.
+- **AMC dialog — category dropdown**: `SelectTrigger` gets `w-full` so options are never truncated.
+- **AMC dialog — SelectValue SSR**: explicit children prevent hydration mismatch on all Select fields.
+- **AMC dialog — notice period**: spinner arrows hidden so "days" suffix doesn't overlap native controls.
+- **AMC dialog — phone field**: alphabets stripped on input; `inputMode="tel"` set.
+- **AMC dialog — label copy**: "Email Address(Optional)" → "Email Address (optional)".
+- **AMC dialog — footer**: replaced `DialogFooter` (causes `bg-muted` two-tone split) with a plain flex div.
+- **AMC dashboard**: "Active" KPI tile renamed "On Track"; duplicate page title removed.
+- **Code quality**: removed unnecessary `(client as any)` casts for typed `expenses` table in analytics route; added missing `'page'` type arg to `revalidatePath` in expense-actions.
+
+| Migration | Change |
+|-----------|--------|
+| `20260820000001_expense_tracker_amc_reminder.sql` | `association_feature_flags`, `expense_categories`, `vendors`, `expenses`, `amc_contracts`, `amc_renewal_history`, `amc_reminder_settings` tables; `amc_contract_status()` function; `send_amc_reminders()` cron function; RLS policies; 14 default expense categories + 20 AMC categories seeded |
+| `20260821000001_expenses_netbanking_constraint.sql` | Adds NetBanking to the `mode_of_payment` check constraint on `expenses` |
+
+---
+
 ## v2.1 — User Consent Gate + Owner/Tenant Advance Payments — 2026-08-15
 
 ### User Consent Gate

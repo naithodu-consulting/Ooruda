@@ -209,6 +209,181 @@ export type Database = {
           },
         ]
       }
+      amc_contracts: {
+        Row: {
+          association_id: string
+          auto_renewal: boolean
+          category: string
+          contract_document_url: string | null
+          contract_value: number
+          coverage_scope: string | null
+          created_at: string
+          created_by: string
+          end_date: string
+          id: string
+          name: string
+          next_payment_due: string | null
+          notes: string | null
+          notice_period_days: number | null
+          payment_frequency: string
+          priority: string
+          sla_terms: string | null
+          start_date: string
+          terminated_at: string | null
+          terminated_reason: string | null
+          updated_at: string
+          vendor_contact_person: string | null
+          vendor_email: string | null
+          vendor_name: string
+          vendor_phone: string | null
+        }
+        Insert: {
+          association_id: string
+          auto_renewal?: boolean
+          category: string
+          contract_document_url?: string | null
+          contract_value: number
+          coverage_scope?: string | null
+          created_at?: string
+          created_by: string
+          end_date: string
+          id?: string
+          name: string
+          next_payment_due?: string | null
+          notes?: string | null
+          notice_period_days?: number | null
+          payment_frequency?: string
+          priority?: string
+          sla_terms?: string | null
+          start_date: string
+          terminated_at?: string | null
+          terminated_reason?: string | null
+          updated_at?: string
+          vendor_contact_person?: string | null
+          vendor_email?: string | null
+          vendor_name: string
+          vendor_phone?: string | null
+        }
+        Update: {
+          association_id?: string
+          auto_renewal?: boolean
+          category?: string
+          contract_document_url?: string | null
+          contract_value?: number
+          coverage_scope?: string | null
+          created_at?: string
+          created_by?: string
+          end_date?: string
+          id?: string
+          name?: string
+          next_payment_due?: string | null
+          notes?: string | null
+          notice_period_days?: number | null
+          payment_frequency?: string
+          priority?: string
+          sla_terms?: string | null
+          start_date?: string
+          terminated_at?: string | null
+          terminated_reason?: string | null
+          updated_at?: string
+          vendor_contact_person?: string | null
+          vendor_email?: string | null
+          vendor_name?: string
+          vendor_phone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amc_contracts_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      amc_reminder_settings: {
+        Row: {
+          association_id: string
+          created_at: string
+          id: string
+          remind_days_before: number
+          updated_at: string
+        }
+        Insert: {
+          association_id: string
+          created_at?: string
+          id?: string
+          remind_days_before?: number
+          updated_at?: string
+        }
+        Update: {
+          association_id?: string
+          created_at?: string
+          id?: string
+          remind_days_before?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amc_reminder_settings_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: true
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      amc_renewal_history: {
+        Row: {
+          amc_contract_id: string
+          contract_value: number
+          created_at: string
+          id: string
+          linked_expense_id: string | null
+          new_end_date: string
+          notes: string | null
+          renewed_at: string
+          renewed_by: string
+        }
+        Insert: {
+          amc_contract_id: string
+          contract_value: number
+          created_at?: string
+          id?: string
+          linked_expense_id?: string | null
+          new_end_date: string
+          notes?: string | null
+          renewed_at: string
+          renewed_by: string
+        }
+        Update: {
+          amc_contract_id?: string
+          contract_value?: number
+          created_at?: string
+          id?: string
+          linked_expense_id?: string | null
+          new_end_date?: string
+          notes?: string | null
+          renewed_at?: string
+          renewed_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amc_renewal_history_amc_contract_id_fkey"
+            columns: ["amc_contract_id"]
+            isOneToOne: false
+            referencedRelation: "amc_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "amc_renewal_history_linked_expense_id_fkey"
+            columns: ["linked_expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assoc_admin_permissions: {
         Row: {
           association_id: string
@@ -271,6 +446,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "roles"
             referencedColumns: ["name"]
+          },
+        ]
+      }
+      association_feature_flags: {
+        Row: {
+          association_id: string
+          enabled: boolean
+          enabled_at: string | null
+          enabled_by: string | null
+          feature: string
+          id: string
+        }
+        Insert: {
+          association_id: string
+          enabled?: boolean
+          enabled_at?: string | null
+          enabled_by?: string | null
+          feature: string
+          id?: string
+        }
+        Update: {
+          association_id?: string
+          enabled?: boolean
+          enabled_at?: string | null
+          enabled_by?: string | null
+          feature?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "association_feature_flags_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1038,6 +1248,142 @@ export type Database = {
           enable_team_accounts?: boolean
         }
         Relationships: []
+      }
+      expense_categories: {
+        Row: {
+          association_id: string | null
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          association_id?: string | null
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          association_id?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_categories_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expenses: {
+        Row: {
+          amount: number
+          association_id: string
+          attachment_url: string | null
+          category_id: string | null
+          created_at: string
+          created_by: string
+          date_of_payment: string
+          deleted_at: string | null
+          gst_amount: number | null
+          id: string
+          invoice_number: string | null
+          linked_amc_id: string | null
+          mode_of_payment: string
+          notes: string | null
+          payee_id: string | null
+          payee_name: string
+          payor: string
+          recurring: boolean
+          recurring_frequency: string | null
+          reference_number: string | null
+          sub_category: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          association_id: string
+          attachment_url?: string | null
+          category_id?: string | null
+          created_at?: string
+          created_by: string
+          date_of_payment: string
+          deleted_at?: string | null
+          gst_amount?: number | null
+          id?: string
+          invoice_number?: string | null
+          linked_amc_id?: string | null
+          mode_of_payment: string
+          notes?: string | null
+          payee_id?: string | null
+          payee_name: string
+          payor?: string
+          recurring?: boolean
+          recurring_frequency?: string | null
+          reference_number?: string | null
+          sub_category?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          association_id?: string
+          attachment_url?: string | null
+          category_id?: string | null
+          created_at?: string
+          created_by?: string
+          date_of_payment?: string
+          deleted_at?: string | null
+          gst_amount?: number | null
+          id?: string
+          invoice_number?: string | null
+          linked_amc_id?: string | null
+          mode_of_payment?: string
+          notes?: string | null
+          payee_id?: string | null
+          payee_name?: string
+          payor?: string
+          recurring?: boolean
+          recurring_frequency?: string | null
+          reference_number?: string | null
+          sub_category?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_linked_amc_fk"
+            columns: ["linked_amc_id"]
+            isOneToOne: false
+            referencedRelation: "amc_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_payee_id_fkey"
+            columns: ["payee_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       invitations: {
         Row: {
@@ -2128,6 +2474,50 @@ export type Database = {
           },
         ]
       }
+      vendors: {
+        Row: {
+          association_id: string
+          bank_details: string | null
+          contact_person: string | null
+          created_at: string
+          email: string | null
+          gst_number: string | null
+          id: string
+          name: string
+          phone: string | null
+        }
+        Insert: {
+          association_id: string
+          bank_details?: string | null
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          gst_number?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+        }
+        Update: {
+          association_id?: string
+          bank_details?: string | null
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          gst_number?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendors_association_id_fkey"
+            columns: ["association_id"]
+            isOneToOne: false
+            referencedRelation: "associations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       user_account_workspace: {
@@ -2196,6 +2586,10 @@ export type Database = {
           p_bill_type: string
           p_period: string
         }
+        Returns: string
+      }
+      amc_contract_status: {
+        Args: { p_end_date: string; p_terminated_at: string }
         Returns: string
       }
       apply_available_advance: {
@@ -2546,6 +2940,7 @@ export type Database = {
         Args: { p_id: string; p_reason?: string }
         Returns: boolean
       }
+      send_amc_reminders: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       super_admin_delete_all_bills: {

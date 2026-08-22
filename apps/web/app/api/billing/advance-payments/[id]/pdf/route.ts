@@ -211,7 +211,9 @@ export const GET = enhanceRouteHandler(
         },
         payment: {
           amount: Number(entry.amount),
-          mode: (entry.razorpay_payment_id as string | null) ? 'Razorpay' : 'Cash / Manual',
+          mode: (entry.razorpay_payment_id as string | null)
+            ? 'Razorpay'
+            : 'Cash / Manual',
           paidAt: entry.entry_date + 'T00:00:00Z',
           referenceNo: (entry.razorpay_payment_id as string | null) ?? null,
         },

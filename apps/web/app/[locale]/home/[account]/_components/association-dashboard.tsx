@@ -359,7 +359,9 @@ async function loadMyBillSummary(
         .order('paid_at', { ascending: false }),
       uc(client)
         .from('cash_ledger')
-        .select('id, unit_id, bill_type, amount, entry_date, razorpay_payment_id')
+        .select(
+          'id, unit_id, bill_type, amount, entry_date, razorpay_payment_id',
+        )
         .in('unit_id', unitIds)
         .eq('association_id', associationId)
         .eq('entry_type', 'advance_payment')
@@ -428,7 +430,14 @@ export async function AssociationDashboard({
       );
     }
 
-    const { units, bills, payments, duePayments, advancePayments, ledgerBalances } = summary;
+    const {
+      units,
+      bills,
+      payments,
+      duePayments,
+      advancePayments,
+      ledgerBalances,
+    } = summary;
 
     return (
       <OwnerUnitsView
