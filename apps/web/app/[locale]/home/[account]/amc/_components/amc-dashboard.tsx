@@ -108,7 +108,7 @@ export function AmcDashboard({ accountSlug, stats }: Props) {
                         'flex items-center justify-between rounded-md border px-3 py-2'
                       }
                     >
-                      <div className={'flex flex-col'}>
+                      <div className={'flex min-w-0 flex-col'}>
                         <Link
                           href={`/home/${accountSlug}/amc/${c.id}`}
                           className={'hover:text-primary text-sm font-medium'}
@@ -184,7 +184,7 @@ export function AmcDashboard({ accountSlug, stats }: Props) {
       {stats.expired > 0 && (
         <div
           className={
-            'bg-destructive/5 border-destructive/20 flex items-center justify-between rounded-lg border px-4 py-3'
+            'bg-destructive/5 border-destructive/20 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between'
           }
         >
           <span className={'text-sm font-medium'}>
@@ -195,6 +195,7 @@ export function AmcDashboard({ accountSlug, stats }: Props) {
           <Button
             variant={'outline'}
             size={'sm'}
+            className={'w-full sm:w-auto'}
             render={
               <Link
                 href={`/home/${accountSlug}/amc?tab=list`}

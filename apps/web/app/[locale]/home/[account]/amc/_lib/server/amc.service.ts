@@ -186,6 +186,23 @@ class AmcService {
     logger.info({ id: input.id }, 'amc: contract terminated');
   }
 
+  async deleteContract(input: { id: string; associationId: string }) {
+    const logger = await getLogger();
+
+    const { error } = await uc(this.client)
+      .from('amc_contracts')
+      .delete()
+      .eq('id', input.id)
+      .eq('association_id', input.associationId);
+
+    if (error) {
+      logger.error({ error, id: input.id }, 'amc: failed to delete contract');
+      throw error;
+    }
+
+    logger.info({ id: input.id }, 'amc: contract deleted');
+  }
+
   async listContracts(
     associationId: string,
     filters: {
@@ -264,29 +281,36 @@ class AmcService {
     const { data, error } = await uc(this.client)
       .from('amc_contracts')
       .select(
-        'id, name, category, end_date, contract_value, priority, terminated_at',
+        'id, name, vendor_name, category, start_date, end_date, contract_value, payment_frequency, priority, auto_renewal, terminated_at',
       )
       .eq('association_id', associationId)
-      .is('terminated_at', null);
+      .order('end_date', { ascending: true });
 
     if (error) throw error;
 
     type DashRow = Record<string, unknown> & { status: AmcStatus };
-    const rows: DashRow[] = (data ?? []).map((r: Record<string, unknown>) => ({
+    const all: DashRow[] = (data ?? []).map((r: Record<string, unknown>) => ({
       ...r,
-      status: computeAmcStatus(r['end_date'] as string, null),
+      status: computeAmcStatus(
+        r['end_date'] as string,
+        r['terminated_at'] as string | null,
+      ),
     }));
 
-    const active = rows.filter((r) => r.status === 'active').length;
-    const dueSoon = rows.filter((r) => r.status === 'due_soon').length;
-    const urgent = rows.filter((r) => r.status === 'urgent').length;
-    const critical = rows.filter((r) => r.status === 'critical').length;
-    const expired = rows.filter((r) => r.status === 'expired').length;
-    const totalAnnualCost = rows.reduce(
-      (sum: number, r: DashRow) => sum + ((r['contract_value'] as number) ?? 0),
-      0,
-    );
-    const needsAttention = rows.filter(
+    // KPI counts exclude terminated contracts
+    const active = all.filter((r) => r.status === 'active').length;
+    const dueSoon = all.filter((r) => r.status === 'due_soon').length;
+    const urgent = all.filter((r) => r.status === 'urgent').length;
+    const critical = all.filter((r) => r.status === 'critical').length;
+    const expired = all.filter((r) => r.status === 'expired').length;
+    const totalAnnualCost = all
+      .filter((r) => !r['terminated_at'])
+      .reduce(
+        (sum: number, r: DashRow) =>
+          sum + ((r['contract_value'] as number) ?? 0),
+        0,
+      );
+    const needsAttention = all.filter(
       (r) =>
         r.status === 'urgent' ||
         r.status === 'critical' ||
@@ -302,7 +326,7 @@ class AmcService {
       expired,
       totalAnnualCost,
       needsAttention: needsAttention as any[],
-      all: rows as any[],
+      all: all as any[],
     };
   }
 

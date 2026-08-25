@@ -61,7 +61,8 @@ export function AddAmcContractDialog({
   associationId,
   onSuccess,
 }: Props) {
-  const form = useForm<AmcContractInput>({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const form = useForm<any>({
     resolver: zodResolver(AmcContractSchema),
     defaultValues: { ...DEFAULT_VALUES, associationId },
   });
@@ -70,7 +71,7 @@ export function AddAmcContractDialog({
     onSuccess: ({ data }) => {
       toast.success('AMC contract added.');
       if (data) {
-        const values = form.getValues();
+        const values = form.getValues() as AmcContractInput;
         onSuccess({
           id: data.id,
           name: values.name,
@@ -93,8 +94,9 @@ export function AddAmcContractDialog({
       toast.error(error.serverError ?? 'Failed to add contract.'),
   });
 
-  function onSubmit(values: AmcContractInput) {
-    execute(values);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function onSubmit(values: any) {
+    execute(values as AmcContractInput);
   }
 
   return (
@@ -105,7 +107,7 @@ export function AddAmcContractDialog({
       }}
     >
       <DialogContent
-        className={'max-h-[90vh] max-w-lg overflow-y-auto'}
+        className={'max-h-[90vh] max-w-lg overflow-y-auto bg-card'}
         data-test={'add-amc-dialog'}
       >
         <DialogHeader>
@@ -155,7 +157,7 @@ export function AddAmcContractDialog({
               )}
             />
 
-            <div className={'grid grid-cols-2 gap-3'}>
+            <div className={'grid grid-cols-1 gap-3 sm:grid-cols-2'}>
               <FormField
                 control={form.control}
                 name={'vendorPhone'}
@@ -238,7 +240,7 @@ export function AddAmcContractDialog({
               )}
             />
 
-            <div className={'grid grid-cols-2 gap-3'}>
+            <div className={'grid grid-cols-1 gap-3 sm:grid-cols-2'}>
               <FormField
                 control={form.control}
                 name={'startDate'}
@@ -276,7 +278,7 @@ export function AddAmcContractDialog({
               />
             </div>
 
-            <div className={'grid grid-cols-2 gap-3'}>
+            <div className={'grid grid-cols-1 gap-3 sm:grid-cols-2'}>
               <FormField
                 control={form.control}
                 name={'contractValue'}
@@ -372,7 +374,7 @@ export function AddAmcContractDialog({
               )}
             />
 
-            <div className={'flex justify-end gap-2 pt-2'}>
+            <div className={'flex flex-wrap justify-end gap-2 pt-2'}>
               <Button
                 type={'button'}
                 variant={'outline'}

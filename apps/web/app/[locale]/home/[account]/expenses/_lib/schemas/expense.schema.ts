@@ -1,5 +1,7 @@
 import * as z from 'zod';
 
+import { todayInBillingZone } from '~/lib/billing-dates';
+
 export const PAYMENT_MODES = [
   'Cash',
   'UPI',
@@ -24,7 +26,13 @@ export const ExpenseSchema = z.object({
   modeOfPayment: z.enum(PAYMENT_MODES),
   referenceNumber: z.string().max(100).nullable().optional(),
   invoiceNumber: z.string().max(100).nullable().optional(),
-  dateOfPayment: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date'),
+  dateOfPayment: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date')
+    .refine(
+      (d) => d <= todayInBillingZone(),
+      'Payment date cannot be in the future',
+    ),
   notes: z.string().max(1000).nullable().optional(),
   recurring: z.boolean().default(false),
   recurringFrequency: z.string().nullable().optional(),
@@ -40,6 +48,7 @@ export const UpdateExpenseSchema = ExpenseSchema.partial().extend({
 export const DeleteExpenseSchema = z.object({
   id: z.string().uuid(),
   associationId: z.string().uuid(),
+  title: z.string().optional(),
 });
 
 export const CreateVendorSchema = z.object({

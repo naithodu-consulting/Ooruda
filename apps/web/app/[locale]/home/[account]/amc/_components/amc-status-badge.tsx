@@ -3,7 +3,7 @@
 import { Badge } from '@kit/ui/badge';
 import { cn } from '@kit/ui/utils';
 
-type AmcStatus =
+export type AmcStatus =
   | 'active'
   | 'due_soon'
   | 'urgent'
@@ -11,43 +11,42 @@ type AmcStatus =
   | 'expired'
   | 'terminated';
 
-const STATUS_CONFIG: Record<AmcStatus, { label: string; className: string }> = {
+const STATUS_CONFIG: Record<
+  AmcStatus,
+  { label: string; className: string }
+> = {
   active: {
     label: 'Active',
-    className:
-      'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+    className: 'border-transparent bg-primary/10 text-primary',
   },
   due_soon: {
     label: 'Due Soon',
-    className:
-      'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+    className: 'border-transparent bg-muted text-muted-foreground',
   },
   urgent: {
     label: 'Urgent',
-    className:
-      'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+    className: 'border-transparent bg-warning/15 text-warning-foreground',
   },
   critical: {
     label: 'Critical',
-    className:
-      'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+    className: 'border-transparent bg-destructive/15 text-destructive',
   },
   expired: {
     label: 'Expired',
-    className: 'bg-destructive/10 text-destructive',
+    className: 'border-transparent bg-destructive/20 text-destructive font-semibold',
   },
   terminated: {
     label: 'Terminated',
-    className: 'bg-muted text-muted-foreground',
+    className: 'border-transparent bg-muted text-muted-foreground',
   },
 };
 
 export function AmcStatusBadge({ status }: { status: AmcStatus }) {
-  const cfg = STATUS_CONFIG[status];
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.terminated;
   return (
     <Badge
       variant={'outline'}
-      className={cn('border-transparent text-xs font-medium', cfg.className)}
+      className={cn('text-xs font-medium', cfg.className)}
     >
       {cfg.label}
     </Badge>
@@ -55,8 +54,8 @@ export function AmcStatusBadge({ status }: { status: AmcStatus }) {
 }
 
 export function getStatusRowClass(status: AmcStatus): string {
-  if (status === 'critical') return 'border-l-4 border-l-orange-400';
-  if (status === 'expired') return 'border-l-4 border-l-destructive';
-  if (status === 'urgent') return 'border-l-4 border-l-amber-400';
+  if (status === 'critical' || status === 'expired')
+    return 'border-l-4 border-l-destructive/60';
+  if (status === 'urgent') return 'border-l-4 border-l-warning/60';
   return '';
 }

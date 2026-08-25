@@ -6,6 +6,7 @@ import { authActionClient } from '@kit/next/safe-action';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { getAssociationRole } from '~/lib/rbac';
+import { logAuditEvent } from '~/lib/audit-log';
 
 import {
   CreateVendorSchema,
@@ -28,6 +29,13 @@ export const createExpenseAction = authActionClient
     const service = createExpenseService(getSupabaseServerClient());
     const expense = await service.createExpense(ctx.user.id, input);
     revalidateExpenses('[account]');
+    void logAuditEvent({
+      associationId: input.associationId,
+      action: 'expense.created',
+      entityType: 'expense',
+      entityId: expense.id,
+      summary: `Expense added: ${input.title} (₹${input.amount})`,
+    });
     return expense;
   });
 
@@ -40,6 +48,13 @@ export const updateExpenseAction = authActionClient
     const service = createExpenseService(getSupabaseServerClient());
     await service.updateExpense(input);
     revalidateExpenses('[account]');
+    void logAuditEvent({
+      associationId: input.associationId,
+      action: 'expense.updated',
+      entityType: 'expense',
+      entityId: input.id,
+      summary: `Expense updated${input.title ? `: ${input.title}` : ''}${input.amount ? ` (₹${input.amount})` : ''}`,
+    });
   });
 
 // ── Delete (soft) ──────────────────────────────────────────────────────────────
@@ -51,6 +66,13 @@ export const deleteExpenseAction = authActionClient
     const service = createExpenseService(getSupabaseServerClient());
     await service.softDeleteExpense(input);
     revalidateExpenses('[account]');
+    void logAuditEvent({
+      associationId: input.associationId,
+      action: 'expense.deleted',
+      entityType: 'expense',
+      entityId: input.id,
+      summary: `Expense deleted${input.title ? `: ${input.title}` : ''}`,
+    });
   });
 
 // ── Create Vendor ─────────────────────────────────────────────────────────────

@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
+
   DialogHeader,
   DialogTitle,
 } from '@kit/ui/dialog';
@@ -44,7 +44,7 @@ import {
   renewAmcContractAction,
   terminateAmcContractAction,
 } from '../../_lib/server/amc-actions';
-import { computeAmcStatus } from '../../_lib/server/amc.service';
+import { computeAmcStatus } from '../../_lib/amc-utils';
 
 interface HistoryRow {
   id: string;
@@ -89,7 +89,10 @@ export function AmcDetailClient({
 
   function formatDate(d: string | null) {
     if (!d) return '—';
-    return format(new Date(d + 'T00:00:00'), 'd MMM yyyy');
+    // ISO timestamps already have a time component; date-only strings need one appended
+    // to avoid UTC midnight shifting the date in IST
+    const date = d.includes('T') ? new Date(d) : new Date(d + 'T00:00:00');
+    return format(date, 'd MMM yyyy');
   }
 
   const daysLeft = (() => {
@@ -113,7 +116,7 @@ export function AmcDetailClient({
           render={<Link href={`/home/${accountSlug}/amc`} />}
         >
           <ArrowLeft className={'mr-1.5 h-4 w-4'} />
-          Back to AMC
+          Back to Contracts
         </Button>
 
         {!contractData['terminated_at'] && (
@@ -125,7 +128,7 @@ export function AmcDetailClient({
               data-test={'terminate-btn'}
             >
               <XCircle className={'mr-1.5 h-3.5 w-3.5'} />
-              Terminate
+              End Contract
             </Button>
             <Button
               size={'sm'}
@@ -155,7 +158,13 @@ export function AmcDetailClient({
           >
             {labelVal('Vendor', contractData['vendor_name'])}
             {labelVal('Category', contractData['category'])}
-            {labelVal('Priority', contractData['priority'])}
+            {labelVal(
+              'Priority',
+              contractData['priority']
+                ? String(contractData['priority']).charAt(0).toUpperCase() +
+                    String(contractData['priority']).slice(1)
+                : null,
+            )}
             {labelVal('Payment Frequency', contractData['payment_frequency'])}
             {labelVal(
               'Start Date',
@@ -173,8 +182,10 @@ export function AmcDetailClient({
               labelVal(
                 'Days Remaining',
                 daysLeft < 0
-                  ? `${Math.abs(daysLeft)}d overdue`
-                  : `${daysLeft}d`,
+                  ? `${Math.abs(daysLeft)} days overdue`
+                  : daysLeft === 0
+                    ? 'Expires today'
+                    : `${daysLeft} days`,
               )}
             {!!contractData['vendor_contact_person'] &&
               labelVal('Contact Person', contractData['vendor_contact_person'])}
@@ -236,39 +247,55 @@ export function AmcDetailClient({
             </p>
           ) : (
             <ol className={'flex flex-col gap-y-3'}>
-              {history.map((h, i) => (
-                <li key={h.id} className={'flex items-start gap-3'}>
-                  <div
-                    className={
-                      'bg-muted mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium'
-                    }
-                  >
-                    {history.length - i}
-                  </div>
-                  <div className={'flex flex-col gap-0.5'}>
-                    <span className={'text-sm font-medium'}>
-                      Renewed on{' '}
-                      {format(
-                        new Date(h.renewed_at + 'T00:00:00'),
-                        'd MMM yyyy',
-                      )}
-                    </span>
-                    <span className={'text-muted-foreground text-xs'}>
-                      New expiry:{' '}
-                      {format(
-                        new Date(h.new_end_date + 'T00:00:00'),
-                        'd MMM yyyy',
-                      )}{' '}
-                      · {formatINR(h.contract_value)}
-                    </span>
-                    {h.notes && (
-                      <span className={'text-muted-foreground text-xs'}>
-                        {h.notes}
+              {history.map((h, i) => {
+                const isLatest = i === 0;
+                const currentEndDate = contractData['end_date'] as string;
+                const dateMismatch =
+                  isLatest && h.new_end_date !== currentEndDate;
+                return (
+                  <li key={h.id} className={'flex items-start gap-3'}>
+                    <div
+                      className={
+                        'bg-muted mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium'
+                      }
+                    >
+                      {history.length - i}
+                    </div>
+                    <div className={'flex flex-col gap-0.5'}>
+                      <span className={'text-sm font-medium'}>
+                        Renewed on{' '}
+                        {format(
+                          new Date(h.renewed_at + 'T00:00:00'),
+                          'd MMM yyyy',
+                        )}
                       </span>
-                    )}
-                  </div>
-                </li>
-              ))}
+                      <span className={'text-muted-foreground text-xs'}>
+                        New expiry:{' '}
+                        {format(
+                          new Date(h.new_end_date + 'T00:00:00'),
+                          'd MMM yyyy',
+                        )}{' '}
+                        · {formatINR(h.contract_value)}
+                      </span>
+                      {dateMismatch && (
+                        <span className={'text-muted-foreground text-xs italic'}>
+                          Current expiry updated to{' '}
+                          {format(
+                            new Date(currentEndDate + 'T00:00:00'),
+                            'd MMM yyyy',
+                          )}{' '}
+                          via contract edit
+                        </span>
+                      )}
+                      {h.notes && (
+                        <span className={'text-muted-foreground text-xs'}>
+                          {h.notes}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ol>
           )}
         </CardContent>
@@ -361,7 +388,7 @@ function RenewDialog({
         if (!v) onClose();
       }}
     >
-      <DialogContent data-test={'renew-dialog'}>
+      <DialogContent className={'bg-card'} data-test={'renew-dialog'}>
         <DialogHeader>
           <DialogTitle>Mark as Renewed</DialogTitle>
         </DialogHeader>
@@ -452,7 +479,7 @@ function RenewDialog({
               )}
             />
 
-            <DialogFooter className={'gap-2'}>
+            <div className={'flex justify-end gap-2 pt-2'}>
               <Button
                 type={'button'}
                 variant={'outline'}
@@ -468,7 +495,7 @@ function RenewDialog({
               >
                 {isPending ? 'Saving…' : 'Confirm Renewal'}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </Form>
       </DialogContent>
@@ -500,11 +527,13 @@ function TerminateDialog({
 
   const { execute, isPending } = useAction(terminateAmcContractAction, {
     onSuccess: () => {
-      toast.success('Contract terminated.');
+      toast.success('Contract ended.');
       onSuccess();
     },
     onError: ({ error }) =>
-      toast.error(error.serverError ?? 'Failed to terminate.'),
+      toast.error(
+        error.serverError ?? 'Could not end the contract. Please try again.',
+      ),
   });
 
   return (
@@ -514,9 +543,9 @@ function TerminateDialog({
         if (!v) onClose();
       }}
     >
-      <DialogContent data-test={'terminate-dialog'}>
+      <DialogContent className={'bg-card'} data-test={'terminate-dialog'}>
         <DialogHeader>
-          <DialogTitle>Terminate Contract</DialogTitle>
+          <DialogTitle>End Contract</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -545,7 +574,7 @@ function TerminateDialog({
               )}
             />
 
-            <DialogFooter className={'gap-2'}>
+            <div className={'flex justify-end gap-2 pt-2'}>
               <Button
                 type={'button'}
                 variant={'outline'}
@@ -560,9 +589,9 @@ function TerminateDialog({
                 disabled={isPending}
                 data-test={'confirm-terminate-btn'}
               >
-                {isPending ? 'Terminating…' : 'Terminate Contract'}
+                {isPending ? 'Ending…' : 'End Contract'}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </Form>
       </DialogContent>

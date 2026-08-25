@@ -80,6 +80,12 @@ export const TerminateAmcSchema = z.object({
   reason: z.string().min(1, 'Reason is required').max(500),
 });
 
+export const DeleteAmcSchema = z.object({
+  id: z.string().uuid(),
+  associationId: z.string().uuid(),
+  name: z.string().optional(),
+});
+
 export const AmcReminderSettingsSchema = z.object({
   associationId: z.string().uuid(),
   remindDaysBefore: z
@@ -94,6 +100,7 @@ export type AmcContractInput = z.infer<typeof AmcContractSchema>;
 export type UpdateAmcContractInput = z.infer<typeof UpdateAmcContractSchema>;
 export type RenewAmcInput = z.infer<typeof RenewAmcSchema>;
 export type TerminateAmcInput = z.infer<typeof TerminateAmcSchema>;
+export type DeleteAmcInput = z.infer<typeof DeleteAmcSchema>;
 export type AmcReminderSettingsInput = z.infer<
   typeof AmcReminderSettingsSchema
 >;

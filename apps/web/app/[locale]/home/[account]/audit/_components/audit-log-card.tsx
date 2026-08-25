@@ -116,13 +116,7 @@ export function AuditLogCard(props: {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-bold">Audit Log</h2>
-          <p className="text-muted-foreground text-sm">
-            All events, actions, and system events
-          </p>
-        </div>
+      <div className="flex justify-end">
         <AuditSearchBar
           defaultValue={search}
           basePath={basePath}

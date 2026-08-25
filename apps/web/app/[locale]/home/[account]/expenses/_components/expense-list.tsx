@@ -22,7 +22,7 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter,
+
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@kit/ui/alert-dialog';
@@ -159,7 +159,8 @@ export function ExpenseList({
   function confirmDelete() {
     startTransition(() => {
       selectedIds.forEach((id) => {
-        deleteExpense({ id, associationId });
+        const expense = expenses.find((e) => e.id === id);
+        deleteExpense({ id, associationId, title: expense?.title });
       });
       setExpenses((prev) => prev.filter((e) => !selectedIds.has(e.id)));
       setSelectedIds(new Set());
@@ -287,7 +288,7 @@ export function ExpenseList({
             value={datePreset}
             onValueChange={(v) => setDatePreset(v as DatePresetValue)}
           >
-            <SelectTrigger className={'w-36'} data-test={'date-preset-select'}>
+            <SelectTrigger className={'w-full sm:w-36'} data-test={'date-preset-select'}>
               <SelectValue>
                 {DATE_PRESETS.find((p) => p.value === datePreset)?.label ??
                   'This FY'}
@@ -307,7 +308,7 @@ export function ExpenseList({
             <>
               <Input
                 type={'date'}
-                className={'w-36'}
+                className={'w-full sm:w-36'}
                 value={customFrom}
                 onChange={(e) => setCustomFrom(e.target.value)}
                 placeholder={'From'}
@@ -315,7 +316,7 @@ export function ExpenseList({
               />
               <Input
                 type={'date'}
-                className={'w-36'}
+                className={'w-full sm:w-36'}
                 value={customTo}
                 min={customFrom}
                 onChange={(e) => setCustomTo(e.target.value)}
@@ -331,7 +332,7 @@ export function ExpenseList({
             onValueChange={(v) => setCategoryFilter(v ?? '')}
           >
             <SelectTrigger
-              className={'w-44'}
+              className={'w-full sm:w-44'}
               data-test={'category-filter-select'}
             >
               <SelectValue>
@@ -356,7 +357,7 @@ export function ExpenseList({
             value={modeFilter}
             onValueChange={(v) => setModeFilter(v ?? '')}
           >
-            <SelectTrigger className={'w-44'} data-test={'mode-filter-select'}>
+            <SelectTrigger className={'w-full sm:w-44'} data-test={'mode-filter-select'}>
               <SelectValue placeholder={'All Modes'} />
             </SelectTrigger>
             <SelectContent>
@@ -379,14 +380,14 @@ export function ExpenseList({
           </Select>
 
           {/* Search */}
-          <div className={'relative'}>
+          <div className={'relative w-full sm:w-52'}>
             <Search
               className={
                 'text-muted-foreground absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2'
               }
             />
             <Input
-              className={'w-52 pl-8'}
+              className={'w-full pl-8'}
               placeholder={'Search expenses…'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -395,7 +396,7 @@ export function ExpenseList({
           </div>
         </div>
 
-        <div className={'flex gap-2'}>
+        <div className={'flex flex-wrap gap-2'}>
           {selectedIds.size > 0 && (
             <Button
               variant={'destructive'}
@@ -632,7 +633,7 @@ export function ExpenseList({
         open={deleteConfirmOpen}
         onOpenChange={setDeleteConfirmOpen}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className={'bg-card'}>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Expenses</AlertDialogTitle>
             <AlertDialogDescription>
@@ -641,7 +642,7 @@ export function ExpenseList({
                 : `Are you sure you want to delete ${selectedIds.size} expenses? This action cannot be undone.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <div className={'flex justify-end gap-2 pt-2'}>
             <AlertDialogCancel data-test={'delete-cancel-btn'}>
               Cancel
             </AlertDialogCancel>
@@ -652,7 +653,7 @@ export function ExpenseList({
             >
               Delete
             </AlertDialogAction>
-          </AlertDialogFooter>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
 

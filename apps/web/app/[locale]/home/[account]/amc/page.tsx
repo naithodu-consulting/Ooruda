@@ -51,6 +51,7 @@ export default async function AmcPage({ params, searchParams }: Props) {
     <>
       <TeamAccountLayoutPageHeader
         account={account}
+        title={'Service Contracts'}
         description={
           'Manage annual maintenance contracts and renewal reminders.'
         }

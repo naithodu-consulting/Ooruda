@@ -38,6 +38,8 @@ import {
   type UpdateExpenseInput,
 } from '../_lib/schemas/expense.schema';
 import { updateExpenseAction } from '../_lib/server/expense-actions';
+import { todayInBillingZone } from '~/lib/billing-dates';
+
 import type { ExpenseRow } from './expenses-page-client';
 
 interface Props {
@@ -149,7 +151,7 @@ export function EditExpenseDialog({
               )}
             />
 
-            <div className={'grid grid-cols-2 gap-3'}>
+            <div className={'grid grid-cols-1 gap-3 sm:grid-cols-2'}>
               {/* Amount */}
               <FormField
                 control={form.control}
@@ -232,7 +234,7 @@ export function EditExpenseDialog({
               )}
             />
 
-            <div className={'grid grid-cols-2 gap-3'}>
+            <div className={'grid grid-cols-1 gap-3 sm:grid-cols-2'}>
               {/* Payor */}
               <FormField
                 control={form.control}
@@ -309,7 +311,7 @@ export function EditExpenseDialog({
               )}
             />
 
-            <div className={'grid grid-cols-2 gap-3'}>
+            <div className={'grid grid-cols-1 gap-3 sm:grid-cols-2'}>
               {/* Reference Number */}
               <FormField
                 control={form.control}
@@ -361,6 +363,7 @@ export function EditExpenseDialog({
                   <FormControl>
                     <Input
                       type={'date'}
+                      max={todayInBillingZone()}
                       {...field}
                       data-test={'expense-date-input'}
                     />
@@ -391,7 +394,7 @@ export function EditExpenseDialog({
               )}
             />
 
-            <div className={'flex justify-end gap-2'}>
+            <div className={'flex flex-wrap justify-end gap-2 pt-2'}>
               <Button
                 type={'button'}
                 variant={'outline'}
