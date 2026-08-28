@@ -89,7 +89,9 @@ export async function GET(req: NextRequest) {
   // Category breakdown (FY)
   const catMap = new Map<string, number>();
   for (const e of rows) {
-    const catName = (e.expense_categories as { name: string } | null)?.name ?? 'Uncategorized';
+    const catName =
+      (e.expense_categories as { name: string } | null)?.name ??
+      'Uncategorized';
     catMap.set(catName, (catMap.get(catName) ?? 0) + e.amount);
   }
   const categoryBreakdown = Array.from(catMap.entries())
@@ -99,7 +101,9 @@ export async function GET(req: NextRequest) {
   // Top category this month
   const monthCatMap = new Map<string, number>();
   for (const e of monthRows) {
-    const catName = (e.expense_categories as { name: string } | null)?.name ?? 'Uncategorized';
+    const catName =
+      (e.expense_categories as { name: string } | null)?.name ??
+      'Uncategorized';
     monthCatMap.set(catName, (monthCatMap.get(catName) ?? 0) + e.amount);
   }
   const sortedCategories = Array.from(monthCatMap.entries()).sort(
@@ -113,13 +117,18 @@ export async function GET(req: NextRequest) {
   const monthlyMap = new Map<string, number>();
   // Pre-seed all 12 FY months with 0 so months without expenses still appear.
   for (let i = 0; i < 12; i++) {
-    const d = new Date(fyStartDate.getFullYear(), fyStartDate.getMonth() + i, 1);
+    const d = new Date(
+      fyStartDate.getFullYear(),
+      fyStartDate.getMonth() + i,
+      1,
+    );
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     monthlyMap.set(key, 0);
   }
   for (const e of rows) {
     const key = e.date_of_payment.slice(0, 7); // YYYY-MM
-    if (monthlyMap.has(key)) monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + e.amount);
+    if (monthlyMap.has(key))
+      monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + e.amount);
   }
   const monthlyTrend = Array.from(monthlyMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))

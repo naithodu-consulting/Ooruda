@@ -49,6 +49,7 @@ import {
 } from '../_lib/reports-types';
 import { TOOLTIP_STYLE } from './chart-tooltip-style';
 import { KpiTile } from './kpi-tile';
+import { TablePagination, usePagedRows } from './table-pagination';
 
 interface Props {
   bills: OutstandingBill[];
@@ -81,12 +82,9 @@ function daysOverdue(dueDate: string): number {
   return Math.max(0, Math.floor((today.getTime() - due.getTime()) / 86400000));
 }
 
-const PAGE_SIZE = 25;
-
 export function OutstandingTab({ bills, statusFilter }: Props) {
   const [showTable, setShowTable] = useState(false);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -163,8 +161,8 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
       ),
     [enriched, search],
   );
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const { page, setPage, paged, totalPages, total, fromIndex, toIndex } =
+    usePagedRows(filtered, `${statusFilter}|${search}`);
 
   const inrK = (val: number) => {
     if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
@@ -403,29 +401,16 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
             </div>
 
             {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  Page {page} of {totalPages}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    disabled={page === 1}
-                    onClick={() => setPage((p) => p - 1)}
-                    className="disabled:text-muted-foreground hover:bg-muted rounded px-2 py-1 text-sm disabled:pointer-events-none"
-                  >
-                    ← Prev
-                  </button>
-                  <button
-                    disabled={page === totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                    className="disabled:text-muted-foreground hover:bg-muted rounded px-2 py-1 text-sm disabled:pointer-events-none"
-                  >
-                    Next →
-                  </button>
-                </div>
-              </div>
-            )}
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              fromIndex={fromIndex}
+              toIndex={toIndex}
+              onPageChange={setPage}
+              label="bills"
+              testPrefix="outstanding"
+            />
           </CardContent>
         )}
       </Card>

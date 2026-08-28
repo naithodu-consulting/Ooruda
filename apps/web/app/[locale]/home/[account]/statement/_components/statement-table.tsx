@@ -38,31 +38,12 @@ import {
 
 import { formatINR } from '~/lib/format-inr';
 
-export interface StatementEntry {
-  id: string;
-  unit_id: string;
-  unit_no: string;
-  entry_type:
-    | 'due'
-    | 'advance_payment'
-    | 'advance_applied'
-    | 'due_payment'
-    | 'reversal';
-  bill_type: string;
-  bill_no: string | null;
-  /** Resolved charge name from bill line items (e.g. "Water Charges"). Overrides generic bill_type label. */
-  charge_name: string | null;
-  amount: number;
-  direction: 'debit' | 'credit';
-  entry_date: string;
-  notes: string | null;
-  mode: string | null;
-  /** Set on due_payment entries affected by a Razorpay refund. */
-  payment_status?: 'active' | 'reversed' | 'partial_refund';
-  /** Amount already refunded (only set when payment_status='partial_refund'). */
-  refunded_amount?: number;
-  runningBalance: number;
-}
+import type { StatementEntry } from '../_lib/statement-types';
+
+// Canonical shape now lives in _lib/statement-types so the server-side
+// statement service can use it without importing this 'use client' module.
+// Re-exported here to keep existing import sites working.
+export type { StatementEntry };
 
 interface Props {
   account: string;

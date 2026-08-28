@@ -121,6 +121,7 @@ async function sendEmail(
   to: string,
   subject: string,
   html: string,
+  tag: string,
 ): Promise<SmsResponse> {
   if (!RESEND_API_KEY)
     return { success: false, error: 'RESEND_API_KEY not configured' };
@@ -130,13 +131,25 @@ async function sendEmail(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${RESEND_API_KEY}`,
     },
-    body: JSON.stringify({ from: SENDER_EMAIL, to: [to], subject, html }),
+    body: JSON.stringify({
+      from: SENDER_EMAIL,
+      to: [to],
+      subject,
+      html,
+      reply_to: SENDER_EMAIL,
+      headers: {
+        'List-Unsubscribe': `<mailto:${SENDER_EMAIL}?subject=unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+      tags: [{ name: 'email_type', value: tag }],
+    }),
   });
   if (res.ok) {
     const data = (await res.json()) as { id?: string };
     return { success: true, messageId: data.id };
   }
-  return { success: false, error: `Resend HTTP ${res.status}` };
+  const body = await res.text().catch(() => '');
+  return { success: false, error: `Resend HTTP ${res.status}: ${body}` };
 }
 
 // Minimal reminder email HTML (no react-email in Deno — plain inline HTML)
@@ -530,7 +543,12 @@ Deno.serve(async (req) => {
               associationName: assoc.accounts.name,
               accountSlug: assoc.accounts.slug,
             });
-            const result = await sendEmail(email, subject, html);
+            const result = await sendEmail(
+              email,
+              subject,
+              html,
+              isOverdue ? 'overdue' : 'reminder',
+            );
             try {
               await supabase.from('notifications_log').insert({
                 association_id: assoc.id,

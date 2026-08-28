@@ -60,6 +60,7 @@ async function sendEmail(
   to: string,
   subject: string,
   html: string,
+  tag: string,
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey)
@@ -71,14 +72,26 @@ async function sendEmail(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ from: SENDER_EMAIL, to: [to], subject, html }),
+    body: JSON.stringify({
+      from: SENDER_EMAIL,
+      to: [to],
+      subject,
+      html,
+      reply_to: SENDER_EMAIL,
+      headers: {
+        'List-Unsubscribe': `<mailto:${SENDER_EMAIL}?subject=unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+      tags: [{ name: 'email_type', value: tag }],
+    }),
   });
 
   if (res.ok) {
     const data = (await res.json()) as { id?: string };
     return { success: true, messageId: data.id };
   }
-  return { success: false, error: `Resend HTTP ${res.status}` };
+  const body = await res.text().catch(() => '');
+  return { success: false, error: `Resend HTTP ${res.status}: ${body}` };
 }
 
 async function logNotification(params: {
@@ -305,7 +318,12 @@ export async function sendBillGeneratedNotifications(
               dueDate: unit.dueDate,
               associationName: params.associationName,
             });
-            const result = await sendEmail(email, subject, html);
+            const result = await sendEmail(
+              email,
+              subject,
+              html,
+              'bill_generated',
+            );
             await logNotification({
               associationId: params.associationId,
               type: 'bill_generated',
@@ -409,7 +427,12 @@ export async function sendPaymentConfirmedNotification(
           paidAmount: params.paidAmount,
           associationName: params.associationName,
         });
-        const result = await sendEmail(email, subject, html);
+        const result = await sendEmail(
+          email,
+          subject,
+          html,
+          'payment_confirmed',
+        );
         await logNotification({
           associationId: params.associationId,
           type: 'payment_confirmed',
@@ -523,7 +546,7 @@ export async function sendReminderNotification(
           associationName: params.associationName,
           accountSlug: params.accountSlug,
         });
-        const result = await sendEmail(email, subject, html);
+        const result = await sendEmail(email, subject, html, templateKey);
         await logNotification({
           associationId: params.associationId,
           type: templateKey,

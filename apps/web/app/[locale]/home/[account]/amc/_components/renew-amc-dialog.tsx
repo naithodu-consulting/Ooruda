@@ -1,10 +1,9 @@
 'use client';
 
-import { useAction } from 'next-safe-action/hooks';
-import { useForm } from 'react-hook-form';
-
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from 'date-fns';
+import { useAction } from 'next-safe-action/hooks';
+import { useForm } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
 import {
@@ -23,15 +22,12 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
-import { Textarea } from '@kit/ui/textarea';
 import { toast } from '@kit/ui/sonner';
+import { Textarea } from '@kit/ui/textarea';
 
-import {
-  RenewAmcSchema,
-  type RenewAmcInput,
-} from '../_lib/schemas/amc.schema';
-import { renewAmcContractAction } from '../_lib/server/amc-actions';
 import { computeAmcStatus } from '../_lib/amc-utils';
+import { RenewAmcSchema, type RenewAmcInput } from '../_lib/schemas/amc.schema';
+import { renewAmcContractAction } from '../_lib/server/amc-actions';
 import type { AmcContractRow } from './amc-page-client';
 
 interface Props {
@@ -95,14 +91,13 @@ export function RenewAmcDialog({
       }}
     >
       <DialogContent
-        className={'max-w-md bg-card'}
+        className={'bg-card max-w-md'}
         data-test={'renew-amc-dialog'}
       >
         <DialogHeader>
           <DialogTitle>Mark as Renewed</DialogTitle>
           <DialogDescription>
-            Enter the new contract details for{' '}
-            <strong>{contract.name}</strong>.
+            Enter the new contract details for <strong>{contract.name}</strong>.
           </DialogDescription>
         </DialogHeader>
 
@@ -119,7 +114,11 @@ export function RenewAmcDialog({
                   <FormItem>
                     <FormLabel>Renewed On</FormLabel>
                     <FormControl>
-                      <Input type={'date'} {...field} data-test={'renew-date-input'} />
+                      <Input
+                        type={'date'}
+                        {...field}
+                        data-test={'renew-date-input'}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

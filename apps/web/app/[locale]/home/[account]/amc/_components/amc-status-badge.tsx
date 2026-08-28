@@ -11,10 +11,7 @@ export type AmcStatus =
   | 'expired'
   | 'terminated';
 
-const STATUS_CONFIG: Record<
-  AmcStatus,
-  { label: string; className: string }
-> = {
+const STATUS_CONFIG: Record<AmcStatus, { label: string; className: string }> = {
   active: {
     label: 'Active',
     className: 'border-transparent bg-primary/10 text-primary',
@@ -33,7 +30,8 @@ const STATUS_CONFIG: Record<
   },
   expired: {
     label: 'Expired',
-    className: 'border-transparent bg-destructive/20 text-destructive font-semibold',
+    className:
+      'border-transparent bg-destructive/20 text-destructive font-semibold',
   },
   terminated: {
     label: 'Terminated',

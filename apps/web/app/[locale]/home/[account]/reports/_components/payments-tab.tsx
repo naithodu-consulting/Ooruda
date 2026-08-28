@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import {
   Area,
@@ -45,6 +45,7 @@ import {
 } from '../_lib/reports-types';
 import { TOOLTIP_STYLE } from './chart-tooltip-style';
 import { KpiTile } from './kpi-tile';
+import { TablePagination, usePagedRows } from './table-pagination';
 
 interface Props {
   payments: PaymentRow[];
@@ -57,8 +58,6 @@ const MODE_COLORS: Record<string, string> = {
   NetBanking: '#06b6d4',
   Cash: '#10b981',
 };
-
-const PAGE_SIZE = 25;
 
 function shortDate(iso: string) {
   const d = new Date(iso);
@@ -81,8 +80,6 @@ function inrK(val: number) {
 }
 
 export function PaymentsTab({ payments }: Props) {
-  const [page, setPage] = useState(1);
-
   const total = payments.reduce((s, p) => s + p.amount, 0);
   const count = payments.length;
   const avg = count > 0 ? total / count : 0;
@@ -168,8 +165,15 @@ export function PaymentsTab({ payments }: Props) {
     'water',
   ].filter((t) => payments.some((p) => p.bill_type === t));
 
-  const totalPages = Math.ceil(payments.length / PAGE_SIZE);
-  const paged = payments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const {
+    page,
+    setPage,
+    paged,
+    totalPages,
+    total: pagedTotal,
+    fromIndex,
+    toIndex,
+  } = usePagedRows(payments, null);
 
   if (payments.length === 0) {
     return (
@@ -440,29 +444,16 @@ export function PaymentsTab({ payments }: Props) {
               </TableBody>
             </Table>
           </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">
-                Page {page} of {totalPages}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="disabled:text-muted-foreground hover:bg-muted rounded px-2 py-1 text-sm disabled:pointer-events-none"
-                >
-                  ← Prev
-                </button>
-                <button
-                  disabled={page === totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="disabled:text-muted-foreground hover:bg-muted rounded px-2 py-1 text-sm disabled:pointer-events-none"
-                >
-                  Next →
-                </button>
-              </div>
-            </div>
-          )}
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={pagedTotal}
+            fromIndex={fromIndex}
+            toIndex={toIndex}
+            onPageChange={setPage}
+            label="payments"
+            testPrefix="payments"
+          />
         </CardContent>
       </Card>
     </div>

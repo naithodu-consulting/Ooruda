@@ -165,9 +165,9 @@ export function AddCashLedgerEntryDialog({
 
   function paidByLabel(type: string) {
     if (type === 'owner')
-      return ownerMember ? `Owner — ${ownerMember.name}` : 'Owner';
+      return ownerMember ? `Owner - ${ownerMember.name}` : 'Owner';
     if (type === 'tenant')
-      return tenantMember ? `Tenant — ${tenantMember.name}` : 'Tenant';
+      return tenantMember ? `Tenant - ${tenantMember.name}` : 'Tenant';
     return 'Other';
   }
 
@@ -228,7 +228,7 @@ export function AddCashLedgerEntryDialog({
           </DialogTitle>
           <DialogDescription>
             {isDue
-              ? 'Record an amount owed by a unit — no payment has been made yet.'
+              ? 'Record an amount owed by a unit where no payment has been made yet.'
               : 'Log a payment received in advance before a bill is generated.'}
           </DialogDescription>
         </DialogHeader>

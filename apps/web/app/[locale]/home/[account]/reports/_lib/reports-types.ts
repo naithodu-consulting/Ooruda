@@ -14,7 +14,21 @@ export type TabKey =
   | 'outstanding'
   | 'payments'
   | 'cash_ledger'
-  | 'electricity';
+  | 'electricity'
+  | 'unit_outstanding'
+  | 'payment_modes'
+  | 'advances'
+  | 'gst_summary'
+  | 'ledger_statement'
+  | 'occupancy'
+  | 'directory'
+  | 'other_charges';
+
+/**
+ * Sentinel unit id for the Ledger Statement's association-wide view.
+ * Not a real UUID, so it can never collide with an actual unit id.
+ */
+export const LEDGER_ALL_UNITS = '__all_units__';
 
 export type OutstandingStatus = 'all' | 'overdue' | 'partial' | 'unpaid';
 
@@ -23,6 +37,8 @@ export interface ReportsFilters {
   billTypes: string[]; // empty = all bill types
   outstandingStatus: OutstandingStatus;
   paymentMode: string; // '' = all modes
+  /** When true, unit breakdown in collection PDF/CSV only includes units with collected > 0. */
+  collectedOnly?: boolean;
 }
 
 export const DEFAULT_FILTERS: ReportsFilters = {
@@ -95,6 +111,63 @@ export interface UnitConsumptionRow {
   charged_amount: number;
   prev_reading: number | null;
   curr_reading: number | null;
+  minimum_charge: number;
+}
+
+// ── New report row types ──────────────────────────────────────────────────────
+
+export interface UnitOutstandingRow {
+  unit_id: string;
+  unit_no: string;
+  total_outstanding: number;
+  overdue_count: number;
+  last_payment_date: string | null;
+  owner_name: string | null;
+  owner_phone: string | null;
+}
+
+export interface PaymentModeRow {
+  mode: string;
+  amount: number;
+  count: number;
+}
+
+export interface AdvanceRow {
+  unit_id: string;
+  unit_no: string;
+  balance: number;
+  last_deposit_date: string | null;
+  last_applied_date: string | null;
+}
+
+// ── Other Charges report ──────────────────────────────────────────────────────
+
+export interface OtherChargeRow {
+  charge_name: string;
+  bill_count: number;
+  unit_count: number;
+  billed: number;
+  collected: number;
+  outstanding: number;
+}
+
+export interface OtherChargeUnitRow {
+  unit_no: string;
+  bill_count: number;
+  billed: number;
+  collected: number;
+  outstanding: number;
+  status: 'paid' | 'partial' | 'unpaid' | 'overdue';
+}
+
+export interface BillTypeUnitRow {
+  unit_id: string;
+  unit_no: string;
+  billed: number;
+  collected: number;
+  outstanding: number;
+  bill_count: number;
+  status: 'paid' | 'partial' | 'unpaid' | 'overdue';
 }
 
 export interface UnitOption {
@@ -179,6 +252,21 @@ export const PRESET_RANGES = [
 
 export type PresetKey = (typeof PRESET_RANGES)[number]['key'];
 
+// ── GST Summary ───────────────────────────────────────────────────────────────
+
+export interface GstSummaryRow {
+  period: string;
+  bill_type: string;
+  bill_count: number;
+  taxable_amount: number; // total_amount - gst_amount
+  gst_amount: number;
+  total_amount: number;
+  // collected breakdown
+  collected_total: number;
+  collected_taxable: number;
+  collected_gst: number;
+}
+
 /**
  * Resolve a preset key to a date range.
  * "All Time" returns empty strings — callers must skip DB filters when from/to are empty.
@@ -209,4 +297,30 @@ export function resolvePreset(key: PresetKey | string): DateRange {
 /** Convert a YYYY-MM-DD date string to a YYYY-MM billing period string. */
 export function dateToPeriod(date: string): string {
   return date.slice(0, 7);
+}
+
+// ── Occupancy & Directory ─────────────────────────────────────────────────────
+
+export interface OccupancyRow {
+  unit_id: string;
+  unit_no: string;
+  type: string;
+  floor: number | null;
+  area_sqft: number;
+  status: 'Occupied' | 'Vacant';
+  occupant_name: string | null;
+  occupant_phone: string | null;
+  occupant_email: string | null;
+  occupant_role: 'Owner' | 'Tenant' | 'Owner + Tenant' | null;
+  move_in_date: string | null;
+}
+
+export interface DirectoryRow {
+  unit_id: string;
+  unit_no: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  role: 'Owner' | 'Tenant';
+  move_in_date: string | null;
 }

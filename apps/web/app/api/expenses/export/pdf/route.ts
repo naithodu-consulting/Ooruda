@@ -31,7 +31,10 @@ export const POST = enhanceRouteHandler(
     try {
       body = BodySchema.parse(await request.json());
     } catch {
-      return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Invalid request body.' },
+        { status: 400 },
+      );
     }
 
     const client = getSupabaseServerClient();
@@ -56,11 +59,17 @@ export const POST = enhanceRouteHandler(
 
     if (error) {
       logger.error({ error }, 'expenses: export PDF fetch failed');
-      return NextResponse.json({ error: 'Failed to fetch expenses.' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to fetch expenses.' },
+        { status: 500 },
+      );
     }
 
     if (!rows || rows.length === 0) {
-      return NextResponse.json({ error: 'No expenses found.' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'No expenses found.' },
+        { status: 404 },
+      );
     }
 
     // Apply search filter (DB ilike would require dynamic query building; JS filter is fine for export volumes)
@@ -75,7 +84,10 @@ export const POST = enhanceRouteHandler(
       : rows;
 
     if (filtered.length === 0) {
-      return NextResponse.json({ error: 'No expenses match the current filters.' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'No expenses match the current filters.' },
+        { status: 404 },
+      );
     }
 
     // Association branding
@@ -95,7 +107,8 @@ export const POST = enhanceRouteHandler(
       date_of_payment: e.date_of_payment,
       title: e.title,
       category_name:
-        (e.expense_categories as unknown as { name: string } | null)?.name ?? null,
+        (e.expense_categories as unknown as { name: string } | null)?.name ??
+        null,
       payee_name: e.payee_name,
       mode_of_payment: e.mode_of_payment,
       amount: Number(e.amount),
@@ -124,7 +137,9 @@ export const POST = enhanceRouteHandler(
           email: assocData?.email ?? null,
           phone: assocData?.phone ?? null,
         },
-        filterLabel: body.filterLabel ?? `${expenses.length} expense${expenses.length !== 1 ? 's' : ''}`,
+        filterLabel:
+          body.filterLabel ??
+          `${expenses.length} expense${expenses.length !== 1 ? 's' : ''}`,
         generatedAt,
         expenses,
         totalAmount,
@@ -140,7 +155,10 @@ export const POST = enhanceRouteHandler(
       });
     } catch (err) {
       logger.error({ error: err }, 'expenses: PDF render failed');
-      return NextResponse.json({ error: 'PDF generation failed.' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'PDF generation failed.' },
+        { status: 500 },
+      );
     }
   },
   { auth: true },

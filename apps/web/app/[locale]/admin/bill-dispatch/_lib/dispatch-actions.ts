@@ -185,6 +185,12 @@ async function sendViaResend(params: {
       to: [params.to],
       subject: params.subject,
       html: params.html,
+      reply_to: EMAIL_SENDER,
+      headers: {
+        'List-Unsubscribe': `<mailto:${EMAIL_SENDER}?subject=unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+      tags: [{ name: 'email_type', value: 'bill_dispatch' }],
       attachments: [
         { filename: params.attachmentName, content: params.attachmentBase64 },
       ],

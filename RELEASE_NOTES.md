@@ -55,10 +55,22 @@ This document covers all feature work, enhancements, and notable changes built o
 - **AMC dashboard**: "Active" KPI tile renamed "On Track"; duplicate page title removed.
 - **Code quality**: removed unnecessary `(client as any)` casts for typed `expenses` table in analytics route; added missing `'page'` type arg to `revalidatePath` in expense-actions.
 
+### Reports Screen — Major Expansion (2026-08-28)
+
+- **12-tab reports screen**: redesigned with three tab groups — Financial (Collection, Outstanding, Payments, Cash Ledger, Unit Dues, Unit Account Statement, Other Charges, GST Summary), Analytics (Electricity, Payment Modes, Advances), Property (Occupancy, Directory).
+- **Other Charges report**: dedicated tab and PDF showing charge-type summary (billed, collected, outstanding) plus per-charge unit breakdown; pro-rata allocation from settled bill amount.
+- **Tab-aware filter reset**: switching tabs now clears filters that the new tab does not support (bill types, status, payment mode, unit selection) — no stale filters carried across.
+- **GST Summary moved to Financial**: grouped with other financial reports; removed from Analytics tab.
+- **Analytics tab renamed**: "Utilities & Analytics" → "Analytics" (cleaner label).
+- **Outstanding PDF fix**: Bill No. and Type columns no longer run together; column flex widths corrected.
+- **Other Charges TypeScript fixes**: `TOOLTIP_STYLE` spread corrected; formatter and labelFormatter types resolved; stale `'bill_type'` tab key removed from action layer.
+- **Unit Outstanding summary**: new migration adds `get_unit_outstanding_summary` RPC for the Unit Dues tab.
+
 | Migration | Change |
 |-----------|--------|
 | `20260820000001_expense_tracker_amc_reminder.sql` | `association_feature_flags`, `expense_categories`, `vendors`, `expenses`, `amc_contracts`, `amc_renewal_history`, `amc_reminder_settings` tables; `amc_contract_status()` function; `send_amc_reminders()` cron function; RLS policies; 14 default expense categories + 20 AMC categories seeded |
 | `20260821000001_expenses_netbanking_constraint.sql` | Adds NetBanking to the `mode_of_payment` check constraint on `expenses` |
+| `20260828000001_unit_outstanding_summary.sql` | Adds `get_unit_outstanding_summary` RPC for the Unit Dues report tab |
 
 ---
 

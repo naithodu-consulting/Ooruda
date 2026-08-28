@@ -159,7 +159,9 @@ export function ExpenseAnalytics({ associationId }: Props) {
           </CardHeader>
           <CardContent>
             {data.monthlyTrend.every((d) => d.amount === 0) ? (
-              <ChartEmpty message={'No expenses recorded this financial year.'} />
+              <ChartEmpty
+                message={'No expenses recorded this financial year.'}
+              />
             ) : (
               <ResponsiveContainer width={'100%'} height={220}>
                 <BarChart data={data.monthlyTrend} margin={{ left: -10 }}>
@@ -206,7 +208,9 @@ export function ExpenseAnalytics({ associationId }: Props) {
                     tick={{ fontSize: 11 }}
                     width={100}
                   />
-                  <Tooltip formatter={(v) => [formatINR(Number(v)), 'Amount']} />
+                  <Tooltip
+                    formatter={(v) => [formatINR(Number(v)), 'Amount']}
+                  />
                   <Bar
                     dataKey={'amount'}
                     name={'Amount'}

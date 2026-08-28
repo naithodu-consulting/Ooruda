@@ -58,10 +58,10 @@ import { formatINR } from '~/lib/format-inr';
 import { AMC_CATEGORIES } from '../_lib/schemas/amc.schema';
 import { deleteAmcContractAction } from '../_lib/server/amc-actions';
 import { AddAmcContractDialog } from './add-amc-contract-dialog';
-import { EditAmcContractDialog } from './edit-amc-contract-dialog';
-import { RenewAmcDialog } from './renew-amc-dialog';
 import type { AmcContractRow } from './amc-page-client';
 import { AmcStatusBadge, getStatusRowClass } from './amc-status-badge';
+import { EditAmcContractDialog } from './edit-amc-contract-dialog';
+import { RenewAmcDialog } from './renew-amc-dialog';
 
 const STATUS_DISPLAY: Record<string, string> = {
   '': 'All Statuses',
@@ -242,11 +242,12 @@ export function AmcList({
 
           <Select
             value={sortBy}
-            onValueChange={(v) =>
-              setSortBy(v as 'end_date' | 'contract_value')
-            }
+            onValueChange={(v) => setSortBy(v as 'end_date' | 'contract_value')}
           >
-            <SelectTrigger className={'w-full sm:w-40'} data-test={'sort-select'}>
+            <SelectTrigger
+              className={'w-full sm:w-40'}
+              data-test={'sort-select'}
+            >
               <SelectValue>
                 {sortBy === 'end_date' ? 'Sort by Expiry' : 'Sort by Value'}
               </SelectValue>
@@ -340,7 +341,7 @@ export function AmcList({
                           <span className={'text-muted-foreground'}>—</span>
                         )}
                       </TableCell>
-                      <TableCell className={'whitespace-nowrap text-sm'}>
+                      <TableCell className={'text-sm whitespace-nowrap'}>
                         {format(
                           new Date(c.end_date + 'T00:00:00'),
                           'd MMM yyyy',
@@ -410,7 +411,9 @@ export function AmcList({
                             )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              className={'text-destructive focus:text-destructive'}
+                              className={
+                                'text-destructive focus:text-destructive'
+                              }
                               onClick={() => setDeleteTarget(c)}
                               data-test={'amc-delete-btn'}
                             >
@@ -472,7 +475,10 @@ export function AmcList({
           if (!open && !isDeleting) setDeleteTarget(null);
         }}
       >
-        <AlertDialogContent className={'bg-card'} data-test={'delete-amc-dialog'}>
+        <AlertDialogContent
+          className={'bg-card'}
+          data-test={'delete-amc-dialog'}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Delete contract?</AlertDialogTitle>
             <AlertDialogDescription>

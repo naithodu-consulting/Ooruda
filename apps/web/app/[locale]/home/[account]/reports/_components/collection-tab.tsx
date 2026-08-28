@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 
 import {
   Bar,
@@ -25,23 +25,54 @@ import {
   CardHeader,
   CardTitle,
 } from '@kit/ui/card';
+import { Badge } from '@kit/ui/badge';
+import { Button } from '@kit/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@kit/ui/table';
+import { toast } from '@kit/ui/sonner';
+import { Spinner } from '@kit/ui/spinner';
+import { useSupabase } from '@kit/supabase/hooks/use-supabase';
 
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
 
+import { downloadCsvAction, downloadPdfAction } from '../_lib/reports-actions';
 import {
   billTypeLabel,
   BILL_TYPE_COLORS,
+  type BillTypeUnitRow,
   type CollectionRow,
+  dateToPeriod,
   type PaymentRow,
 } from '../_lib/reports-types';
 import { TOOLTIP_STYLE } from './chart-tooltip-style';
 import { KpiTile } from './kpi-tile';
+import { TablePagination, usePagedRows } from './table-pagination';
 
 interface Props {
+  associationId: string;
+  from: string;
+  to: string;
+  unitIds: string[];
   rows: CollectionRow[]; // bills grouped by bill period
   payments: PaymentRow[]; // payments grouped by paid_at date
 }
+
+const STATUS_BADGE: Record<
+  BillTypeUnitRow['status'],
+  { label: string; className: string }
+> = {
+  paid: { label: 'Paid', className: 'border-green-200 bg-green-50 text-green-700' },
+  partial: { label: 'Partial', className: 'border-amber-200 bg-amber-50 text-amber-700' },
+  unpaid: { label: 'Unpaid', className: 'border-red-200 bg-red-50 text-red-700' },
+  overdue: { label: 'Overdue', className: 'border-red-200 bg-red-100 text-red-800' },
+};
 
 const BILL_TYPES = [
   'maintenance',
@@ -68,11 +99,83 @@ function inrK(val: number) {
 
 type View = 'received' | 'raised';
 
-export function CollectionTab({ rows, payments }: Props) {
+export function CollectionTab({ associationId, from, to, unitIds, rows, payments, onViewChange }: Props & { onViewChange?: (v: View) => void }) {
   // Default to "Payments Received" (payment-date-based) so
   // "This FY" always shows money that actually came in.
   const [view, setView] = useState<View>('received');
+  const handleViewChange = (v: View) => { setView(v); onViewChange?.(v); };
   const [activeBillType, setActiveBillType] = useState<string | null>(null);
+
+  // Unit-level breakdown for the selected bill type — fetched lazily when the
+  // user clicks a donut slice. Mirrors the former "By Bill Type" tab logic.
+  const [unitBreakdownRows, setUnitBreakdownRows] = useState<BillTypeUnitRow[]>([]);
+  const [unitBreakdownLoading, setUnitBreakdownLoading] = useState(false);
+  const supabase = useSupabase();
+
+  useEffect(() => {
+    if (!activeBillType) {
+      setUnitBreakdownRows([]);
+      return;
+    }
+    let cancelled = false;
+    setUnitBreakdownLoading(true);
+
+    const allTime = !from && !to;
+    const fromPeriod = from ? dateToPeriod(from) : null;
+    const toPeriod = to ? dateToPeriod(to) : null;
+
+    let q = (supabase as any)
+      .from('bills')
+      .select('unit_id, total_amount, paid_amount, advance_applied, status, due_date, units(unit_no)')
+      .eq('association_id', associationId)
+      .eq('bill_type', activeBillType)
+      .neq('status', 'Reversed')
+      .neq('status', 'Void');
+    if (!allTime) {
+      if (fromPeriod) q = q.gte('period', fromPeriod);
+      if (toPeriod) q = q.lte('period', toPeriod);
+    }
+    if (unitIds.length > 0) q = q.in('unit_id', unitIds);
+
+    q.then(({ data }: { data: any[] | null }) => {
+      if (cancelled) return;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const unitAgg = new Map<string, { unit_no: string; billed: number; collected: number; bill_count: number; has_overdue: boolean }>();
+      for (const b of (data ?? [])) {
+        const uid = b.unit_id as string;
+        const unit_no = (b.units as { unit_no: string } | null)?.unit_no ?? '—';
+        const settled = Number(b.paid_amount ?? 0) + Number(b.advance_applied ?? 0);
+        const outstanding = Math.max(0, Number(b.total_amount) - settled);
+        const isOverdue = outstanding > 0 && new Date(b.due_date) < today;
+        const cur = unitAgg.get(uid) ?? { unit_no, billed: 0, collected: 0, bill_count: 0, has_overdue: false };
+        cur.billed += Number(b.total_amount);
+        cur.collected += settled;
+        cur.bill_count += 1;
+        if (isOverdue) cur.has_overdue = true;
+        unitAgg.set(uid, cur);
+      }
+
+      const result: BillTypeUnitRow[] = Array.from(unitAgg.entries())
+        .map(([uid, v]) => {
+          const outstanding = Math.max(0, v.billed - v.collected);
+          let status: BillTypeUnitRow['status'] = 'paid';
+          if (outstanding > 0) {
+            if (v.has_overdue) status = 'overdue';
+            else if (v.collected > 0) status = 'partial';
+            else status = 'unpaid';
+          }
+          return { unit_id: uid, unit_no: v.unit_no, billed: v.billed, collected: v.collected, outstanding, bill_count: v.bill_count, status };
+        })
+        .sort((a, b) => b.outstanding - a.outstanding);
+
+      setUnitBreakdownRows(result);
+      setUnitBreakdownLoading(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [activeBillType, associationId, from, to, unitIds.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Payment-date-based aggregation (primary, correct for "This FY") ──────────
 
@@ -175,7 +278,7 @@ export function CollectionTab({ rows, payments }: Props) {
       <div className="flex items-center gap-3">
         <div className="flex rounded-lg border text-sm">
           <button
-            onClick={() => setView('received')}
+            onClick={() => handleViewChange('received')}
             className={`px-3 py-1.5 transition-colors first:rounded-l-lg last:rounded-r-lg ${
               view === 'received'
                 ? 'bg-primary text-primary-foreground font-medium'
@@ -185,7 +288,7 @@ export function CollectionTab({ rows, payments }: Props) {
             Payments Received
           </button>
           <button
-            onClick={() => setView('raised')}
+            onClick={() => handleViewChange('raised')}
             className={`px-3 py-1.5 transition-colors first:rounded-l-lg last:rounded-r-lg ${
               view === 'raised'
                 ? 'bg-primary text-primary-foreground font-medium'
@@ -566,6 +669,223 @@ export function CollectionTab({ rows, payments }: Props) {
           </CardContent>
         </Card>
       )}
+
+      {/* Unit breakdown — shown when a charge type is selected in the donut.
+          In "Payments Received" view only show units that actually have
+          collected amounts; in "Bills Raised" show all units. */}
+      {activeBillType && (
+        <UnitBreakdownTable
+          associationId={associationId}
+          from={from}
+          to={to}
+          unitIds={unitIds}
+          activeBillType={activeBillType}
+          billTypeLabel={billTypeLabel(activeBillType)}
+          view={view}
+          rows={
+            view === 'received'
+              ? unitBreakdownRows.filter((r) => r.collected > 0)
+              : unitBreakdownRows
+          }
+          loading={unitBreakdownLoading}
+        />
+      )}
     </div>
+  );
+}
+
+// ── Unit breakdown sub-component ──────────────────────────────────────────────
+
+function UnitBreakdownTable({
+  associationId,
+  from,
+  to,
+  unitIds,
+  activeBillType,
+  billTypeLabel: label,
+  view,
+  rows,
+  loading,
+}: {
+  associationId: string;
+  from: string;
+  to: string;
+  unitIds: string[];
+  activeBillType: string;
+  billTypeLabel: string;
+  view: 'received' | 'raised';
+  rows: BillTypeUnitRow[];
+  loading: boolean;
+}) {
+  const totalBilled = rows.reduce((s, r) => s + r.billed, 0);
+  const totalCollected = rows.reduce((s, r) => s + r.collected, 0);
+  const totalOutstanding = rows.reduce((s, r) => s + r.outstanding, 0);
+
+  const { page, setPage, paged, totalPages, total, fromIndex, toIndex } =
+    usePagedRows(rows, label);
+
+  const [csvPending, startCsvTransition] = useTransition();
+  const [pdfPending, startPdfTransition] = useTransition();
+
+  // CSV is generated client-side from the rows already in memory (fast,
+  // no server round-trip) then falls back to the server action which also
+  // includes the period-level summary above the unit breakdown.
+  const handleCsvDownload = () => {
+    startCsvTransition(async () => {
+      const result = await downloadCsvAction(
+        associationId,
+        from,
+        to,
+        'collection',
+        { billTypes: [activeBillType], unitIds, collectedOnly: view === 'received' },
+      );
+      if (!result.success) {
+        toast.error(result.error ?? 'Could not generate CSV.');
+        return;
+      }
+      const blob = new Blob([result.csv!], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename ?? `collection_${activeBillType}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  };
+
+  const handlePdfDownload = () => {
+    startPdfTransition(async () => {
+      const result = await downloadPdfAction(
+        associationId,
+        from,
+        to,
+        'collection',
+        { billTypes: [activeBillType], unitIds, collectedOnly: view === 'received' },
+      );
+      if (!result.success) {
+        toast.error(result.error ?? 'Could not generate PDF.');
+        return;
+      }
+      const binary = atob(result.base64!);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename ?? `collection_${activeBillType}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  };
+
+  const isPending = csvPending || pdfPending;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-base">
+              Unit breakdown · {label}
+              {view === 'received' && (
+                <span className="text-muted-foreground ml-2 text-xs font-normal">
+                  units with payments only
+                </span>
+              )}
+            </CardTitle>
+            <CardDescription className="mt-0.5">
+              Per-unit collection status for the selected charge type
+            </CardDescription>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCsvDownload}
+              disabled={isPending || loading || rows.length === 0}
+              data-test="collection-unit-breakdown-csv"
+            >
+              {csvPending ? <Spinner className="h-3.5 w-3.5" /> : null}
+              CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePdfDownload}
+              disabled={isPending || loading || rows.length === 0}
+              data-test="collection-unit-breakdown-pdf"
+            >
+              {pdfPending ? <Spinner className="h-3.5 w-3.5" /> : null}
+              PDF
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="bg-muted h-32 animate-pulse rounded-lg" />
+        ) : rows.length === 0 ? (
+          <p className="text-muted-foreground py-8 text-center text-sm">
+            No {view === 'received' ? 'payments received' : 'bills'} found for{' '}
+            {label} in the selected period.
+          </p>
+        ) : (
+          <>
+            <div className="overflow-x-auto rounded-xl border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Unit</TableHead>
+                    <TableHead className="text-right">Bills</TableHead>
+                    <TableHead className="text-right">Billed (₹)</TableHead>
+                    <TableHead className="text-right">Collected (₹)</TableHead>
+                    <TableHead className="text-right">Outstanding (₹)</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paged.map((r) => {
+                    const badge = STATUS_BADGE[r.status];
+                    return (
+                      <TableRow key={r.unit_id}>
+                        <TableCell className="font-medium">{r.unit_no}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.bill_count}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatINR(r.billed)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatINR(r.collected)}</TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums">{formatINR(r.outstanding)}</TableCell>
+                        <TableCell>
+                          <Badge className={`text-xs ${badge.className}`}>{badge.label}</Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  <TableRow className="bg-muted/30 font-semibold">
+                    <TableCell>Total ({rows.length} units)</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {rows.reduce((s, r) => s + r.bill_count, 0)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{formatINR(totalBilled)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatINR(totalCollected)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatINR(totalOutstanding)}</TableCell>
+                    <TableCell />
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              fromIndex={fromIndex}
+              toIndex={toIndex}
+              onPageChange={setPage}
+              label="units"
+              testPrefix="collection-unit-breakdown"
+            />
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

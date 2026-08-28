@@ -16,7 +16,12 @@ import {
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 
-import { downloadCsvAction, downloadPdfAction } from '../_lib/reports-actions';
+import {
+  downloadCsvAction,
+  downloadLedgerStatementCsvAction,
+  downloadLedgerStatementPdfAction,
+  downloadPdfAction,
+} from '../_lib/reports-actions';
 import type { ReportsFilters, TabKey } from '../_lib/reports-types';
 
 interface Props {
@@ -25,6 +30,11 @@ interface Props {
   to: string;
   activeTab: TabKey;
   filters: ReportsFilters;
+  /**
+   * Ledger statement is scoped by its own unit picker rather than the shared
+   * filters, so its exports take the unit id instead of from/to + filters.
+   */
+  ledgerUnitId?: string;
 }
 
 export function ExportButton({
@@ -33,7 +43,9 @@ export function ExportButton({
   to,
   activeTab,
   filters,
+  ledgerUnitId,
 }: Props) {
+  const isLedger = activeTab === 'ledger_statement';
   const [isPending, startTransition] = useTransition();
   const [exportType, setExportType] = useState<'csv' | 'pdf' | null>(null);
 
@@ -46,13 +58,12 @@ export function ExportButton({
   const handleCsv = () => {
     setExportType('csv');
     startTransition(async () => {
-      const result = await downloadCsvAction(
-        associationId,
-        from,
-        to,
-        activeTab,
-        filters,
-      );
+      const result = isLedger
+        ? await downloadLedgerStatementCsvAction(
+            associationId,
+            ledgerUnitId ?? '',
+          )
+        : await downloadCsvAction(associationId, from, to, activeTab, filters);
       setExportType(null);
       if (!result.success) {
         toast.error(result.error ?? 'Could not generate CSV.');
@@ -71,13 +82,12 @@ export function ExportButton({
   const handlePdf = () => {
     setExportType('pdf');
     startTransition(async () => {
-      const result = await downloadPdfAction(
-        associationId,
-        from,
-        to,
-        activeTab,
-        filters,
-      );
+      const result = isLedger
+        ? await downloadLedgerStatementPdfAction(
+            associationId,
+            ledgerUnitId ?? '',
+          )
+        : await downloadPdfAction(associationId, from, to, activeTab, filters);
       setExportType(null);
       if (!result.success) {
         toast.error(result.error ?? 'Could not generate PDF.');

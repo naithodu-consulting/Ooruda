@@ -18,7 +18,7 @@ export function EmailFooter(_props: React.PropsWithChildren) {
       </Text>
       <Text
         style={{
-          margin: '0',
+          margin: '0 0 4px',
           textAlign: 'center' as const,
           fontSize: '11px',
           color: '#b5b5a5',

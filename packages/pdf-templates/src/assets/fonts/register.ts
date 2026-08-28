@@ -38,5 +38,11 @@ export function registerPdfFonts() {
     ],
   });
 
+  // react-pdf hyphenates by default, which mangles unbreakable atoms: a phone
+  // number "+919999999998" renders as "+-" / "919999999998" when its column is
+  // narrow. Nothing we print (phones, emails, bill numbers, amounts) should ever
+  // gain a hyphen, so opt out globally — long text still wraps at whitespace.
+  Font.registerHyphenationCallback((word) => [word]);
+
   registered = true;
 }

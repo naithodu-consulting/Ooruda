@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { getLogger } from '@kit/shared/logger';
 
+import { computeAmcStatus } from '../amc-utils';
+import type { AmcStatus } from '../amc-utils';
 import type {
   AmcContractInput,
   AmcReminderSettingsInput,
@@ -9,8 +11,6 @@ import type {
   TerminateAmcInput,
   UpdateAmcContractInput,
 } from '../schemas/amc.schema';
-import { computeAmcStatus } from '../amc-utils';
-import type { AmcStatus } from '../amc-utils';
 
 export { computeAmcStatus };
 export type { AmcStatus };

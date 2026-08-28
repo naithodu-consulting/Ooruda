@@ -2810,6 +2810,18 @@ export type Database = {
           unit_id: string
         }[]
       }
+      get_unit_outstanding_summary: {
+        Args: { p_association_id: string }
+        Returns: {
+          last_payment_date: string
+          overdue_count: number
+          owner_name: string
+          owner_phone: string
+          total_outstanding: number
+          unit_id: string
+          unit_no: string
+        }[]
+      }
       get_upper_system_role: { Args: never; Returns: string }
       has_active_subscription: {
         Args: { target_account_id: string }

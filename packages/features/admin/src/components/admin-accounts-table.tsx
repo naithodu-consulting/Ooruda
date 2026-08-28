@@ -4,7 +4,7 @@ import { useRef, useState, useMemo } from 'react';
 
 import Link from 'next/link';
 
-import { ColumnDef } from '@tanstack/react-table';
+import { ColumnDef, SortingState } from '@tanstack/react-table';
 import { CheckCircle2, Clock, EllipsisVertical, Search } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
@@ -84,6 +84,7 @@ export function AdminAccountsTable(props: {
   );
   const [query, setQuery] = useState('');
   const [pageIndex, setPageIndex] = useState(0);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const form = useForm({ defaultValues: { query: '' } });
@@ -108,9 +109,29 @@ export function AdminAccountsTable(props: {
     );
   }, [rawData, query]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Pre-sort the full filtered list before pagination so sort spans all pages.
+  const sorted = useMemo(() => {
+    const [first] = sorting;
+    if (!first) return filtered;
+    const { id, desc } = first;
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      if (id === 'consent') {
+        const ta = props.consentByAccountId[a.id] ? 0 : 1;
+        const tb = props.consentByAccountId[b.id] ? 0 : 1;
+        cmp = ta - tb;
+      } else if (id === 'name') {
+        cmp = (a.name ?? '').localeCompare(b.name ?? '');
+      } else if (id === 'created_at') {
+        cmp = (a.created_at ?? '').localeCompare(b.created_at ?? '');
+      }
+      return desc ? -cmp : cmp;
+    });
+  }, [filtered, sorting, props.consentByAccountId]);
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const safePageIndex = Math.min(pageIndex, pageCount - 1);
-  const paginated = filtered.slice(
+  const paginated = sorted.slice(
     safePageIndex * PAGE_SIZE,
     (safePageIndex + 1) * PAGE_SIZE,
   );
@@ -234,8 +255,13 @@ export function AdminAccountsTable(props: {
               pageIndex={safePageIndex}
               pageCount={pageCount}
               data={paginated}
-              manualSorting={false}
+              manualSorting={true}
+              sorting={sorting}
               columns={columns}
+              onSortingChange={(next) => {
+                setSorting(next);
+                setPageIndex(0);
+              }}
               onPaginationChange={(pagination) => {
                 setPageIndex(pagination.pageIndex);
               }}
@@ -417,6 +443,8 @@ function getColumns(
       {
         id: 'consent',
         header: 'Consent',
+        enableSorting: true,
+        accessorFn: (row) => (consentByAccountId[row.id] ? 0 : 1),
         cell: ({ row }) => {
           const ts = consentByAccountId[row.original.id];
           if (ts) {
@@ -427,7 +455,7 @@ function getColumns(
                     render={
                       <Badge
                         variant="outline"
-                        className="border-success/40 bg-success/10 text-success cursor-default gap-1 px-2 py-0.5 text-[11px] whitespace-nowrap"
+                        className="cursor-default gap-1 border-[var(--color-success)]/40 bg-[var(--color-success)]/10 px-2 py-0.5 text-[11px] whitespace-nowrap text-[var(--color-success)]"
                       >
                         <CheckCircle2 className="h-3 w-3 shrink-0" />
                         Accepted
@@ -447,7 +475,7 @@ function getColumns(
           return (
             <Badge
               variant="outline"
-              className="border-warning/40 bg-warning/10 text-warning cursor-default gap-1 px-2 py-0.5 text-[11px] whitespace-nowrap"
+              className="cursor-default gap-1 border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 px-2 py-0.5 text-[11px] whitespace-nowrap text-[var(--color-warning)]"
             >
               <Clock className="h-3 w-3 shrink-0" />
               Pending

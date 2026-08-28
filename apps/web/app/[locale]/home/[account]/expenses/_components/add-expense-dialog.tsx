@@ -33,14 +33,14 @@ import {
 import { toast } from '@kit/ui/sonner';
 import { Textarea } from '@kit/ui/textarea';
 
+import { todayInBillingZone } from '~/lib/billing-dates';
+
 import {
   ExpenseSchema,
   PAYMENT_MODES,
   type ExpenseInput,
 } from '../_lib/schemas/expense.schema';
 import { createExpenseAction } from '../_lib/server/expense-actions';
-import { todayInBillingZone } from '~/lib/billing-dates';
-
 import type { ExpenseRow } from './expenses-page-client';
 
 interface Props {
@@ -84,7 +84,8 @@ export function AddExpenseDialog({
           id: data.id,
           title: values.title,
           amount: Number(values.amount),
-          gst_amount: values.gstAmount != null ? Number(values.gstAmount) : null,
+          gst_amount:
+            values.gstAmount != null ? Number(values.gstAmount) : null,
           payor: values.payor,
           payee_name: values.payeeName,
           mode_of_payment: values.modeOfPayment,

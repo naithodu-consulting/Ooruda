@@ -44,6 +44,7 @@ import { formatPeriod } from '~/lib/format-period';
 import { type MescomRow, type UnitConsumptionRow } from '../_lib/reports-types';
 import { TOOLTIP_STYLE } from './chart-tooltip-style';
 import { KpiTile } from './kpi-tile';
+import { TablePagination, usePagedRows } from './table-pagination';
 
 interface Props {
   mescomRows: MescomRow[];
@@ -95,9 +96,9 @@ export function ElectricityTab({ mescomRows, consumptionByPeriod }: Props) {
   // Per-unit consumption for selected period
   const unitConsumption = useMemo(
     () =>
-      (consumptionByPeriod[selectedPeriod] ?? [])
-        .filter((r) => r.consumed_units > 0)
-        .sort((a, b) => b.consumed_units - a.consumed_units),
+      (consumptionByPeriod[selectedPeriod] ?? []).sort(
+        (a, b) => b.consumed_units - a.consumed_units,
+      ),
     [consumptionByPeriod, selectedPeriod],
   );
 
@@ -108,6 +109,9 @@ export function ElectricityTab({ mescomRows, consumptionByPeriod }: Props) {
       </p>
     );
   }
+
+  const { page, setPage, paged, totalPages, total, fromIndex, toIndex } =
+    usePagedRows(unitConsumption, selectedPeriod);
 
   return (
     <div className="flex flex-col gap-6">
@@ -299,32 +303,67 @@ export function ElectricityTab({ mescomRows, consumptionByPeriod }: Props) {
                       <TableHead className="text-right">Prev Reading</TableHead>
                       <TableHead className="text-right">Curr Reading</TableHead>
                       <TableHead className="text-right">Units (kWh)</TableHead>
-                      <TableHead className="text-right">Charged</TableHead>
+                      <TableHead className="text-right">
+                        Min Charge (₹)
+                      </TableHead>
+                      <TableHead className="text-right">
+                        Rate / kWh (₹)
+                      </TableHead>
+                      <TableHead className="text-right">Charged (₹)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {unitConsumption.map((r) => (
-                      <TableRow key={r.unit_no}>
-                        <TableCell className="font-medium">
-                          {r.unit_no}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {r.prev_reading?.toLocaleString('en-IN') ?? '—'}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {r.curr_reading?.toLocaleString('en-IN') ?? '—'}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">
-                          {r.consumed_units.toLocaleString('en-IN')}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatINR(r.charged_amount)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {paged.map((r) => {
+                      const ratePerUnit =
+                        r.consumed_units > 0
+                          ? (r.charged_amount - r.minimum_charge) /
+                            r.consumed_units
+                          : null;
+                      return (
+                        <TableRow key={r.unit_no}>
+                          <TableCell className="font-medium">
+                            {r.unit_no}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {r.prev_reading?.toLocaleString('en-IN') ?? '—'}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {r.curr_reading?.toLocaleString('en-IN') ?? '—'}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums">
+                            {r.consumed_units > 0
+                              ? r.consumed_units.toLocaleString('en-IN')
+                              : '—'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-right tabular-nums">
+                            {r.minimum_charge > 0
+                              ? formatINR(r.minimum_charge)
+                              : '—'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-right tabular-nums">
+                            {ratePerUnit !== null && ratePerUnit > 0
+                              ? formatINR(ratePerUnit)
+                              : '—'}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatINR(r.charged_amount)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                total={total}
+                fromIndex={fromIndex}
+                toIndex={toIndex}
+                onPageChange={setPage}
+                label="units"
+                testPrefix="electricity"
+              />
             </>
           )}
         </CardContent>

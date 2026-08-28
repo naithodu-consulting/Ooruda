@@ -1,6 +1,5 @@
-import { redirect } from 'next/navigation';
-
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 import { format } from 'date-fns';
 import { ArrowLeft, Paperclip } from 'lucide-react';
@@ -81,7 +80,7 @@ export default async function ExpenseDetailPage({ params }: Props) {
         description={expense.title}
       />
       <PageBody>
-        <div className={'flex flex-col gap-y-6 max-w-2xl'}>
+        <div className={'flex max-w-2xl flex-col gap-y-6'}>
           <div>
             <Button
               variant={'ghost'}
@@ -119,16 +118,17 @@ export default async function ExpenseDetailPage({ params }: Props) {
                 {!!expense.invoice_number &&
                   labelVal('Invoice No.', expense.invoice_number)}
                 {expense.recurring &&
-                  labelVal(
-                    'Recurring',
-                    expense.recurring_frequency ?? 'Yes',
-                  )}
+                  labelVal('Recurring', expense.recurring_frequency ?? 'Yes')}
                 {!!expense.notes && labelVal('Notes', expense.notes)}
               </div>
 
               {expense.vendor && (
                 <div className={'mt-4 border-t pt-4'}>
-                  <p className={'text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wide'}>
+                  <p
+                    className={
+                      'text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase'
+                    }
+                  >
                     Vendor Details
                   </p>
                   <div className={'grid grid-cols-2 gap-4 sm:grid-cols-3'}>
@@ -149,7 +149,9 @@ export default async function ExpenseDetailPage({ params }: Props) {
                     href={expense.attachment_url}
                     target={'_blank'}
                     rel={'noreferrer'}
-                    className={'text-primary inline-flex items-center gap-1.5 text-sm underline underline-offset-4'}
+                    className={
+                      'text-primary inline-flex items-center gap-1.5 text-sm underline underline-offset-4'
+                    }
                     data-test={'attachment-link'}
                   >
                     <Paperclip className={'h-3.5 w-3.5'} />

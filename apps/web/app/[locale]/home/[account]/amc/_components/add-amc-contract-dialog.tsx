@@ -1,10 +1,9 @@
 'use client';
 
-import { useAction } from 'next-safe-action/hooks';
-import { useForm } from 'react-hook-form';
-
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from 'date-fns';
+import { useAction } from 'next-safe-action/hooks';
+import { useForm } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
 import {
@@ -31,6 +30,7 @@ import {
 } from '@kit/ui/select';
 import { toast } from '@kit/ui/sonner';
 
+import { computeAmcStatus } from '../_lib/amc-utils';
 import {
   AMC_CATEGORIES,
   AmcContractSchema,
@@ -38,7 +38,6 @@ import {
   type AmcContractInput,
 } from '../_lib/schemas/amc.schema';
 import { createAmcContractAction } from '../_lib/server/amc-actions';
-import { computeAmcStatus } from '../_lib/amc-utils';
 import type { AmcContractRow } from './amc-page-client';
 
 interface Props {
@@ -107,7 +106,7 @@ export function AddAmcContractDialog({
       }}
     >
       <DialogContent
-        className={'max-h-[90vh] max-w-lg overflow-y-auto bg-card'}
+        className={'bg-card max-h-[90vh] max-w-lg overflow-y-auto'}
         data-test={'add-amc-dialog'}
       >
         <DialogHeader>
@@ -355,7 +354,9 @@ export function AddAmcContractDialog({
                         type={'number'}
                         min={'0'}
                         placeholder={'e.g. 30'}
-                        className={'[appearance:textfield] pr-12 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'}
+                        className={
+                          '[appearance:textfield] pr-12 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
+                        }
                         {...field}
                         value={(field.value as number | null) ?? ''}
                         data-test={'amc-notice-input'}

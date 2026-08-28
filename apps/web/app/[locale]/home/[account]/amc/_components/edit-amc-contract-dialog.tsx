@@ -1,9 +1,8 @@
 'use client';
 
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useAction } from 'next-safe-action/hooks';
 import { useForm } from 'react-hook-form';
-
-import { zodResolver } from '@hookform/resolvers/zod';
 
 import { Button } from '@kit/ui/button';
 import {
@@ -30,6 +29,7 @@ import {
 } from '@kit/ui/select';
 import { toast } from '@kit/ui/sonner';
 
+import { computeAmcStatus } from '../_lib/amc-utils';
 import {
   AMC_CATEGORIES,
   AMC_PRIORITIES,
@@ -38,7 +38,6 @@ import {
   type UpdateAmcContractInput,
 } from '../_lib/schemas/amc.schema';
 import { updateAmcContractAction } from '../_lib/server/amc-actions';
-import { computeAmcStatus } from '../_lib/amc-utils';
 import type { AmcContractRow } from './amc-page-client';
 
 interface Props {
@@ -114,7 +113,7 @@ export function EditAmcContractDialog({
       }}
     >
       <DialogContent
-        className={'max-h-[90vh] max-w-lg overflow-y-auto bg-card'}
+        className={'bg-card max-h-[90vh] max-w-lg overflow-y-auto'}
         data-test={'edit-amc-dialog'}
       >
         <DialogHeader>

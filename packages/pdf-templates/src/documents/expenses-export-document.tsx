@@ -108,7 +108,12 @@ const s = StyleSheet.create({
   cellMuted: { fontSize: 7, color: '#888' },
   cellR: { fontSize: 7.5, color: '#222', textAlign: 'right' },
   cellBold: { fontSize: 7.5, fontWeight: 'bold', color: NAVY },
-  cellBoldR: { fontSize: 7.5, fontWeight: 'bold', color: NAVY, textAlign: 'right' },
+  cellBoldR: {
+    fontSize: 7.5,
+    fontWeight: 'bold',
+    color: NAVY,
+    textAlign: 'right',
+  },
 });
 
 function C({
@@ -121,7 +126,13 @@ function C({
   children?: React.ReactNode;
 }) {
   return (
-    <View style={{ flex, overflow: 'hidden', alignItems: right ? 'flex-end' : 'flex-start' }}>
+    <View
+      style={{
+        flex,
+        overflow: 'hidden',
+        alignItems: right ? 'flex-end' : 'flex-start',
+      }}
+    >
       {children}
     </View>
   );
@@ -156,7 +167,11 @@ export interface ExpensesExportPdfData {
   totalGst: number;
 }
 
-export function ExpensesExportDocument({ data }: { data: ExpensesExportPdfData }) {
+export function ExpensesExportDocument({
+  data,
+}: {
+  data: ExpensesExportPdfData;
+}) {
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={s.page}>
@@ -186,19 +201,33 @@ export function ExpensesExportDocument({ data }: { data: ExpensesExportPdfData }
           {data.totalGst > 0 && (
             <View style={s.kpiBox}>
               <Text style={s.kpiLabel}>Total (incl. GST)</Text>
-              <Text style={s.kpiValue}>{formatINR(data.totalAmount + data.totalGst)}</Text>
+              <Text style={s.kpiValue}>
+                {formatINR(data.totalAmount + data.totalGst)}
+              </Text>
             </View>
           )}
         </View>
 
         {/* Table header */}
         <View style={s.thead}>
-          <C flex={COL.date}><Text style={s.th}>Date</Text></C>
-          <C flex={COL.title}><Text style={s.th}>Title / Reference</Text></C>
-          <C flex={COL.category}><Text style={s.th}>Category</Text></C>
-          <C flex={COL.payee}><Text style={s.th}>Payee</Text></C>
-          <C flex={COL.mode}><Text style={s.th}>Mode</Text></C>
-          <C flex={COL.amount} right><Text style={s.thR}>Amount</Text></C>
+          <C flex={COL.date}>
+            <Text style={s.th}>Date</Text>
+          </C>
+          <C flex={COL.title}>
+            <Text style={s.th}>Title / Reference</Text>
+          </C>
+          <C flex={COL.category}>
+            <Text style={s.th}>Category</Text>
+          </C>
+          <C flex={COL.payee}>
+            <Text style={s.th}>Payee</Text>
+          </C>
+          <C flex={COL.mode}>
+            <Text style={s.th}>Mode</Text>
+          </C>
+          <C flex={COL.amount} right>
+            <Text style={s.thR}>Amount</Text>
+          </C>
         </View>
 
         {data.expenses.map((e, i) => {
@@ -226,7 +255,9 @@ export function ExpensesExportDocument({ data }: { data: ExpensesExportPdfData }
               <C flex={COL.amount} right>
                 <Text style={s.cellR}>{formatINR(e.amount)}</Text>
                 {e.gst_amount ? (
-                  <Text style={s.cellMuted}>+{formatINR(e.gst_amount)} GST</Text>
+                  <Text style={s.cellMuted}>
+                    +{formatINR(e.gst_amount)} GST
+                  </Text>
                 ) : null}
               </C>
             </View>
@@ -237,7 +268,9 @@ export function ExpensesExportDocument({ data }: { data: ExpensesExportPdfData }
         <View style={s.totalRow}>
           <C flex={COL.date} />
           <C flex={COL.title}>
-            <Text style={s.cellBold}>Total ({data.expenses.length} entries)</Text>
+            <Text style={s.cellBold}>
+              Total ({data.expenses.length} entries)
+            </Text>
           </C>
           <C flex={COL.category} />
           <C flex={COL.payee} />

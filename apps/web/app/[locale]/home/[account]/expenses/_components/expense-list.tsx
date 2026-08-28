@@ -22,7 +22,6 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@kit/ui/alert-dialog';
@@ -170,7 +169,18 @@ export function ExpenseList({
 
   function exportCsv() {
     const rows = [
-      ['Date', 'Title', 'Category', 'Payee', 'Mode', 'Amount', 'GST', 'Reference', 'Invoice', 'Notes'],
+      [
+        'Date',
+        'Title',
+        'Category',
+        'Payee',
+        'Mode',
+        'Amount',
+        'GST',
+        'Reference',
+        'Invoice',
+        'Notes',
+      ],
       ...filteredExpenses.map((e) => [
         e.date_of_payment,
         e.title,
@@ -185,7 +195,12 @@ export function ExpenseList({
       ]),
     ];
     const csv = rows
-      .map((r) => r.map(String).map((v) => `"${v.replace(/"/g, '""')}"`).join(','))
+      .map((r) =>
+        r
+          .map(String)
+          .map((v) => `"${v.replace(/"/g, '""')}"`)
+          .join(','),
+      )
       .join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -200,7 +215,8 @@ export function ExpenseList({
     setExportingPdf(true);
     toast.info('Generating PDF, please wait…');
     try {
-      const presetLabel = DATE_PRESETS.find((p) => p.value === datePreset)?.label ?? '';
+      const presetLabel =
+        DATE_PRESETS.find((p) => p.value === datePreset)?.label ?? '';
       const filterLabel =
         datePreset === 'custom' && customFrom && customTo
           ? `${filteredExpenses.length} entries · ${customFrom} to ${customTo}`
@@ -288,7 +304,10 @@ export function ExpenseList({
             value={datePreset}
             onValueChange={(v) => setDatePreset(v as DatePresetValue)}
           >
-            <SelectTrigger className={'w-full sm:w-36'} data-test={'date-preset-select'}>
+            <SelectTrigger
+              className={'w-full sm:w-36'}
+              data-test={'date-preset-select'}
+            >
               <SelectValue>
                 {DATE_PRESETS.find((p) => p.value === datePreset)?.label ??
                   'This FY'}
@@ -357,7 +376,10 @@ export function ExpenseList({
             value={modeFilter}
             onValueChange={(v) => setModeFilter(v ?? '')}
           >
-            <SelectTrigger className={'w-full sm:w-44'} data-test={'mode-filter-select'}>
+            <SelectTrigger
+              className={'w-full sm:w-44'}
+              data-test={'mode-filter-select'}
+            >
               <SelectValue placeholder={'All Modes'} />
             </SelectTrigger>
             <SelectContent>
@@ -542,7 +564,9 @@ export function ExpenseList({
                       <div className={'text-sm font-medium'}>
                         {expense.title}
                       </div>
-                      <div className={'mt-0.5 flex flex-wrap items-center gap-1'}>
+                      <div
+                        className={'mt-0.5 flex flex-wrap items-center gap-1'}
+                      >
                         {expense.reference_number && (
                           <span className={'text-muted-foreground text-xs'}>
                             Ref: {expense.reference_number}
@@ -629,10 +653,7 @@ export function ExpenseList({
         onSuccess={handleExpenseAdded}
       />
 
-      <AlertDialog
-        open={deleteConfirmOpen}
-        onOpenChange={setDeleteConfirmOpen}
-      >
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent className={'bg-card'}>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Expenses</AlertDialogTitle>

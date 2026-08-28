@@ -7,10 +7,10 @@ import { Trans } from '@kit/ui/trans';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
-import {
-  ReportsClientPage,
-  ReportsSkeleton,
-} from './_components/reports-client-page';
+import { ReportsClientPage } from './_components/reports-client-page';
+// Imported directly (not re-exported through the client page) so the Suspense
+// fallback does not depend on that large client module.
+import { ReportsSkeleton } from './_components/reports-skeleton';
 
 interface Props {
   params: Promise<{ account: string }>;

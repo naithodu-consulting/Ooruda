@@ -15,7 +15,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import {
   Dialog,
   DialogContent,
-
   DialogHeader,
   DialogTitle,
 } from '@kit/ui/dialog';
@@ -34,6 +33,7 @@ import { Textarea } from '@kit/ui/textarea';
 import { formatINR } from '~/lib/format-inr';
 
 import { AmcStatusBadge } from '../../_components/amc-status-badge';
+import { computeAmcStatus } from '../../_lib/amc-utils';
 import {
   RenewAmcSchema,
   TerminateAmcSchema,
@@ -44,7 +44,6 @@ import {
   renewAmcContractAction,
   terminateAmcContractAction,
 } from '../../_lib/server/amc-actions';
-import { computeAmcStatus } from '../../_lib/amc-utils';
 
 interface HistoryRow {
   id: string;
@@ -278,7 +277,9 @@ export function AmcDetailClient({
                         · {formatINR(h.contract_value)}
                       </span>
                       {dateMismatch && (
-                        <span className={'text-muted-foreground text-xs italic'}>
+                        <span
+                          className={'text-muted-foreground text-xs italic'}
+                        >
                           Current expiry updated to{' '}
                           {format(
                             new Date(currentEndDate + 'T00:00:00'),

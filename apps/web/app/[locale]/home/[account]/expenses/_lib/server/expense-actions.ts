@@ -5,8 +5,8 @@ import { revalidatePath } from 'next/cache';
 import { authActionClient } from '@kit/next/safe-action';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
-import { getAssociationRole } from '~/lib/rbac';
 import { logAuditEvent } from '~/lib/audit-log';
+import { getAssociationRole } from '~/lib/rbac';
 
 import {
   CreateVendorSchema,

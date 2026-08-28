@@ -34,6 +34,7 @@ import { formatINR } from '~/lib/format-inr';
 import { billTypeLabel, type CashLedgerRow } from '../_lib/reports-types';
 import { TOOLTIP_STYLE } from './chart-tooltip-style';
 import { KpiTile } from './kpi-tile';
+import { TablePagination, usePagedRows } from './table-pagination';
 
 interface Props {
   rows: CashLedgerRow[];
@@ -51,10 +52,12 @@ function shortDate(iso: string) {
 }
 
 const ENTRY_TYPE_LABELS: Record<string, string> = {
-  due_payment: 'Payment received',
-  advance_applied: 'Advance used',
-  advance_received: 'Advance received',
-  advance_refund: 'Advance refund',
+  due: 'Bill Due',
+  due_payment: 'Payment Received',
+  advance_payment: 'Advance Deposit',
+  advance_applied: 'Advance Applied',
+  advance_received: 'Advance Received',
+  advance_refund: 'Advance Refund',
   other: 'Other',
 };
 
@@ -106,6 +109,9 @@ export function CashLedgerTab({ rows }: Props) {
       </div>
     );
   }
+
+  const { page, setPage, paged, totalPages, total, fromIndex, toIndex } =
+    usePagedRows(rows, null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -203,11 +209,11 @@ export function CashLedgerTab({ rows }: Props) {
             </ResponsiveContainer>
             <div className="mt-2 flex gap-4 text-xs">
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="inline-block h-2 w-2 rounded-full bg-[var(--color-success)]" />
                 Credits
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                <span className="inline-block h-2 w-2 rounded-full bg-[var(--color-warning)]" />
                 Debits
               </span>
             </div>
@@ -219,8 +225,10 @@ export function CashLedgerTab({ rows }: Props) {
       {byBillType.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Received by Charge Type</CardTitle>
-            <CardDescription>Amount received per charge type</CardDescription>
+            <CardTitle className="text-base">Credits by Charge Type</CardTitle>
+            <CardDescription>
+              Total credits per charge type (payments + advances)
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-2">
@@ -234,7 +242,7 @@ export function CashLedgerTab({ rows }: Props) {
                     </div>
                     <div className="bg-muted relative h-2 flex-1 overflow-hidden rounded-full">
                       <div
-                        className="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                        className="absolute inset-y-0 left-0 rounded-full bg-[var(--color-success)]"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -273,7 +281,7 @@ export function CashLedgerTab({ rows }: Props) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => (
+                {paged.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="text-xs tabular-nums">
                       {formatDateDMY(r.entry_date)}
@@ -290,8 +298,8 @@ export function CashLedgerTab({ rows }: Props) {
                       <span
                         className={`text-xs font-semibold ${
                           r.direction === 'credit'
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-amber-600 dark:text-amber-400'
+                            ? 'text-[var(--color-success)]'
+                            : 'text-[var(--color-warning)]'
                         }`}
                       >
                         {r.direction === 'credit' ? '↑' : '↓'}
@@ -308,6 +316,16 @@ export function CashLedgerTab({ rows }: Props) {
               </TableBody>
             </Table>
           </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            fromIndex={fromIndex}
+            toIndex={toIndex}
+            onPageChange={setPage}
+            label="entries"
+            testPrefix="cash-ledger"
+          />
         </CardContent>
       </Card>
     </div>
