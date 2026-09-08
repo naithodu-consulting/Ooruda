@@ -2920,30 +2920,20 @@ export type Database = {
         }
         Returns: string
       }
-      record_payment:
-        | {
-            Args: {
-              p_amount: number
-              p_association_id: string
-              p_bill_id: string
-              p_mode: string
-              p_paid_by_role: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_amount: number
-              p_association_id: string
-              p_bill_id: string
-              p_mode: string
-              p_paid_by_role: string
-              p_payment_batch_id?: string
-              p_razorpay_order_id?: string
-              p_razorpay_payment_id?: string
-            }
-            Returns: string
-          }
+      record_payment: {
+        Args: {
+          p_amount: number
+          p_association_id: string
+          p_bill_id: string
+          p_mode: string
+          p_paid_at?: string
+          p_paid_by_role: string
+          p_payment_batch_id?: string
+          p_razorpay_order_id?: string
+          p_razorpay_payment_id?: string
+        }
+        Returns: string
+      }
       record_payment_reversal: {
         Args: { p_razorpay_payment_id: string; p_refund_amount?: number }
         Returns: undefined

@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
           .then(({ data }) => (data ?? []).map((t) => t.unit_id)),
     client
       .from('bills')
-      .select('id, total_amount, paid_amount, unit_id')
+      .select('id, total_amount, paid_amount, advance_applied, unit_id')
       .in('id', billIds)
       .eq('association_id', associationId)
       .neq('status', 'Void'),
@@ -104,8 +104,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // advance_applied must be subtracted, or a bill already part-settled by
+  // cash-ledger advance credit is charged to the payer twice — and
+  // record_payment now rejects the excess, which would capture the money at
+  // Razorpay with no payment row written.
   const totalOutstanding = allowedBills.reduce(
-    (sum, b) => sum + (Number(b.total_amount) - Number(b.paid_amount)),
+    (sum, b) =>
+      sum +
+      (Number(b.total_amount) -
+        Number(b.paid_amount) -
+        Number(b.advance_applied ?? 0)),
     0,
   );
   if (totalOutstanding <= 0) {

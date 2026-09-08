@@ -374,7 +374,7 @@ export async function POST(req: NextRequest) {
 
   const { data: bills } = await admin
     .from('bills')
-    .select('id, total_amount, paid_amount')
+    .select('id, total_amount, paid_amount, advance_applied')
     .in('id', billIds)
     .eq('association_id', associationId)
     .neq('status', 'Void');
@@ -398,7 +398,12 @@ export async function POST(req: NextRequest) {
   const paymentBatchId = billIds.length > 1 ? crypto.randomUUID() : null;
 
   for (const bill of bills) {
-    const outstanding = Number(bill.total_amount) - Number(bill.paid_amount);
+    // Must match record_payment's own check, or the RPC rejects the amount
+    // after Razorpay has already captured it.
+    const outstanding =
+      Number(bill.total_amount) -
+      Number(bill.paid_amount) -
+      Number(bill.advance_applied ?? 0);
     if (outstanding <= 0) continue;
 
     const { error } = await admin.rpc('record_payment', {

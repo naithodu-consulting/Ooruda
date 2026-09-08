@@ -7,6 +7,7 @@ import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client'
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
+import { todayInBillingZone } from '~/lib/billing-dates';
 import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
 import { sendPaymentConfirmedNotification } from '~/lib/notify';
 import { getAssociationRole } from '~/lib/rbac';
@@ -56,8 +57,18 @@ export async function recordPaymentAction(
     };
   }
 
-  const { amount, mode, paid_by_role, reference_no } = parsed.data;
+  const { amount, mode, paid_by_role, reference_no, paid_on } = parsed.data;
   const client = getSupabaseServerClient();
+
+  // Resolve the payment date. Today (or blank) passes null so the RPC stamps
+  // now() and same-day payments keep their real ordering. A back-dated entry
+  // is anchored at midday IST: paid_at is timestamptz, and IST midnight would
+  // convert to 18:30 UTC on the PREVIOUS day, dropping the payment out of any
+  // report range filtered on that date. Midday reads as the same calendar day
+  // in both zones.
+  const today = todayInBillingZone();
+  const isBackDated = Boolean(paid_on && paid_on !== today);
+  const paidAt = isBackDated ? `${paid_on}T12:00:00+05:30` : null;
 
   const { data: paymentId, error } = await client.rpc('record_payment', {
     p_bill_id: billId,
@@ -65,9 +76,10 @@ export async function recordPaymentAction(
     p_amount: amount,
     p_mode: mode,
     p_paid_by_role: paid_by_role,
-    p_razorpay_payment_id: null,
-    p_razorpay_order_id: null,
-    p_payment_batch_id: null,
+    p_razorpay_payment_id: undefined,
+    p_razorpay_order_id: undefined,
+    p_payment_batch_id: undefined,
+    p_paid_at: paidAt ?? undefined,
   });
 
   if (error) {
@@ -110,7 +122,7 @@ export async function recordPaymentAction(
     action: 'payment.recorded',
     entityType: 'payment',
     entityId: paymentId as unknown as string,
-    summary: `Unit ${unit?.unit_no ?? '?'} — ₹${amount.toLocaleString('en-IN')} collected via ${mode}`,
+    summary: `Unit ${unit?.unit_no ?? '?'} — ₹${amount.toLocaleString('en-IN')} collected via ${mode}${isBackDated ? ` (back-dated to ${paid_on})` : ''}`,
   });
 
   // Fire payment-confirmed notification non-blocking via after()

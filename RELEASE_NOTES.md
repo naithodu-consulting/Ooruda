@@ -33,12 +33,43 @@ Prompted by a production incident: one sub-meter's September reading was never s
 
 - "Reason for voiding" label marked required (`*` + `aria-required`) in both the single and bulk void dialogs. The field was already mandatory at the UI, Zod and audit layers, but nothing said so — users only discovered it from the greyed-out button.
 
+### Payments — payment date (data-integrity fix)
+
+- **Record Payment now takes a Payment Date**, defaulting to today and capped at today. `payments.paid_at` previously always fell back to `now()`, so a cash payment collected on the 30th but entered on the 3rd was stamped with the entry date. That value drives the receipt PDF's payment date, every report's date-range filter, and the unit account statement — so monthly collection figures moved with the data-entry lag. Hidden for Razorpay, which supplies its own timestamp. Back-dated entries are noted in the audit log.
+- **Timezone-safe**: a back-dated entry is anchored at midday IST. `paid_at` is `timestamptz`, and IST midnight converts to 18:30 UTC on the *previous* day, which would drop the payment out of any report range filtered on that date.
+
+### Payments — `record_payment` overload consolidation (bug fix)
+
+`20260703000001` dropped the stale 5-arg `record_payment` overload because PostgREST returns HTTP 300 when two overloads are present. `20260723000001` then re-created that 5-arg version in order to add `advance_applied` to the outstanding check — but the application calls the 8-arg (Razorpay-aware) version, which never received that fix. Confirmed against the generated types, which showed `record_payment` as a union of two overloads.
+
+- **Consequence**: for a bill covered by advance credit, outstanding was computed as `total - paid`, ignoring `advance_applied`. A further payment could therefore be recorded against an already-settled bill and overpay it.
+- **Fix**: one 9-arg definition now carries both the `advance_applied` check and the Razorpay/service_role logic; both stale overloads are dropped. `p_paid_at` defaults to NULL, so callers passing the previous 8 arguments still resolve — no deploy-order coupling between the migration and the app.
+
+| Migration | Change |
+|-----------|--------|
+| `20260908000001_record_payment_paid_at.sql` | Adds `p_paid_at` to `record_payment`; restores the `advance_applied` outstanding check on the path the app actually calls; drops the stale 5-arg and 8-arg overloads |
+
+### Razorpay — advance credit over-charge (bug fix)
+
+Surfaced while fixing the `advance_applied` check above. The self-service Razorpay path computed the amount to charge as `total_amount - paid_amount`, ignoring `advance_applied` — so an owner whose bill was already part-settled by cash-ledger advance credit was charged for the full amount.
+
+Once `record_payment` began enforcing `advance_applied`, that over-payment would have been *rejected after Razorpay captured the money*, leaving a payment with no record and requiring a manual refund. All three paths now compute outstanding identically as `total - paid - advance_applied`:
+
+- `create-order` — the amount charged to the payer
+- `verify` — the amount recorded, and the >0 filter that decides which bills to record against
+- `webhook` — the fallback path used when verify fails
+
+### Error messages
+
+- **Domain errors raised by our own Postgres functions now reach the operator verbatim.** "Amount exceeds the outstanding balance (₹900)" and "Payment date cannot be in the future" were previously classified as server faults and replaced with the generic "Something went wrong… contact support", hiding the one thing the operator could act on. An explicit allowlist passes through only messages we author; everything else is still sanitized.
+- **Support ref codes are now generated in the billing timezone.** A UTC-based ref read `0908-1111` while the operator's screen showed 16:41 IST.
+
 ### Code quality
 
 - Removed dead code in the Reports screen: the unused `headerSub` derived-header block (and its `formatAmount` helper, `collectionData`, `totalBilled`, `totalOutstanding`, `periodLabel`) and the unused `collectionView` prop binding in `reports-tabs`. `pnpm lint:fix` is now clean.
 - `bills.generation.blocked` added to `ACTION_LABELS` so the audit log renders it in sentence case.
 
-**No migrations in this release.**
+
 
 ---
 

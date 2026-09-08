@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
   // payment should never be recorded against a cancelled bill.
   const { data: bills } = await client
     .from('bills')
-    .select('id, total_amount, paid_amount')
+    .select('id, total_amount, paid_amount, advance_applied')
     .in('id', billIds)
     .in('unit_id', allowedUnitIds)
     .eq('association_id', associationId)
@@ -164,17 +164,26 @@ export async function POST(req: NextRequest) {
   // Record payments in parallel.
   const results = await Promise.all(
     bills
-      .filter((b) => Number(b.total_amount) - Number(b.paid_amount) > 0)
+      .filter(
+        (b) =>
+          Number(b.total_amount) -
+            Number(b.paid_amount) -
+            Number(b.advance_applied ?? 0) >
+          0,
+      )
       .map((bill) =>
         client.rpc('record_payment', {
           p_bill_id: bill.id,
           p_association_id: associationId,
-          p_amount: Number(bill.total_amount) - Number(bill.paid_amount),
+          p_amount:
+            Number(bill.total_amount) -
+            Number(bill.paid_amount) -
+            Number(bill.advance_applied ?? 0),
           p_mode: 'Razorpay',
           p_paid_by_role: canonicalPaidByRole,
           p_razorpay_payment_id: razorpayPaymentId,
           p_razorpay_order_id: razorpayOrderId,
-          p_payment_batch_id: paymentBatchId,
+          p_payment_batch_id: paymentBatchId ?? undefined,
         }),
       ),
   );
