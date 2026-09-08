@@ -263,7 +263,6 @@ export function ReportsTabs({
   onLedgerStatementUnitChange,
   ledgerView,
   onLedgerViewChange,
-  collectionView,
   onCollectionViewChange,
   otherChargeRows,
   occupancyRows,
@@ -371,10 +370,10 @@ export function ReportsTabs({
               data-test={`reports-tab-${t.value}`}
               onClick={() => onTabChange(t.value as TabKey)}
               className={cn(
-                '-mb-px border-b-2 px-3 pb-2 pt-1 text-sm whitespace-nowrap transition-colors',
+                '-mb-px border-b-2 px-3 pt-1 pb-2 text-sm whitespace-nowrap transition-colors',
                 isActive
                   ? 'border-foreground text-foreground font-semibold'
-                  : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground font-medium',
+                  : 'text-muted-foreground hover:border-border hover:text-foreground border-transparent font-medium',
               )}
             >
               {t.label}
@@ -447,7 +446,7 @@ export function ReportsTabs({
                     paymentMode: '',
                   })
                 }
-                className="text-muted-foreground hover:bg-accent hover:text-foreground inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-xs font-medium transition-colors hover:border-border"
+                className="text-muted-foreground hover:bg-accent hover:text-foreground hover:border-border inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-xs font-medium transition-colors"
                 data-test="filter-clear-all-inline"
               >
                 <X className="h-3 w-3" />

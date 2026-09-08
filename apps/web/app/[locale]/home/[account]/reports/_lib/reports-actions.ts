@@ -136,7 +136,9 @@ async function fetchCollectionUnitBreakdown(
 ): Promise<CollectionUnitRow[]> {
   let q = client
     .from('bills')
-    .select('unit_id, total_amount, paid_amount, advance_applied, status, due_date, units(unit_no)')
+    .select(
+      'unit_id, total_amount, paid_amount, advance_applied, status, due_date, units(unit_no)',
+    )
     .eq('association_id', associationId)
     .neq('status', 'Reversed')
     .neq('status', 'Void');
@@ -151,14 +153,29 @@ async function fetchCollectionUnitBreakdown(
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const unitAgg = new Map<string, { unit_no: string; billed: number; collected: number; bill_count: number; has_overdue: boolean }>();
+  const unitAgg = new Map<
+    string,
+    {
+      unit_no: string;
+      billed: number;
+      collected: number;
+      bill_count: number;
+      has_overdue: boolean;
+    }
+  >();
   for (const b of data as any[]) {
     const uid = b.unit_id as string;
     const unit_no = (b.units as { unit_no: string } | null)?.unit_no ?? '—';
     const settled = Number(b.paid_amount ?? 0) + Number(b.advance_applied ?? 0);
     const outstanding = Math.max(0, Number(b.total_amount) - settled);
     const isOverdue = outstanding > 0 && new Date(b.due_date) < today;
-    const cur = unitAgg.get(uid) ?? { unit_no, billed: 0, collected: 0, bill_count: 0, has_overdue: false };
+    const cur = unitAgg.get(uid) ?? {
+      unit_no,
+      billed: 0,
+      collected: 0,
+      bill_count: 0,
+      has_overdue: false,
+    };
     cur.billed += Number(b.total_amount);
     cur.collected += settled;
     cur.bill_count += 1;
@@ -175,7 +192,14 @@ async function fetchCollectionUnitBreakdown(
         else if (v.collected > 0) status = 'partial';
         else status = 'unpaid';
       }
-      return { unit_no: v.unit_no, bill_count: v.bill_count, billed: v.billed, collected: v.collected, outstanding, status };
+      return {
+        unit_no: v.unit_no,
+        bill_count: v.bill_count,
+        billed: v.billed,
+        collected: v.collected,
+        outstanding,
+        status,
+      };
     })
     .filter((r) => !collectedOnly || r.collected > 0)
     .sort((a, b) => b.outstanding - a.outstanding);
@@ -215,19 +239,43 @@ export async function downloadCsvAction(
     if (unitIds.length > 0) rpcParams['p_unit_ids'] = unitIds;
     if (billTypes.length > 0) rpcParams['p_bill_types'] = billTypes;
 
-        // Fetch unit breakdown: one section per type when multi-type selected
+    // Fetch unit breakdown: one section per type when multi-type selected
     const collectedOnly = filters.collectedOnly ?? false;
-    const unitSectionsPromise: Promise<{ label: string; rows: CollectionUnitRow[] }[]> =
+    const unitSectionsPromise: Promise<
+      { label: string; rows: CollectionUnitRow[] }[]
+    > =
       billTypes.length > 1
         ? Promise.all(
             billTypes.map(async (bt) => ({
               label: billTypeLabel(bt),
-              rows: await fetchCollectionUnitBreakdown(client, associationId, [bt], fromPeriod, toPeriod_, unitIds, collectedOnly),
+              rows: await fetchCollectionUnitBreakdown(
+                client,
+                associationId,
+                [bt],
+                fromPeriod,
+                toPeriod_,
+                unitIds,
+                collectedOnly,
+              ),
             })),
           )
-        : fetchCollectionUnitBreakdown(client, associationId, billTypes, fromPeriod, toPeriod_, unitIds, collectedOnly).then(
-            (rows) => [{ label: billTypes.length === 0 ? 'All charge types' : billTypeLabel(billTypes[0]!), rows }],
-          );
+        : fetchCollectionUnitBreakdown(
+            client,
+            associationId,
+            billTypes,
+            fromPeriod,
+            toPeriod_,
+            unitIds,
+            collectedOnly,
+          ).then((rows) => [
+            {
+              label:
+                billTypes.length === 0
+                  ? 'All charge types'
+                  : billTypeLabel(billTypes[0]!),
+              rows,
+            },
+          ]);
 
     const [{ data, error }, unitSections] = await Promise.all([
       (client as any).rpc('get_collection_summary', rpcParams),
@@ -257,13 +305,23 @@ export async function downloadCsvAction(
     );
 
     const STATUS_LABEL: Record<string, string> = {
-      paid: 'Paid', partial: 'Partial', unpaid: 'Unpaid', overdue: 'Overdue',
+      paid: 'Paid',
+      partial: 'Partial',
+      unpaid: 'Unpaid',
+      overdue: 'Overdue',
     };
     for (const section of unitSections) {
       if (section.rows.length === 0) continue;
       const sectionHeader = `\n\nUnit Breakdown · ${section.label}\n`;
       const unitCsv = toCSV(
-        ['Unit', 'Bills', 'Billed (₹)', 'Collected (₹)', 'Outstanding (₹)', 'Status'],
+        [
+          'Unit',
+          'Bills',
+          'Billed (₹)',
+          'Collected (₹)',
+          'Outstanding (₹)',
+          'Status',
+        ],
         section.rows.map((r) => [
           r.unit_no,
           r.bill_count,
@@ -733,7 +791,9 @@ export async function downloadCsvAction(
   if (tab === 'other_charges') {
     let q = client
       .from('bills')
-      .select('id, total_amount, paid_amount, advance_applied, bill_line_items(description, amount)')
+      .select(
+        'id, total_amount, paid_amount, advance_applied, bill_line_items(description, amount)',
+      )
       .eq('association_id', associationId)
       .eq('bill_type', 'other_charges')
       .neq('status', 'Reversed')
@@ -761,7 +821,11 @@ export async function downloadCsvAction(
         const itemAmt = Number(item.amount ?? 0);
         const fraction = billTotal > 0 ? itemAmt / billTotal : 0;
         const itemCollected = Math.round(settled * fraction * 100) / 100;
-        const cur = chargeMap.get(desc) ?? { billed: 0, collected: 0, bill_count: 0 };
+        const cur = chargeMap.get(desc) ?? {
+          billed: 0,
+          collected: 0,
+          bill_count: 0,
+        };
         cur.billed += itemAmt;
         cur.collected += itemCollected;
         cur.bill_count += 1;
@@ -779,7 +843,14 @@ export async function downloadCsvAction(
       ])
       .sort((a, b) => Number(b[2]) - Number(a[2]));
     const csv = toCSV(
-      ['Charge Name', 'Bills', 'Billed (₹)', 'Collected (₹)', 'Outstanding (₹)', 'Collection Rate'],
+      [
+        'Charge Name',
+        'Bills',
+        'Billed (₹)',
+        'Collected (₹)',
+        'Outstanding (₹)',
+        'Collection Rate',
+      ],
       rows,
     );
     return { success: true, csv, filename: `other_charges_${slug}.csv` };
@@ -892,7 +963,9 @@ export async function downloadPdfAction(
 
   let elecQ = client
     .from('mescom_bills')
-    .select('id, period, invoice_amount, block_consumption_units, effective_rate')
+    .select(
+      'id, period, invoice_amount, block_consumption_units, effective_rate',
+    )
     .eq('association_id', associationId)
     .order('period', { ascending: false });
   if (fromPeriod) elecQ = (elecQ as any).gte('period', fromPeriod);
@@ -1100,9 +1173,14 @@ export async function downloadPdfAction(
               // Rate per unit per period from the mescom bill
               const rateMap = new Map<string, number>();
               for (const m of mescomRows as any[]) {
-                if (m.effective_rate) rateMap.set(m.period, Number(m.effective_rate));
+                if (m.effective_rate)
+                  rateMap.set(m.period, Number(m.effective_rate));
                 else if (m.block_consumption_units > 0)
-                  rateMap.set(m.period, Number(m.invoice_amount) / Number(m.block_consumption_units));
+                  rateMap.set(
+                    m.period,
+                    Number(m.invoice_amount) /
+                      Number(m.block_consumption_units),
+                  );
               }
               const rows: {
                 period: string;
@@ -1148,8 +1226,7 @@ export async function downloadPdfAction(
         ? await (async () => {
             // When multiple types are selected, produce a separate section per type
             // so the reader can distinguish Maintenance vs Electricity rows.
-            const effectiveTypes =
-              billTypes.length > 1 ? billTypes : billTypes; // always use passed array
+            const effectiveTypes = billTypes.length > 1 ? billTypes : billTypes; // always use passed array
             const collectedOnly = filters.collectedOnly ?? false;
 
             if (billTypes.length > 1) {
@@ -1208,17 +1285,25 @@ export async function downloadPdfAction(
       if (billTypes.length > 0) clQ = (clQ as any).in('bill_type', billTypes);
       const { data: clData, error: clError } = await clQ;
       if (clError) return undefined;
-      const entries: { entry_date: string; unit_no: string; entry_type: string; bill_type: string; direction: 'credit' | 'debit'; amount: number; paid_by_name: string; notes: string }[] =
-        (clData ?? []).map((r: any) => ({
-          entry_date: r.entry_date,
-          unit_no: (r.units as { unit_no: string } | null)?.unit_no ?? '—',
-          entry_type: r.entry_type as string,
-          bill_type: r.bill_type as string,
-          direction: r.direction as 'credit' | 'debit',
-          amount: Number(r.amount),
-          paid_by_name: r.paid_by_name ?? '',
-          notes: r.notes ?? '',
-        }));
+      const entries: {
+        entry_date: string;
+        unit_no: string;
+        entry_type: string;
+        bill_type: string;
+        direction: 'credit' | 'debit';
+        amount: number;
+        paid_by_name: string;
+        notes: string;
+      }[] = (clData ?? []).map((r: any) => ({
+        entry_date: r.entry_date,
+        unit_no: (r.units as { unit_no: string } | null)?.unit_no ?? '—',
+        entry_type: r.entry_type as string,
+        bill_type: r.bill_type as string,
+        direction: r.direction as 'credit' | 'debit',
+        amount: Number(r.amount),
+        paid_by_name: r.paid_by_name ?? '',
+        notes: r.notes ?? '',
+      }));
       const totalCredits = entries
         .filter((e) => e.direction === 'credit')
         .reduce((s, e) => s + e.amount, 0);
@@ -1254,7 +1339,9 @@ export async function downloadPdfAction(
       if (tab !== 'other_charges') return undefined;
       let q = client
         .from('bills')
-        .select('id, unit_id, total_amount, paid_amount, advance_applied, units(unit_no), bill_line_items(description, amount)')
+        .select(
+          'id, unit_id, total_amount, paid_amount, advance_applied, units(unit_no), bill_line_items(description, amount)',
+        )
         .eq('association_id', associationId)
         .eq('bill_type', 'other_charges')
         .neq('status', 'Reversed')
@@ -1272,7 +1359,12 @@ export async function downloadPdfAction(
       // unit-level aggregation: key = `${charge_name}|||${unit_no}`
       const unitMap = new Map<
         string,
-        { charge_name: string; unit_no: string; billed: number; collected: number }
+        {
+          charge_name: string;
+          unit_no: string;
+          billed: number;
+          collected: number;
+        }
       >();
 
       for (const b of (ocData ?? []) as any[]) {
@@ -1290,14 +1382,23 @@ export async function downloadPdfAction(
           const fraction = billTotal > 0 ? itemAmt / billTotal : 0;
           const itemCollected = Math.round(settled * fraction * 100) / 100;
 
-          const cur = chargeMap.get(desc) ?? { billed: 0, collected: 0, bill_count: 0 };
+          const cur = chargeMap.get(desc) ?? {
+            billed: 0,
+            collected: 0,
+            bill_count: 0,
+          };
           cur.billed += itemAmt;
           cur.collected += itemCollected;
           cur.bill_count += 1;
           chargeMap.set(desc, cur);
 
           const uKey = `${desc}|||${unit_no}`;
-          const ucur = unitMap.get(uKey) ?? { charge_name: desc, unit_no, billed: 0, collected: 0 };
+          const ucur = unitMap.get(uKey) ?? {
+            charge_name: desc,
+            unit_no,
+            billed: 0,
+            collected: 0,
+          };
           ucur.billed += itemAmt;
           ucur.collected += itemCollected;
           unitMap.set(uKey, ucur);
@@ -1319,9 +1420,10 @@ export async function downloadPdfAction(
           ...v,
           outstanding: Math.max(0, v.billed - v.collected),
         }))
-        .sort((a, b) =>
-          a.charge_name.localeCompare(b.charge_name) ||
-          a.unit_no.localeCompare(b.unit_no),
+        .sort(
+          (a, b) =>
+            a.charge_name.localeCompare(b.charge_name) ||
+            a.unit_no.localeCompare(b.unit_no),
         );
 
       return { rows, unitRows };
@@ -1734,7 +1836,12 @@ export async function fetchLedgerStatementAction(
         client,
         associationId,
         unitIds: allUnits.map((u: { id: string; unit_no: string }) => u.id),
-        unitNoMap: new Map(allUnits.map((u: { id: string; unit_no: string }) => [u.id, u.unit_no])),
+        unitNoMap: new Map(
+          allUnits.map((u: { id: string; unit_no: string }) => [
+            u.id,
+            u.unit_no,
+          ]),
+        ),
         balanceMode: 'combined',
       });
       return { success: true, rows };

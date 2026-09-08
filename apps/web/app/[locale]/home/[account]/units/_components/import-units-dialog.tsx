@@ -313,7 +313,7 @@ export function ImportUnitsDialog({
                   )}
                 </div>
 
-                <div className="max-h-60 overflow-auto rounded-md border">
+                <div className="max-h-60 overflow-y-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -346,7 +346,7 @@ export function ImportUnitsDialog({
                           <TableCell>{row.door_no ?? '—'}</TableCell>
                           <TableCell>
                             {row._error ? (
-                              <span className="text-destructive flex items-center gap-1 text-xs">
+                              <span className="text-destructive flex items-start gap-1 text-xs break-words whitespace-normal">
                                 <AlertCircle className="h-3 w-3 shrink-0" />
                                 {row._error}
                               </span>
@@ -384,7 +384,7 @@ export function ImportUnitsDialog({
                 </Alert>
 
                 {result.skipped.length > 0 && (
-                  <div className="max-h-40 overflow-auto rounded-md border">
+                  <div className="max-h-40 overflow-y-auto rounded-md border">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -398,7 +398,7 @@ export function ImportUnitsDialog({
                           <TableRow key={s.row} className="bg-destructive/5">
                             <TableCell className="text-xs">{s.row}</TableCell>
                             <TableCell>{s.unit_no}</TableCell>
-                            <TableCell className="text-destructive text-xs">
+                            <TableCell className="text-destructive text-xs break-words whitespace-normal">
                               {s.reason}
                             </TableCell>
                           </TableRow>

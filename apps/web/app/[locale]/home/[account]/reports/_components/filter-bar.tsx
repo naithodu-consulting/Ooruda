@@ -329,7 +329,7 @@ export function ActiveFilterChips({
       ))}
       <button
         onClick={onClearAll}
-        className="text-muted-foreground hover:bg-accent hover:text-foreground inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-xs font-medium transition-colors hover:border-border"
+        className="text-muted-foreground hover:bg-accent hover:text-foreground hover:border-border inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-xs font-medium transition-colors"
         data-test="filter-clear-all"
       >
         <X className="h-3 w-3" />

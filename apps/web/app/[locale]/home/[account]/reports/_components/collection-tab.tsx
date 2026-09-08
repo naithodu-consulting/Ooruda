@@ -18,6 +18,9 @@ import {
   YAxis,
 } from 'recharts';
 
+import { useSupabase } from '@kit/supabase/hooks/use-supabase';
+import { Badge } from '@kit/ui/badge';
+import { Button } from '@kit/ui/button';
 import {
   Card,
   CardContent,
@@ -25,8 +28,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@kit/ui/card';
-import { Badge } from '@kit/ui/badge';
-import { Button } from '@kit/ui/button';
+import { toast } from '@kit/ui/sonner';
+import { Spinner } from '@kit/ui/spinner';
 import {
   Table,
   TableBody,
@@ -35,9 +38,6 @@ import {
   TableHeader,
   TableRow,
 } from '@kit/ui/table';
-import { toast } from '@kit/ui/sonner';
-import { Spinner } from '@kit/ui/spinner';
-import { useSupabase } from '@kit/supabase/hooks/use-supabase';
 
 import { formatINR } from '~/lib/format-inr';
 import { formatPeriod } from '~/lib/format-period';
@@ -68,10 +68,22 @@ const STATUS_BADGE: Record<
   BillTypeUnitRow['status'],
   { label: string; className: string }
 > = {
-  paid: { label: 'Paid', className: 'border-green-200 bg-green-50 text-green-700' },
-  partial: { label: 'Partial', className: 'border-amber-200 bg-amber-50 text-amber-700' },
-  unpaid: { label: 'Unpaid', className: 'border-red-200 bg-red-50 text-red-700' },
-  overdue: { label: 'Overdue', className: 'border-red-200 bg-red-100 text-red-800' },
+  paid: {
+    label: 'Paid',
+    className: 'border-green-200 bg-green-50 text-green-700',
+  },
+  partial: {
+    label: 'Partial',
+    className: 'border-amber-200 bg-amber-50 text-amber-700',
+  },
+  unpaid: {
+    label: 'Unpaid',
+    className: 'border-red-200 bg-red-50 text-red-700',
+  },
+  overdue: {
+    label: 'Overdue',
+    className: 'border-red-200 bg-red-100 text-red-800',
+  },
 };
 
 const BILL_TYPES = [
@@ -99,16 +111,29 @@ function inrK(val: number) {
 
 type View = 'received' | 'raised';
 
-export function CollectionTab({ associationId, from, to, unitIds, rows, payments, onViewChange }: Props & { onViewChange?: (v: View) => void }) {
+export function CollectionTab({
+  associationId,
+  from,
+  to,
+  unitIds,
+  rows,
+  payments,
+  onViewChange,
+}: Props & { onViewChange?: (v: View) => void }) {
   // Default to "Payments Received" (payment-date-based) so
   // "This FY" always shows money that actually came in.
   const [view, setView] = useState<View>('received');
-  const handleViewChange = (v: View) => { setView(v); onViewChange?.(v); };
+  const handleViewChange = (v: View) => {
+    setView(v);
+    onViewChange?.(v);
+  };
   const [activeBillType, setActiveBillType] = useState<string | null>(null);
 
   // Unit-level breakdown for the selected bill type — fetched lazily when the
   // user clicks a donut slice. Mirrors the former "By Bill Type" tab logic.
-  const [unitBreakdownRows, setUnitBreakdownRows] = useState<BillTypeUnitRow[]>([]);
+  const [unitBreakdownRows, setUnitBreakdownRows] = useState<BillTypeUnitRow[]>(
+    [],
+  );
   const [unitBreakdownLoading, setUnitBreakdownLoading] = useState(false);
   const supabase = useSupabase();
 
@@ -126,7 +151,9 @@ export function CollectionTab({ associationId, from, to, unitIds, rows, payments
 
     let q = (supabase as any)
       .from('bills')
-      .select('unit_id, total_amount, paid_amount, advance_applied, status, due_date, units(unit_no)')
+      .select(
+        'unit_id, total_amount, paid_amount, advance_applied, status, due_date, units(unit_no)',
+      )
       .eq('association_id', associationId)
       .eq('bill_type', activeBillType)
       .neq('status', 'Reversed')
@@ -142,14 +169,30 @@ export function CollectionTab({ associationId, from, to, unitIds, rows, payments
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const unitAgg = new Map<string, { unit_no: string; billed: number; collected: number; bill_count: number; has_overdue: boolean }>();
-      for (const b of (data ?? [])) {
+      const unitAgg = new Map<
+        string,
+        {
+          unit_no: string;
+          billed: number;
+          collected: number;
+          bill_count: number;
+          has_overdue: boolean;
+        }
+      >();
+      for (const b of data ?? []) {
         const uid = b.unit_id as string;
         const unit_no = (b.units as { unit_no: string } | null)?.unit_no ?? '—';
-        const settled = Number(b.paid_amount ?? 0) + Number(b.advance_applied ?? 0);
+        const settled =
+          Number(b.paid_amount ?? 0) + Number(b.advance_applied ?? 0);
         const outstanding = Math.max(0, Number(b.total_amount) - settled);
         const isOverdue = outstanding > 0 && new Date(b.due_date) < today;
-        const cur = unitAgg.get(uid) ?? { unit_no, billed: 0, collected: 0, bill_count: 0, has_overdue: false };
+        const cur = unitAgg.get(uid) ?? {
+          unit_no,
+          billed: 0,
+          collected: 0,
+          bill_count: 0,
+          has_overdue: false,
+        };
         cur.billed += Number(b.total_amount);
         cur.collected += settled;
         cur.bill_count += 1;
@@ -166,7 +209,15 @@ export function CollectionTab({ associationId, from, to, unitIds, rows, payments
             else if (v.collected > 0) status = 'partial';
             else status = 'unpaid';
           }
-          return { unit_id: uid, unit_no: v.unit_no, billed: v.billed, collected: v.collected, outstanding, bill_count: v.bill_count, status };
+          return {
+            unit_id: uid,
+            unit_no: v.unit_no,
+            billed: v.billed,
+            collected: v.collected,
+            outstanding,
+            bill_count: v.bill_count,
+            status,
+          };
         })
         .sort((a, b) => b.outstanding - a.outstanding);
 
@@ -174,7 +225,9 @@ export function CollectionTab({ associationId, from, to, unitIds, rows, payments
       setUnitBreakdownLoading(false);
     });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [activeBillType, associationId, from, to, unitIds.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Payment-date-based aggregation (primary, correct for "This FY") ──────────
@@ -737,7 +790,11 @@ function UnitBreakdownTable({
         from,
         to,
         'collection',
-        { billTypes: [activeBillType], unitIds, collectedOnly: view === 'received' },
+        {
+          billTypes: [activeBillType],
+          unitIds,
+          collectedOnly: view === 'received',
+        },
       );
       if (!result.success) {
         toast.error(result.error ?? 'Could not generate CSV.');
@@ -760,7 +817,11 @@ function UnitBreakdownTable({
         from,
         to,
         'collection',
-        { billTypes: [activeBillType], unitIds, collectedOnly: view === 'received' },
+        {
+          billTypes: [activeBillType],
+          unitIds,
+          collectedOnly: view === 'received',
+        },
       );
       if (!result.success) {
         toast.error(result.error ?? 'Could not generate PDF.');
@@ -840,7 +901,9 @@ function UnitBreakdownTable({
                     <TableHead className="text-right">Bills</TableHead>
                     <TableHead className="text-right">Billed (₹)</TableHead>
                     <TableHead className="text-right">Collected (₹)</TableHead>
-                    <TableHead className="text-right">Outstanding (₹)</TableHead>
+                    <TableHead className="text-right">
+                      Outstanding (₹)
+                    </TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -849,13 +912,25 @@ function UnitBreakdownTable({
                     const badge = STATUS_BADGE[r.status];
                     return (
                       <TableRow key={r.unit_id}>
-                        <TableCell className="font-medium">{r.unit_no}</TableCell>
-                        <TableCell className="text-right tabular-nums">{r.bill_count}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatINR(r.billed)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatINR(r.collected)}</TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">{formatINR(r.outstanding)}</TableCell>
+                        <TableCell className="font-medium">
+                          {r.unit_no}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.bill_count}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatINR(r.billed)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatINR(r.collected)}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums">
+                          {formatINR(r.outstanding)}
+                        </TableCell>
                         <TableCell>
-                          <Badge className={`text-xs ${badge.className}`}>{badge.label}</Badge>
+                          <Badge className={`text-xs ${badge.className}`}>
+                            {badge.label}
+                          </Badge>
                         </TableCell>
                       </TableRow>
                     );
@@ -865,9 +940,15 @@ function UnitBreakdownTable({
                     <TableCell className="text-right tabular-nums">
                       {rows.reduce((s, r) => s + r.bill_count, 0)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatINR(totalBilled)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatINR(totalCollected)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatINR(totalOutstanding)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatINR(totalBilled)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatINR(totalCollected)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatINR(totalOutstanding)}
+                    </TableCell>
                     <TableCell />
                   </TableRow>
                 </TableBody>

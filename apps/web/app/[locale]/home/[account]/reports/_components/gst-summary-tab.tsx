@@ -17,6 +17,7 @@ import {
 } from '@kit/ui/table';
 
 import { formatINR } from '~/lib/format-inr';
+import { formatPeriod } from '~/lib/format-period';
 
 import { billTypeLabel, type GstSummaryRow } from '../_lib/reports-types';
 import { KpiTile } from './kpi-tile';
@@ -107,7 +108,7 @@ export function GstSummaryTab({ rows }: Props) {
                   const pendingGst = r.gst_amount - r.collected_gst;
                   return (
                     <TableRow key={`${r.period}-${r.bill_type}`}>
-                      <TableCell className="tabular-nums">{r.period}</TableCell>
+                      <TableCell>{formatPeriod(r.period)}</TableCell>
                       <TableCell>{billTypeLabel(r.bill_type)}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {r.bill_count}

@@ -6,6 +6,7 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
 import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
+import { formatPeriod } from '~/lib/format-period';
 import { getAssociationRole } from '~/lib/rbac';
 
 import {
@@ -175,7 +176,7 @@ export async function createElectricityBillAction(
     if (error.code === '23505') {
       return {
         success: false,
-        error: `A bill for ${parsed.data.period} already exists.`,
+        error: `A bill for ${formatPeriod(parsed.data.period)} already exists.`,
       };
     }
     const { userMessage } = await sanitizeActionError(error, {
@@ -188,7 +189,7 @@ export async function createElectricityBillAction(
       action: 'mescom_bill.create.failed',
       entityType: 'mescom_bill',
       eventType: 'error',
-      summary: `Failed to create electricity bill for ${parsed.data.period}: ${error.message}`,
+      summary: `Failed to create electricity bill for ${formatPeriod(parsed.data.period)}: ${error.message}`,
     });
     return { success: false, error: userMessage };
   }
@@ -197,7 +198,7 @@ export async function createElectricityBillAction(
     associationId,
     action: 'mescom_bill.created',
     entityType: 'mescom_bill',
-    summary: `Added electricity bill for ${parsed.data.period}`,
+    summary: `Added electricity bill for ${formatPeriod(parsed.data.period)}`,
   });
 
   return { success: true };
@@ -327,7 +328,7 @@ export async function bulkImportMeterReadingsAction(
       client.from('units').select('id').eq('association_id', associationId),
       client
         .from('mescom_bills')
-        .select('id, period')
+        .select('id, period, block_consumption_units')
         .eq('association_id', associationId),
       client
         .from('bills')
@@ -343,12 +344,16 @@ export async function bulkImportMeterReadingsAction(
       success: false,
       imported: 0,
       skipped: [],
-      error: `Electricity bills have already been generated for ${firstPeriod}. Readings cannot be changed after billing.`,
+      error: `Electricity bills have already been generated for ${formatPeriod(firstPeriod)}. Readings cannot be changed after billing.`,
     };
   }
 
   const billByPeriod = new Map<string, string>(
     (bills ?? []).map((b) => [b.period, b.id]),
+  );
+
+  const blockUnitsByPeriod = new Map<string, number>(
+    (bills ?? []).map((b) => [b.period, b.block_consumption_units]),
   );
 
   const unitIds = (units ?? []).map((u) => u.id);
@@ -421,7 +426,7 @@ export async function bulkImportMeterReadingsAction(
     targetBillId && smIds.length
       ? await client
           .from('meter_readings')
-          .select('sub_meter_id, minimum_charge, load_kva')
+          .select('sub_meter_id, minimum_charge, load_kva, consumed_units')
           .eq('mescom_bill_id', targetBillId)
           .in('sub_meter_id', smIds)
       : { data: [] };
@@ -429,11 +434,16 @@ export async function bulkImportMeterReadingsAction(
   type ExistingReading = {
     minimum_charge: number | null;
     load_kva: number | null;
+    consumed_units: number | null;
   };
   const existingBySmId = new Map<string, ExistingReading>(
     (existingReadings ?? []).map((r) => [
       r.sub_meter_id,
-      { minimum_charge: r.minimum_charge, load_kva: r.load_kva },
+      {
+        minimum_charge: r.minimum_charge,
+        load_kva: r.load_kva,
+        consumed_units: r.consumed_units,
+      },
     ]),
   );
 
@@ -460,7 +470,7 @@ export async function bulkImportMeterReadingsAction(
       skipped.push({
         row: rowNum,
         sub_meter_no: row.sub_meter_no,
-        reason: `No MESCOM bill found for ${row.period}. Upload the bill first.`,
+        reason: `No electricity bill found for ${formatPeriod(row.period)}. Upload the bill first.`,
       });
       continue;
     }
@@ -500,7 +510,7 @@ export async function bulkImportMeterReadingsAction(
       skipped.push({
         row: rowNum,
         sub_meter_no: row.sub_meter_no,
-        reason: `Current reading (${row.current_reading}) is less than previous reading (${previousReading}). Check for meter replacement.`,
+        reason: `Current reading (${row.current_reading}) is less than previous reading (${previousReading}).`,
       });
       continue;
     }
@@ -536,6 +546,45 @@ export async function bulkImportMeterReadingsAction(
     });
   }
 
+  // Block-total guard: sub-meters can never consume more than the main
+  // Electricity meter. The manual readings dialog refuses to save such a set,
+  // so the CSV path must refuse too — otherwise an over-block set lands in the
+  // DB and inflates the block rate for every unit at bill generation.
+  //
+  // The total is the period's state AFTER this import: the rows being written
+  // plus the readings already saved for meters this CSV doesn't mention. A
+  // per-file sum would let two successive partial imports slip past.
+  const blockUnits = blockUnitsByPeriod.get(firstPeriod) ?? 0;
+
+  if (toUpsert.length > 0 && blockUnits > 0) {
+    const incomingSmIds = new Set(toUpsert.map((r) => r.sub_meter_id));
+
+    const incomingUnits = toUpsert.reduce(
+      (sum, r) => sum + Math.max(0, r.current_reading - r.previous_reading),
+      0,
+    );
+
+    let retainedUnits = 0;
+    for (const [smId, existing] of existingBySmId) {
+      if (incomingSmIds.has(smId)) continue;
+      retainedUnits += Math.max(0, existing.consumed_units ?? 0);
+    }
+
+    // Readings are decimals, so round before comparing and displaying —
+    // otherwise float drift both trips the guard on an exact match and prints
+    // totals like "270.00000000000003".
+    const totalUnits = Math.round((incomingUnits + retainedUnits) * 100) / 100;
+
+    if (totalUnits > blockUnits) {
+      return {
+        success: false,
+        imported: 0,
+        skipped,
+        error: `The readings total is ${totalUnits} units for ${formatPeriod(firstPeriod)}, which exceeds the block consumption of ${blockUnits} units. Correct the readings and import again.`,
+      };
+    }
+  }
+
   let imported = 0;
 
   if (toUpsert.length > 0) {
@@ -562,7 +611,9 @@ export async function bulkImportMeterReadingsAction(
   }
 
   if (imported > 0) {
-    const periods = [...new Set(rows.map((r) => r.period))].join(', ');
+    const periods = [...new Set(rows.map((r) => r.period))]
+      .map(formatPeriod)
+      .join(', ');
     await logAuditEvent({
       associationId,
       action: 'meter_readings.bulk_imported',
@@ -625,7 +676,7 @@ export async function recordMeterReadingsAction(
   if ((generatedBillCount ?? 0) > 0) {
     return {
       success: false,
-      error: `Electricity bills have already been generated for ${bill.period}. Readings cannot be changed after billing.`,
+      error: `Electricity bills have already been generated for ${formatPeriod(bill.period)}. Readings cannot be changed after billing.`,
     };
   }
 
@@ -649,7 +700,7 @@ export async function recordMeterReadingsAction(
       entityType: 'mescom_bill',
       entityId: bill.id,
       eventType: 'error',
-      summary: `Failed to record meter readings for ${bill.period}: ${upsertError.message}`,
+      summary: `Failed to record meter readings for ${formatPeriod(bill.period)}: ${upsertError.message}`,
     });
     const { userMessage } = await sanitizeActionError(upsertError, {
       action: 'recordMeterReadings',
@@ -664,7 +715,7 @@ export async function recordMeterReadingsAction(
     action: 'meter_readings.recorded',
     entityType: 'mescom_bill',
     entityId: bill.id,
-    summary: `Recorded meter readings for ${bill.period}`,
+    summary: `Recorded meter readings for ${formatPeriod(bill.period)}`,
   });
 
   return { success: true };

@@ -96,7 +96,7 @@ export function VoidBillDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="void-reason">Reason for voiding</Label>
+            <Label htmlFor="void-reason">Reason for voiding *</Label>
             <Textarea
               ref={textareaRef}
               id="void-reason"
@@ -105,6 +105,8 @@ export function VoidBillDialog({
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               className="resize-none"
+              required
+              aria-required="true"
               disabled={isPending}
             />
             {error && (
@@ -212,7 +214,7 @@ export function VoidBillsBulkDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="bulk-void-reason">Reason for voiding</Label>
+            <Label htmlFor="bulk-void-reason">Reason for voiding *</Label>
             <Textarea
               id="bulk-void-reason"
               placeholder="e.g. Incorrect rates applied, re-generating with updated charges…"
@@ -220,6 +222,8 @@ export function VoidBillsBulkDialog({
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               className="resize-none"
+              required
+              aria-required="true"
               disabled={isPending}
             />
             {error && (

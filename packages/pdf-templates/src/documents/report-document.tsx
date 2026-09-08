@@ -544,43 +544,100 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
               .filter((ub) => ub.rows.length > 0)
               .map((ub) => {
                 const STATUS_LABEL: Record<string, string> = {
-                  paid: 'Paid', partial: 'Partial', unpaid: 'Unpaid', overdue: 'Overdue',
+                  paid: 'Paid',
+                  partial: 'Partial',
+                  unpaid: 'Unpaid',
+                  overdue: 'Overdue',
                 };
                 const ubTotal = ub.rows.reduce(
-                  (s, r) => ({ billed: s.billed + r.billed, collected: s.collected + r.collected, outstanding: s.outstanding + r.outstanding }),
+                  (s, r) => ({
+                    billed: s.billed + r.billed,
+                    collected: s.collected + r.collected,
+                    outstanding: s.outstanding + r.outstanding,
+                  }),
                   { billed: 0, collected: 0, outstanding: 0 },
                 );
                 return (
                   <React.Fragment key={ub.billTypeLabel}>
-                    <Text style={[rStyles.sectionTitle, { marginTop: 14, fontSize: 10 }]} minPresenceAhead={60}>
+                    <Text
+                      style={[
+                        rStyles.sectionTitle,
+                        { marginTop: 14, fontSize: 10 },
+                      ]}
+                      minPresenceAhead={60}
+                    >
                       Unit Breakdown · {ub.billTypeLabel}
                     </Text>
                     <View style={rStyles.table}>
                       <View style={rStyles.thead}>
-                        <Text style={[rStyles.theadCell, { flex: 1.5 }]}>Unit</Text>
+                        <Text style={[rStyles.theadCell, { flex: 1.5 }]}>
+                          Unit
+                        </Text>
                         <Text style={rStyles.theadCellRight}>Bills</Text>
                         <Text style={rStyles.theadCellRight}>Billed (₹)</Text>
-                        <Text style={rStyles.theadCellRight}>Collected (₹)</Text>
-                        <Text style={rStyles.theadCellRight}>Outstanding (₹)</Text>
+                        <Text style={rStyles.theadCellRight}>
+                          Collected (₹)
+                        </Text>
+                        <Text style={rStyles.theadCellRight}>
+                          Outstanding (₹)
+                        </Text>
                         <Text style={rStyles.theadCellRight}>Status</Text>
                       </View>
                       {ub.rows.map((r, i) => (
-                        <View key={r.unit_no} style={i % 2 === 0 ? rStyles.row : rStyles.rowAlt}>
-                          <Text style={[rStyles.cell, { flex: 1.5 }]}>{r.unit_no}</Text>
+                        <View
+                          key={r.unit_no}
+                          style={i % 2 === 0 ? rStyles.row : rStyles.rowAlt}
+                        >
+                          <Text style={[rStyles.cell, { flex: 1.5 }]}>
+                            {r.unit_no}
+                          </Text>
                           <Text style={rStyles.cellRight}>{r.bill_count}</Text>
-                          <Text style={rStyles.cellRight}>{formatINR(r.billed)}</Text>
-                          <Text style={rStyles.cellRight}>{formatINR(r.collected)}</Text>
-                          <Text style={rStyles.cellRight}>{formatINR(r.outstanding)}</Text>
-                          <Text style={rStyles.cellRight}>{STATUS_LABEL[r.status] ?? r.status}</Text>
+                          <Text style={rStyles.cellRight}>
+                            {formatINR(r.billed)}
+                          </Text>
+                          <Text style={rStyles.cellRight}>
+                            {formatINR(r.collected)}
+                          </Text>
+                          <Text style={rStyles.cellRight}>
+                            {formatINR(r.outstanding)}
+                          </Text>
+                          <Text style={rStyles.cellRight}>
+                            {STATUS_LABEL[r.status] ?? r.status}
+                          </Text>
                         </View>
                       ))}
                       {/* Totals row */}
-                      <View style={[rStyles.row, { backgroundColor: '#f0f0f0' }]}>
-                        <Text style={[rStyles.cell, { flex: 1.5, fontWeight: 'bold' }]}>Total</Text>
-                        <Text style={[rStyles.cellRight, { fontWeight: 'bold' }]}>{ub.rows.reduce((s, r) => s + r.bill_count, 0)}</Text>
-                        <Text style={[rStyles.cellRight, { fontWeight: 'bold' }]}>{formatINR(ubTotal.billed)}</Text>
-                        <Text style={[rStyles.cellRight, { fontWeight: 'bold' }]}>{formatINR(ubTotal.collected)}</Text>
-                        <Text style={[rStyles.cellRight, { fontWeight: 'bold' }]}>{formatINR(ubTotal.outstanding)}</Text>
+                      <View
+                        style={[rStyles.row, { backgroundColor: '#f0f0f0' }]}
+                      >
+                        <Text
+                          style={[
+                            rStyles.cell,
+                            { flex: 1.5, fontWeight: 'bold' },
+                          ]}
+                        >
+                          Total
+                        </Text>
+                        <Text
+                          style={[rStyles.cellRight, { fontWeight: 'bold' }]}
+                        >
+                          {ub.rows.reduce((s, r) => s + r.bill_count, 0)}
+                        </Text>
+                        <Text
+                          style={[rStyles.cellRight, { fontWeight: 'bold' }]}
+                        >
+                          {formatINR(ubTotal.billed)}
+                        </Text>
+                        <Text
+                          style={[rStyles.cellRight, { fontWeight: 'bold' }]}
+                        >
+                          {formatINR(ubTotal.collected)}
+                        </Text>
+                        <Text
+                          style={[rStyles.cellRight, { fontWeight: 'bold' }]}
+                        >
+                          {formatINR(ubTotal.outstanding)}
+                        </Text>
                         <Text style={rStyles.cellRight} />
                       </View>
                     </View>
@@ -615,7 +672,9 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
               <View style={[rStyles.table, { fontSize: 8 }]}>
                 <View style={rStyles.thead}>
                   <Text style={[rStyles.theadCell, { flex: 0.8 }]}>Unit</Text>
-                  <Text style={[rStyles.theadCell, { flex: 1.8 }]}>Bill No.</Text>
+                  <Text style={[rStyles.theadCell, { flex: 1.8 }]}>
+                    Bill No.
+                  </Text>
                   <Text style={[rStyles.theadCell, { flex: 1.2 }]}>Type</Text>
                   <Text style={rStyles.theadCell}>Period</Text>
                   <Text style={rStyles.theadCellRight}>Outstanding</Text>
@@ -626,8 +685,12 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                     key={b.bill_no}
                     style={i % 2 === 0 ? rStyles.row : rStyles.rowAlt}
                   >
-                    <Text style={[rStyles.cell, { flex: 0.8 }]}>{b.unit_no}</Text>
-                    <Text style={[rStyles.cell, { flex: 1.8 }]}>{b.bill_no}</Text>
+                    <Text style={[rStyles.cell, { flex: 0.8 }]}>
+                      {b.unit_no}
+                    </Text>
+                    <Text style={[rStyles.cell, { flex: 1.8 }]}>
+                      {b.bill_no}
+                    </Text>
                     <Text style={[rStyles.cell, { flex: 1.2 }]}>
                       {BILL_TYPE_LABELS[b.bill_type] ?? b.bill_type}
                     </Text>
@@ -856,7 +919,9 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                       {r.minimum_charge > 0 ? formatINR(r.minimum_charge) : '—'}
                     </Text>
                     <Text style={rStyles.cellRight}>
-                      {r.rate_per_unit !== null ? formatINR(r.rate_per_unit) : '—'}
+                      {r.rate_per_unit !== null
+                        ? formatINR(r.rate_per_unit)
+                        : '—'}
                     </Text>
                     <Text style={rStyles.cellRight}>
                       {formatINR(r.charged_amount)}
@@ -1318,9 +1383,14 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
             const rows = data.otherCharges!.rows;
             const totalBilled = rows.reduce((s, r) => s + r.billed, 0);
             const totalCollected = rows.reduce((s, r) => s + r.collected, 0);
-            const totalOutstanding = rows.reduce((s, r) => s + r.outstanding, 0);
+            const totalOutstanding = rows.reduce(
+              (s, r) => s + r.outstanding,
+              0,
+            );
             const rate =
-              totalBilled > 0 ? Math.round((totalCollected / totalBilled) * 100) : 0;
+              totalBilled > 0
+                ? Math.round((totalCollected / totalBilled) * 100)
+                : 0;
             return (
               <>
                 <View style={rStyles.kpiRow}>
@@ -1330,7 +1400,9 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                   </View>
                   <View style={rStyles.kpiBox}>
                     <Text style={rStyles.kpiLabel}>TOTAL BILLED</Text>
-                    <Text style={rStyles.kpiValue}>{formatINR(totalBilled)}</Text>
+                    <Text style={rStyles.kpiValue}>
+                      {formatINR(totalBilled)}
+                    </Text>
                   </View>
                   <View style={rStyles.kpiBox}>
                     <Text style={rStyles.kpiLabel}>COLLECTED</Text>
@@ -1355,7 +1427,9 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                 </View>
                 <View style={rStyles.table}>
                   <View style={rStyles.thead}>
-                    <Text style={[rStyles.theadCell, { flex: 3 }]}>Charge Name</Text>
+                    <Text style={[rStyles.theadCell, { flex: 3 }]}>
+                      Charge Name
+                    </Text>
                     <Text style={rStyles.theadCellRight}>Bills</Text>
                     <Text style={rStyles.theadCellRight}>Billed</Text>
                     <Text style={rStyles.theadCellRight}>Collected</Text>
@@ -1364,7 +1438,9 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                   </View>
                   {rows.map((r, i) => {
                     const rate_ =
-                      r.billed > 0 ? Math.round((r.collected / r.billed) * 100) : 0;
+                      r.billed > 0
+                        ? Math.round((r.collected / r.billed) * 100)
+                        : 0;
                     return (
                       <View
                         key={r.charge_name}
@@ -1374,8 +1450,12 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                           {r.charge_name}
                         </Text>
                         <Text style={rStyles.cellRight}>{r.bill_count}</Text>
-                        <Text style={rStyles.cellRight}>{formatINR(r.billed)}</Text>
-                        <Text style={rStyles.cellRight}>{formatINR(r.collected)}</Text>
+                        <Text style={rStyles.cellRight}>
+                          {formatINR(r.billed)}
+                        </Text>
+                        <Text style={rStyles.cellRight}>
+                          {formatINR(r.collected)}
+                        </Text>
                         <Text
                           style={[
                             rStyles.cellRight,
@@ -1389,8 +1469,21 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                     );
                   })}
                   {/* Totals row */}
-                  <View style={[rStyles.row, { borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: '#312e81' }]}>
-                    <Text style={[rStyles.cell, { flex: 3, fontWeight: 'bold' }]}>Total</Text>
+                  <View
+                    style={[
+                      rStyles.row,
+                      {
+                        borderTopWidth: 1,
+                        borderTopStyle: 'solid',
+                        borderTopColor: '#312e81',
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[rStyles.cell, { flex: 3, fontWeight: 'bold' }]}
+                    >
+                      Total
+                    </Text>
                     <Text style={rStyles.cellRight} />
                     <Text style={[rStyles.cellRight, { fontWeight: 'bold' }]}>
                       {formatINR(totalBilled)}
@@ -1401,52 +1494,82 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                     <Text
                       style={[
                         rStyles.cellRight,
-                        { fontWeight: 'bold', color: totalOutstanding > 0 ? '#dc2626' : '#888' },
+                        {
+                          fontWeight: 'bold',
+                          color: totalOutstanding > 0 ? '#dc2626' : '#888',
+                        },
                       ]}
                     >
                       {formatINR(totalOutstanding)}
                     </Text>
-                    <Text style={[rStyles.cellRight, { fontWeight: 'bold' }]}>{rate}%</Text>
+                    <Text style={[rStyles.cellRight, { fontWeight: 'bold' }]}>
+                      {rate}%
+                    </Text>
                   </View>
                 </View>
 
                 {/* Unit breakdown per charge type */}
-                {data.otherCharges!.unitRows && data.otherCharges!.unitRows.length > 0 &&
+                {data.otherCharges!.unitRows &&
+                  data.otherCharges!.unitRows.length > 0 &&
                   rows.map((charge) => {
                     const units = data.otherCharges!.unitRows!.filter(
                       (u) => u.charge_name === charge.charge_name,
                     );
                     if (units.length === 0) return null;
                     const uBilled = units.reduce((s, u) => s + u.billed, 0);
-                    const uCollected = units.reduce((s, u) => s + u.collected, 0);
-                    const uOutstanding = units.reduce((s, u) => s + u.outstanding, 0);
+                    const uCollected = units.reduce(
+                      (s, u) => s + u.collected,
+                      0,
+                    );
+                    const uOutstanding = units.reduce(
+                      (s, u) => s + u.outstanding,
+                      0,
+                    );
                     return (
                       <React.Fragment key={charge.charge_name}>
                         <Text
-                          style={[rStyles.sectionTitle, { marginTop: 14, fontSize: 10 }]}
+                          style={[
+                            rStyles.sectionTitle,
+                            { marginTop: 14, fontSize: 10 },
+                          ]}
                           minPresenceAhead={40}
                         >
                           Unit Breakdown · {charge.charge_name}
                         </Text>
                         <View style={[rStyles.table, { fontSize: 8 }]}>
                           <View style={rStyles.thead}>
-                            <Text style={[rStyles.theadCell, { flex: 1.5 }]}>Unit</Text>
+                            <Text style={[rStyles.theadCell, { flex: 1.5 }]}>
+                              Unit
+                            </Text>
                             <Text style={rStyles.theadCellRight}>Billed</Text>
-                            <Text style={rStyles.theadCellRight}>Collected</Text>
-                            <Text style={rStyles.theadCellRight}>Outstanding</Text>
+                            <Text style={rStyles.theadCellRight}>
+                              Collected
+                            </Text>
+                            <Text style={rStyles.theadCellRight}>
+                              Outstanding
+                            </Text>
                           </View>
                           {units.map((u, i) => (
                             <View
                               key={u.unit_no}
                               style={i % 2 === 0 ? rStyles.row : rStyles.rowAlt}
                             >
-                              <Text style={[rStyles.cell, { flex: 1.5 }]}>{u.unit_no}</Text>
-                              <Text style={rStyles.cellRight}>{formatINR(u.billed)}</Text>
-                              <Text style={rStyles.cellRight}>{formatINR(u.collected)}</Text>
+                              <Text style={[rStyles.cell, { flex: 1.5 }]}>
+                                {u.unit_no}
+                              </Text>
+                              <Text style={rStyles.cellRight}>
+                                {formatINR(u.billed)}
+                              </Text>
+                              <Text style={rStyles.cellRight}>
+                                {formatINR(u.collected)}
+                              </Text>
                               <Text
                                 style={[
                                   rStyles.cellRight,
-                                  { color: u.outstanding > 0 ? '#d97706' : '#888' },
+                                  {
+                                    color:
+                                      u.outstanding > 0 ? '#d97706' : '#888',
+                                  },
                                 ]}
                               >
                                 {formatINR(u.outstanding)}
@@ -1454,14 +1577,47 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                             </View>
                           ))}
                           {/* Sub-total */}
-                          <View style={[rStyles.row, { borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: '#312e81' }]}>
-                            <Text style={[rStyles.cell, { flex: 1.5, fontWeight: 'bold' }]}>Total</Text>
-                            <Text style={[rStyles.cellRight, { fontWeight: 'bold' }]}>{formatINR(uBilled)}</Text>
-                            <Text style={[rStyles.cellRight, { fontWeight: 'bold' }]}>{formatINR(uCollected)}</Text>
+                          <View
+                            style={[
+                              rStyles.row,
+                              {
+                                borderTopWidth: 1,
+                                borderTopStyle: 'solid',
+                                borderTopColor: '#312e81',
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                rStyles.cell,
+                                { flex: 1.5, fontWeight: 'bold' },
+                              ]}
+                            >
+                              Total
+                            </Text>
                             <Text
                               style={[
                                 rStyles.cellRight,
-                                { fontWeight: 'bold', color: uOutstanding > 0 ? '#dc2626' : '#888' },
+                                { fontWeight: 'bold' },
+                              ]}
+                            >
+                              {formatINR(uBilled)}
+                            </Text>
+                            <Text
+                              style={[
+                                rStyles.cellRight,
+                                { fontWeight: 'bold' },
+                              ]}
+                            >
+                              {formatINR(uCollected)}
+                            </Text>
+                            <Text
+                              style={[
+                                rStyles.cellRight,
+                                {
+                                  fontWeight: 'bold',
+                                  color: uOutstanding > 0 ? '#dc2626' : '#888',
+                                },
                               ]}
                             >
                               {formatINR(uOutstanding)}

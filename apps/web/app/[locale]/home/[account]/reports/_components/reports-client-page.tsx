@@ -78,16 +78,6 @@ function syncUrl(params: Record<string, string>, remove?: string[]) {
   window.history.replaceState(null, '', url.toString());
 }
 
-/**
- * Format a rupee amount for the header summary. Only switches to the lakh
- * shorthand once the value is actually of that magnitude — filtering down to a
- * single unit otherwise rendered real amounts as a meaningless "₹0.0L".
- */
-function formatAmount(n: number): string {
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  return `₹${Math.round(n).toLocaleString('en-IN')}`;
-}
-
 function serializeIds(ids: string[]): string {
   return ids.join(',');
 }
@@ -96,7 +86,10 @@ function parseIds(s: string | null): string[] {
   return s.split(',').filter(Boolean);
 }
 
-const TAB_FILTER_SUPPORT: Record<string, ('units' | 'bill_types' | 'status' | 'mode')[]> = {
+const TAB_FILTER_SUPPORT: Record<
+  string,
+  ('units' | 'bill_types' | 'status' | 'mode')[]
+> = {
   collection: ['units', 'bill_types'],
   outstanding: ['units', 'bill_types', 'status'],
   payments: ['units', 'bill_types', 'mode'],
@@ -171,7 +164,9 @@ export function ReportsClientPage({
   const [ledgerStatementUnitId, setLedgerStatementUnitId] =
     useState<string>(LEDGER_ALL_UNITS);
   const [ledgerView, setLedgerView] = useState<LedgerView>('all');
-  const [collectionView, setCollectionView] = useState<'received' | 'raised'>('received');
+  const [collectionView, setCollectionView] = useState<'received' | 'raised'>(
+    'received',
+  );
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -992,11 +987,13 @@ export function ReportsClientPage({
     if (!supports.includes('status')) removeParams.push('status');
     if (!supports.includes('mode')) removeParams.push('mode');
     if (!supports.includes('units')) removeParams.push('units');
-    setFilters(prev => ({
+    setFilters((prev) => ({
       ...prev,
       unitIds: supports.includes('units') ? prev.unitIds : [],
       billTypes: supports.includes('bill_types') ? prev.billTypes : [],
-      outstandingStatus: supports.includes('status') ? prev.outstandingStatus : 'all',
+      outstandingStatus: supports.includes('status')
+        ? prev.outstandingStatus
+        : 'all',
       paymentMode: supports.includes('mode') ? prev.paymentMode : '',
     }));
     syncUrl({ tab }, removeParams);
@@ -1048,27 +1045,6 @@ export function ReportsClientPage({
     [filters],
   );
 
-  // ── Derived header summary ────────────────────────────────────────────────
-
-  const collectionData = tabData.collection;
-  const collectionRows = collectionData?.collectionRows ?? [];
-  const totalBilled = collectionRows.reduce((s, r) => s + r.billed, 0);
-  // Derive outstanding from the same filtered collection rows rather than the
-  // Outstanding tab — that tab is lazily fetched, so reading it here reported
-  // ₹0 outstanding until the user actually opened it.
-  const totalOutstanding = collectionRows.reduce(
-    (s, r) => s + (r.billed - r.collected),
-    0,
-  );
-
-  const periodLabel =
-    preset === 'all_time' ? 'all time' : 'the selected period';
-  const headerSub = loading
-    ? 'Loading…'
-    : totalBilled > 0
-      ? `${formatAmount(totalBilled)} billed · ${formatAmount(totalOutstanding)} outstanding`
-      : `No data for ${periodLabel}`;
-
   if (error) {
     return (
       <div className="flex flex-col items-center gap-2 py-16 text-center">
@@ -1107,7 +1083,8 @@ export function ReportsClientPage({
         onTabChange={handleTabChange}
         filters={{
           ...filters,
-          collectedOnly: activeTab === 'collection' && collectionView === 'received',
+          collectedOnly:
+            activeTab === 'collection' && collectionView === 'received',
         }}
         onFiltersChange={handleFiltersChange}
         collectionView={collectionView}

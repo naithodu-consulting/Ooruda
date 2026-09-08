@@ -55,6 +55,7 @@ export const ACTION_LABELS: Record<string, string> = {
   'tenancy.ended': 'Tenancy ended',
   'bills.generated': 'Bills generated',
   'bills.generation.failed': 'Bill generation failed',
+  'bills.generation.blocked': 'Bill generation blocked',
   'bill.updated': 'Bill updated',
   'bill.pdf_generated': 'Bill PDF generated',
   'payment.recorded': 'Payment recorded',

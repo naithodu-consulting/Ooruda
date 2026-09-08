@@ -4,6 +4,44 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v2.3 — Electricity Reading Guards + Period Formatting — 2026-09-08
+
+### Electricity — reading validation (data-integrity fixes)
+
+Prompted by a production incident: one sub-meter's September reading was never saved, so its unit was billed ₹0 while the readings looked complete. Nothing stopped bills from being generated against an incomplete set.
+
+- **Bill generation pre-flight guard**: `generateBillsAction` now refuses to generate electricity bills when any **active** sub-meter has no reading for the period, or a negative one. Names up to 5 offending meters and logs a `bills.generation.blocked` audit event. A period with *no* readings at all is deliberately exempt on an "All" run, so generating maintenance before entering readings still works exactly as before — only a partial or negative set is blocked, since that is the unrecoverable case.
+- **Readings dialog — per-row guard**: Save is now disabled when any row has a current reading below its previous reading, with a live banner naming the meters. Previously only an "Invalid" badge appeared and the block-total check was the sole blocker.
+- **CSV import — block-total guard**: the import now rejects the whole file when the period's resulting total would exceed the MESCOM block consumption, matching the manual dialog. The total is computed as the period's state *after* import (incoming rows plus readings already saved for meters absent from the file), so successive partial imports cannot slip past.
+- **Rounding consistency**: all consumption totals and per-row consumption are rounded to 2dp at source, and that one value drives comparison, display and overage alike. Float drift previously produced a banner reading "250 / 250 units — exceeds by 0 units".
+
+### Electricity — readings dialog UX
+
+- **Reading fields no longer truncate**: number-input spinners hidden, padding tightened, previous/current columns widened (5rem → 6.75rem), min-charge 5.5rem → 6.5rem, dialog `sm:max-w-xl` → `sm:max-w-3xl`. 8-digit readings such as `27917.00` previously clipped to ~5 characters.
+- **Mobile labels**: "Previous" / "Current" labels added below `sm:`, where the two inputs sit side by side with no arrow between them. Hidden from `sm:` up, where the column headers already do this job.
+
+### Period formatting — app-wide
+
+- Every user-visible period now reads **"September 2026"** instead of `2026-09` or `08/2026`: import toasts and result panels, skipped-row reasons, bill-generation errors, "bills already generated" errors, "bill already exists", bill added/deleted toasts, and the GST Summary report table (which had disagreed with its own PDF export).
+- Audit log summaries aligned to the same format across electricity and billing actions. Historical rows keep their original format — these strings are written at insert time.
+
+### Import dialogs — UI fix
+
+- Skipped-row and preview tables no longer show a stray full-width horizontal scrollbar. `TableCell` defaults to `whitespace-nowrap`, so long error text stretched the table; reason/error cells now wrap and the outer container scrolls vertically only. `Table` supplies its own `overflow-x-auto`, so genuinely narrow screens still scroll horizontally.
+
+### Billing — void dialog
+
+- "Reason for voiding" label marked required (`*` + `aria-required`) in both the single and bulk void dialogs. The field was already mandatory at the UI, Zod and audit layers, but nothing said so — users only discovered it from the greyed-out button.
+
+### Code quality
+
+- Removed dead code in the Reports screen: the unused `headerSub` derived-header block (and its `formatAmount` helper, `collectionData`, `totalBilled`, `totalOutstanding`, `periodLabel`) and the unused `collectionView` prop binding in `reports-tabs`. `pnpm lint:fix` is now clean.
+- `bills.generation.blocked` added to `ACTION_LABELS` so the audit log renders it in sentence case.
+
+**No migrations in this release.**
+
+---
+
 ## v2.2 — Expense Tracker + AMC Reminder — 2026-08-20
 
 ### Expense Tracker (assoc_admin + billing_operator)

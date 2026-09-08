@@ -13,12 +13,8 @@ import {
   YAxis,
 } from 'recharts';
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@kit/ui/card';
+import { useSupabase } from '@kit/supabase/hooks/use-supabase';
+import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import {
   Table,
   TableBody,
@@ -30,16 +26,20 @@ import {
 
 import { formatINR } from '~/lib/format-inr';
 
-import { useSupabase } from '@kit/supabase/hooks/use-supabase';
-
 import type { OtherChargeRow, OtherChargeUnitRow } from '../_lib/reports-types';
 import { TOOLTIP_STYLE } from './chart-tooltip-style';
 import { KpiTile } from './kpi-tile';
 
 // Colour palette for bars — cycles if more charge types than colours
 const PALETTE = [
-  '#6366f1', '#f59e0b', '#10b981', '#ec4899',
-  '#8b5cf6', '#0ea5e9', '#f97316', '#14b8a6',
+  '#6366f1',
+  '#f59e0b',
+  '#10b981',
+  '#ec4899',
+  '#8b5cf6',
+  '#0ea5e9',
+  '#f97316',
+  '#14b8a6',
 ];
 
 function pct(collected: number, billed: number) {
@@ -55,7 +55,13 @@ interface Props {
   rows: OtherChargeRow[];
 }
 
-export function OtherChargesTab({ associationId, from, to, unitIds, rows }: Props) {
+export function OtherChargesTab({
+  associationId,
+  from,
+  to,
+  unitIds,
+  rows,
+}: Props) {
   const [activeCharge, setActiveCharge] = useState<string | null>(null);
   const [unitRows, setUnitRows] = useState<OtherChargeUnitRow[]>([]);
   const [unitLoading, setUnitLoading] = useState(false);
@@ -137,7 +143,8 @@ export function OtherChargesTab({ associationId, from, to, unitIds, rows }: Prop
         const lineItems: { description: string; amount: number }[] =
           bill.bill_line_items ?? [];
         const relevantItems = lineItems.filter(
-          (li: { description: string }) => li.description?.trim() === chargeName,
+          (li: { description: string }) =>
+            li.description?.trim() === chargeName,
         );
         if (relevantItems.length === 0) continue;
 
@@ -178,7 +185,11 @@ export function OtherChargesTab({ associationId, from, to, unitIds, rows }: Prop
           const outstanding = Math.max(0, v.billed - v.collected);
           let status: OtherChargeUnitRow['status'] = 'paid';
           if (outstanding > 0) {
-            status = v.has_overdue ? 'overdue' : v.collected > 0 ? 'partial' : 'unpaid';
+            status = v.has_overdue
+              ? 'overdue'
+              : v.collected > 0
+                ? 'partial'
+                : 'unpaid';
           }
           return {
             unit_no: v.unit_no,
@@ -259,7 +270,11 @@ export function OtherChargesTab({ associationId, from, to, unitIds, rows }: Prop
                 margin={{ top: 4, right: 8, left: 8, bottom: 4 }}
                 barCategoryGap="35%"
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="hsl(var(--border))"
+                  vertical={false}
+                />
                 <XAxis
                   dataKey="name"
                   tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
@@ -374,7 +389,7 @@ export function OtherChargesTab({ associationId, from, to, unitIds, rows }: Prop
                     >
                       {r.outstanding > 0 ? formatINR(r.outstanding) : '—'}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-right tabular-nums text-xs">
+                    <TableCell className="text-muted-foreground text-right text-xs tabular-nums">
                       {pct(r.collected, r.billed)}%
                     </TableCell>
                   </TableRow>
@@ -440,9 +455,7 @@ export function OtherChargesTab({ associationId, from, to, unitIds, rows }: Prop
                                 : 'text-muted-foreground'
                             }`}
                           >
-                            {r.outstanding > 0
-                              ? formatINR(r.outstanding)
-                              : '—'}
+                            {r.outstanding > 0 ? formatINR(r.outstanding) : '—'}
                           </TableCell>
                           <TableCell
                             className={`text-right text-xs ${badge.className}`}
@@ -462,10 +475,14 @@ export function OtherChargesTab({ associationId, from, to, unitIds, rows }: Prop
                         {formatINR(unitRows.reduce((s, r) => s + r.billed, 0))}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatINR(unitRows.reduce((s, r) => s + r.collected, 0))}
+                        {formatINR(
+                          unitRows.reduce((s, r) => s + r.collected, 0),
+                        )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatINR(unitRows.reduce((s, r) => s + r.outstanding, 0))}
+                        {formatINR(
+                          unitRows.reduce((s, r) => s + r.outstanding, 0),
+                        )}
                       </TableCell>
                       <TableCell />
                     </TableRow>

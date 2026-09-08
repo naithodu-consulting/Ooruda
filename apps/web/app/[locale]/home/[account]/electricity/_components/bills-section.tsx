@@ -326,7 +326,7 @@ function AddBillForm(props: { associationId: string; onSuccess: () => void }) {
         return;
       }
 
-      toast.success(`Bill for ${values.period} added.`);
+      toast.success(`Bill for ${formatPeriod(values.period)} added.`);
       form.reset();
       props.onSuccess();
       router.refresh();
@@ -454,7 +454,9 @@ function DeleteElectricityBillButton(props: {
         return;
       }
 
-      toast.success(`Electricity bill for ${props.period} deleted.`);
+      toast.success(
+        `Electricity bill for ${formatPeriod(props.period)} deleted.`,
+      );
       router.refresh();
     });
   };

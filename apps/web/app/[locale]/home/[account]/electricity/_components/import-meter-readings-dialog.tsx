@@ -42,6 +42,7 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
+import { formatPeriod } from '~/lib/format-period';
 import {
   downloadXlsxTemplate,
   parseSpreadsheetFile,
@@ -210,6 +211,10 @@ export function ImportMeterReadingsDialog({
     skipped: { row: number; sub_meter_no: string; reason: string }[];
   } | null>(null);
 
+  // selectedPeriod is the MM/YYYY option value; never show it raw — every
+  // period the operator sees reads as "August 2026".
+  const selectedPeriodLabel = formatPeriod(toDbPeriod(selectedPeriod));
+
   const validRows = rows.filter((r) => !r._error);
   const invalidRows = rows.filter((r) => r._error);
   const hasHeaderError = rows[0]?._row === 0;
@@ -258,7 +263,9 @@ export function ImportMeterReadingsDialog({
       );
 
       if (!res.success) {
-        toast.error(res.error ?? 'Import failed.');
+        // Rejection reasons (e.g. the block-consumption overage) carry numbers
+        // the operator needs to act on, so give them time to read it.
+        toast.error(res.error ?? 'Import failed.', { duration: 10000 });
         return;
       }
 
@@ -266,7 +273,7 @@ export function ImportMeterReadingsDialog({
 
       if (res.imported > 0) {
         toast.success(
-          `${res.imported} reading(s) imported for ${selectedPeriod}.`,
+          `${res.imported} reading(s) imported for ${selectedPeriodLabel}.`,
         );
         router.refresh();
       }
@@ -402,7 +409,7 @@ export function ImportMeterReadingsDialog({
                   )}
                 </div>
 
-                <div className="max-h-52 overflow-auto rounded-md border">
+                <div className="max-h-52 overflow-y-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -437,7 +444,7 @@ export function ImportMeterReadingsDialog({
                           </TableCell>
                           <TableCell>
                             {row._error ? (
-                              <span className="text-destructive flex items-center gap-1 text-xs">
+                              <span className="text-destructive flex items-start gap-1 text-xs break-words whitespace-normal">
                                 <AlertCircle className="h-3 w-3 shrink-0" />
                                 {row._error}
                               </span>
@@ -467,7 +474,7 @@ export function ImportMeterReadingsDialog({
                   <CheckCircle2 className="h-4 w-4" />
                   <AlertDescription>
                     <strong>{result.imported}</strong> reading(s) imported
-                    successfully for <strong>{selectedPeriod}</strong>.
+                    successfully for <strong>{selectedPeriodLabel}</strong>.
                     {result.skipped.length > 0 && (
                       <> {result.skipped.length} row(s) were skipped.</>
                     )}
@@ -475,7 +482,7 @@ export function ImportMeterReadingsDialog({
                 </Alert>
 
                 {result.skipped.length > 0 && (
-                  <div className="max-h-40 overflow-auto rounded-md border">
+                  <div className="max-h-40 overflow-y-auto rounded-md border">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -489,7 +496,7 @@ export function ImportMeterReadingsDialog({
                           <TableRow key={s.row} className="bg-destructive/5">
                             <TableCell className="text-xs">{s.row}</TableCell>
                             <TableCell>{s.sub_meter_no}</TableCell>
-                            <TableCell className="text-destructive text-xs">
+                            <TableCell className="text-destructive text-xs break-words whitespace-normal">
                               {s.reason}
                             </TableCell>
                           </TableRow>

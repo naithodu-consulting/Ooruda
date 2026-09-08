@@ -324,7 +324,7 @@ export function ImportSubMetersDialog({
                   )}
                 </div>
 
-                <div className="max-h-52 overflow-auto rounded-md border">
+                <div className="max-h-52 overflow-y-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -353,7 +353,7 @@ export function ImportSubMetersDialog({
                           </TableCell>
                           <TableCell>
                             {row._error ? (
-                              <span className="text-destructive flex items-center gap-1 text-xs">
+                              <span className="text-destructive flex items-start gap-1 text-xs break-words whitespace-normal">
                                 <AlertCircle className="h-3 w-3 shrink-0" />
                                 {row._error}
                               </span>
@@ -391,7 +391,7 @@ export function ImportSubMetersDialog({
                 </Alert>
 
                 {result.skipped.length > 0 && (
-                  <div className="max-h-40 overflow-auto rounded-md border">
+                  <div className="max-h-40 overflow-y-auto rounded-md border">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -405,7 +405,7 @@ export function ImportSubMetersDialog({
                           <TableRow key={s.row} className="bg-destructive/5">
                             <TableCell className="text-xs">{s.row}</TableCell>
                             <TableCell>{s.sub_meter_no}</TableCell>
-                            <TableCell className="text-destructive text-xs">
+                            <TableCell className="text-destructive text-xs break-words whitespace-normal">
                               {s.reason}
                             </TableCell>
                           </TableRow>
