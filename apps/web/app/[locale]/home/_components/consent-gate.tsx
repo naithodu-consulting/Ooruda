@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Lock } from 'lucide-react';
 import { useAction } from 'next-safe-action/hooks';
@@ -18,15 +18,48 @@ export function ConsentGate({ consentRequired }: { consentRequired: boolean }) {
 
   const { execute, isPending } = useAction(acceptConsentAction);
 
-  const handleScroll = () => {
+  /**
+   * Unlocks the accept button once the reader reaches the end.
+   *
+   * Critically, content that is *not* scrollable counts as already read. This
+   * gate is a full-screen overlay with no escape, so a document short enough to
+   * fit — at browser zoom-out, on a tall viewport, or if this text is ever
+   * shortened — would otherwise fire no scroll event, leave the button disabled
+   * forever, and lock the user out of the app entirely.
+   */
+  const measure = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
+
     const scrollable = el.scrollHeight - el.clientHeight;
-    if (scrollable <= 0) return;
+
+    if (scrollable <= 0) {
+      setScrollProgress(100);
+      setScrolledToBottom(true);
+      return;
+    }
+
     const pct = Math.min(100, Math.round((el.scrollTop / scrollable) * 100));
     setScrollProgress(pct);
     if (pct >= 98) setScrolledToBottom(true);
-  };
+  }, []);
+
+  // Re-measure on mount and whenever the box or its content resizes, so zoom
+  // changes and font-size changes cannot strand the reader behind a locked
+  // button.
+  useEffect(() => {
+    if (!consentRequired) return;
+
+    const el = scrollRef.current;
+    if (!el) return;
+
+    measure();
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+
+    return () => observer.disconnect();
+  }, [consentRequired, measure]);
 
   if (!consentRequired) return null;
 
@@ -51,10 +84,19 @@ export function ConsentGate({ consentRequired }: { consentRequired: boolean }) {
         </div>
 
         {/* ── Scrollable body ────────────────────────────── */}
+        {/*
+          tabIndex makes the region focusable so it can be scrolled with the
+          keyboard. Without it a keyboard-only or screen-reader user cannot
+          reach the end of the text, cannot unlock the accept button, and is
+          locked out of the application with no way forward.
+        */}
         <div
           ref={scrollRef}
-          onScroll={handleScroll}
-          className="flex-1 overflow-y-auto scroll-smooth px-6 py-5 sm:px-8"
+          onScroll={measure}
+          tabIndex={0}
+          role="region"
+          aria-label="User Consent document"
+          className="focus-visible:ring-ring flex-1 overflow-y-auto scroll-smooth px-6 py-5 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset sm:px-8"
         >
           <div className="space-y-5 text-sm leading-relaxed">
             {/* Meta line */}
@@ -82,7 +124,7 @@ export function ConsentGate({ consentRequired }: { consentRequired: boolean }) {
                 rel="noopener noreferrer"
                 className="text-primary underline underline-offset-2"
               >
-                Ooruda Terms of Use
+                Ooruda Terms of Service
               </a>
               , and the{' '}
               <a
@@ -92,6 +134,15 @@ export function ConsentGate({ consentRequired }: { consentRequired: boolean }) {
                 className="text-primary underline underline-offset-2"
               >
                 Ooruda Privacy Policy
+              </a>
+              , and the{' '}
+              <a
+                href="/refund-policy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline underline-offset-2"
+              >
+                Ooruda Refund &amp; Cancellation Policy
               </a>
               .
             </p>
@@ -175,7 +226,7 @@ export function ConsentGate({ consentRequired }: { consentRequired: boolean }) {
               This User Consent shall be governed by the laws of India. Any
               dispute arising out of or relating to this User Consent shall be
               subject to the exclusive jurisdiction of the competent courts at
-              Mangaluru, Karnataka.
+              Mangalore, Karnataka.
             </Section>
 
             {/* Declaration */}
@@ -189,8 +240,8 @@ export function ConsentGate({ consentRequired }: { consentRequired: boolean }) {
                   information as described above.
                 </li>
                 <li>
-                  I agree to be bound by the Ooruda Terms of Use and Privacy
-                  Policy.
+                  I agree to be bound by the Ooruda Terms of Service, Privacy
+                  Policy, and Refund &amp; Cancellation Policy.
                 </li>
               </ul>
               <p className="text-muted-foreground mt-3 text-xs">

@@ -1,40 +1,19 @@
-import { NavigationMenu, NavigationMenuList } from '@kit/ui/navigation-menu';
 import { Trans } from '@kit/ui/trans';
 
 import { MobileSiteNavigation } from './mobile-site-navigation';
 import { SiteNavigationItem } from './site-navigation-item';
 
+/**
+ * Ooruda has no public marketing site — there is nothing to navigate to from
+ * the header. The only public pages are the legal documents and the contact
+ * form, which the footer covers. Sign-in stays available on mobile, where the
+ * header's own sign-in button is hidden.
+ */
 const links = {
-  Blog: {
-    label: 'marketing.blog',
-    path: '/blog',
-  },
-  Changelog: {
-    label: 'marketing.changelog',
-    path: '/changelog',
-  },
-  Docs: {
-    label: 'marketing.documentation',
-    path: '/docs',
-  },
-  Pricing: {
-    label: 'marketing.pricing',
-    path: '/pricing',
-  },
-  FAQ: {
-    label: 'marketing.faq',
-    path: '/faq',
-  },
   SignIn: {
     label: 'auth.signIn',
     path: '/auth/sign-in',
     showOn: 'mobile',
-  },
-  SignUp: {
-    label: 'auth.signUp',
-    path: '/auth/sign-up',
-    showOn: 'mobile',
-    variant: 'default' as const,
   },
 };
 
@@ -54,11 +33,7 @@ export function SiteNavigation() {
   return (
     <>
       <div className={'hidden items-center justify-center md:flex'}>
-        <NavigationMenu>
-          <NavigationMenuList className={'gap-x-2.5'}>
-            {NavItems}
-          </NavigationMenuList>
-        </NavigationMenu>
+        {NavItems}
       </div>
 
       <div className={'flex justify-start sm:items-center md:hidden'}>
