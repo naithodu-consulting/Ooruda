@@ -234,6 +234,63 @@ UPDATE sub_meters SET initial_reading = <actual_value> WHERE meter_label = '<lab
 
 ---
 
+## UI Component Modernization — site-wide audit
+
+**Priority:** Medium  
+**Context:** Identified during Villa 19 (Habbaa) build. The same issues exist in Ooruda. All forms and interactive components should use modern, custom-built UI instead of OS-native or outdated widgets.
+
+### 1. Replace native `<input type="date">` with a custom DatePicker
+
+OS-native date pickers look like 2012 — ugly, inconsistent across browsers and OSes, and impossible to brand. Replace everywhere with a custom React calendar component.
+
+**Reference implementation:** `villa-booking/src/components/ui/DatePicker.tsx`  
+- Zero external dependencies (pure React + CSS variables)  
+- Inline calendar dropdown with month navigation  
+- Branded with project design tokens (maroon header, brass accent day indicators, today ring)  
+- Props: `value` (ISO string), `onChange`, `min`, `max`, `clearable`, `dropdownAlign`, `compact`  
+- Keyboard accessible: ESC closes, outside-click closes  
+- Aria: `aria-haspopup="dialog"`, `aria-expanded`, `aria-label` per day cell  
+
+**Places to update in Ooruda:**
+- Any maintenance request form with date fields
+- Bill due date pickers in admin forms
+- Booking / scheduling forms
+- Filter date range pickers on payments, audit log pages
+
+### 2. Audit all buttons for hover/active states
+
+Every interactive button must have visible hover feedback. No `transition-all` without a `hover:` class.
+
+**Patterns to enforce:**
+| Button type | Hover | Active |
+|---|---|---|
+| Primary filled (brand color) | `hover:brightness-90` | `active:scale-[0.98]` |
+| WhatsApp green (`#25D366`) | `hover:brightness-110` | `active:scale-95` |
+| Frosted glass on dark bg | `hover:bg-white/25` | `active:scale-95` |
+| Outline on light bg | `hover:border-[brand]` + text darken | `active:scale-[0.98]` |
+| Ghost / text | `hover:bg-[tint]` | — |
+
+### 3. Form input focus rings
+
+Native `focus:outline-none` with no replacement leaves keyboard users with no visible focus indicator. Add:
+```
+focus:ring-2 focus:ring-[brand-color] focus:ring-offset-1 transition-shadow
+```
+to every `<input>`, `<textarea>`, `<select>`.
+
+### 4. Dead component cleanup
+
+Remove any components not imported anywhere. Dead code creates confusion and shows up in type-checker output. Before each release, run:
+```bash
+grep -rn "export default" src/components --include="*.tsx" | awk -F: '{print $1}' | while read f; do name=$(basename $f .tsx); grep -rq "$name" src/app src/components --include="*.tsx" --exclude="$f" || echo "UNUSED: $f"; done
+```
+
+### 5. No OS-native select dropdowns for important choices
+
+`<select>` looks different on every OS. For any dropdown that matters to UX (status filters, role pickers, date range presets), build a custom popover-based dropdown using the same pattern as the BookingWidget guest counter.
+
+---
+
 ## Known risk: Razorpay partial refund webhook not idempotent
 
 **Priority:** Low (low-probability in practice)

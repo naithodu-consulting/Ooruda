@@ -31,6 +31,7 @@ export const generateRootMetadata = async (): Promise<Metadata> => {
       title: appConfig.title,
       description: appConfig.description,
       images: ['/images/brand/og-image.png'],
+      site: '@ooruda',
     },
     icons: {
       icon: [

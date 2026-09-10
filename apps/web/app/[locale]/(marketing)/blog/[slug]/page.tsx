@@ -34,12 +34,16 @@ export async function generateMetadata({
   return Promise.resolve({
     title,
     description,
+    alternates: {
+      canonical: `/blog/${slug}`,
+    },
     openGraph: {
       title,
       description,
       type: 'article',
       publishedTime: publishedAt,
-      url: post.url,
+      url: `/blog/${slug}`,
+      authors: ['Ooruda'],
       images: image
         ? [
             {
@@ -52,6 +56,7 @@ export async function generateMetadata({
       card: 'summary_large_image',
       title,
       description,
+      site: '@ooruda',
       images: image ? [image] : [],
     },
   });

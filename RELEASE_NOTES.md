@@ -4,6 +4,210 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v2.3 — Marketing SEO + Structured Data — 2026-09-10
+
+Search-engine and social-preview work across the public marketing surface. No database changes.
+
+### Structured data
+
+- **Organization / SoftwareApplication / WebSite JSON-LD** added to the root locale layout as a single `@graph`, with the `SoftwareApplication` and `WebSite` nodes both referencing the Organization as publisher. Gives search engines an explicit entity for the product rather than leaving them to infer one from page copy.
+
+### Canonical URLs (bug fix)
+
+A canonical tag pointing at the wrong URL is worse than none at all — it actively tells search engines to index something else. Two issues were caught and fixed during review:
+
+- A site-wide `alternates.canonical` in `generateRootMetadata` would have been **inherited by every page in the app**, declaring `/pricing`, `/faq` and every blog post to be duplicates of the homepage. Removed; canonicals now belong to the pages that can state them correctly.
+- Blog posts now set their own `alternates.canonical`. Note that `post.url` from the Keystatic CMS client is the **bare slug** (`my-post`), not a path — resolved against `metadataBase` it yields `/my-post`, a 404. Both the canonical and the pre-existing `openGraph.url` now build `/blog/${slug}`, matching what the sitemap emits.
+
+### Crawl directives
+
+- **robots.txt** now disallows `/home/`, `/admin/` and `/api/` — authenticated and internal routes that should never have been crawlable.
+- **Sitemap** rewritten with per-path `priority`, `lastmod` and `changeFrequency`. Every entry previously claimed `changeFrequency: 'always'` with a `lastmod` of "right now", which search engines discount as noise. Static marketing pages now carry honest values (`/` weekly, legal pages yearly), and blog/docs entries changed from `always` to `weekly`.
+
+### Social previews
+
+- `twitter:site` (`@ooruda`) added to root and blog-post metadata so Twitter/X cards attribute correctly.
+- Blog `openGraph.authors` set to `Ooruda`. It previously held the site URL, which reads as "the author is a website".
+
+### Assets and accessibility
+
+- **`site.webmanifest` had a duplicate `display` key** — `fullscreen` near the top and `standalone` at the bottom. Invalid JSON, with the winner varying by parser. The stray `fullscreen` entry is gone; installed PWA behaviour is now unambiguously `standalone`.
+- **Blog cover images** accept an optional `alt` override, falling back to the post title. The previous alt text was hardcoded to `Cover Image for ${title}`, which screen readers announce as boilerplate before every heading.
+- **Font weight 300 dropped** from the sans family. Verified unused — no `font-light` or `font-thin` anywhere in the codebase — so this removes a font file from the critical path at no visual cost.
+
+**Migrations:** none.
+
+---
+
+## v2.3 — Electricity Reading Guards + Period Formatting — 2026-09-08
+
+### Electricity — reading validation (data-integrity fixes)
+
+Prompted by a production incident: one sub-meter's September reading was never saved, so its unit was billed ₹0 while the readings looked complete. Nothing stopped bills from being generated against an incomplete set.
+
+- **Bill generation pre-flight guard**: `generateBillsAction` now refuses to generate electricity bills when any **active** sub-meter has no reading for the period, or a negative one. Names up to 5 offending meters and logs a `bills.generation.blocked` audit event. A period with *no* readings at all is deliberately exempt on an "All" run, so generating maintenance before entering readings still works exactly as before — only a partial or negative set is blocked, since that is the unrecoverable case.
+- **Readings dialog — per-row guard**: Save is now disabled when any row has a current reading below its previous reading, with a live banner naming the meters. Previously only an "Invalid" badge appeared and the block-total check was the sole blocker.
+- **CSV import — block-total guard**: the import now rejects the whole file when the period's resulting total would exceed the MESCOM block consumption, matching the manual dialog. The total is computed as the period's state *after* import (incoming rows plus readings already saved for meters absent from the file), so successive partial imports cannot slip past.
+- **Rounding consistency**: all consumption totals and per-row consumption are rounded to 2dp at source, and that one value drives comparison, display and overage alike. Float drift previously produced a banner reading "250 / 250 units — exceeds by 0 units".
+
+### Electricity — readings dialog UX
+
+- **Reading fields no longer truncate**: number-input spinners hidden, padding tightened, previous/current columns widened (5rem → 6.75rem), min-charge 5.5rem → 6.5rem, dialog `sm:max-w-xl` → `sm:max-w-3xl`. 8-digit readings such as `27917.00` previously clipped to ~5 characters.
+- **Mobile labels**: "Previous" / "Current" labels added below `sm:`, where the two inputs sit side by side with no arrow between them. Hidden from `sm:` up, where the column headers already do this job.
+
+### Period formatting — app-wide
+
+- Every user-visible period now reads **"September 2026"** instead of `2026-09` or `08/2026`: import toasts and result panels, skipped-row reasons, bill-generation errors, "bills already generated" errors, "bill already exists", bill added/deleted toasts, and the GST Summary report table (which had disagreed with its own PDF export).
+- Audit log summaries aligned to the same format across electricity and billing actions. Historical rows keep their original format — these strings are written at insert time.
+
+### Import dialogs — UI fix
+
+- Skipped-row and preview tables no longer show a stray full-width horizontal scrollbar. `TableCell` defaults to `whitespace-nowrap`, so long error text stretched the table; reason/error cells now wrap and the outer container scrolls vertically only. `Table` supplies its own `overflow-x-auto`, so genuinely narrow screens still scroll horizontally.
+
+### Billing — void dialog
+
+- "Reason for voiding" label marked required (`*` + `aria-required`) in both the single and bulk void dialogs. The field was already mandatory at the UI, Zod and audit layers, but nothing said so — users only discovered it from the greyed-out button.
+
+### Payments — payment date (data-integrity fix)
+
+- **Record Payment now takes a Payment Date**, defaulting to today and capped at today. `payments.paid_at` previously always fell back to `now()`, so a cash payment collected on the 30th but entered on the 3rd was stamped with the entry date. That value drives the receipt PDF's payment date, every report's date-range filter, and the unit account statement — so monthly collection figures moved with the data-entry lag. Hidden for Razorpay, which supplies its own timestamp. Back-dated entries are noted in the audit log.
+- **Timezone-safe**: a back-dated entry is anchored at midday IST. `paid_at` is `timestamptz`, and IST midnight converts to 18:30 UTC on the *previous* day, which would drop the payment out of any report range filtered on that date.
+
+### Payments — `record_payment` overload consolidation (bug fix)
+
+`20260703000001` dropped the stale 5-arg `record_payment` overload because PostgREST returns HTTP 300 when two overloads are present. `20260723000001` then re-created that 5-arg version in order to add `advance_applied` to the outstanding check — but the application calls the 8-arg (Razorpay-aware) version, which never received that fix. Confirmed against the generated types, which showed `record_payment` as a union of two overloads.
+
+- **Consequence**: for a bill covered by advance credit, outstanding was computed as `total - paid`, ignoring `advance_applied`. A further payment could therefore be recorded against an already-settled bill and overpay it.
+- **Fix**: one 9-arg definition now carries both the `advance_applied` check and the Razorpay/service_role logic; both stale overloads are dropped. `p_paid_at` defaults to NULL, so callers passing the previous 8 arguments still resolve — no deploy-order coupling between the migration and the app.
+
+| Migration | Change |
+|-----------|--------|
+| `20260908000001_record_payment_paid_at.sql` | Adds `p_paid_at` to `record_payment`; restores the `advance_applied` outstanding check on the path the app actually calls; drops the stale 5-arg and 8-arg overloads |
+
+### Razorpay — advance credit over-charge (bug fix)
+
+Surfaced while fixing the `advance_applied` check above. The self-service Razorpay path computed the amount to charge as `total_amount - paid_amount`, ignoring `advance_applied` — so an owner whose bill was already part-settled by cash-ledger advance credit was charged for the full amount.
+
+Once `record_payment` began enforcing `advance_applied`, that over-payment would have been *rejected after Razorpay captured the money*, leaving a payment with no record and requiring a manual refund. All three paths now compute outstanding identically as `total - paid - advance_applied`:
+
+- `create-order` — the amount charged to the payer
+- `verify` — the amount recorded, and the >0 filter that decides which bills to record against
+- `webhook` — the fallback path used when verify fails
+
+### Error messages
+
+- **Domain errors raised by our own Postgres functions now reach the operator verbatim.** "Amount exceeds the outstanding balance (₹900)" and "Payment date cannot be in the future" were previously classified as server faults and replaced with the generic "Something went wrong… contact support", hiding the one thing the operator could act on. An explicit allowlist passes through only messages we author; everything else is still sanitized.
+- **Support ref codes are now generated in the billing timezone.** A UTC-based ref read `0908-1111` while the operator's screen showed 16:41 IST.
+
+### Code quality
+
+- Removed dead code in the Reports screen: the unused `headerSub` derived-header block (and its `formatAmount` helper, `collectionData`, `totalBilled`, `totalOutstanding`, `periodLabel`) and the unused `collectionView` prop binding in `reports-tabs`. `pnpm lint:fix` is now clean.
+- `bills.generation.blocked` added to `ACTION_LABELS` so the audit log renders it in sentence case.
+
+
+
+---
+
+## v2.2 — Expense Tracker + AMC Reminder — 2026-08-20
+
+### Expense Tracker (assoc_admin + billing_operator)
+
+- **Expense log**: record completed payments with title, category, amount, GST amount, payor, payee / vendor, mode of payment (Cash, UPI, NEFT/RTGS/IMPS, Cheque, Demand Draft, Credit Card, Debit Card, NetBanking), reference number, invoice number, date of payment, notes, recurring flag, and attachment URL.
+- **14 default system categories**: Maintenance & Repairs, Utilities, Security, Housekeeping, Landscaping, AMC Payments, Administrative, Legal & Professional, Insurance, Events & Community, Capital Expenditure, Salaries & Wages, Taxes & Govt Fees, Miscellaneous.
+- **Vendor master**: vendor autocomplete via datalist on payee field.
+- **List view**: date preset filters (This Month, Last Month, This Quarter, This FY, All Time), category filter, payment mode filter, full-text search. Checkbox selection for bulk delete. CSV export of filtered set.
+- **Analytics tab**: KPI row (spend this month, spend this FY, entry count, top category); four Recharts charts — category donut, monthly trend bar, top-10 payees horizontal bar, payment mode donut. Data served by `/api/expenses/analytics` route.
+- Soft-delete pattern (`deleted_at`) for audit trail.
+- **Feature-gated**: only visible when super admin enables "Expense Tracker" flag for the association.
+
+### AMC Reminder (assoc_admin only)
+
+- **Contract management**: record AMC contracts with name, vendor details (contact person, phone, email), category (20 system categories covering all common building services), start/end date, contract value, payment frequency (Annual/Bi-annual/Quarterly/Monthly), notice period, auto-renewal flag, priority (critical/high/medium/low), coverage scope, SLA terms, and document URL.
+- **Computed status**: active (>90d), due_soon (≤90d), urgent (≤30d), critical (≤7d), expired (<0d), terminated — computed at application layer from expiry date.
+- **Dashboard tab**: 4 KPI tiles (Active, Due Soon, Urgent+Critical, Total Annual Cost ₹). "Needs Attention" panel lists urgent/critical/expired contracts with days-remaining and status badge. Category spend donut chart.
+- **All Contracts tab**: colour-coded rows by urgency (left border stripe), sortable by expiry or contract value, filterable by status and category, free-text search by contract name or vendor.
+- **Contract detail page** (`/amc/[contractId]`): all fields displayed. "Mark as Renewed" CTA → modal (new end date, value, notes) records renewal in `amc_renewal_history` and updates the contract. "Terminate" CTA → modal captures reason and soft-terminates via `terminated_at`.
+- **Renewal history timeline**: chronological list of past renewals with dates and amounts.
+- **Reminder Settings tab**: simple dropdown — "Remind X days before expiry" (90/60/30/15/7, default 30). Setting stored per association in `amc_reminder_settings`.
+- **Daily email reminders** (Supabase cron): `send_amc_reminders()` DB function runs daily, strictly scoped by association — no cross-association data leak. Sends to all `assoc_admin` members of that specific association only.
+- **Feature-gated**: only visible when super admin enables "AMC Reminder" flag for the association.
+
+### Feature Flag Infrastructure
+
+- New `association_feature_flags(association_id, feature, enabled, enabled_at, enabled_by)` table — clean per-feature toggles without schema changes for each feature.
+- Super admin association detail page: "Features" section with toggle switches for Expense Tracker and AMC Reminder.
+- Layout reads flags and passes to sidebar — nav entries only appear when the feature is enabled for that association.
+
+### Navigation
+
+- Two new sidebar entries under Operations: "Expense Tracker" (Receipt icon) and "AMC Reminder" (CalendarClock icon).
+- Role visibility: `assoc_admin` sees both; `billing_operator` sees Expense Tracker only; `prop_owner`/`tenant` see neither.
+
+### Polish & Fixes (2026-08-22)
+
+- **Expense PDF logo**: association logo now fetched and embedded correctly via `sanitizeLogoUrl`; was hardcoded null.
+- **Expense PDF UX**: immediate toast + spinner shown on export button while PDF renders.
+- **Analytics — monthly trend**: all 12 FY months now pre-seeded with zero so the bar chart always shows a full year, not just months with data.
+- **Analytics — X-axis**: removed ambiguous year suffix ("Aug 26" → "Aug") on the monthly trend chart.
+- **Analytics — Top Payees tooltip**: tooltip now labels the value "Amount" instead of the raw dataKey name.
+- **AMC dialog — category dropdown**: `SelectTrigger` gets `w-full` so options are never truncated.
+- **AMC dialog — SelectValue SSR**: explicit children prevent hydration mismatch on all Select fields.
+- **AMC dialog — notice period**: spinner arrows hidden so "days" suffix doesn't overlap native controls.
+- **AMC dialog — phone field**: alphabets stripped on input; `inputMode="tel"` set.
+- **AMC dialog — label copy**: "Email Address(Optional)" → "Email Address (optional)".
+- **AMC dialog — footer**: replaced `DialogFooter` (causes `bg-muted` two-tone split) with a plain flex div.
+- **AMC dashboard**: "Active" KPI tile renamed "On Track"; duplicate page title removed.
+- **Code quality**: removed unnecessary `(client as any)` casts for typed `expenses` table in analytics route; added missing `'page'` type arg to `revalidatePath` in expense-actions.
+
+### Reports Screen — Major Expansion (2026-08-28)
+
+- **12-tab reports screen**: redesigned with three tab groups — Financial (Collection, Outstanding, Payments, Cash Ledger, Unit Dues, Unit Account Statement, Other Charges, GST Summary), Analytics (Electricity, Payment Modes, Advances), Property (Occupancy, Directory).
+- **Other Charges report**: dedicated tab and PDF showing charge-type summary (billed, collected, outstanding) plus per-charge unit breakdown; pro-rata allocation from settled bill amount.
+- **Tab-aware filter reset**: switching tabs now clears filters that the new tab does not support (bill types, status, payment mode, unit selection) — no stale filters carried across.
+- **GST Summary moved to Financial**: grouped with other financial reports; removed from Analytics tab.
+- **Analytics tab renamed**: "Utilities & Analytics" → "Analytics" (cleaner label).
+- **Outstanding PDF fix**: Bill No. and Type columns no longer run together; column flex widths corrected.
+- **Other Charges TypeScript fixes**: `TOOLTIP_STYLE` spread corrected; formatter and labelFormatter types resolved; stale `'bill_type'` tab key removed from action layer.
+- **Unit Outstanding summary**: new migration adds `get_unit_outstanding_summary` RPC for the Unit Dues tab.
+
+| Migration | Change |
+|-----------|--------|
+| `20260820000001_expense_tracker_amc_reminder.sql` | `association_feature_flags`, `expense_categories`, `vendors`, `expenses`, `amc_contracts`, `amc_renewal_history`, `amc_reminder_settings` tables; `amc_contract_status()` function; `send_amc_reminders()` cron function; RLS policies; 14 default expense categories + 20 AMC categories seeded |
+| `20260821000001_expenses_netbanking_constraint.sql` | Adds NetBanking to the `mode_of_payment` check constraint on `expenses` |
+| `20260828000001_unit_outstanding_summary.sql` | Adds `get_unit_outstanding_summary` RPC for the Unit Dues report tab |
+
+---
+
+## v2.1 — User Consent Gate + Owner/Tenant Advance Payments — 2026-08-15
+
+### User Consent Gate
+
+- First-login consent gate displayed to all non-super-admin users covering data consent, communications, payments, disclosure, rights, and governing law (matching the Ooruda User Consent document).
+- Scroll-to-bottom requirement: "I Agree" button locked with a progress bar and lock icon until the user scrolls to the end of the document. Unlocked state shows a centred, full-width button.
+- Consent stored as `consent_accepted_at timestamptz` in `profiles` — timestamp provides legal record of when consent was given.
+- Super-admin users are naturally exempt (redirected to `/admin`).
+- **Admin accounts table**: new "Consent" column on the Users tab — shows a green "Accepted" badge with a hover tooltip displaying the exact IST timestamp, or an amber "Pending" badge for users who have not yet consented.
+
+### Advance Payment (Owner / Tenant Self-Service)
+
+- **Owners and tenants can now make advance deposits online via Razorpay** for all four charge types: Maintenance, Electricity, Water, Other Charges (₹1 minimum, no upper limit).
+- New **"Advance credits" section** in the Payments page: shows existing credit balance per charge type and an "Add Advance" button (disabled when gateway inactive).
+- **Pay Advance dialog**: select unit (for multi-unit accounts), charge type, enter amount, checkout via Razorpay. After successful payment, a receipt download link appears immediately.
+- **Advance deposit receipt PDF** (`/api/billing/advance-payments/[id]/pdf`): format matches existing due payment receipts; includes Razorpay payment ID and a note explaining the credit will auto-apply to future bills.
+- **Idempotency**: unique index on `cash_ledger.razorpay_payment_id` prevents double-recording from concurrent `/verify` + webhook; 23505 error handled gracefully.
+- **Webhook safety net**: `payment.captured` webhook now handles `notes.type === 'advance'` so payments are recorded even if the browser closes before `/verify` completes.
+- **Cash ledger admin view**: advance entries now show `Online · Owner` / `Online · Tenant` (Razorpay-paid) vs `Manual · Admin` (admin-entered) in the Source column.
+- **Recent payments**: advance deposits appear in the owner/tenant "Recent payments" list alongside bill and due payments, with receipt download.
+- Auto-apply: `_apply_advance_internal` is called immediately after recording, settling any outstanding bills of that charge type.
+- Advance credits shown in the PDF receipt document under new `advance_deposit` type.
+
+| Migration | Change |
+|---|---|
+| `20260813000001_user_consent` | Adds `consent_accepted_at timestamptz` to `profiles` |
+| `20260815000001_advance_payment_razorpay` | Adds `razorpay_order_id`, `razorpay_payment_id`, `paid_by_role`, `tenancy_id` to `cash_ledger`; unique partial index; `record_advance_payment()` function |
+
+---
+
 ## v1.4.6 — Dashboard Accuracy, Admin Audit Log, PDF Fixes — 2026-08-12
 
 ### Dashboard — Advance Payment Accounting Fix

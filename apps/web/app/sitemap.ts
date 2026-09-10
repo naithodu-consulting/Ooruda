@@ -11,29 +11,92 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return transformSitemapEntries([...paths, ...contentItems]);
 }
 
+type SitemapFrequency =
+  | 'always'
+  | 'hourly'
+  | 'daily'
+  | 'weekly'
+  | 'monthly'
+  | 'yearly'
+  | 'never';
+
+type StaticPath = {
+  path: string;
+  priority: number;
+  lastmod: string;
+  changeFrequency: SitemapFrequency;
+};
+
 function getPaths() {
-  const paths = [
-    '/',
-    '/faq',
-    '/blog',
-    '/docs',
-    '/changelog',
-    '/pricing',
-    '/contact',
-    '/cookie-policy',
-    '/terms-of-service',
-    '/privacy-policy',
-    // add more paths here
+  const staticPaths: StaticPath[] = [
+    {
+      path: '/',
+      priority: 1.0,
+      lastmod: '2026-08-01',
+      changeFrequency: 'weekly',
+    },
+    {
+      path: '/pricing',
+      priority: 0.9,
+      lastmod: '2026-08-01',
+      changeFrequency: 'monthly',
+    },
+    {
+      path: '/blog',
+      priority: 0.8,
+      lastmod: '2026-08-01',
+      changeFrequency: 'daily',
+    },
+    {
+      path: '/docs',
+      priority: 0.8,
+      lastmod: '2026-08-01',
+      changeFrequency: 'weekly',
+    },
+    {
+      path: '/changelog',
+      priority: 0.7,
+      lastmod: '2026-08-01',
+      changeFrequency: 'weekly',
+    },
+    {
+      path: '/faq',
+      priority: 0.7,
+      lastmod: '2026-08-01',
+      changeFrequency: 'monthly',
+    },
+    {
+      path: '/contact',
+      priority: 0.6,
+      lastmod: '2026-08-01',
+      changeFrequency: 'monthly',
+    },
+    {
+      path: '/cookie-policy',
+      priority: 0.3,
+      lastmod: '2026-03-01',
+      changeFrequency: 'yearly',
+    },
+    {
+      path: '/terms-of-service',
+      priority: 0.3,
+      lastmod: '2026-03-01',
+      changeFrequency: 'yearly',
+    },
+    {
+      path: '/privacy-policy',
+      priority: 0.3,
+      lastmod: '2026-03-01',
+      changeFrequency: 'yearly',
+    },
   ];
 
-  return paths.map((path) => {
-    return {
-      priority: path === '/' ? 1 : 0.8,
-      loc: new URL(path, appConfig.url).href,
-      lastmod: new Date().toISOString(),
-      changeFrequency: 'always' as const,
-    };
-  });
+  return staticPaths.map(({ path, priority, lastmod, changeFrequency }) => ({
+    priority,
+    loc: new URL(path, appConfig.url).href,
+    lastmod,
+    changeFrequency,
+  }));
 }
 
 async function getContentItems() {
@@ -56,7 +119,7 @@ async function getContentItems() {
           ? new Date(post.publishedAt).toISOString()
           : new Date().toISOString(),
         priority: 0.8,
-        changeFrequency: 'always' as const,
+        changeFrequency: 'weekly' as const,
       })),
     );
 
@@ -74,7 +137,7 @@ async function getContentItems() {
           ? new Date(doc.publishedAt).toISOString()
           : new Date().toISOString(),
         priority: 0.8,
-        changeFrequency: 'always' as const,
+        changeFrequency: 'weekly' as const,
       })),
     );
 
