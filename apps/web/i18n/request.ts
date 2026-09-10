@@ -18,7 +18,6 @@ const namespaces = [
   'account',
   'teams',
   'billing',
-  'marketing',
   'association',
 ] as const;
 

@@ -8,6 +8,27 @@ This document covers all feature work, enhancements, and notable changes built o
 
 Search-engine and social-preview work across the public marketing surface. No database changes.
 
+### Legal pages — Privacy, Terms, Refund & Cancellation
+
+Client-supplied legal documents (dated 9 September 2026) now back all three pages, replacing Makerkit boilerplate that read "Your terms of service content here" — text that was **live on ooruda.com/privacy-policy** until this change.
+
+- **Three documents, real content**: Privacy Policy (17 sections), Terms of Service (21 sections), and a new **Refund & Cancellation Policy** (13 sections) at `/refund-policy` — the last of which did not exist before and is required for payment-gateway compliance.
+- **Real registered-entity details throughout**: HABBAA SOLUTIONS PRIVATE LIMITED, registered office in Mangalore, with CIN and GSTIN. The previous drafts carried 13 unfilled `[PLACEHOLDER]` markers; there are now none. Contact details live in one shared component so they cannot drift between documents.
+- **New top-level `(legal)` route group** using the prerendered-shell + `Suspense` header pattern rather than `force-dynamic` — legal pages are the most cacheable content on the site.
+- **Typography**: the drafts styled themselves with `prose prose-slate dark:prose-invert`, but `@tailwindcss/typography` is not installed anywhere in the monorepo and `prose` appears in no other file — every one of those classes was inert, rendering each document as a flat wall of 14px text with no heading hierarchy. Replaced with explicit semantic-token styling.
+
+### Legal link placement
+
+The three policies are linked from the auth screens in **every** environment, and production carries them in the public landing-page footer as well.
+
+That duplication is deliberate rather than redundant. On production, `proxy.ts` gates `/(auth|home)/*` behind the access-PIN cookie, so a visitor without a PIN never reaches the auth screens — the auth-screen links alone would leave the policies publicly unreachable, which payment gateways do not accept. The landing footer covers the public; the auth footer covers everyone already inside. Non-production has no landing page (`/` redirects to sign-in), so the auth screens are the only home the links need.
+
+An earlier revision of this change gated the auth links behind a `NEXT_PUBLIC_ENABLE_LEGAL_LINKS_IN_AUTH` flag. That was dropped: a single mis-set environment variable would have silently removed the policy links from production, and there is no case where hiding them is desirable.
+
+- Marketing `SiteFooter` gains the Refund & Cancellation Policy link; `/cookie-policy` was dropped from both the footer and the sitemap, since that page is still a boilerplate stub.
+- Sitemap adds `/refund-policy` and stamps all three legal pages with the 2026-09-09 document date.
+- The landing-page footer on `main` is updated separately — that route group exists only on `main`, since the landing page and access gate are production-only.
+
 ### Structured data
 
 - **Organization / SoftwareApplication / WebSite JSON-LD** added to the root locale layout as a single `@graph`, with the `SoftwareApplication` and `WebSite` nodes both referencing the Organization as publisher. Gives search engines an explicit entity for the product rather than leaving them to infer one from page copy.

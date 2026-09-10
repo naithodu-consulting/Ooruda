@@ -1,5 +1,14 @@
 import { OorudaMark } from '~/components/ooruda-mark';
 
+// Rendered on the auth screens in every environment. Production additionally
+// carries these in the public landing-page footer: /auth sits behind the access
+// gate there, so the auth copy alone would not be publicly reachable.
+const LEGAL_LINKS = [
+  { href: '/privacy-policy', label: 'Privacy Policy' },
+  { href: '/terms-of-service', label: 'Terms of Service' },
+  { href: '/refund-policy', label: 'Refund Policy' },
+];
+
 function AuthLayout({ children }: React.PropsWithChildren) {
   return (
     <div
@@ -47,9 +56,25 @@ function AuthLayout({ children }: React.PropsWithChildren) {
           <div className="px-6 py-8 sm:px-10 sm:py-10">{children}</div>
         </div>
 
-        <p className="mt-5 text-center text-[11px] text-[#a09070]">
-          &copy; {new Date().getFullYear()} Ooruda. All rights reserved.
-        </p>
+        <div className="mt-5 flex flex-col items-center gap-1">
+          <p className="text-center text-[11px] text-[#a09070]">
+            &copy; {new Date().getFullYear()} Ooruda. All rights reserved.
+          </p>
+
+          <p className="flex flex-wrap justify-center gap-x-1.5 gap-y-0.5 text-center text-[10px] text-[#a09070]">
+            {LEGAL_LINKS.map((link, index) => (
+              <span key={link.href}>
+                {index > 0 ? <span aria-hidden>· </span> : null}
+                <a
+                  href={link.href}
+                  className="underline underline-offset-2 transition-colors hover:text-[#5a4a10]"
+                >
+                  {link.label}
+                </a>
+              </span>
+            ))}
+          </p>
+        </div>
       </div>
     </div>
   );

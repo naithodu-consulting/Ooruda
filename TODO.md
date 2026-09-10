@@ -234,6 +234,37 @@ UPDATE sub_meters SET initial_reading = <actual_value> WHERE meter_label = '<lab
 
 ---
 
+## Sitemap omits the production homepage (do during the v2.3 → main merge)
+
+**Priority:** Medium — SEO regression, only bites once v2.3 reaches production
+
+`apps/web/app/sitemap.ts` lists only the three legal pages. That is correct on `v2.3`/`release`, where `/` redirects to sign-in and there is nothing at the root worth indexing.
+
+It is **wrong on `main`**. The public landing page lives at `apps/web/app/[locale]/(landing)/page.tsx`, which exists only on `main` — so after the merge, ooruda.com's own homepage is missing from ooruda.com's sitemap.
+
+### Fix
+
+Re-add the root entry to `getPaths()` when merging v2.3 into main:
+
+```ts
+{
+  path: '/',
+  priority: 1.0,
+  lastmod: '<landing page last change>',
+  changeFrequency: 'weekly',
+},
+```
+
+### Why it cannot simply be added now
+
+On `v2.3` the root is a `redirect()` to `/home`. Listing it would advertise a redirect to crawlers, which is worse than omitting it. The entry is only correct once the branch carrying the landing page is the one being deployed.
+
+### Related
+
+Same merge should also revisit `(marketing)/layout.tsx`, which still performs a `requireUser()` Supabase call to render a header for a route group whose only page is a redirect. See [RELEASE_NOTES.md](RELEASE_NOTES.md) v2.3 for the legal-page and marketing-cleanup context.
+
+---
+
 ## UI Component Modernization — site-wide audit
 
 **Priority:** Medium  

@@ -77,27 +77,20 @@ function AuthButtons() {
         </If>
       </div>
 
+      {/*
+        No sign-up button: Ooruda onboards residents and admins through an
+        association invitation, so there is no self-serve registration to
+        offer a visitor reading a legal page.
+      */}
       <div className={'flex items-center gap-x-2'}>
         <Button
           nativeButton={false}
-          className={'hidden md:flex md:text-sm'}
           render={
             <Link href={pathsConfig.auth.signIn}>
               <Trans i18nKey={'auth.signIn'} />
             </Link>
           }
-          variant={'outline'}
-          size={'sm'}
-        />
-
-        <Button
-          nativeButton={false}
-          render={
-            <Link href={pathsConfig.auth.signUp}>
-              <Trans i18nKey={'auth.signUp'} />
-            </Link>
-          }
-          className="text-xs md:text-sm"
+          className={'text-xs md:text-sm'}
           variant={'default'}
           size={'sm'}
         />

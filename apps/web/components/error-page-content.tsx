@@ -78,13 +78,18 @@ export function ErrorPageContent({
             />
           )}
 
+          {/*
+            Mails support directly: there is no /contact page. Ooruda has no
+            public marketing site, and the contact address is published on the
+            legal pages.
+          */}
           <Button
             nativeButton={false}
             render={
-              <Link href={'/contact'}>
+              <a href={'mailto:hello@ooruda.com'}>
                 <MessageCircleQuestion className={'mr-1 h-4 w-4'} />
                 <Trans i18nKey={contactLabel} />
-              </Link>
+              </a>
             }
             variant={'ghost'}
           />
