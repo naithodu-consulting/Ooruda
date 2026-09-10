@@ -5,11 +5,18 @@ import { cn } from '@kit/ui/utils';
 type Props = {
   title: string;
   src: string;
+  alt?: string;
   preloadImage?: boolean;
   className?: string;
 };
 
-export function CoverImage({ title, src, preloadImage, className }: Props) {
+export function CoverImage({
+  title,
+  src,
+  alt,
+  preloadImage,
+  className,
+}: Props) {
   return (
     <Image
       className={cn('block rounded-md object-cover', {
@@ -17,7 +24,7 @@ export function CoverImage({ title, src, preloadImage, className }: Props) {
       })}
       src={src}
       priority={preloadImage}
-      alt={`Cover Image for ${title}`}
+      alt={alt ?? title}
       fill
     />
   );

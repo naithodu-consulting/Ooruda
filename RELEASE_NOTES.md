@@ -4,6 +4,41 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v2.3 — Marketing SEO + Structured Data — 2026-09-10
+
+Search-engine and social-preview work across the public marketing surface. No database changes.
+
+### Structured data
+
+- **Organization / SoftwareApplication / WebSite JSON-LD** added to the root locale layout as a single `@graph`, with the `SoftwareApplication` and `WebSite` nodes both referencing the Organization as publisher. Gives search engines an explicit entity for the product rather than leaving them to infer one from page copy.
+
+### Canonical URLs (bug fix)
+
+A canonical tag pointing at the wrong URL is worse than none at all — it actively tells search engines to index something else. Two issues were caught and fixed during review:
+
+- A site-wide `alternates.canonical` in `generateRootMetadata` would have been **inherited by every page in the app**, declaring `/pricing`, `/faq` and every blog post to be duplicates of the homepage. Removed; canonicals now belong to the pages that can state them correctly.
+- Blog posts now set their own `alternates.canonical`. Note that `post.url` from the Keystatic CMS client is the **bare slug** (`my-post`), not a path — resolved against `metadataBase` it yields `/my-post`, a 404. Both the canonical and the pre-existing `openGraph.url` now build `/blog/${slug}`, matching what the sitemap emits.
+
+### Crawl directives
+
+- **robots.txt** now disallows `/home/`, `/admin/` and `/api/` — authenticated and internal routes that should never have been crawlable.
+- **Sitemap** rewritten with per-path `priority`, `lastmod` and `changeFrequency`. Every entry previously claimed `changeFrequency: 'always'` with a `lastmod` of "right now", which search engines discount as noise. Static marketing pages now carry honest values (`/` weekly, legal pages yearly), and blog/docs entries changed from `always` to `weekly`.
+
+### Social previews
+
+- `twitter:site` (`@ooruda`) added to root and blog-post metadata so Twitter/X cards attribute correctly.
+- Blog `openGraph.authors` set to `Ooruda`. It previously held the site URL, which reads as "the author is a website".
+
+### Assets and accessibility
+
+- **`site.webmanifest` had a duplicate `display` key** — `fullscreen` near the top and `standalone` at the bottom. Invalid JSON, with the winner varying by parser. The stray `fullscreen` entry is gone; installed PWA behaviour is now unambiguously `standalone`.
+- **Blog cover images** accept an optional `alt` override, falling back to the post title. The previous alt text was hardcoded to `Cover Image for ${title}`, which screen readers announce as boilerplate before every heading.
+- **Font weight 300 dropped** from the sans family. Verified unused — no `font-light` or `font-thin` anywhere in the codebase — so this removes a font file from the critical path at no visual cost.
+
+**Migrations:** none.
+
+---
+
 ## v2.3 — Electricity Reading Guards + Period Formatting — 2026-09-08
 
 ### Electricity — reading validation (data-integrity fixes)

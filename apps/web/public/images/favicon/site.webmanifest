@@ -3,7 +3,6 @@
   "short_name": "Ooruda",
   "theme_color": "#FCD469",
   "background_color": "#FFFDF5",
-  "display": "fullscreen",
   "orientation": "portrait",
   "scope": "/",
   "start_url": "/",

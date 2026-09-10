@@ -10,9 +10,44 @@ import { Toaster } from '@kit/ui/sonner';
 import { cn } from '@kit/ui/utils';
 
 import { RootProviders } from '~/components/root-providers';
+import appConfig from '~/config/app.config';
 import { getFontsClassName } from '~/lib/fonts';
 import { generateRootMetadata } from '~/lib/root-metadata';
 import { getRootTheme } from '~/lib/root-theme';
+
+const organizationJsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': `${appConfig.url}/#organization`,
+      name: appConfig.name,
+      url: appConfig.url,
+      logo: {
+        '@type': 'ImageObject',
+        url: `${appConfig.url}/images/brand/og-image.png`,
+      },
+      sameAs: ['https://twitter.com/ooruda'],
+    },
+    {
+      '@type': 'SoftwareApplication',
+      '@id': `${appConfig.url}/#software`,
+      name: appConfig.name,
+      url: appConfig.url,
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web',
+      description: appConfig.description,
+      publisher: { '@id': `${appConfig.url}/#organization` },
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${appConfig.url}/#website`,
+      url: appConfig.url,
+      name: appConfig.name,
+      publisher: { '@id': `${appConfig.url}/#organization` },
+    },
+  ],
+};
 
 export const generateMetadata = () => {
   return generateRootMetadata();
@@ -45,6 +80,13 @@ export default async function LocaleLayout({
     <html lang={locale} className={className} suppressHydrationWarning>
       <head>
         <PublicEnvScript nonce={nonce} />
+        <script
+          id="schema-org"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(organizationJsonLd),
+          }}
+        />
       </head>
 
       <body>
