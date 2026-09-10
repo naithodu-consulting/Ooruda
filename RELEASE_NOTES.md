@@ -4,6 +4,38 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Landing page — legal footer, accessibility and layout — 2026-09-10
+
+Production-only. The landing page and access gate live on `main`, so this does not appear on `release`.
+
+### Legal and compliance
+
+- **Footer now carries the three policies** — Terms of Service, Privacy Policy, Refund & Cancellation. This is the only public route to them: `proxy.ts` gates `/(auth|home)/*` behind the access-PIN cookie, so the copies rendered on the auth screens are unreachable to a visitor without a PIN, including a payment-gateway reviewer.
+- **Registered entity disclosed**: Habbaa Solutions Private Limited, registered office, CIN and GSTIN. The footer previously credited only the product name.
+- **Notice at the point of collection** under the early-access form, linking the Privacy Policy and stating that submissions are processed by a third-party form provider.
+
+### Accessibility
+
+- **Form labels bound to their inputs.** All three `<label>` elements had no `for`, the inputs had no `id`, and the labels did not wrap — screen readers announced three unlabelled fields on the only conversion form.
+- **Inputs raised to 16px.** iOS Safari zooms the viewport on focus for anything smaller, so every tap jerked the layout.
+- **Focus rings** on all interactive elements; the page previously defined none.
+- **Heading hierarchy corrected** — the `h3` rendered at 36px against a 32px `h2`.
+
+### Layout
+
+- **Hero rebuilt as a two-column grid.** The photo was an absolutely-positioned, gradient-masked background cropped by `object-fit: cover` from a portrait source, so only the top third — the spire — survived. It is now a normal image card matching the section below, and on mobile it sits between the copy and the CTA so the button ends the section.
+- **Dead space removed**: 258px of white below the hero CTA, a growing channel between the copy and photo, and 128px between sections on mobile.
+- **Line length capped** — copy ran to ~81 characters in the stacked breakpoint band.
+- Spam honeypot on the form; `_next` now returns to the current environment rather than always to production.
+
+### Copy
+
+- Standardised on **"Private Beta"** over "Coming Soon". The product is live with invited associations; "Coming Soon" claimed nothing was built and left the `/access` PIN gate unexplained.
+
+**Migrations:** none.
+
+---
+
 ## v2.3 — Marketing SEO + Structured Data — 2026-09-10
 
 Search-engine and social-preview work across the public marketing surface. No database changes.
