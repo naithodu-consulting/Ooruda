@@ -23,12 +23,18 @@ type StaticPath = {
 };
 
 /**
- * Ooruda has no public marketing site: `/` redirects into the app, and the
- * production landing page lives on the `main` branch. Only the publicly
- * reachable pages belong in the sitemap.
+ * Only the publicly reachable pages belong here: the landing page at `/` and
+ * the legal documents. Everything else on this deployment sits behind the
+ * access gate or the app's own auth.
  */
 function getPaths() {
   const staticPaths: StaticPath[] = [
+    {
+      path: '/',
+      priority: 1.0,
+      lastmod: '2026-07-19',
+      changeFrequency: 'weekly',
+    },
     {
       path: '/terms-of-service',
       priority: 0.3,
