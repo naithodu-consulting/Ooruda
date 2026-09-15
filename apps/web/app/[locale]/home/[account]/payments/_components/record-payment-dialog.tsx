@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
+import { DatePicker } from '@kit/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -157,7 +158,15 @@ function RecordPaymentForm(props: {
               <FormItem>
                 <FormLabel>Payment Date</FormLabel>
                 <FormControl>
-                  <Input type="date" max={todayInBillingZone()} {...field} />
+                  <DatePicker
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    max={todayInBillingZone()}
+                    placeholder="Select payment date"
+                    data-test="payment-date"
+                  />
                 </FormControl>
                 <FormDescription>
                   When the money was actually received — not necessarily today.

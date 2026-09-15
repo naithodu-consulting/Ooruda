@@ -21,13 +21,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@kit/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@kit/ui/select';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import {
@@ -213,22 +207,16 @@ export function ImportOtherChargesDialog(props: Props) {
               Select Target Billing Period
             </h4>
             <div className="mt-1 w-64">
-              <Select
+              <SearchableSelect
                 items={periodOptions}
                 value={period}
-                onValueChange={(val) => setPeriod(val ?? '')}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Select period" />
-                </SelectTrigger>
-                <SelectContent>
-                  {periodOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(val) => setPeriod(val ?? '')}
+                placeholder="Select period"
+                searchPlaceholder="Search periods…"
+                emptyMessage="No periods found"
+                className="h-9"
+                data-test="import-other-charges-period"
+              />
             </div>
           </div>
 

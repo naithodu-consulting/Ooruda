@@ -7,6 +7,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 
 import { Button } from '@kit/ui/button';
+import { DatePicker } from '@kit/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -240,28 +242,25 @@ export function AddCashLedgerEntryDialog({
               control={form.control}
               name="unit_id"
               render={({ field }) => {
-                const selectedUnit = units.find((u) => u.id === field.value);
                 return (
                   <FormItem>
                     <FormLabel>Unit</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <span className="truncate">
-                            {selectedUnit
-                              ? `Unit ${selectedUnit.unit_no}`
-                              : 'Select unit'}
-                          </span>
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {units.map((u) => (
-                          <SelectItem key={u.id} value={u.id}>
-                            Unit {u.unit_no}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <SearchableSelect
+                        items={units.map((u) => ({
+                          value: u.id,
+                          label: `Unit ${u.unit_no}`,
+                        }))}
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        placeholder="Select unit"
+                        searchPlaceholder="Search units…"
+                        emptyMessage="No units found"
+                        data-test="cash-ledger-entry-unit"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 );
@@ -421,7 +420,12 @@ export function AddCashLedgerEntryDialog({
                 <FormItem>
                   <FormLabel>{isDue ? 'Due Date' : 'Paid On'}</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} />
+                    <DatePicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

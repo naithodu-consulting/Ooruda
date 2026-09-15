@@ -35,6 +35,7 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -278,28 +279,23 @@ function AddSubMeterForm(props: {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Unit</FormLabel>
-              <Select
-                value={field.value}
-                onValueChange={(v) => field.onChange(v ?? '')}
-              >
-                <FormControl>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>
-                      {(value: string) =>
-                        props.units.find((u) => u.id === value)?.unit_no ??
-                        'Select a unit'
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {props.units.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.unit_no}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FormControl>
+                <SearchableSelect
+                  items={props.units.map((u) => ({
+                    value: u.id,
+                    label: u.unit_no,
+                  }))}
+                  value={field.value}
+                  onChange={(v) => field.onChange(v ?? '')}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  placeholder="Select a unit"
+                  searchPlaceholder="Search units…"
+                  emptyMessage="No units found"
+                  className="w-full"
+                  data-test="sub-meter-unit"
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}

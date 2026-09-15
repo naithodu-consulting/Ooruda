@@ -10,6 +10,7 @@ import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
 import { Checkbox } from '@kit/ui/checkbox';
+import { DatePicker } from '@kit/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -260,28 +262,25 @@ function UnitDetailsForm(props: {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Owner</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue>
-                        {(v: string) =>
-                          v === UNASSIGNED
-                            ? 'Unassigned'
-                            : (props.eligibleOwners.find((o) => o.id === v)
-                                ?.label ?? 'Unassigned')
-                        }
-                      </SelectValue>
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
-                    {props.eligibleOwners.map((o) => (
-                      <SelectItem key={o.id} value={o.id}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <SearchableSelect
+                    items={[
+                      { value: UNASSIGNED, label: 'Unassigned' },
+                      ...props.eligibleOwners.map((o) => ({
+                        value: o.id,
+                        label: o.label,
+                      })),
+                    ]}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    placeholder="Unassigned"
+                    searchPlaceholder="Search people…"
+                    emptyMessage="No eligible owners found"
+                    data-test="unit-owner-select"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -450,32 +449,26 @@ function TenantSection(props: {
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <Select
+            <SearchableSelect
+              items={props.eligibleTenants.map((t) => ({
+                value: t.id,
+                label: t.label,
+              }))}
               value={tenantId}
-              onValueChange={(v) => setTenantId(v ?? '')}
-            >
-              <SelectTrigger className="min-w-0 flex-1 basis-40">
-                <SelectValue>
-                  {(v: string) =>
-                    props.eligibleTenants.find((t) => t.id === v)?.label ??
-                    'Select a tenant'
-                  }
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {props.eligibleTenants.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(v) => setTenantId(v ?? '')}
+              placeholder="Select a tenant"
+              searchPlaceholder="Search people…"
+              emptyMessage="No eligible tenants found"
+              className="min-w-0 flex-1 basis-40"
+              data-test="tenancy-tenant-select"
+            />
 
-            <Input
-              type="date"
+            <DatePicker
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-36 shrink-0"
+              onChange={setStartDate}
+              placeholder="Start date"
+              className="w-40 shrink-0"
+              data-test="tenancy-start-date"
             />
           </div>
 

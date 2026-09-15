@@ -5,6 +5,7 @@ import { useAction } from 'next-safe-action/hooks';
 import { useForm } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
+import { DatePicker } from '@kit/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -205,9 +206,11 @@ export function EditAmcContractDialog({
                   <FormItem>
                     <FormLabel>Start Date *</FormLabel>
                     <FormControl>
-                      <Input
-                        type={'date'}
-                        {...field}
+                      <DatePicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
                         data-test={'amc-start-date-input'}
                       />
                     </FormControl>
@@ -223,9 +226,11 @@ export function EditAmcContractDialog({
                   <FormItem>
                     <FormLabel>End Date *</FormLabel>
                     <FormControl>
-                      <Input
-                        type={'date'}
-                        {...field}
+                      <DatePicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
                         data-test={'amc-end-date-input'}
                       />
                     </FormControl>

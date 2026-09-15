@@ -4,6 +4,50 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v2.3 — UI Component Uplift: SearchableSelect, DatePicker, MultiSelect — 2026-09-15
+
+App-wide replacement of plain dropdowns and native date inputs with polished, accessible shared components. No database changes.
+
+### New shared UI primitives
+
+- **`SearchableSelect`** (`@kit/ui/searchable-select`) — combobox-style select with inline search, keyboard navigation, and empty-state messaging. Built on the same Base UI `Combobox` primitive as the existing `MultiSelect`, so look and behaviour are consistent across the app.
+- **`DatePicker`** (`@kit/ui/date-picker`) — replaces bare `<input type="date">` throughout the app. Returns a `YYYY-MM-DD` string (same shape as the native input), so no form logic changes were needed at call sites.
+- **`natural-compare`** (`apps/web/lib/natural-compare.ts`) — `sortNaturally()` utility for unit numbers (`A1 < A2 < A10`), used by the reports filter bar.
+
+### `MultiSelect` rewrite
+
+The existing `MultiSelect` was rebuilt on `Base UI Combobox` (matching `SearchableSelect`) to replace the old hand-rolled `Popover` + button list that predated the Combobox primitive and drifted from the rest of the design system.
+
+### `Select → SearchableSelect` migration (30+ call sites)
+
+Plain `<Select>` replaced with `<SearchableSelect>` wherever the option list can grow or benefits from inline search:
+
+- **Billing**: other-charges dialog, sinking-fund dialog, draft-bills period filter, generate-bills dialog, import-other-charges dialog
+- **Cash Ledger**: unit filter, entry dialog
+- **AMC**: add, edit, and renew dialogs; contract detail page
+- **Expenses**: add and edit dialogs, expense list filter
+- **Electricity**: bills section, meter readings dialog, sub-meters section
+- **Payments**: pay-advance dialog, record-payment dialog
+- **Units**: owner picker and tenant picker in edit-unit dialog
+- **Statement**: period filter in statement table
+- **Admin**: activity card, bill dispatch client
+
+### `Input[type=date] → DatePicker` migration
+
+Native date inputs replaced with `DatePicker` in cash ledger, expenses, electricity, and AMC dialogs — gives a consistent calendar popover and avoids browser-native date formatting inconsistencies.
+
+### Reports filter bar refactor
+
+`filter-bar.tsx` simplified from ~258 to ~100 lines: hand-rolled dropdown filter pills replaced with `MultiSelect` + `Select` from the shared library. Unit list now sorted with `sortNaturally` so `A2` appears before `A10`.
+
+### Accessibility baseline
+
+New `@layer base` rule in `makerkit.css` adds a `focus-visible` ring to all bare `<button>`, `<a>`, and `[role=button]` elements that previously had no visible keyboard focus indicator. The shared `Button`, `Input`, and `Select` components define their own rings and are unaffected.
+
+**Migrations:** none.
+
+---
+
 ## v2.3 — Marketing SEO + Structured Data — 2026-09-10
 
 Search-engine and social-preview work across the public marketing surface. No database changes.

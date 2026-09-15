@@ -1051,7 +1051,7 @@ export function ReportsClientPage({
         <p className="font-semibold">Could not load report data</p>
         <p className="text-muted-foreground text-sm">{error}</p>
         <button
-          className="text-primary mt-2 text-sm underline"
+          className="text-primary hover:text-primary/80 mt-2 text-sm underline transition-colors"
           onClick={() => {
             invalidateAll();
           }}

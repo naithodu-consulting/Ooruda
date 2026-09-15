@@ -8,8 +8,9 @@ import { CheckCircle2, Plus, Upload } from 'lucide-react';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
-import { Input } from '@kit/ui/input';
+import { DatePicker } from '@kit/ui/date-picker';
 import { Label } from '@kit/ui/label';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -209,28 +210,19 @@ export function CashLedgerSection({
       {/* ── Toolbar ── */}
       <div className="bg-muted/40 flex flex-wrap items-end gap-x-4 gap-y-3 rounded-xl border px-4 py-3">
         <FilterField label="Unit">
-          <Select
+          <SearchableSelect
             value={selectedUnitId}
-            onValueChange={(v) => setSelectedUnitId(v ?? 'all')}
-          >
-            <SelectTrigger className="h-9 w-full text-sm sm:w-36">
-              <span className="truncate">
-                {isAllUnits
-                  ? 'All Units'
-                  : selectedUnit
-                    ? selectedUnit.unit_no
-                    : 'Select unit'}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Units</SelectItem>
-              {units.map((u) => (
-                <SelectItem key={u.id} value={u.id}>
-                  {u.unit_no}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={(v) => setSelectedUnitId(v || 'all')}
+            items={[
+              { value: 'all', label: 'All Units' },
+              ...units.map((u) => ({ value: u.id, label: u.unit_no })),
+            ]}
+            placeholder="All Units"
+            searchPlaceholder="Search units…"
+            emptyMessage="No units found"
+            className="h-9 w-full text-sm sm:w-40"
+            data-test="cash-ledger-unit-filter"
+          />
         </FilterField>
 
         <FilterField label="Bill Type">
@@ -257,19 +249,24 @@ export function CashLedgerSection({
         {/* Date range — wraps on narrow screens */}
         <div className="flex flex-wrap items-end gap-2">
           <FilterField label="From">
-            <Input
-              type="date"
+            <DatePicker
               value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="h-9 w-36 text-sm"
+              onChange={setDateFrom}
+              placeholder="From"
+              clearable
+              className="w-40"
+              data-test="cash-ledger-date-from"
             />
           </FilterField>
           <FilterField label="To">
-            <Input
-              type="date"
+            <DatePicker
               value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="h-9 w-36 text-sm"
+              min={dateFrom}
+              onChange={setDateTo}
+              placeholder="To"
+              clearable
+              className="w-40"
+              data-test="cash-ledger-date-to"
             />
           </FilterField>
           {hasDateFilter && (

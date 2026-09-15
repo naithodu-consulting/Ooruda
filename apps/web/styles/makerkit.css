@@ -87,3 +87,26 @@ button:not(:disabled) {
   background-color: #fcd469;
   color: #1a1a1a;
 }
+
+/*
+ * Keyboard focus fallback for bare interactive elements.
+ *
+ * The shared Button, Input and Select all define their own focus-visible ring
+ * and set `outline-none`, so this rule never applies to them — the utility
+ * layer beats the base layer. It only catches hand-rolled `<button>` and `<a>`
+ * elements that define no focus styling at all: an audit found 44 of them
+ * (filter pills, segmented controls, pagination), none of which were reachable
+ * for a keyboard user in any visible way.
+ *
+ * Because it is a fallback rather than a per-site edit, new bare buttons get a
+ * focus ring for free instead of having to remember one.
+ */
+@layer base {
+  button:focus-visible,
+  a:focus-visible,
+  [role='button']:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm, 0.25rem);
+  }
+}

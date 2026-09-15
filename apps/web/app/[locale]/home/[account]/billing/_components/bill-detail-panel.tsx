@@ -106,7 +106,7 @@ export function BillDetailPanel({
             setError(null);
             setRetryCount((c) => c + 1);
           }}
-          className="inline-flex items-center gap-1 underline underline-offset-2"
+          className="hover:text-foreground inline-flex items-center gap-1 underline underline-offset-2 transition-colors"
         >
           <RotateCw className="h-3 w-3" />
           Retry

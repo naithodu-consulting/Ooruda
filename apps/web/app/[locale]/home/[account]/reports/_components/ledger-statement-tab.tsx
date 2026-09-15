@@ -11,13 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@kit/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@kit/ui/select';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Table,
   TableBody,
@@ -115,38 +109,25 @@ export function LedgerStatementTab({
 
   const isAllUnits = selectedUnitId === LEDGER_ALL_UNITS;
   const selectedUnit = units.find((u) => u.id === selectedUnitId);
-  // Base UI's SelectValue renders the raw value unless given explicit children —
-  // without this the trigger showed the unit's UUID instead of its number.
-  const unitTriggerLabel = isAllUnits
-    ? 'All Units'
-    : (selectedUnit?.unit_no ?? '');
 
   return (
     <div className="flex flex-col gap-6">
       {/* Unit picker — primary scope selector for the statement */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-muted-foreground text-sm">Statement for</span>
-        <Select
+        <SearchableSelect
           value={selectedUnitId}
-          onValueChange={(v) => onSelectedUnitChange(v as string)}
-        >
-          <SelectTrigger
-            className="h-8 w-[180px]"
-            data-test="ledger-statement-unit-select"
-          >
-            <SelectValue placeholder="Select a unit">
-              {unitTriggerLabel}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={LEDGER_ALL_UNITS}>All Units</SelectItem>
-            {units.map((u) => (
-              <SelectItem key={u.id} value={u.id}>
-                {u.unit_no}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={(v) => onSelectedUnitChange(v || LEDGER_ALL_UNITS)}
+          items={[
+            { value: LEDGER_ALL_UNITS, label: 'All Units' },
+            ...units.map((u) => ({ value: u.id, label: u.unit_no })),
+          ]}
+          placeholder="Select a unit"
+          searchPlaceholder="Search units…"
+          emptyMessage="No units found"
+          className="h-8 w-[200px]"
+          data-test="ledger-statement-unit-select"
+        />
       </div>
 
       {!selectedUnitId ? (

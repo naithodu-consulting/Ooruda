@@ -6,6 +6,7 @@ import { useAction } from 'next-safe-action/hooks';
 import { useForm } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
+import { DatePicker } from '@kit/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -114,9 +115,11 @@ export function RenewAmcDialog({
                   <FormItem>
                     <FormLabel>Renewed On</FormLabel>
                     <FormControl>
-                      <Input
-                        type={'date'}
-                        {...field}
+                      <DatePicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
                         data-test={'renew-date-input'}
                       />
                     </FormControl>
@@ -132,9 +135,11 @@ export function RenewAmcDialog({
                   <FormItem>
                     <FormLabel>New Expiry Date *</FormLabel>
                     <FormControl>
-                      <Input
-                        type={'date'}
-                        {...field}
+                      <DatePicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
                         data-test={'new-end-date-input'}
                       />
                     </FormControl>

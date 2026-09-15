@@ -7,6 +7,7 @@ import { useAction } from 'next-safe-action/hooks';
 import { useForm } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
+import { DatePicker } from '@kit/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -206,29 +208,23 @@ export function EditExpenseDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Category</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value ?? ''}
-                  >
-                    <FormControl>
-                      <SelectTrigger
-                        className={'w-full'}
-                        data-test={'expense-category-select'}
-                      >
-                        <SelectValue placeholder={'Select category'}>
-                          {categories.find((c) => c.id === field.value)?.name ??
-                            'Select category'}
-                        </SelectValue>
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {categories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <SearchableSelect
+                      items={categories.map((c) => ({
+                        value: c.id,
+                        label: c.name,
+                      }))}
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      placeholder={'Select category'}
+                      searchPlaceholder={'Search categories…'}
+                      emptyMessage={'No categories found'}
+                      className={'w-full'}
+                      data-test={'expense-category-select'}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -361,11 +357,13 @@ export function EditExpenseDialog({
                 <FormItem>
                   <FormLabel>Date of Payment *</FormLabel>
                   <FormControl>
-                    <Input
-                      type={'date'}
-                      max={todayInBillingZone()}
-                      {...field}
+                    <DatePicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      name={field.name}
                       data-test={'expense-date-input'}
+                      max={todayInBillingZone()}
                     />
                   </FormControl>
                   <FormMessage />

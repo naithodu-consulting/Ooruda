@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@kit/ui/button';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -264,29 +265,25 @@ export function DraftBillsTab(props: {
             <span className="text-muted-foreground text-xs font-bold tracking-wider uppercase">
               Period
             </span>
-            <Select
+            <SearchableSelect
+              items={[
+                { value: 'all', label: 'All Periods' },
+                ...allPeriods.map((p) => ({
+                  value: p,
+                  label: formatPeriod(p),
+                })),
+              ]}
               value={periodFilter}
-              onValueChange={(v) => {
+              onChange={(v) => {
                 if (v) setPeriodFilter(v);
                 setChargesPage(1);
               }}
-            >
-              <SelectTrigger className="bg-background h-9 w-[150px]">
-                <SelectValue>
-                  {periodFilter === 'all'
-                    ? 'All Periods'
-                    : formatPeriod(periodFilter)}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Periods</SelectItem>
-                {allPeriods.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {formatPeriod(p)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="All Periods"
+              searchPlaceholder="Search periods…"
+              emptyMessage="No periods found"
+              className="bg-background h-9 w-[170px]"
+              data-test="draft-bills-period"
+            />
           </div>
         )}
 

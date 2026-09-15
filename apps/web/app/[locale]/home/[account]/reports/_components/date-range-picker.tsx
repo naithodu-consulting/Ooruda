@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { CalendarRange, Loader2 } from 'lucide-react';
 
 import { Button } from '@kit/ui/button';
+import { DatePicker } from '@kit/ui/date-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@kit/ui/popover';
 
 import {
@@ -134,12 +135,10 @@ export function DateRangePicker({
               <label className="text-muted-foreground text-xs font-medium">
                 From
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={customFrom}
+                onChange={setCustomFrom}
                 max={customTo || undefined}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                className="border-input bg-background text-foreground focus:ring-ring h-9 w-full rounded-md border px-3 text-sm focus:ring-1 focus:outline-none"
               />
               {customFrom && (
                 <p className="text-muted-foreground text-xs">
@@ -152,12 +151,10 @@ export function DateRangePicker({
               <label className="text-muted-foreground text-xs font-medium">
                 To
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={customTo}
+                onChange={setCustomTo}
                 min={customFrom || undefined}
-                onChange={(e) => setCustomTo(e.target.value)}
-                className="border-input bg-background text-foreground focus:ring-ring h-9 w-full rounded-md border px-3 text-sm focus:ring-1 focus:outline-none"
               />
               {customTo && (
                 <p className="text-muted-foreground text-xs">

@@ -28,6 +28,7 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -143,28 +144,20 @@ export function PayAdvanceDialog({
                   <FormItem>
                     <FormLabel>Unit</FormLabel>
                     <FormControl>
-                      <Select
+                      <SearchableSelect
+                        items={units.map((u) => ({
+                          value: u.id,
+                          label: `Unit ${u.unit_no}`,
+                        }))}
                         value={field.value}
-                        onValueChange={(v) => setValue('unitId', v ?? '')}
-                      >
-                        <SelectTrigger
-                          id="advance-unit"
-                          data-test="advance-unit-select"
-                        >
-                          <span>
-                            {selectedUnit
-                              ? `Unit ${selectedUnit.unit_no}`
-                              : 'Select unit'}
-                          </span>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {units.map((u) => (
-                            <SelectItem key={u.id} value={u.id}>
-                              Unit {u.unit_no}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={(v) => setValue('unitId', v ?? '')}
+                        onBlur={field.onBlur}
+                        placeholder="Select unit"
+                        searchPlaceholder="Search units…"
+                        emptyMessage="No units found"
+                        id="advance-unit"
+                        data-test="advance-unit-select"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

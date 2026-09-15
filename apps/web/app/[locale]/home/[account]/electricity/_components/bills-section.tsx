@@ -16,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@kit/ui/card';
+import { DatePicker } from '@kit/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -34,13 +35,7 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@kit/ui/select';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import {
@@ -341,24 +336,19 @@ function AddBillForm(props: { associationId: string; onSuccess: () => void }) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Billing Month</FormLabel>
-              <Select
-                items={periodOptions}
-                onValueChange={field.onChange}
-                defaultValue={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a month" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {periodOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FormControl>
+                <SearchableSelect
+                  items={periodOptions}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  placeholder="Select a month"
+                  searchPlaceholder="Search months…"
+                  emptyMessage="No months found"
+                  data-test="electricity-bill-period"
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -400,7 +390,12 @@ function AddBillForm(props: { associationId: string; onSuccess: () => void }) {
               <FormItem>
                 <FormLabel>Reading Start Date</FormLabel>
                 <FormControl>
-                  <Input type="date" {...field} />
+                  <DatePicker
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -412,7 +407,12 @@ function AddBillForm(props: { associationId: string; onSuccess: () => void }) {
               <FormItem>
                 <FormLabel>Reading End Date</FormLabel>
                 <FormControl>
-                  <Input type="date" {...field} />
+                  <DatePicker
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

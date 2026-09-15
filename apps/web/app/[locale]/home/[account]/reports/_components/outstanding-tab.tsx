@@ -319,7 +319,7 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
       <Card>
         <CardHeader className="pb-2">
           <button
-            className="flex w-full items-center justify-between text-left"
+            className="hover:bg-muted/40 -mx-2 flex w-full items-center justify-between rounded-md px-2 py-1 text-left transition-colors"
             onClick={() => setShowTable((v) => !v)}
           >
             <div>

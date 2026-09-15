@@ -24,13 +24,7 @@ import {
   DialogTrigger,
 } from '@kit/ui/dialog';
 import { Label } from '@kit/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@kit/ui/select';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import {
@@ -306,22 +300,17 @@ export function ImportMeterReadingsDialog({
             {!result && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="billing-month-select">Billing Period</Label>
-                <Select
+                <SearchableSelect
                   items={periodOptions}
                   value={selectedPeriod}
-                  onValueChange={(v) => v && setSelectedPeriod(v)}
-                >
-                  <SelectTrigger id="billing-month-select" className="w-52">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {periodOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(v) => v && setSelectedPeriod(v)}
+                  placeholder="Select a month"
+                  searchPlaceholder="Search months…"
+                  emptyMessage="No months found"
+                  id="billing-month-select"
+                  className="w-52"
+                  data-test="import-readings-period"
+                />
                 <p className="text-muted-foreground text-xs">
                   Select the billing month. Previous reading and minimum charge
                   are auto-filled from sub-meter defaults.

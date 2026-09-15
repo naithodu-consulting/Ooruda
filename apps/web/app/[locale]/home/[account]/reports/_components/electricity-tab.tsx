@@ -22,13 +22,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@kit/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@kit/ui/select';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Table,
   TableBody,
@@ -226,22 +220,16 @@ export function ElectricityTab({ mescomRows, consumptionByPeriod }: Props) {
                 Top consumers for the selected period
               </CardDescription>
             </div>
-            <Select
+            <SearchableSelect
               items={periods.map((p) => ({ value: p, label: formatPeriod(p) }))}
               value={selectedPeriod}
-              onValueChange={(v) => setSelectedPeriod(v ?? '')}
-            >
-              <SelectTrigger className="h-8 w-40 text-sm">
-                <SelectValue placeholder="Select period" />
-              </SelectTrigger>
-              <SelectContent>
-                {periods.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {formatPeriod(p)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(v) => setSelectedPeriod(v ?? '')}
+              placeholder="Select period"
+              searchPlaceholder="Search periods…"
+              emptyMessage="No periods found"
+              className="h-8 w-44 text-sm"
+              data-test="electricity-report-period"
+            />
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">

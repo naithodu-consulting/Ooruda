@@ -28,6 +28,7 @@ import {
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import { Card } from '@kit/ui/card';
+import { DatePicker } from '@kit/ui/date-picker';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from '@kit/ui/dropdown-menu';
 import { Input } from '@kit/ui/input';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -325,51 +327,40 @@ export function ExpenseList({
           {/* Custom date range inputs */}
           {datePreset === 'custom' && (
             <>
-              <Input
-                type={'date'}
-                className={'w-full sm:w-36'}
+              <DatePicker
+                className={'w-full sm:w-40'}
                 value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
+                onChange={setCustomFrom}
                 placeholder={'From'}
+                clearable
                 data-test={'custom-date-from'}
               />
-              <Input
-                type={'date'}
-                className={'w-full sm:w-36'}
+              <DatePicker
+                className={'w-full sm:w-40'}
                 value={customTo}
                 min={customFrom}
-                onChange={(e) => setCustomTo(e.target.value)}
+                onChange={setCustomTo}
                 placeholder={'To'}
+                clearable
                 data-test={'custom-date-to'}
               />
             </>
           )}
 
           {/* Category filter */}
-          <Select
+          <SearchableSelect
             value={categoryFilter}
-            onValueChange={(v) => setCategoryFilter(v ?? '')}
-          >
-            <SelectTrigger
-              className={'w-full sm:w-44'}
-              data-test={'category-filter-select'}
-            >
-              <SelectValue>
-                {categoryFilter
-                  ? (categories.find((c) => c.id === categoryFilter)?.name ??
-                    'All Categories')
-                  : 'All Categories'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={''}>All Categories</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={setCategoryFilter}
+            items={[
+              { value: '', label: 'All Categories' },
+              ...categories.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+            placeholder="All Categories"
+            searchPlaceholder="Search categories…"
+            emptyMessage="No categories found"
+            className={'w-full sm:w-44'}
+            data-test={'category-filter-select'}
+          />
 
           {/* Mode filter */}
           <Select

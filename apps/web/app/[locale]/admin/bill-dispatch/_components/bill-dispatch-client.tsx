@@ -26,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@kit/ui/dialog';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -343,56 +344,36 @@ export function BillDispatchClient({ associations }: Props) {
         <div className="flex flex-wrap items-center gap-3">
           {/* Association — widest */}
           <div className="min-w-[220px] flex-[2]">
-            <Select
+            <SearchableSelect
+              items={associations.map((a) => ({ value: a.id, label: a.name }))}
               value={associationId}
-              onValueChange={(v) => {
+              onChange={(v) => {
                 if (v) {
                   setAssociationId(v);
                   setRows([]);
                   setHasSearched(false);
                 }
               }}
-            >
-              <SelectTrigger className="w-full bg-white">
-                <span className="truncate text-sm">
-                  {associationId ? (
-                    (associations.find((a) => a.id === associationId)?.name ??
-                    associationId)
-                  ) : (
-                    <span className="text-muted-foreground">
-                      Select association…
-                    </span>
-                  )}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {associations.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Select an association"
+              searchPlaceholder="Search associations…"
+              emptyMessage="No associations found"
+              className="w-full"
+              data-test="bill-dispatch-association"
+            />
           </div>
 
           {/* Period */}
           <div className="min-w-[160px] flex-1">
-            <Select value={period} onValueChange={(v) => v && setPeriod(v)}>
-              <SelectTrigger className="w-full bg-white">
-                <span className="text-sm">
-                  {periodLabel || (
-                    <span className="text-muted-foreground">Period</span>
-                  )}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {periodOptions.map((p) => (
-                  <SelectItem key={p.value} value={p.value}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              items={periodOptions}
+              value={period}
+              onChange={(v) => v && setPeriod(v)}
+              placeholder="Period"
+              searchPlaceholder="Search periods…"
+              emptyMessage="No periods found"
+              className="w-full"
+              data-test="bill-dispatch-period"
+            />
           </div>
 
           {/* Bill type */}

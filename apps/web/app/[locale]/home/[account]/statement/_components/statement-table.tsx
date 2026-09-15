@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@kit/ui/card';
+import { DatePicker } from '@kit/ui/date-picker';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -769,19 +770,15 @@ export function StatementTable({
               {fyFilter === FY_CUSTOM && (
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-1.5">
-                    <input
-                      type="date"
+                    <DatePicker
                       value={customFrom}
-                      onChange={(e) => handleCustomFrom(e.target.value)}
-                      className="border-input bg-background h-8 rounded-md border px-2 text-xs"
+                      onChange={handleCustomFrom}
                       aria-label="From date"
                     />
                     <span className="text-muted-foreground text-xs">to</span>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={customTo}
-                      onChange={(e) => handleCustomTo(e.target.value)}
-                      className="border-input bg-background h-8 rounded-md border px-2 text-xs"
+                      onChange={handleCustomTo}
                       aria-label="To date"
                     />
                   </div>
