@@ -139,6 +139,7 @@ export function MultiSelect({
         <ComboboxTrigger
           render={
             <Button
+              type="button"
               variant="outline"
               size="sm"
               disabled={disabled}

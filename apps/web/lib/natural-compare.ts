@@ -10,7 +10,10 @@
  * gives `A1, A2, A3, A10, A12, A13`. Built once, because constructing a
  * collator per comparison is the expensive part.
  */
-const collator = new Intl.Collator(undefined, {
+// The locale is pinned so the server and the browser agree. With `undefined`
+// each picks its own default, and a list sorted during SSR can come back in a
+// different order on the client — which React reports as a hydration mismatch.
+const collator = new Intl.Collator('en-IN', {
   numeric: true,
   sensitivity: 'base',
 });

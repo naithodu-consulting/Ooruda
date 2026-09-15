@@ -102,15 +102,32 @@ export function DatePicker({
     ...(maxDate ? [{ after: maxDate }] : []),
   ];
 
+  // The locale is pinned rather than left to the runtime default. With
+  // `undefined` the server formats in Node's locale and the browser in the
+  // user's, so SSR emitted "Apr 01, 2026" against the client's "01 Apr 2026"
+  // and React threw a hydration mismatch. `en-IN` also matches
+  // `formatDateReadable`, so a picker and a table show the same date the
+  // same way.
   const label = selected
-    ? selected.toLocaleDateString(undefined, {
-        day: '2-digit',
+    ? selected.toLocaleDateString('en-IN', {
+        day: 'numeric',
         month: 'short',
         year: 'numeric',
       })
     : placeholder;
 
   function handleSelect(date: Date | undefined) {
+    // react-day-picker treats a click on the already-selected day as a
+    // toggle and hands back `undefined` (see `useSingle`: "If the date is
+    // the same, clear the selection"). A user re-clicking the highlighted
+    // day means "yes, this one", not "clear it" — and on a payment or due
+    // date that silently wrote an empty value. Clearing stays deliberate,
+    // via the `clearable` X below.
+    if (!date) {
+      setOpen(false);
+      return;
+    }
+
     onChange(localDateToYmd(date));
     setOpen(false);
     onBlur?.();

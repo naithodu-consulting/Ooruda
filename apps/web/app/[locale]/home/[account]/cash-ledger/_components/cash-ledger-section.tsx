@@ -251,6 +251,7 @@ export function CashLedgerSection({
           <FilterField label="From">
             <DatePicker
               value={dateFrom}
+              max={dateTo}
               onChange={setDateFrom}
               placeholder="From"
               clearable

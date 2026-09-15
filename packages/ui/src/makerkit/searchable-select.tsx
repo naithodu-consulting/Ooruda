@@ -112,7 +112,7 @@ export function SearchableSelect({
               // next to the white Inputs beside it inside a dialog.
               className={cn(
                 'w-full justify-between gap-2 bg-transparent font-normal',
-                !selected && 'text-muted-foreground',
+                !selected && !value && 'text-muted-foreground',
                 className,
               )}
             />
@@ -130,7 +130,12 @@ export function SearchableSelect({
                   ) : null}
                 </span>
               ) : (
-                <span className="truncate">{placeholder}</span>
+                // A value with no matching item falls back to the raw value
+                // rather than the placeholder. `items` can lag the value —
+                // still loading, or the option was filtered out — and showing
+                // the placeholder there reads as "nothing selected" for a
+                // field that does hold one, hiding the mismatch from the user.
+                <span className="truncate">{value || placeholder}</span>
               )
             }
           </ComboboxValue>

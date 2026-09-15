@@ -44,6 +44,19 @@ Native date inputs replaced with `DatePicker` in cash ledger, expenses, electric
 
 New `@layer base` rule in `makerkit.css` adds a `focus-visible` ring to all bare `<button>`, `<a>`, and `[role=button]` elements that previously had no visible keyboard focus indicator. The shared `Button`, `Input`, and `Select` components define their own rings and are unaffected.
 
+The rule no longer sets `border-radius`. A focus style should not change an element's geometry, and for any element without a `rounded-*` utility it did.
+
+### Fixes found while verifying the migration in the browser
+
+None of the below were caught by type-checking — every one needed the components actually rendered.
+
+- **Dates could be silently cleared by confirming them.** react-day-picker treats a click on the already-selected day as a toggle and hands back `undefined` (`useSingle`: "If the date is the same, clear the selection"), and `DatePicker` did not pass `required`. A user re-clicking the highlighted day to confirm it wrote an empty value instead — on Record Payment, expense Date of Payment, all four AMC dates, and electricity reading dates. On Other Charges that persists as `null`, which then feeds the `recompute_overdue_bills()` cron. Re-selecting the current day is now a no-op; clearing stays deliberate, through the existing clear affordance.
+- **Hydration mismatch on every `DatePicker`.** The trigger label used `toLocaleDateString(undefined, …)`, so the server formatted in Node's locale and the browser in the user's — SSR emitted `Apr 01, 2026` against the client's `01 Apr 2026` and React threw. The locale is now pinned to `en-IN`, matching `formatDateReadable`, so a picker and a table render the same date the same way. This was the only unpinned locale in the codebase.
+- **`natural-compare` had the same latent bug** — `Intl.Collator(undefined, …)` can order a list differently on the server than in the browser. Pinned to `en-IN`.
+- **A set value with no matching option rendered as the placeholder.** `SearchableSelect` resolves its value by looking it up in `items`; when the lookup missed — options still loading, or the option filtered out — the trigger showed muted placeholder text, indistinguishable from an empty field, while the form still held the value. It now falls back to the raw value so the mismatch is visible rather than hidden.
+- **Cash ledger date range could invert.** The To picker was bounded by `min={dateFrom}` but From had no matching `max={dateTo}`, so From could be moved past To. Unlike the statement view, the ledger has no inversion guard and simply returned nothing.
+- **`MultiSelect`'s trigger was missing `type="button"`** and would have submitted any form it was placed in.
+
 **Migrations:** none.
 
 ---
