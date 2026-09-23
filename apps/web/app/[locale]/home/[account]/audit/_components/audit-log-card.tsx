@@ -61,7 +61,7 @@ export interface AuditLogRow {
 
 function RoleBadge({ roleLabel }: { roleLabel: string | null }) {
   if (!roleLabel)
-    return <span className="text-muted-foreground text-xs">—</span>;
+    return <span className="text-muted-foreground text-xs">-</span>;
 
   const isSuperAdmin = roleLabel === 'Super Admin';
   const isAdmin = roleLabel === 'Association Admin';
@@ -81,9 +81,9 @@ function RoleBadge({ roleLabel }: { roleLabel: string | null }) {
         isSuperAdmin
           ? 'text-destructive text-sm font-medium'
           : isAdmin
-            ? 'text-primary text-sm font-medium'
+            ? 'text-brand-ink text-sm font-medium'
             : isOperator
-              ? 'text-sm font-medium text-[var(--color-success)]'
+              ? 'text-success text-sm font-medium'
               : 'text-muted-foreground text-sm font-medium'
       }
     >
@@ -168,7 +168,7 @@ export function AuditLogCard(props: {
                               {actionLabel(row.action)}
                             </span>
                             {row.path && (
-                              <div className="text-muted-foreground mt-0.5 font-mono text-[10px]">
+                              <div className="text-muted-foreground mt-0.5 font-mono text-xs">
                                 {row.path}
                               </div>
                             )}
@@ -184,7 +184,7 @@ export function AuditLogCard(props: {
                       <TableCell className="text-muted-foreground py-3.5 text-sm">
                         {truncateSummary(row.summary)}
                         {row.errorCode && (
-                          <div className="text-destructive mt-0.5 font-mono text-[10px]">
+                          <div className="text-destructive mt-0.5 font-mono text-xs">
                             {row.errorCode}
                           </div>
                         )}

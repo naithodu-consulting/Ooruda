@@ -93,7 +93,7 @@ export function AdminEditUserDialog(
     resolver: zodResolver(FormSchema),
     defaultValues: {
       fullName: props.userName,
-      // PhoneInput expects E.164 (e.g. "+918826262459") — it parses country + national internally.
+      // PhoneInput expects E.164 (e.g. "+918826262459") - it parses country + national internally.
       phone: props.userPhone || '',
       email: props.userEmail || '',
       role: props.currentRole || '',

@@ -31,8 +31,8 @@ export const GET = enhanceRouteHandler(
       Object.fromEntries(url.searchParams),
     );
 
-    // cash_ledger_payments has REVOKE ALL FROM service_role — must use authenticated client.
-    // user is injected by enhanceRouteHandler (auth: true) — no extra getUser() call.
+    // cash_ledger_payments has REVOKE ALL FROM service_role - must use authenticated client.
+    // user is injected by enhanceRouteHandler (auth: true) - no extra getUser() call.
     const client = getSupabaseServerClient();
 
     const { data: payment, error: queryError } = await client

@@ -14,7 +14,7 @@ export const createAccountPolicyRegistry = createPolicyRegistry();
  * Super-admin-only account creation.
  *
  * New associations are onboarded by the platform operator, not self-served by
- * whoever happens to verify a phone number — regular users only ever get
+ * whoever happens to verify a phone number - regular users only ever get
  * access to an association by being invited into it. Without this, any
  * uninvited phone number could create (and become admin of) its own
  * association the moment it signs in.

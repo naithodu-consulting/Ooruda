@@ -59,7 +59,7 @@ const s = StyleSheet.create({
   },
   kpiLabel: {
     fontSize: 6.5,
-    color: '#888',
+    color: '#666',
     marginBottom: 2,
     textTransform: 'uppercase',
   },
@@ -103,7 +103,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  footerText: { fontSize: 7, color: '#888' },
+  footerText: { fontSize: 7, color: '#666' },
   th: { fontSize: 7, color: '#fff', fontWeight: 'bold' },
   thR: { fontSize: 7, color: '#fff', fontWeight: 'bold', textAlign: 'right' },
   cell: { fontSize: 7.5, color: '#222' },
@@ -117,7 +117,7 @@ const s = StyleSheet.create({
   },
 });
 
-// Cell container — View clips content at column boundary (Text overflow
+// Cell container - View clips content at column boundary (Text overflow
 // alone is unreliable in react-pdf's layout engine).
 function C({
   flex,
@@ -159,7 +159,7 @@ const PAYMENT_MODE_LABELS: Record<string, string> = {
 };
 
 function fmtDate(iso: string | null | undefined) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   return new Date(iso.slice(0, 10)).toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'short',
@@ -288,21 +288,21 @@ export function PaymentsExportDocument({
               <Text style={s.cell}>
                 {r.payment_mode
                   ? (PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode)
-                  : '—'}
+                  : '-'}
               </Text>
             </C>
             <C flex={COL.amount} right>
               <Text style={s.cellR}>
-                {r.amount_paid != null ? formatINR(r.amount_paid) : '—'}
+                {r.amount_paid != null ? formatINR(r.amount_paid) : '-'}
               </Text>
             </C>
             <C flex={COL.advance} right>
               <Text style={s.cellR}>
-                {r.advance_applied > 0 ? formatINR(r.advance_applied) : '—'}
+                {r.advance_applied > 0 ? formatINR(r.advance_applied) : '-'}
               </Text>
             </C>
             <C flex={COL.reference}>
-              <Text style={s.cell}>{r.reference_no ?? '—'}</Text>
+              <Text style={s.cell}>{r.reference_no ?? '-'}</Text>
             </C>
             <C flex={COL.status}>
               <Text style={s.cell}>{r.bill_status}</Text>

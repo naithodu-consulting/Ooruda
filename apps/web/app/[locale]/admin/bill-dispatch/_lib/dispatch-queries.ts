@@ -94,7 +94,7 @@ export async function fetchBillsForDispatch(params: {
     // DB stores bill_type as lowercase_underscore (e.g. "other_charges").
     // billType is already validated against VALID_BILL_TYPES whitelist above.
     const normalized = billType.toLowerCase().replace(/ /g, '_');
-    // Use separate .ilike() chained as .or() — both forms safe since they come from the whitelist.
+    // Use separate .ilike() chained as .or() - both forms safe since they come from the whitelist.
     query = query.or(
       `bill_type.ilike.${normalized},bill_type.ilike.${billType.toLowerCase()}`,
     );
@@ -206,7 +206,7 @@ export async function fetchBillsForDispatch(params: {
       paymentId: paymentIdByBill.get(b.id) ?? null,
       unitId: b.unit_id,
       unitNo: unit?.unit_no ?? b.unit_id,
-      ownerName: ownerProfile?.full_name ?? '—',
+      ownerName: ownerProfile?.full_name ?? '-',
       ownerEmail: ownerProfile?.email ?? null,
       tenantName: tenantProfile?.full_name ?? null,
       tenantEmail: tenantProfile?.email ?? null,

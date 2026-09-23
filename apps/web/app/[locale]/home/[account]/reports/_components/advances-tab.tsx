@@ -106,7 +106,7 @@ export function AdvancesTab({ rows }: Props) {
                     <span
                       className={
                         r.balance > 0
-                          ? 'font-semibold text-green-700'
+                          ? 'text-success font-semibold'
                           : 'text-muted-foreground'
                       }
                     >
@@ -114,10 +114,10 @@ export function AdvancesTab({ rows }: Props) {
                     </span>
                   </TableCell>
                   <TableCell className="text-muted-foreground tabular-nums">
-                    {r.last_deposit_date ?? '—'}
+                    {r.last_deposit_date ?? '-'}
                   </TableCell>
                   <TableCell className="text-muted-foreground tabular-nums">
-                    {r.last_applied_date ?? '—'}
+                    {r.last_applied_date ?? '-'}
                   </TableCell>
                 </TableRow>
               ))

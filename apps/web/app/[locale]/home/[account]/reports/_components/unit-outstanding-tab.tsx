@@ -121,17 +121,17 @@ export function UnitOutstandingTab({ rows }: Props) {
                 <TableRow key={r.unit_id}>
                   <TableCell className="font-medium">{r.unit_no}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {r.owner_name ?? '—'}
+                    {r.owner_name ?? '-'}
                   </TableCell>
                   <TableCell className="text-muted-foreground tabular-nums">
-                    {r.owner_phone ?? '—'}
+                    {r.owner_phone ?? '-'}
                   </TableCell>
                   <TableCell className="text-right font-semibold tabular-nums">
                     {formatINR(r.total_outstanding)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {r.overdue_count > 0 ? (
-                      <span className="font-semibold text-red-600">
+                      <span className="text-destructive font-semibold">
                         {r.overdue_count}
                       </span>
                     ) : (
@@ -143,11 +143,11 @@ export function UnitOutstandingTab({ rows }: Props) {
                   </TableCell>
                   <TableCell>
                     {r.overdue_count > 0 ? (
-                      <Badge className="border-red-200 bg-red-50 text-xs text-red-700">
+                      <Badge className="text-destructive border-red-200 bg-red-50 text-xs">
                         Overdue
                       </Badge>
                     ) : (
-                      <Badge className="border-amber-200 bg-amber-50 text-xs text-amber-700">
+                      <Badge className="text-warning border-amber-200 bg-amber-50 text-xs">
                         Pending
                       </Badge>
                     )}

@@ -18,7 +18,8 @@ import { EmailHeader } from '../components/header';
 import { EmailHeading } from '../components/heading';
 import { EmailWrapper } from '../components/wrapper';
 
-const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT =
+  "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('en-IN', {
@@ -99,7 +100,7 @@ function ColorScheme() {
  * One label/value line of the detail table.
  *
  * Must be Row + Column: react-email's Row renders a <tr>, so a <Text> (a <p>)
- * placed directly inside it is invalid HTML — mail clients hoist it out of the
+ * placed directly inside it is invalid HTML - mail clients hoist it out of the
  * table and stack the label and value on separate lines. Fixed column widths
  * keep values aligned across rows.
  */
@@ -232,7 +233,7 @@ function BillEmail(props: BillEmailProps) {
         <BodyStyle />
       </Head>
       <Preview>
-        {typeLabel} bill for {periodLabel} — {formatCurrency(props.totalAmount)}{' '}
+        {typeLabel} bill for {periodLabel} - {formatCurrency(props.totalAmount)}{' '}
         due {dueDateLabel}
       </Preview>
       <Tailwind>
@@ -288,7 +289,7 @@ function ReceiptEmail(props: ReceiptEmailProps) {
         <BodyStyle />
       </Head>
       <Preview>
-        Payment of {formatCurrency(props.paidAmount)} received — {typeLabel}{' '}
+        Payment of {formatCurrency(props.paidAmount)} received - {typeLabel}{' '}
         {periodLabel}
       </Preview>
       <Tailwind>
@@ -301,7 +302,7 @@ function ReceiptEmail(props: ReceiptEmailProps) {
             <EmailContent>
               <Text style={bodyStyle}>Dear {props.ownerName},</Text>
               <Text style={bodyStyle}>
-                Thank you — we have received your payment for the{' '}
+                Thank you, we have received your payment for the{' '}
                 {typeLabel.toLowerCase()} bill for{' '}
                 <strong>{periodLabel}</strong> at {props.associationName}. Your
                 receipt is attached to this email as a PDF.

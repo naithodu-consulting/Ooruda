@@ -21,13 +21,13 @@ import { cn } from '@kit/ui/utils';
 const BUCKET = 'account_image';
 
 /**
- * Association logo uploader — the single, canonical place to set the
+ * Association logo uploader - the single, canonical place to set the
  * association's image.
  *
  * The association logo is the MakerKit team account image: stored in the
  * `account_image` bucket keyed by account id, with the URL persisted to
  * `accounts.picture_url`. It reuses that bucket + RLS so no new storage
- * migration is needed. Deliberately the only uploader for this field — the
+ * migration is needed. Deliberately the only uploader for this field - the
  * generic team-account settings page (`@kit/team-accounts`'s
  * `UpdateTeamAccountImage`) is not rendered anywhere in this app to avoid a
  * second control writing to the same column. The logo flows to the workspace
@@ -48,7 +48,7 @@ export function AssociationLogoUploader({
 
       // Uploads always overwrite the same storage key (`account.id`) with
       // `upsert: true`, so there's no need to delete the old file first when
-      // replacing — that would just be a third, redundant network round-trip
+      // replacing - that would just be a third, redundant network round-trip
       // that widens the window where a quick tab-switch can outrun the save.
       // Deleting is only needed when clearing (no replacement file).
       const result = file
@@ -62,7 +62,7 @@ export function AssociationLogoUploader({
           ).then(() => persistPictureUrl(client, account.id, null));
 
       // Computed once and shared between the toast and the revalidation below
-      // — calling this twice would upload/delete the file twice.
+      // - calling this twice would upload/delete the file twice.
       toast.promise(() => result, {
         loading: 'Updating logo…',
         success: 'Logo updated.',

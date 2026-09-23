@@ -123,7 +123,7 @@ export function ElectricityTab({ mescomRows, consumptionByPeriod }: Props) {
         />
         <KpiTile
           label="Avg Rate / kWh"
-          value={avgRate !== null ? formatINR(avgRate) : '—'}
+          value={avgRate !== null ? formatINR(avgRate) : '-'}
           sub="blended rate across all periods"
         />
       </div>
@@ -313,25 +313,25 @@ export function ElectricityTab({ mescomRows, consumptionByPeriod }: Props) {
                             {r.unit_no}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {r.prev_reading?.toLocaleString('en-IN') ?? '—'}
+                            {r.prev_reading?.toLocaleString('en-IN') ?? '-'}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {r.curr_reading?.toLocaleString('en-IN') ?? '—'}
+                            {r.curr_reading?.toLocaleString('en-IN') ?? '-'}
                           </TableCell>
                           <TableCell className="text-right font-semibold tabular-nums">
                             {r.consumed_units > 0
                               ? r.consumed_units.toLocaleString('en-IN')
-                              : '—'}
+                              : '-'}
                           </TableCell>
                           <TableCell className="text-muted-foreground text-right tabular-nums">
                             {r.minimum_charge > 0
                               ? formatINR(r.minimum_charge)
-                              : '—'}
+                              : '-'}
                           </TableCell>
                           <TableCell className="text-muted-foreground text-right tabular-nums">
                             {ratePerUnit !== null && ratePerUnit > 0
                               ? formatINR(ratePerUnit)
-                              : '—'}
+                              : '-'}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
                             {formatINR(r.charged_amount)}

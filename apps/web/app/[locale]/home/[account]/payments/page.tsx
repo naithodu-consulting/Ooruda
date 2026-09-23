@@ -63,7 +63,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
 
   const client = getSupabaseServerClient();
 
-  // isSuperAdmin gates the "Delete all payments" danger-zone action — a
+  // isSuperAdmin gates the "Delete all payments" danger-zone action - a
   // super admin viewing an "opened workspace" resolves `role` to
   // 'assoc_admin' too, so this must be checked independently of `role`.
   const { data: isSuperAdmin } = await client.rpc('is_super_admin');
@@ -107,7 +107,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
   // association, so we resolve both independently:
   // - owned units: the user sees every bill ever generated for them.
   // - rented units: the user must only see bills attributed to their OWN
-  //   tenancy (bills.tenancy_id) — otherwise a new tenant on a unit would
+  //   tenancy (bills.tenancy_id) - otherwise a new tenant on a unit would
   //   see every past tenant's bill/payment history on that same unit.
   let ownedUnitIds: string[] = [];
   let rentedUnitIds: string[] = [];
@@ -166,7 +166,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     gatewayActive = gateway?.is_active ?? false;
   }
 
-  // Load all bills in one query — client filters instantly in-memory.
+  // Load all bills in one query - client filters instantly in-memory.
   let query = client
     .from('bills')
     .select(BILL_WITH_PAYMENTS_SELECT)
@@ -176,7 +176,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
   if (isUserRestricted) {
     // Owned units: every bill, regardless of tenancy. Rented units: only
     // bills attributed to this tenant's own tenancy (or predating any
-    // tenancy — self-occupied period bills with no tenant to hide from).
+    // tenancy - self-occupied period bills with no tenant to hide from).
     const filters: string[] = [];
     if (ownedUnitIds.length > 0) {
       filters.push(`unit_id.in.(${ownedUnitIds.join(',')})`);
@@ -191,7 +191,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
       );
     }
     if (filters.length === 0) {
-      // No accessible units — return nothing rather than falling through to
+      // No accessible units - return nothing rather than falling through to
       // an empty .or('') which PostgREST treats as no filter (returns all rows).
       return (
         <PageBody>
@@ -211,7 +211,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     query = query.eq('association_id', association.id);
   }
 
-  // Void bills have no payments and carry no active obligation — exclude them
+  // Void bills have no payments and carry no active obligation - exclude them
   // from both the admin metrics and the owner/tenant payment view.
   query = query.neq('status', 'Void');
 
@@ -366,7 +366,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     period: b.period,
     bill_no: b.bill_no,
     bill_type: b.bill_type ?? 'maintenance',
-    unit_no: (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
+    unit_no: (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '-',
     total_amount: Number(b.total_amount),
     paid_amount: Number(b.paid_amount),
     advance_applied: Number(
@@ -403,7 +403,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         amount: a.amount,
         mode: 'Advance Applied',
         reference_no: null,
-        paid_by_role: '—',
+        paid_by_role: '-',
         paid_at: a.applied_at,
         receipt_no: a.voucher_no,
         is_advance: true as const,
@@ -421,7 +421,7 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         return owed > 0.009 ? sum + owed : sum;
       }, 0) + cashLedgerDues.reduce((sum, d) => sum + Math.abs(d.balance), 0);
     if (totalOwed <= 0) {
-      ownerDescription = 'All paid up — nothing due.';
+      ownerDescription = 'All paid up. Nothing due.';
     } else {
       const overdueCount = rows.filter((b) => {
         const owed = b.total_amount - b.paid_amount - (b.advance_applied ?? 0);

@@ -305,14 +305,14 @@ function UnitDetailsForm(props: {
                               ? 'Always bill owner'
                               : v === 'tenant'
                                 ? 'Always bill tenant'
-                                : 'Auto — tenant if occupied, else owner'
+                                : 'Auto: tenant if occupied, else owner'
                           }
                         </SelectValue>
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="min-w-[280px]">
                       <SelectItem value="auto">
-                        Auto — tenant if occupied, else owner
+                        Auto: tenant if occupied, else owner
                       </SelectItem>
                       <SelectItem value="owner">Always bill owner</SelectItem>
                       <SelectItem value="tenant">Always bill tenant</SelectItem>
@@ -394,7 +394,7 @@ function TenantSection(props: {
       <div className="flex flex-col gap-2 border-t pt-4">
         <span className="text-sm font-medium">Tenant</span>
         <p className="text-sm">
-          {props.tenancy.label} — since{' '}
+          {props.tenancy.label} - since{' '}
           {formatDateDMY(props.tenancy.start_date)}
         </p>
         <Button
@@ -581,7 +581,7 @@ function OwnerCompanyFields({ form }: { form: any }) {
                 <FormLabel>Company registered address</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder="Optional — leave blank to use unit address"
+                    placeholder="Optional. Leave blank to use unit address"
                     {...(field as React.InputHTMLAttributes<HTMLInputElement>)}
                   />
                 </FormControl>

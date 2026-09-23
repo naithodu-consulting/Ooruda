@@ -94,10 +94,10 @@ export function BillLineItemsDialog(props: {
                 {hasAreaColumns && (
                   <>
                     <TableCell className="text-right tabular-nums">
-                      {li.area_sqft ?? '—'}
+                      {li.area_sqft ?? '-'}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {li.rate_per_sqft ?? '—'}
+                      {li.rate_per_sqft ?? '-'}
                     </TableCell>
                   </>
                 )}
@@ -110,7 +110,7 @@ export function BillLineItemsDialog(props: {
           </TableBody>
         </Table>
 
-        {/* Compact GST summary — only shown when GST was applied */}
+        {/* Compact GST summary - only shown when GST was applied */}
         {gst > 0 && (
           <div className="border-t pt-3">
             <div className="text-muted-foreground flex flex-col gap-1 text-sm">

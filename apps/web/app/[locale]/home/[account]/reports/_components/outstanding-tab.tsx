@@ -107,7 +107,7 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
   const enriched = useMemo(() => {
     if (statusFilter === 'overdue')
       return enrichedAll.filter((b) => b.days > 0);
-    // "Partial" / "Unpaid" are about how much has been settled — advance credit
+    // "Partial" / "Unpaid" are about how much has been settled - advance credit
     // counts as settlement just like a payment does.
     if (statusFilter === 'partial')
       return enrichedAll.filter((b) => b.settled > 0);
@@ -199,7 +199,7 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
         />
         <KpiTile
           label="Oldest Unpaid"
-          value={oldestDue ? formatDateReadable(oldestDue) : '—'}
+          value={oldestDue ? formatDateReadable(oldestDue) : '-'}
           highlight={oldestDue ? 'red' : undefined}
           sub="Earliest unpaid due date"
         />
@@ -387,11 +387,11 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
                       <TableCell>{formatDateDMY(b.due_date)}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {b.days > 0 ? (
-                          <span className="font-medium text-red-600 dark:text-red-400">
+                          <span className="text-destructive font-medium">
                             {b.days}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
                     </TableRow>

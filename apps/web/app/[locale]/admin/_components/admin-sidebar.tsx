@@ -49,8 +49,8 @@ export function AdminSidebar() {
           href="/admin"
           className="flex items-center gap-2.5 group-data-[collapsible=icon]:justify-center"
         >
-          <OorudaMark size={28} className="shrink-0 text-[#1a1a1a]" />
-          <span className="text-[15px] font-black tracking-tight text-[#1a1a1a] lowercase group-data-[collapsible=icon]:hidden">
+          <OorudaMark size={28} className="text-foreground shrink-0" />
+          <span className="text-foreground text-base font-black tracking-tight lowercase group-data-[collapsible=icon]:hidden">
             ooruda
           </span>
         </Link>
@@ -64,6 +64,7 @@ export function AdminSidebar() {
             <SidebarMenu>
               <SidebarMenuButton
                 isActive={path.includes('/admin/accounts')}
+                className="data-active:border-l-primary data-active:rounded-l-sm data-active:border-l-2 data-active:font-semibold"
                 render={
                   <Link
                     className={'flex size-full gap-2.5'}
@@ -79,6 +80,7 @@ export function AdminSidebar() {
                 'true' && (
                 <SidebarMenuButton
                   isActive={path.includes('/admin/channels')}
+                  className="data-active:border-l-primary data-active:rounded-l-sm data-active:border-l-2 data-active:font-semibold"
                   render={
                     <Link
                       className={'flex size-full gap-2.5'}
@@ -93,6 +95,7 @@ export function AdminSidebar() {
 
               <SidebarMenuButton
                 isActive={path.includes('/admin/activity')}
+                className="data-active:border-l-primary data-active:rounded-l-sm data-active:border-l-2 data-active:font-semibold"
                 render={
                   <Link
                     className={'flex size-full gap-2.5'}
@@ -107,6 +110,7 @@ export function AdminSidebar() {
               {process.env.NEXT_PUBLIC_ENABLE_BILL_DISPATCH === 'true' && (
                 <SidebarMenuButton
                   isActive={path.includes('/admin/bill-dispatch')}
+                  className="data-active:border-l-primary data-active:rounded-l-sm data-active:border-l-2 data-active:font-semibold"
                   render={
                     <Link
                       className={'flex size-full gap-2.5'}
@@ -123,23 +127,23 @@ export function AdminSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-[#1F2D3D] bg-[#050B14] px-3 py-3">
+      <SidebarFooter className="border-t border-[var(--sidebar-footer-border)] bg-[var(--sidebar-footer-bg)] px-3 py-3">
         {collapsed ? (
           <div className="flex items-center justify-center">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f59e0b] text-sm font-black text-slate-950">
+            <div className="text-primary-foreground flex h-8 w-8 items-center justify-center rounded-full bg-[#f59e0b] text-sm font-bold">
               {initials}
             </div>
           </div>
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-2 flex items-center gap-3 duration-200">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f59e0b] text-sm font-black text-slate-950">
+            <div className="text-primary-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f59e0b] text-sm font-bold">
               {initials}
             </div>
             <div className="flex min-w-0 flex-col">
-              <span className="truncate text-xs leading-snug font-bold text-white">
+              <span className="truncate text-xs leading-snug font-bold text-[var(--sidebar-footer-fg)]">
                 {displayName}
               </span>
-              <span className="truncate text-[10px] font-semibold text-slate-400">
+              <span className="truncate text-xs font-semibold text-[var(--sidebar-footer-fg-muted)]">
                 Super Admin
               </span>
             </div>

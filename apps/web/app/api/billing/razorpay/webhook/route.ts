@@ -43,8 +43,8 @@ interface RazorpayWebhookPayload {
  * network drop, etc.). Razorpay retries on non-2xx responses.
  *
  * Handled events:
- *   payment.captured — record the payment against the bill / cash-ledger due
- *   refund.processed — mark the payment as reversed; bill reverts to unpaid
+ *   payment.captured - record the payment against the bill / cash-ledger due
+ *   refund.processed - mark the payment as reversed; bill reverts to unpaid
  *
  * All other events are acknowledged (200) and ignored.
  *
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!associationId) {
-      // Payment not from Ooruda — ignore silently.
+      // Payment not from Ooruda - ignore silently.
       return new Response('OK', { status: 200 });
     }
 
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
       .update(rawBody)
       .digest('hex');
 
-    // Return 200 on bad signature — same as the "not found" path — so
+    // Return 200 on bad signature - same as the "not found" path - so
     // unauthenticated callers cannot distinguish a valid payment_id from an
     // unknown one (information oracle eliminated).
     // Use timingSafeEqual to prevent HMAC timing attacks.
@@ -256,7 +256,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate unit_id from notes belongs to the association — the HMAC only
+    // Validate unit_id from notes belongs to the association - the HMAC only
     // authenticates the association, not which unit was embedded in the notes.
     const { data: unitCheck } = await admin
       .from('units')
@@ -380,7 +380,7 @@ export async function POST(req: NextRequest) {
     .neq('status', 'Void');
 
   if (!bills || bills.length === 0) {
-    // Bills are missing or all voided. Return 200 so Razorpay stops retrying —
+    // Bills are missing or all voided. Return 200 so Razorpay stops retrying -
     // a non-2xx response would cause up to 15 retries over 24 hours while the
     // money sits unconciled. Log so the admin can issue a manual refund.
     void logAuditEvent({
@@ -388,7 +388,7 @@ export async function POST(req: NextRequest) {
       action: 'razorpay.payment.void_bill',
       entityType: 'payment',
       eventType: 'error',
-      summary: `Razorpay webhook payment arrived for voided or missing bill(s) — not recorded. Manual refund may be required.`,
+      summary: `Razorpay webhook payment arrived for voided or missing bill(s), not recorded. Manual refund may be required.`,
       metadata: { razorpayPaymentId, razorpayOrderId, billIds },
       useAdminClient: true,
     });

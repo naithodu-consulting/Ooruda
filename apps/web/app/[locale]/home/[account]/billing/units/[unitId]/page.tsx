@@ -52,7 +52,7 @@ export async function generateMetadata({ params }: Props) {
  * Level 3: one unit's complete billing history.
  *
  * Every query here is scoped by `unit_id`, which is the whole point of the
- * route — the previous single-page design had to load every bill for the
+ * route - the previous single-page design had to load every bill for the
  * association just in case a row was expanded.
  */
 export default async function UnitBillingPage({ params }: Props) {
@@ -74,7 +74,7 @@ export default async function UnitBillingPage({ params }: Props) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  // Scoped by association_id as well as id — a unit belonging to another
+  // Scoped by association_id as well as id - a unit belonging to another
   // association must read as missing, not as forbidden.
   const { data: unit } = await client
     .from('units')
@@ -203,13 +203,13 @@ export default async function UnitBillingPage({ params }: Props) {
           Back to Bills by Unit
         </Link>
 
-        {/* Summary strip — chips matching the Payments page metrics pattern */}
+        {/* Summary strip - chips matching the Payments page metrics pattern */}
         <div className="flex flex-wrap items-center gap-2">
           <Stat label="Billed" value={formatINR(node.billed)} />
           <Stat label="Collected" value={formatINR(node.collected)} />
           <Stat
             label="Outstanding"
-            value={node.outstanding > 0 ? formatINR(node.outstanding) : '—'}
+            value={node.outstanding > 0 ? formatINR(node.outstanding) : '-'}
             tone={node.outstanding > 0 ? 'warning' : undefined}
           />
           {node.overdueCount > 0 && (
@@ -262,11 +262,11 @@ function Stat({
 }) {
   const toneClass =
     tone === 'warning'
-      ? 'text-[var(--color-warning)]'
+      ? 'text-warning'
       : tone === 'danger'
         ? 'text-destructive'
         : tone === 'info'
-          ? 'text-[var(--color-info)]'
+          ? 'text-info'
           : 'text-foreground';
 
   return (
@@ -274,9 +274,7 @@ function Stat({
       <span className={`text-base font-semibold tabular-nums ${toneClass}`}>
         {value}
       </span>
-      <span className="text-muted-foreground text-[13px] font-medium">
-        {label}
-      </span>
+      <span className="text-muted-foreground text-sm font-medium">{label}</span>
     </div>
   );
 }

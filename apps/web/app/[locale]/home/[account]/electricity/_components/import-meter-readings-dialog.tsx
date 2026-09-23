@@ -158,11 +158,11 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
 
     let error: string | undefined;
     if (!sub_meter_no) {
-      error = 'Sub-meter number is missing — add it and re-upload.';
+      error = 'Sub-meter number is missing. Add it and re-upload.';
     } else if (duplicates.has(sub_meter_no.toLowerCase())) {
-      error = `"${sub_meter_no}" appears more than once — remove the duplicate and re-upload.`;
+      error = `"${sub_meter_no}" appears more than once. Remove the duplicate and re-upload.`;
     } else if (currentRaw === '' || Number.isNaN(currentReading)) {
-      error = 'Current reading must be a number — fix it and re-upload.';
+      error = 'Current reading must be a number. Fix it and re-upload.';
     } else if (currentReading < 0) {
       error = 'Current reading must be 0 or greater.';
     } else if (load_kva !== null && (Number.isNaN(load_kva) || load_kva <= 0)) {
@@ -205,7 +205,7 @@ export function ImportMeterReadingsDialog({
     skipped: { row: number; sub_meter_no: string; reason: string }[];
   } | null>(null);
 
-  // selectedPeriod is the MM/YYYY option value; never show it raw — every
+  // selectedPeriod is the MM/YYYY option value; never show it raw - every
   // period the operator sees reads as "August 2026".
   const selectedPeriodLabel = formatPeriod(toDbPeriod(selectedPeriod));
 
@@ -335,10 +335,10 @@ export function ImportMeterReadingsDialog({
                   className="flex w-full cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed border-orange-500/50 px-6 py-10 text-center transition-colors hover:bg-orange-50/50 dark:hover:bg-orange-950/20"
                 >
                   <CloudUpload
-                    className="h-10 w-10 text-orange-500"
+                    className="text-warning h-10 w-10"
                     strokeWidth={1.5}
                   />
-                  <p className="font-medium text-orange-600">
+                  <p className="text-warning font-medium">
                     {fileName
                       ? fileName
                       : 'Drop CSV or Excel here, or click to browse'}
@@ -419,17 +419,17 @@ export function ImportMeterReadingsDialog({
                           <TableCell className="text-muted-foreground text-xs">
                             {row._row}
                           </TableCell>
-                          <TableCell>{row.sub_meter_no || '—'}</TableCell>
+                          <TableCell>{row.sub_meter_no || '-'}</TableCell>
                           <TableCell className="tabular-nums">
-                            {row.load_kva != null ? row.load_kva : '—'}
+                            {row.load_kva != null ? row.load_kva : '-'}
                           </TableCell>
                           <TableCell className="tabular-nums">
                             {row.minimum_charge != null
                               ? row.minimum_charge
-                              : '—'}
+                              : '-'}
                           </TableCell>
                           <TableCell className="tabular-nums">
-                            {row._error ? '—' : row.current_reading}
+                            {row._error ? '-' : row.current_reading}
                           </TableCell>
                           <TableCell>
                             {row._error ? (

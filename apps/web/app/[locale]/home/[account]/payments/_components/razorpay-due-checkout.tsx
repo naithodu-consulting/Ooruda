@@ -37,7 +37,7 @@ export function RazorpayDueCheckoutButton({
   useEffect(() => {
     if (outstanding <= 0) return;
 
-    // Inject Razorpay script once — skip if already present.
+    // Inject Razorpay script once - skip if already present.
     if (
       !document.querySelector(
         'script[src="https://checkout.razorpay.com/v1/checkout.js"]',
@@ -133,7 +133,7 @@ export function RazorpayDueCheckoutButton({
         currency: 'INR',
         order_id: order.orderId,
         name: 'Association Billing',
-        description: `Due payment — Unit ${unitNo} (${billType})`,
+        description: `Due payment - Unit ${unitNo} (${billType})`,
         theme: { color: '#d97706' },
         modal: {
           ondismiss: () => {
@@ -164,7 +164,7 @@ export function RazorpayDueCheckoutButton({
             onSuccess?.();
           }, 6000);
 
-          // 4. Verify in background — resolves the toast in place.
+          // 4. Verify in background - resolves the toast in place.
           fetch('/api/billing/razorpay/verify-due', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -187,7 +187,7 @@ export function RazorpayDueCheckoutButton({
               }) => {
                 clearTimeout(fallbackTimer);
                 if (data.error && !data.alreadyRecorded) {
-                  toast.warning('Payment received — confirmation delayed', {
+                  toast.warning('Payment received, confirmation delayed', {
                     id: toastId,
                     description:
                       "Contact the association if it doesn't reflect within 24h.",
@@ -204,7 +204,7 @@ export function RazorpayDueCheckoutButton({
             )
             .catch(() => {
               clearTimeout(fallbackTimer);
-              toast.warning('Payment received — confirmation delayed', {
+              toast.warning('Payment received, confirmation delayed', {
                 id: toastId,
                 description:
                   "Contact the association if it doesn't reflect within 24h.",

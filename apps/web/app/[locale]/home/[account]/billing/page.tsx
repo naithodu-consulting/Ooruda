@@ -39,7 +39,7 @@ const STATUS_TO_FILTER: Record<string, string> = {
 };
 
 /**
- * Level 1: the Billing landing page — KPI tiles and nothing else.
+ * Level 1: the Billing landing page - KPI tiles and nothing else.
  *
  * This page used to render the tiles, the full unit tree and a bills card with
  * draft/generated tabs all at once, which meant loading every bill for the
@@ -153,7 +153,7 @@ export default async function BillingPage({ params, searchParams }: Props) {
     (mb) => !generatedElecPeriods.has(mb.period),
   ).length;
 
-  // Maintenance is an informational alert, not a stageable item — exclude it
+  // Maintenance is an informational alert, not a stageable item - exclude it
   // so the badge count reflects actual billable charges only.
   const draftCount =
     (otherChargesCount.count ?? 0) +
@@ -189,7 +189,7 @@ export default async function BillingPage({ params, searchParams }: Props) {
             description={
               draftCount > 0
                 ? `${draftCount} charge${draftCount !== 1 ? 's' : ''} waiting to be billed.`
-                : 'Nothing waiting — all charges have been billed.'
+                : 'Nothing waiting. All charges have been billed.'
             }
             badge={draftCount > 0 ? draftCount : undefined}
             icon={<FilePlus2 className="h-4 w-4" />}
@@ -223,7 +223,7 @@ function NavCard({
           {icon}
           <span className="text-sm font-semibold">{title}</span>
           {badge !== undefined && (
-            <span className="bg-primary text-primary-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold">
+            <span className="bg-primary text-primary-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold">
               {badge}
             </span>
           )}

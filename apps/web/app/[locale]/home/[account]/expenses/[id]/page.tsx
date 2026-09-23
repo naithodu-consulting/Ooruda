@@ -150,7 +150,7 @@ export default async function ExpenseDetailPage({ params }: Props) {
                     target={'_blank'}
                     rel={'noreferrer'}
                     className={
-                      'text-primary inline-flex items-center gap-1.5 text-sm underline underline-offset-4'
+                      'text-brand-ink inline-flex items-center gap-1.5 text-sm underline underline-offset-4'
                     }
                     data-test={'attachment-link'}
                   >

@@ -125,7 +125,7 @@ export const POST = enhanceRouteHandler(
 
     for (const b of bills) {
       const unitNo =
-        (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '—';
+        (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '-';
       const bStatus = resolveStatus(
         b.status,
         b.due_date,

@@ -56,7 +56,7 @@ export default async function UnitDetailPage({ params }: Props) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  // Fetch unit — 404 if not found or not in this association
+  // Fetch unit - 404 if not found or not in this association
   const { data: unit } = await client
     .from('units')
     .select('id, unit_no, type, floor, area_sqft, owner_id, status')
@@ -180,7 +180,7 @@ export default async function UnitDetailPage({ params }: Props) {
               },
               {
                 label: 'Floor',
-                value: <span>{unit.floor ?? '—'}</span>,
+                value: <span>{unit.floor ?? '-'}</span>,
               },
               {
                 label: 'Area',
@@ -201,7 +201,7 @@ export default async function UnitDetailPage({ params }: Props) {
             ))}
           </div>
 
-          {/* Owner row — full width */}
+          {/* Owner row - full width */}
           <div className="border-t px-5 py-3.5">
             <div className="flex items-center gap-2">
               <User className="text-muted-foreground h-3.5 w-3.5 flex-none" />

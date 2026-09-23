@@ -12,7 +12,7 @@ const namespace = 'billing.lemon-squeezy';
  *
  * Fetches the variant's configured billing interval (stable plan metadata) and
  * resolves the interval from it, preferring it over inferring the interval from
- * the renewal date — which silently misclassifies annual subscriptions as
+ * the renewal date - which silently misclassifies annual subscriptions as
  * monthly once they enter their final ~32 days before renewal.
  *
  * If the variant fetch fails we fall back to the (lossy) renewal-date

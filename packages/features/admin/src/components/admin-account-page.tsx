@@ -146,7 +146,7 @@ async function PersonalAccountPage(props: { account: Account }) {
                   variant={'secondary'}
                   data-test={'admin-impersonate-button'}
                 >
-                  <VenetianMask className={'mr-1 h-4 text-blue-500'} />
+                  <VenetianMask className={'text-info mr-1 h-4'} />
                   Impersonate
                 </Button>
               </AdminImpersonateUserDialog>
@@ -209,7 +209,7 @@ async function TeamAccountPage(props: {
 }) {
   const adminClient = getSupabaseServerAdminClient();
 
-  // associations.id ≠ accounts.id — fetch the real association PK first.
+  // associations.id ≠ accounts.id - fetch the real association PK first.
   const { data: assocRow } = await adminClient
     .from('associations')
     .select('id, is_test')
@@ -279,7 +279,7 @@ async function TeamAccountPage(props: {
 
           {isTestAssociation && (
             <Badge
-              className={'border-amber-400 bg-amber-50 text-amber-700'}
+              className={'text-warning border-amber-400 bg-amber-50'}
               variant={'outline'}
             >
               Test

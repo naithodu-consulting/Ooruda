@@ -25,12 +25,12 @@ order: 1
 The monitoring system uses a registry pattern that loads providers dynamically based on the `NEXT_PUBLIC_MONITORING_PROVIDER` environment variable. You can add support for LogRocket, Bugsnag, Datadog, or any other service.
 
 {% alert type="warning" title="Five registration points, not three" %}
-SDK initialization is no longer owned by `MonitoringService`. The instrumentation files (`instrumentation.ts` and `instrumentation-client.ts`) own SDK init and provider-agnostic global error handlers; the service is a thin capture/identify wrapper. A custom provider has to register in **all five** registries below — in particular, the `onRequestError` entry is what keeps server errors from being silently dropped after the `error.tsx` digest dedup.
+SDK initialization is no longer owned by `MonitoringService`. The instrumentation files (`instrumentation.ts` and `instrumentation-client.ts`) own SDK init and provider-agnostic global error handlers; the service is a thin capture/identify wrapper. A custom provider has to register in **all five** registries below - in particular, the `onRequestError` entry is what keeps server errors from being silently dropped after the `error.tsx` digest dedup.
 {% /alert %}
 
 ## Implement the MonitoringService Interface
 
-The service is a thin wrapper around the SDK's capture / identify APIs — no SDK initialization here. Init happens in the instrumentation registrations further down.
+The service is a thin wrapper around the SDK's capture / identify APIs - no SDK initialization here. Init happens in the instrumentation registrations further down.
 
 ```typescript {% title="packages/monitoring/logrocket/src/logrocket-monitoring.service.ts" %}
 import LogRocket from 'logrocket';
@@ -140,7 +140,7 @@ serverMonitoringRegistry.register('logrocket', async () => {
 
 ## Register the Server Instrumentation
 
-This is the entry that initializes your SDK on the server and forwards Next.js request errors. **`onRequestError` is required** — without it, every server error is dropped (the client `error.tsx` already skips reports for errors with a `digest`).
+This is the entry that initializes your SDK on the server and forwards Next.js request errors. **`onRequestError` is required** - without it, every server error is dropped (the client `error.tsx` already skips reports for errors with a `digest`).
 
 ```typescript {% title="packages/monitoring/api/src/instrumentation.ts" %}
 instrumentationRegistry.register('logrocket', async () => {
@@ -172,11 +172,11 @@ instrumentationRegistry.register('logrocket', async () => {
 });
 ```
 
-If your SDK provides a built-in Next.js request-error handler (the way `@sentry/nextjs` exposes `captureRequestError`), use it directly — it will produce richer context than a hand-rolled forward.
+If your SDK provides a built-in Next.js request-error handler (the way `@sentry/nextjs` exposes `captureRequestError`), use it directly - it will produce richer context than a hand-rolled forward.
 
 ## Register the Client Instrumentation
 
-The client instrumentation entry initializes the browser SDK and provides a `captureException` that the provider-agnostic global handlers in `instrumentation-client.ts` will call. **Do not register your own `window.onerror` / `unhandledrejection` listeners** — the monitoring layer owns those, and adding more will double-report. If your SDK installs its own by default (e.g. Sentry's `GlobalHandlers`), disable that integration.
+The client instrumentation entry initializes the browser SDK and provides a `captureException` that the provider-agnostic global handlers in `instrumentation-client.ts` will call. **Do not register your own `window.onerror` / `unhandledrejection` listeners** - the monitoring layer owns those, and adding more will double-report. If your SDK installs its own by default (e.g. Sentry's `GlobalHandlers`), disable that integration.
 
 ```typescript {% title="packages/monitoring/api/src/instrumentation-client.ts" %}
 clientInstrumentationRegistry.register('logrocket', async () => {
@@ -200,7 +200,7 @@ clientInstrumentationRegistry.register('logrocket', async () => {
 });
 ```
 
-The `mechanism` argument is one of `onerror`, `onunhandledrejection`, or `react-error-boundary` — useful for telling unhandled rejections from React boundary errors in your dashboard.
+The `mechanism` argument is one of `onerror`, `onunhandledrejection`, or `react-error-boundary` - useful for telling unhandled rejections from React boundary errors in your dashboard.
 
 ## Environment Variables
 
@@ -270,12 +270,12 @@ Then wire the client instrumentation and React provider as shown in the registra
 
 ## Common Gotchas
 
-1. **Don't double-install global handlers** — `@kit/monitoring/instrumentation-client` owns `window.onerror` and `unhandledrejection`. Disable any equivalent feature in your SDK's options (Sentry's `GlobalHandlers`, Datadog's `forwardErrorsToLogs`, etc.).
-2. **`onRequestError` is required** — the client error boundary skips reports for errors that carry a `digest`. Without a server-side `onRequestError`, those errors disappear.
-3. **Don't init from the service constructor** — initialization is owned by `instrumentation.ts` / `instrumentation-client.ts`. The service should be stateless.
-4. **Provider enum** — every new provider must be added to `MONITORING_PROVIDERS` in `get-monitoring-provider.ts`, otherwise Zod will reject the env var.
-5. **Lazy loading** — providers are loaded lazily through registries. Don't statically import provider SDKs from shared code, or you'll pull them into every bundle.
-6. **Browser-only SDKs** — providers like LogRocket can't run on the server. Either guard the server registration (return a no-op service) or skip the registration entirely.
+1. **Don't double-install global handlers** - `@kit/monitoring/instrumentation-client` owns `window.onerror` and `unhandledrejection`. Disable any equivalent feature in your SDK's options (Sentry's `GlobalHandlers`, Datadog's `forwardErrorsToLogs`, etc.).
+2. **`onRequestError` is required** - the client error boundary skips reports for errors that carry a `digest`. Without a server-side `onRequestError`, those errors disappear.
+3. **Don't init from the service constructor** - initialization is owned by `instrumentation.ts` / `instrumentation-client.ts`. The service should be stateless.
+4. **Provider enum** - every new provider must be added to `MONITORING_PROVIDERS` in `get-monitoring-provider.ts`, otherwise Zod will reject the env var.
+5. **Lazy loading** - providers are loaded lazily through registries. Don't statically import provider SDKs from shared code, or you'll pull them into every bundle.
+6. **Browser-only SDKs** - providers like LogRocket can't run on the server. Either guard the server registration (return a no-op service) or skip the registration entirely.
 
 This monitoring system is part of the [Next.js Supabase SaaS Kit](/next-supabase-turbo).
 

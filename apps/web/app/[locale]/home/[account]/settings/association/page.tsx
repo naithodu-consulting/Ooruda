@@ -21,12 +21,12 @@ export default async function AssociationSettingsPage({ params }: Props) {
   const { account } = await params;
 
   // Association configuration (status, GST, branding, billing defaults) is an
-  // admin-only task — the underlying RLS write policies require assoc_admin.
+  // admin-only task - the underlying RLS write policies require assoc_admin.
   const { accountId } = await requireRole(account, ['assoc_admin']);
 
   const client = getSupabaseServerClient();
 
-  // Fire accounts and associations queries in parallel — both only need accountId.
+  // Fire accounts and associations queries in parallel - both only need accountId.
   const [{ data: accountRow }, { data: associationRow }] = await Promise.all([
     client
       .from('accounts')
@@ -84,7 +84,7 @@ export default async function AssociationSettingsPage({ params }: Props) {
       .eq('association_id', association.id)
       .order('is_builtin', { ascending: false })
       .order('name'),
-    // Admin client required — association_payment_gateways has no authenticated policies.
+    // Admin client required - association_payment_gateways has no authenticated policies.
     admin
       .from('association_payment_gateways')
       .select('key_id, is_active, key_secret, webhook_secret, created_at')
@@ -114,7 +114,7 @@ export default async function AssociationSettingsPage({ params }: Props) {
           name: accountRow.name,
           slug: accountRow.slug as string,
         }}
-        // Pass the UNRESOLVED template (with the `[account]` placeholder) — the
+        // Pass the UNRESOLVED template (with the `[account]` placeholder) - the
         // update action does `path.replace('[account]', newSlug)` to redirect
         // after a slug change. Resolving it here would break that redirect.
         path={pathsConfig.app.accountAssociationSettings}

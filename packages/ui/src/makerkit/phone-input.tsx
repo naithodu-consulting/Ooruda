@@ -70,7 +70,7 @@ function parseE164(value: string): { country: CountryCode; national: string } {
     };
   }
 
-  // Unrecognised / partial value — don't extract digits (would include the
+  // Unrecognised / partial value - don't extract digits (would include the
   // calling-code prefix and bleed into the national number field).
   return { country: DEFAULT_COUNTRY, national: '' };
 }

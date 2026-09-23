@@ -93,7 +93,7 @@ export function PaymentModesTab({ rows }: Props) {
         <KpiTile label="Total Transactions" value={String(totalCount)} />
         <KpiTile
           label="Top Mode"
-          value={topMode?.mode ?? '—'}
+          value={topMode?.mode ?? '-'}
           sub={
             topMode
               ? `${((topMode.amount / total) * 100).toFixed(1)}% of total`

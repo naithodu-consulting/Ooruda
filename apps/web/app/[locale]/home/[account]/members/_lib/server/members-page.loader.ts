@@ -80,7 +80,7 @@ async function loadAccountMembers(
       .in('id', userIds);
 
     if (profilesError) {
-      // non-fatal — phone numbers degrade to null; log for visibility
+      // non-fatal - phone numbers degrade to null; log for visibility
       console.warn(
         '[members-loader] profiles query failed:',
         profilesError.message,

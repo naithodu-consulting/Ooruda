@@ -188,7 +188,7 @@ export function ImportOtherChargesDialog(props: Props) {
       <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5 text-blue-500" />
+            <FileSpreadsheet className="text-info h-5 w-5" />
             Import Other Charges
           </DialogTitle>
           <DialogDescription>
@@ -232,7 +232,7 @@ export function ImportOtherChargesDialog(props: Props) {
               <button
                 type="button"
                 onClick={downloadTemplate}
-                className="text-sm font-semibold text-blue-600 hover:underline"
+                className="text-info text-sm font-semibold hover:underline"
               >
                 Download Template
               </button>
@@ -274,12 +274,12 @@ export function ImportOtherChargesDialog(props: Props) {
                   Review Import Rows ({rows.length})
                 </span>
                 {hasErrors ? (
-                  <span className="flex items-center gap-1 font-semibold text-red-600">
+                  <span className="text-destructive flex items-center gap-1 font-semibold">
                     <AlertCircle className="h-3.5 w-3.5" /> Resolve errors
                     before importing
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 font-semibold text-green-600">
+                  <span className="text-success flex items-center gap-1 font-semibold">
                     <CheckCircle2 className="h-3.5 w-3.5" /> All rows are valid!
                   </span>
                 )}
@@ -316,12 +316,12 @@ export function ImportOtherChargesDialog(props: Props) {
                         </TableCell>
                         <TableCell>
                           {row._error ? (
-                            <span className="flex items-center gap-1 text-sm font-medium text-red-600">
+                            <span className="text-destructive flex items-center gap-1 text-sm font-medium">
                               <AlertCircle className="h-3 w-3 shrink-0" />{' '}
                               {row._error}
                             </span>
                           ) : (
-                            <span className="flex items-center gap-1 text-sm font-medium text-green-600">
+                            <span className="text-success flex items-center gap-1 text-sm font-medium">
                               <CheckCircle2 className="h-3 w-3 shrink-0" />{' '}
                               Ready
                             </span>

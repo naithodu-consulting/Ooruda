@@ -88,7 +88,7 @@ export function AmcDetailClient({
   }
 
   function formatDate(d: string | null) {
-    if (!d) return '—';
+    if (!d) return '-';
     // ISO timestamps already have a time component; date-only strings need one appended
     // to avoid UTC midnight shifting the date in IST
     const date = d.includes('T') ? new Date(d) : new Date(d + 'T00:00:00');
@@ -223,7 +223,9 @@ export function AmcDetailClient({
                 href={contractData['contract_document_url'] as string}
                 target={'_blank'}
                 rel={'noreferrer'}
-                className={'text-primary text-sm underline underline-offset-4'}
+                className={
+                  'text-brand-ink text-sm underline underline-offset-4'
+                }
               >
                 View Contract Document
               </a>

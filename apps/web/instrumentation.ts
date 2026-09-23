@@ -12,14 +12,14 @@ export const onRequestError: Instrumentation.onRequestError = async (
   request,
   context,
 ) => {
-  // Forward to monitoring provider (Sentry etc.) — no-op when unconfigured.
+  // Forward to monitoring provider (Sentry etc.) - no-op when unconfigured.
   const { onRequestError: handler } =
     await import('@kit/monitoring/instrumentation');
   void handler(error, request, context);
 
   // Also persist to audit_logs so unhandled server errors appear in the
   // Activity Log without requiring an external monitoring subscription.
-  // Runs best-effort — never throws.
+  // Runs best-effort - never throws.
   try {
     if (process.env.NEXT_RUNTIME === 'nodejs') {
       const { logAuditEvent } = await import('~/lib/audit-log');

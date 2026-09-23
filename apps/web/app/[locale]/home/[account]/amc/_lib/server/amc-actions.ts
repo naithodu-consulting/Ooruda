@@ -73,7 +73,7 @@ export const renewAmcContractAction = authActionClient
       action: 'amc.contract.renewed',
       entityType: 'amc_contract',
       entityId: input.id,
-      summary: `AMC contract renewed — new expiry: ${input.newEndDate}`,
+      summary: `AMC contract renewed - new expiry: ${input.newEndDate}`,
     });
   });
 

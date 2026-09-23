@@ -146,7 +146,7 @@ export function PageTitle(props: React.PropsWithChildren) {
   return (
     <h1
       className={
-        'font-heading text-base leading-none font-bold tracking-tight dark:text-white'
+        'font-heading text-xl leading-tight font-semibold tracking-tight'
       }
     >
       {props.children}

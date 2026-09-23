@@ -11,7 +11,7 @@ type DetailResult = { success: boolean; error?: string; detail?: BillDetail };
  * a bill row. Payment history lives in the Payments module, not here.
  *
  * Uses the authenticated client so RLS scopes the read to associations the
- * caller is a member of — an id belonging to another association returns no
+ * caller is a member of - an id belonging to another association returns no
  * rows rather than leaking data.
  */
 export async function fetchBillDetailAction(

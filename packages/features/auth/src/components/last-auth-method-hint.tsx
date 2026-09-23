@@ -56,7 +56,7 @@ function LastAuthMethodHintImpl({ className }: LastAuthMethodHintProps) {
   return (
     <div
       data-test="last-auth-method-hint"
-      className={`text-muted-foreground/80 flex items-center justify-center gap-2 text-xs ${className || ''}`}
+      className={`text-muted-foreground flex items-center justify-center gap-2 text-xs ${className || ''}`}
     >
       <Lightbulb className="h-3 w-3" />
 

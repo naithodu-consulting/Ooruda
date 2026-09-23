@@ -70,12 +70,12 @@ export function AmcDashboard({ accountSlug, stats }: Props) {
         <StatCard
           label={'Expiring Soon'}
           value={String(stats.dueSoon)}
-          highlight={'text-blue-600 dark:text-blue-400'}
+          highlight={'text-info'}
         />
         <StatCard
           label={'Urgent / Critical'}
           value={String(stats.urgent + stats.critical)}
-          highlight={'text-amber-600 dark:text-amber-400'}
+          highlight={'text-warning'}
         />
         <StatCard
           label={'Total Annual Cost'}
@@ -88,9 +88,7 @@ export function AmcDashboard({ accountSlug, stats }: Props) {
         {/* Needs Attention */}
         <Card>
           <CardHeader className={'pb-2'}>
-            <CardTitle className={'text-sm font-medium'}>
-              Needs Attention
-            </CardTitle>
+            <CardTitle>Needs Attention</CardTitle>
           </CardHeader>
           <CardContent>
             {stats.needsAttention.length === 0 ? (
@@ -111,7 +109,7 @@ export function AmcDashboard({ accountSlug, stats }: Props) {
                       <div className={'flex min-w-0 flex-col'}>
                         <Link
                           href={`/home/${accountSlug}/amc/${c.id}`}
-                          className={'hover:text-primary text-sm font-medium'}
+                          className={'hover:text-brand-ink text-sm font-medium'}
                         >
                           {c.name}
                         </Link>
@@ -140,9 +138,7 @@ export function AmcDashboard({ accountSlug, stats }: Props) {
         {/* Category spend donut */}
         <Card>
           <CardHeader className={'pb-2'}>
-            <CardTitle className={'text-sm font-medium'}>
-              Contract Value by Category
-            </CardTitle>
+            <CardTitle>Contract Value by Category</CardTitle>
           </CardHeader>
           <CardContent>
             {categoryData.length === 0 ? (
@@ -189,8 +185,8 @@ export function AmcDashboard({ accountSlug, stats }: Props) {
         >
           <span className={'text-sm font-medium'}>
             {stats.expired} expired{' '}
-            {stats.expired === 1 ? 'contract' : 'contracts'} — renew or
-            terminate to keep records clean.
+            {stats.expired === 1 ? 'contract' : 'contracts'}. Renew or terminate
+            to keep records clean.
           </span>
           <Button
             variant={'outline'}

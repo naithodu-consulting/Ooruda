@@ -4,7 +4,7 @@ import { MobileSiteNavigation } from './mobile-site-navigation';
 import { SiteNavigationItem } from './site-navigation-item';
 
 /**
- * Ooruda has no public marketing site — there is nothing to navigate to from
+ * Ooruda has no public marketing site - there is nothing to navigate to from
  * the header. The only public pages are the legal documents and the contact
  * form, which the footer covers. Sign-in stays available on mobile, where the
  * header's own sign-in button is hidden.

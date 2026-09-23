@@ -1,18 +1,18 @@
-# @kit/supabase — Database & Authentication
+# @kit/supabase - Database & Authentication
 
 ## Non-Negotiables
 
 1. 3 clients: `getSupabaseServerClient()` (server, RLS enforced), `useSupabase()` (client hook, RLS enforced), `getSupabaseServerAdminClient()` (bypasses RLS, use rarely and only if needed)
 2. NEVER use admin client without manually validating authorization first
-3. NEVER modify `database.types.ts` manually — regenerate with `pnpm supabase:web:typegen`
-4. NEVER add manual auth checks when using standard client — trust RLS
+3. NEVER modify `database.types.ts` manually - regenerate with `pnpm supabase:web:typegen`
+4. NEVER add manual auth checks when using standard client - trust RLS
 5. ALWAYS add indexes on foreign keys
 6. ALWAYS include `account_id` in storage paths
 7. Use `Tables<'table_name'>` from `@kit/supabase/database` for type references, don't create new types
 
 ## Skills
 
-- `/postgres-expert` — Schemas, RLS, migrations, query optimization
+- `/postgres-expert` - Schemas, RLS, migrations, query optimization
 
 ## SQL Helper Functions
 
@@ -37,4 +37,4 @@ public.is_super_admin()
 
 ## Exemplar
 
-- `apps/web/app/[locale]/home/(user)/_lib/server/load-user-workspace.ts` — server client with RLS
+- `apps/web/app/[locale]/home/(user)/_lib/server/load-user-workspace.ts` - server client with RLS

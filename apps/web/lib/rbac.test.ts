@@ -100,7 +100,7 @@ describe('hasMinimumRole', () => {
     }
   });
 
-  it('is asymmetric across distinct tiers — privilege only flows downward', () => {
+  it('is asymmetric across distinct tiers - privilege only flows downward', () => {
     expect(hasMinimumRole('assoc_admin', 'tenant')).toBe(true);
     expect(hasMinimumRole('tenant', 'assoc_admin')).toBe(false);
   });

@@ -109,7 +109,7 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
     const validType = UNIT_TYPES.includes(type as (typeof UNIT_TYPES)[number]);
 
     let error: string | undefined;
-    if (!unit_no) error = 'Unit number is missing — add it and re-upload.';
+    if (!unit_no) error = 'Unit number is missing. Add it and re-upload.';
     else if (!validType)
       error = `"${type}" is not a valid unit type. Use one of: ${UNIT_TYPES.join(', ')}.`;
     else {
@@ -124,7 +124,7 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
         error =
           type === 'Common Area'
             ? 'Area must be 0 or a positive number for Common Area units.'
-            : 'Area must be greater than 0 — enter a valid value and re-upload.';
+            : 'Area must be greater than 0. Enter a valid value and re-upload.';
       }
     }
 
@@ -236,7 +236,7 @@ export function ImportUnitsDialog({
       <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
           <DialogHeader>
-            <DialogTitle>Bulk import — CSV / Excel</DialogTitle>
+            <DialogTitle>Bulk import - CSV / Excel</DialogTitle>
           </DialogHeader>
 
           <div className="flex flex-col gap-6">
@@ -257,10 +257,10 @@ export function ImportUnitsDialog({
                   className="flex w-full cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed border-orange-500/50 px-6 py-10 text-center transition-colors hover:bg-orange-50/50 dark:hover:bg-orange-950/20"
                 >
                   <CloudUpload
-                    className="h-10 w-10 text-orange-500"
+                    className="text-warning h-10 w-10"
                     strokeWidth={1.5}
                   />
-                  <p className="font-medium text-orange-600">
+                  <p className="text-warning font-medium">
                     {fileName
                       ? fileName
                       : 'Drop CSV or Excel here, or click to browse'}
@@ -335,15 +335,15 @@ export function ImportUnitsDialog({
                           <TableCell className="text-muted-foreground text-xs">
                             {row._row}
                           </TableCell>
-                          <TableCell>{row.unit_no || '—'}</TableCell>
-                          <TableCell>{row.type || '—'}</TableCell>
+                          <TableCell>{row.unit_no || '-'}</TableCell>
+                          <TableCell>{row.type || '-'}</TableCell>
                           <TableCell>
                             {row.floor === null || row.floor === ''
-                              ? '—'
+                              ? '-'
                               : row.floor}
                           </TableCell>
-                          <TableCell>{row.area_sqft || '—'}</TableCell>
-                          <TableCell>{row.door_no ?? '—'}</TableCell>
+                          <TableCell>{row.area_sqft || '-'}</TableCell>
+                          <TableCell>{row.door_no ?? '-'}</TableCell>
                           <TableCell>
                             {row._error ? (
                               <span className="text-destructive flex items-start gap-1 text-xs break-words whitespace-normal">

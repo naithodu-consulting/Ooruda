@@ -95,7 +95,7 @@ export async function addCashLedgerEntryAction(
   }
 
   // A new advance deposit should immediately offset any outstanding bills of the
-  // same bill-type (oldest-first). Best-effort — a failure here must not undo the
+  // same bill-type (oldest-first). Best-effort - a failure here must not undo the
   // advance that was already recorded above.
   if (input.entry_type === 'advance_payment') {
     await uc(client).rpc('apply_available_advance', {
@@ -328,7 +328,7 @@ export async function recordDuePaymentAction(
   if (input.amount > outstanding + 0.01)
     return { success: false, error: 'Amount exceeds the outstanding due.' };
 
-  // Single RPC call — both cash_ledger_payments insert and cash_ledger credit
+  // Single RPC call - both cash_ledger_payments insert and cash_ledger credit
   // entry are written atomically; receipt number is generated inside the RPC.
   const { data: paymentId, error } = await uc(client).rpc(
     'record_due_payment',

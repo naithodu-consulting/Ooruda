@@ -34,7 +34,7 @@ export default async function NotificationsPage({ params }: Props) {
 
   const client = getSupabaseServerClient();
 
-  // My personal in-app alerts — all roles
+  // My personal in-app alerts - all roles
   const myAlertsQuery = client
     .from('notifications')
     .select('id, type, body, link, dismissed, created_at')
@@ -44,7 +44,7 @@ export default async function NotificationsPage({ params }: Props) {
     .order('created_at', { ascending: false })
     .limit(50);
 
-  // Outbound sent log — admins only
+  // Outbound sent log - admins only
   const logsQuery = isAdmin
     ? client
         .from('associations')
@@ -91,7 +91,7 @@ export default async function NotificationsPage({ params }: Props) {
       type: l.type,
       recipient: l.recipient_user_id
         ? (nameById.get(l.recipient_user_id) ?? 'Unknown')
-        : '—',
+        : '-',
       channel: l.channel,
       provider_key: l.provider_key,
       status: l.status,
@@ -125,7 +125,7 @@ export default async function NotificationsPage({ params }: Props) {
             <TabsTrigger value="alerts" data-test="tab-my-alerts">
               My Alerts
               {myAlerts.length > 0 && (
-                <span className="bg-primary text-primary-foreground ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold">
+                <span className="bg-primary text-primary-foreground ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs font-bold">
                   {myAlerts.length}
                 </span>
               )}

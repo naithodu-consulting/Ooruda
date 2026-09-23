@@ -45,9 +45,9 @@ interface RateLimitBucket {
 const rateLimitStore = new Map<string, RateLimitBucket>();
 
 const RATE_LIMIT_RULES = [
-  // Auth routes (sign-in, OTP, password reset) — 5 per minute
+  // Auth routes (sign-in, OTP, password reset) - 5 per minute
   { pathPrefix: '/auth', limit: 5, windowMs: 60_000, group: 'auth' },
-  // API routes — 30 per 10 seconds
+  // API routes - 30 per 10 seconds
   { pathPrefix: '/api', limit: 30, windowMs: 10_000, group: 'api' },
 ];
 
@@ -119,7 +119,7 @@ export default async function proxy(request: NextRequest) {
     });
   }
 
-  // ── Skip non-page routes (API) — no i18n/session middleware needed ──────────
+  // ── Skip non-page routes (API) - no i18n/session middleware needed ──────────
   if (request.nextUrl.pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
@@ -224,7 +224,7 @@ async function getPatterns() {
         const isVerifyMfa = normalizedPathname === pathsConfig.auth.verifyMfa;
 
         // the complete-profile page lives under /auth but is for already
-        // logged-in users adding a mandatory email — don't bounce them home.
+        // logged-in users adding a mandatory email - don't bounce them home.
         const isCompleteProfile =
           normalizedPathname === pathsConfig.auth.completeProfile;
 

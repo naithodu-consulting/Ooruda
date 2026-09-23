@@ -4,7 +4,7 @@ import type { StatementEntry } from '../statement-types';
 type AnyClient = any;
 
 interface BuildStatementParams {
-  /** Supabase client. RLS-enforced client is expected — access is scoped by policy. */
+  /** Supabase client. RLS-enforced client is expected - access is scoped by policy. */
   client: AnyClient;
   associationId: string;
   /** Units to build the statement for. Callers scope this (resident: own units; association: a picked unit). */
@@ -14,7 +14,7 @@ interface BuildStatementParams {
   /**
    * How the running balance accumulates.
    *
-   * 'per_unit' (default) keeps an independent balance per unit — correct when
+   * 'per_unit' (default) keeps an independent balance per unit - correct when
    * each unit's statement is read on its own. 'combined' accumulates a single
    * association-wide balance across every entry in date order, which is what an
    * "All Units" overview needs; a per-unit balance interleaved across units
@@ -29,7 +29,7 @@ interface BuildStatementParams {
  * entries newest-first with a per-unit running balance already computed.
  *
  * Extracted from the resident statement page so the association-side Reports
- * tab can reuse the identical accounting rules — particularly advance netting
+ * tab can reuse the identical accounting rules - particularly advance netting
  * and reversal handling, which are easy to get subtly wrong.
  */
 export async function buildStatementEntries({
@@ -42,7 +42,7 @@ export async function buildStatementEntries({
   if (unitIds.length === 0) return [];
 
   // Bills → debit entries (due raised). Payments nested inside → credit entries.
-  // Voided bills are excluded — they carry no outstanding obligation.
+  // Voided bills are excluded - they carry no outstanding obligation.
   const [{ data: billRows }, { data: advanceRows }] = await Promise.all([
     client
       .from('bills')
@@ -53,9 +53,9 @@ export async function buildStatementEntries({
       .eq('association_id', associationId)
       .neq('status', 'Void')
       .order('generated_at', { ascending: true }),
-    // Cash ledger — advances and due payments (advance_payment deposits,
+    // Cash ledger - advances and due payments (advance_payment deposits,
     // advance_applied drawdowns, due_payment cash credits, legacy due entries).
-    // cash_ledger is a DB view not in generated types — cast required.
+    // cash_ledger is a DB view not in generated types - cast required.
     (client as AnyClient)
       .from('cash_ledger')
       .select(
@@ -73,7 +73,7 @@ export async function buildStatementEntries({
       .order('created_at', { ascending: true }),
   ]);
 
-  // Sum of advance_applied amounts per bill — used to compute the remaining
+  // Sum of advance_applied amounts per bill - used to compute the remaining
   // bill debit after advance has been partially or fully applied.
   const advanceAppliedByBillId = new Map<string, number>();
   for (const e of (advanceRows ?? []) as {
@@ -111,7 +111,7 @@ export async function buildStatementEntries({
 
     // Debit: due raised when bill was generated.
     // If advance was applied (fully or partially), the advance_applied cash_ledger
-    // entries already represent that portion as debits — including the full bill
+    // entries already represent that portion as debits - including the full bill
     // amount here would double-count. Emit a debit only for the remaining amount
     // not covered by advance (0 if fully advance-paid, full amount if no advance).
     const totalAdvanceApplied = advanceAppliedByBillId.get(bill.id) ?? 0;

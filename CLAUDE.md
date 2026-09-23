@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Ooruda** is a PropTech SaaS for commercial property associations. It manages units, tenancies, electricity sub-metering, bill generation, payments, receipts, a per-unit cash ledger, and a Razorpay-integrated payment flow. One Makerkit **team account = one association** (1:1 mapping).
 
-**Roles:** `assoc_admin` (full access), `billing_operator` (billing/electricity only), `prop_owner` (view own bills/pay), `tenant` (view own bills/pay). Platform **super-admin** stored in JWT `app_metadata.role`. There is **no `owner` role** — it was renamed to `assoc_admin`.
+**Roles:** `assoc_admin` (full access), `billing_operator` (billing/electricity only), `prop_owner` (view own bills/pay), `tenant` (view own bills/pay). Platform **super-admin** stored in JWT `app_metadata.role`. There is **no `owner` role** - it was renamed to `assoc_admin`.
 
 ## Tech Stack
 
@@ -50,7 +50,7 @@ pnpm supabase:web:reset           # Reset local database
 pnpm supabase:web:typegen         # Regenerate TypeScript types after migrations
 pnpm typecheck                    # Type-check all 23 packages
 pnpm lint:fix                     # Fix linting
-pnpm format:fix                   # Format code (oxfmt — large whitespace-only diffs are normal)
+pnpm format:fix                   # Format code (oxfmt - large whitespace-only diffs are normal)
 ```
 
 **If `supabase:web:start` fails:** run `colima start` first (Docker runtime is Colima, not Docker Desktop).
@@ -59,7 +59,7 @@ pnpm format:fix                   # Format code (oxfmt — large whitespace-only
 
 ## Next.js
 
-Always find and read the relevant doc in `apps/web/node_modules/next/dist/docs/` before Next.js work — training data is outdated.
+Always find and read the relevant doc in `apps/web/node_modules/next/dist/docs/` before Next.js work - training data is outdated.
 
 ```typescript
 // Next.js 16: await params directly
@@ -78,32 +78,32 @@ async function Page({ params }: Props) {
 | UI Components  | `@kit/ui/{component}`                                        |
 | Translations   | `Trans` from `@kit/ui/trans`                                 |
 | Class merging  | `cn` from `@kit/ui/utils`                                    |
-| Logging        | `getLogger` from `@kit/shared/logger` — never `console.log` |
+| Logging        | `getLogger` from `@kit/shared/logger` - never `console.log` |
 
 **Server actions:** mutations only, never data fetching. Always validate with Zod `.inputSchema()`. Always `revalidatePath` after mutations. Business logic goes in service files, not in the action itself.
 
 **Data fetching:**
-- Server Components (default): `getSupabaseServerClient()` — RLS enforced
+- Server Components (default): `getSupabaseServerClient()` - RLS enforced
 - Client Components: `useSupabase()` hook with React Query
-- Admin client (`getSupabaseServerAdminClient`): bypasses RLS — requires manual auth check, use sparingly
+- Admin client (`getSupabaseServerAdminClient`): bypasses RLS - requires manual auth check, use sparingly
 
 ## Authorization
 
-RLS enforces access control. No manual auth checks needed with the standard client. RLS policies must use the `association_role(association_id)` helper function — never direct `memberships` joins.
+RLS enforces access control. No manual auth checks needed with the standard client. RLS policies must use the `association_role(association_id)` helper function - never direct `memberships` joins.
 
 `isSuperAdmin()` check + `AdminGuard` wrapper required for all admin operations.
 
 ## UI Conventions
 
-- **Semantic Tailwind tokens only** — `bg-background`, `text-muted-foreground`, `bg-card`, etc. Never hardcoded colors (`bg-white`, `text-gray-500`, hex values, arbitrary `slate-*`/`emerald-*`).
-- **Base UI, not Radix UI** — use `render` prop for element composition, never `asChild`.
+- **Semantic Tailwind tokens only** - `bg-background`, `text-muted-foreground`, `bg-card`, etc. Never hardcoded colors (`bg-white`, `text-gray-500`, hex values, arbitrary `slate-*`/`emerald-*`).
+- **Base UI, not Radix UI** - use `render` prop for element composition, never `asChild`.
 - All `@kit/ui` imports use the short form: `@kit/ui/<name>` (no deep paths).
-- Do not edit files in `packages/ui/src/shadcn/` — those mirror upstream shadcn and may be overwritten. Extend in `src/makerkit/` instead.
+- Do not edit files in `packages/ui/src/shadcn/` - those mirror upstream shadcn and may be overwritten. Extend in `src/makerkit/` instead.
 - Add `data-test` attributes on all interactive elements.
 - Every form field needs `FormMessage` for error display.
 - Always use `useWatch` hook, never `watch()` from react-hook-form.
 - Zod: `import * as z from 'zod'`. Place schemas in separate files for server-action reuse.
-- **Every UI change must be responsive** — mobile (360px+), tablet, desktop. Use Tailwind responsive prefixes.
+- **Every UI change must be responsive** - mobile (360px+), tablet, desktop. Use Tailwind responsive prefixes.
 
 **Background fix (critical):** The global canvas token `--background` is warm cream `#fffdf5`. Any card container needs explicit `bg-card` (`#ffffff`) to appear white. Never rely on the absence of a background.
 
@@ -130,7 +130,7 @@ RLS enforces access control. No manual auth checks needed with the standard clie
 Never edit `database.types.ts` manually. Regenerate with `pnpm supabase:web:typegen` after migrations. Use `Tables<'table_name'>` from `@kit/supabase/database` for type references.
 
 ### Performance pattern
-Server component fetches initial data → passes to client component which seeds `useState` + skips first `useEffect` via `useRef(true)` guard. Use `Promise.all` for parallel queries — serial fetches are a common source of latency.
+Server component fetches initial data → passes to client component which seeds `useState` + skips first `useEffect` via `useRef(true)` guard. Use `Promise.all` for parallel queries - serial fetches are a common source of latency.
 
 ## Migration Workflow
 
@@ -158,7 +158,7 @@ Out-of-order local migrations: `pnpm --filter web supabase migrations up --inclu
 
 | Environment    | Supabase Project Ref   | Vercel Project    | Branch    |
 | -------------- | ---------------------- | ----------------- | --------- |
-| Local          | Docker (Colima)        | —                 | any       |
+| Local          | Docker (Colima)        | -                 | any       |
 | Dev / Staging  | `bcdosjrbkkemsqowhigj` | `prop-tech-dev-tool` | `release` |
 | Production     | `vkxchopjqakvftcnxwie` | `ooruda`          | `main`    |
 

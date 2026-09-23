@@ -38,7 +38,7 @@ import { checkPhoneInvitationAction } from '../actions/check-invitation-action';
 import { AuthErrorAlert } from './auth-error-alert';
 
 // Per-channel throttling. Phone (primary) keeps its established limits; email
-// (secondary) is intentionally tighter. The two are tracked independently —
+// (secondary) is intentionally tighter. The two are tracked independently -
 // switching channels resets the counters, and the server-side SMS vs email
 // rate-limit buckets are separate too.
 const CHANNEL_CONFIG = {
@@ -135,7 +135,7 @@ export function PhoneOtpSignInContainer() {
       return true;
     }
 
-    // email channel — secondary login, never creates an account
+    // email channel - secondary login, never creates an account
     const checkResult = await checkEmailLoginAction(identifier);
     if (!checkResult.allowed) {
       setLocalError('email_not_registered');
@@ -272,7 +272,7 @@ export function PhoneOtpSignInContainer() {
 
           <Button
             type="submit"
-            className="w-full border border-[#FCD469] !bg-[#FCD469] font-semibold !text-[#1a1a1a] shadow-none hover:!bg-[#f0c740]"
+            className="!text-primary-foreground w-full border border-[#FCD469] !bg-[#FCD469] font-semibold shadow-none hover:!bg-[#f0c740]"
             disabled={signInMutation.isPending}
             data-test="phone-send-otp-button"
           >
@@ -346,7 +346,7 @@ export function PhoneOtpSignInContainer() {
 
           <Button
             type="submit"
-            className="w-full border border-[#FCD469] !bg-[#FCD469] font-semibold !text-[#1a1a1a] shadow-none hover:!bg-[#f0c740]"
+            className="!text-primary-foreground w-full border border-[#FCD469] !bg-[#FCD469] font-semibold shadow-none hover:!bg-[#f0c740]"
             disabled={signInMutation.isPending}
             data-test="email-send-otp-button"
           >
@@ -375,7 +375,7 @@ export function PhoneOtpSignInContainer() {
   return (
     <Form {...otpForm}>
       <div className="flex w-full flex-col items-center gap-y-8">
-        <p className="text-center text-sm font-medium text-[#6f6a5a]">
+        <p className="text-muted-foreground text-center text-sm font-medium">
           <Trans
             i18nKey={
               channel === 'phone'
@@ -391,7 +391,7 @@ export function PhoneOtpSignInContainer() {
         </p>
 
         {isMockMode && (
-          <p className="w-full animate-pulse rounded border border-[#FCD469]/40 bg-[#FCD469]/15 px-3 py-2 text-center text-xs font-medium text-[#7a6320]">
+          <p className="text-brand-ink w-full animate-pulse rounded border border-[#FCD469]/40 bg-[#FCD469]/15 px-3 py-2 text-center text-xs font-medium">
             <Trans i18nKey="auth.phoneMockHint" />
           </p>
         )}
@@ -428,35 +428,35 @@ export function PhoneOtpSignInContainer() {
                       <InputOTPSlot
                         index={0}
                         data-slot="0"
-                        className="h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-[22px] font-black text-[#1a1a1a] focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12"
+                        className="text-foreground h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-2xl font-semibold focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12"
                       />
                       <InputOTPSlot
                         index={1}
                         data-slot="1"
-                        className="h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-[22px] font-black text-[#1a1a1a] focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12"
+                        className="text-foreground h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-2xl font-semibold focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12"
                       />
                       <InputOTPSlot
                         index={2}
                         data-slot="2"
-                        className="h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-[22px] font-black text-[#1a1a1a] focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12"
+                        className="text-foreground h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-2xl font-semibold focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12"
                       />
                     </InputOTPGroup>
-                    <InputOTPSeparator className="mx-1 font-bold text-[#cbbd8e]" />
+                    <InputOTPSeparator className="text-muted-foreground/50 mx-1 font-bold" />
                     <InputOTPGroup className="gap-1.5 md:gap-2">
                       <InputOTPSlot
                         index={3}
                         data-slot="3"
-                        className="h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-[22px] font-black text-[#1a1a1a] focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12"
+                        className="text-foreground h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-2xl font-semibold focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12"
                       />
                       <InputOTPSlot
                         index={4}
                         data-slot="4"
-                        className="h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-[22px] font-black text-[#1a1a1a] focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12"
+                        className="text-foreground h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-2xl font-semibold focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12"
                       />
                       <InputOTPSlot
                         index={5}
                         data-slot="5"
-                        className="h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-[22px] font-black text-[#1a1a1a] focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12"
+                        className="text-foreground h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-2xl font-semibold focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12"
                       />
                     </InputOTPGroup>
                   </InputOTP>
@@ -468,7 +468,7 @@ export function PhoneOtpSignInContainer() {
 
           <Button
             type="submit"
-            className="mt-2 flex h-12 w-full items-center justify-center gap-2 border border-[#FCD469] !bg-[#FCD469] text-[13px] font-extrabold !text-[#1a1a1a] shadow-none transition-all hover:!bg-[#f0c740] active:scale-[0.98]"
+            className="!text-primary-foreground mt-2 flex h-12 w-full items-center justify-center gap-2 border border-[#FCD469] !bg-[#FCD469] text-sm font-semibold shadow-none transition-all hover:!bg-[#f0c740] active:scale-[0.98]"
             disabled={verifyMutation.isPending || tooManyAttempts}
             data-test="otp-verify-button"
           >
@@ -490,7 +490,7 @@ export function PhoneOtpSignInContainer() {
               type="button"
               variant="ghost"
               size="sm"
-              className="flex h-9 items-center gap-1.5 text-[#6f6a5a] transition-all hover:bg-[#FBF7E8] hover:text-[#1a1a1a]"
+              className="text-muted-foreground hover:text-foreground flex h-9 items-center gap-1.5 transition-all hover:bg-[#FBF7E8]"
               onClick={() => {
                 setStep('identifier');
                 setSentTo('');
@@ -520,7 +520,7 @@ export function PhoneOtpSignInContainer() {
               disabled={resendSeconds > 0 || signInMutation.isPending}
               onClick={handleResend}
               data-test="resend-otp-button"
-              className="h-9 text-[#6f6a5a] transition-all hover:bg-[#FBF7E8] hover:text-[#1a1a1a] disabled:text-[#6f6a5a]/40 disabled:hover:bg-transparent"
+              className="text-muted-foreground hover:text-foreground disabled:text-muted-foreground/40 h-9 transition-all hover:bg-[#FBF7E8] disabled:hover:bg-transparent"
             >
               {resendSeconds > 0 ? (
                 <Trans
@@ -555,7 +555,7 @@ function ChannelToggle({
         size="sm"
         onClick={() => onSwitch(target)}
         data-test={`use-${target}-instead`}
-        className="h-9 gap-1.5 text-[#6f6a5a] transition-all hover:bg-[#FBF7E8] hover:text-[#1a1a1a]"
+        className="text-muted-foreground hover:text-foreground h-9 gap-1.5 transition-all hover:bg-[#FBF7E8]"
       >
         {target === 'email' ? (
           <Mail className="h-[14px] w-[14px]" strokeWidth={2.5} />

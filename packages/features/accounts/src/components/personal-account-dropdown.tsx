@@ -169,9 +169,7 @@ export function PersonalAccountDropdown({
           <DropdownMenuItem
             render={
               <Link
-                className={
-                  'flex items-center gap-x-2 text-yellow-700 dark:text-yellow-500'
-                }
+                className={'text-warning flex items-center gap-x-2'}
                 href={'/admin'}
               />
             }

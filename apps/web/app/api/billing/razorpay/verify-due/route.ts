@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   const client = getSupabaseServerClient();
   const admin = getSupabaseServerAdminClient();
 
-  // Authenticate first — no elevated (admin/RLS-bypassing) work until the
+  // Authenticate first - no elevated (admin/RLS-bypassing) work until the
   // caller is a confirmed session. Association lookup uses the RLS client.
   const [
     {
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Verify HMAC-SHA256 signature — proves the request corresponds to an order
+  // Verify HMAC-SHA256 signature - proves the request corresponds to an order
   // we actually created; forged requests are rejected here.
   const expectedSignature = crypto
     .createHmac('sha256', gateway.key_secret)
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
 
   // Idempotency pre-check: if this Razorpay payment was already recorded (e.g.
   // the client's 6s fallback fired a retry), return gracefully BEFORE the amount
-  // guard — by now the balance already reflects this payment and would trip it.
+  // guard - by now the balance already reflects this payment and would trip it.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existingPayment } = await (admin as any)
     .from('cash_ledger_payments')
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ paymentId: null, alreadyRecorded: true });
   }
 
-  // Fetch the actual captured amount from Razorpay — do NOT trust the
+  // Fetch the actual captured amount from Razorpay - do NOT trust the
   // client-supplied amount. The HMAC only covers orderId|paymentId, so a
   // caller could submit a low-value payment signature with an inflated amount
   // and record more credit than they actually paid.

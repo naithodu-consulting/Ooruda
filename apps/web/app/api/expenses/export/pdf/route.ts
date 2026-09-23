@@ -40,7 +40,7 @@ export const POST = enhanceRouteHandler(
     const client = getSupabaseServerClient();
     const admin = getSupabaseServerAdminClient();
 
-    // Build query — RLS enforces association scoping automatically.
+    // Build query - RLS enforces association scoping automatically.
     let query = client
       .from('expenses')
       .select(

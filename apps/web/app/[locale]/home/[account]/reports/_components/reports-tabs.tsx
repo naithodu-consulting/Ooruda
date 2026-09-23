@@ -230,7 +230,7 @@ const TAB_FILTERS: Record<
   payment_modes: [],
   advances: [],
   gst_summary: ['bill_types'],
-  // Ledger statement scopes itself with its own single-unit picker — the shared
+  // Ledger statement scopes itself with its own single-unit picker - the shared
   // multi-select unit filter would conflict with a per-unit statement.
   ledger_statement: [],
   occupancy: [],
@@ -370,10 +370,10 @@ export function ReportsTabs({
               data-test={`reports-tab-${t.value}`}
               onClick={() => onTabChange(t.value as TabKey)}
               className={cn(
-                '-mb-px border-b-2 px-3 pt-1 pb-2 text-sm whitespace-nowrap transition-colors',
+                '-mb-px border-b-2 px-3 pt-1 pb-2 text-sm font-medium whitespace-nowrap transition-colors',
                 isActive
-                  ? 'border-foreground text-foreground font-semibold'
-                  : 'text-muted-foreground hover:border-border hover:text-foreground border-transparent font-medium',
+                  ? 'border-foreground text-foreground'
+                  : 'text-muted-foreground hover:border-border hover:text-foreground border-transparent',
               )}
             >
               {t.label}
@@ -387,7 +387,7 @@ export function ReportsTabs({
         <div className="bg-muted/40 mb-4 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
           {tabFilters.includes('units') && units.length > 0 && (
             <>
-              <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+              <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                 Units
               </span>
               <UnitFilter
@@ -400,7 +400,7 @@ export function ReportsTabs({
 
           {tabFilters.includes('bill_types') && (
             <>
-              <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+              <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                 Type
               </span>
               <BillTypeFilter
@@ -412,7 +412,7 @@ export function ReportsTabs({
 
           {tabFilters.includes('status') && (
             <>
-              <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+              <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                 Status
               </span>
               <StatusFilter
@@ -424,7 +424,7 @@ export function ReportsTabs({
 
           {tabFilters.includes('mode') && (
             <>
-              <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+              <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                 Mode
               </span>
               <ModeFilter
@@ -480,7 +480,7 @@ export function ReportsTabs({
       )}
 
       {/* Panel region only. The tab bar, filter bar and export button above
-          stay mounted while data loads — swapping the whole component out was
+          stay mounted while data loads - swapping the whole component out was
           what made every tab change flash and jump. */}
       {loading ? (
         <div className="min-h-[420px]">

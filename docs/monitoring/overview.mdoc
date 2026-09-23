@@ -134,7 +134,7 @@ registerClientMonitoringInstrumentation();
 
 ### Avoiding duplicate reports
 
-A server error returned to the client carries a `digest` property. Because `onRequestError` already captured it, your `error.tsx` boundary should skip the client report when `digest` is present — pass `null` to `useCaptureException`:
+A server error returned to the client carries a `digest` property. Because `onRequestError` already captured it, your `error.tsx` boundary should skip the client report when `digest` is present - pass `null` to `useCaptureException`:
 
 ```tsx title="apps/web/app/[locale]/error.tsx"
 useCaptureException(error.digest ? null : error);
@@ -241,13 +241,13 @@ Makerkit automatically identifies users when they sign in if you've configured t
 
 ## Adding a Custom Monitoring Provider
 
-Adding a provider involves five registration points — see the [Custom Provider guide](/docs/next-supabase-turbo/monitoring/custom-monitoring-provider) for the full walkthrough. The short version:
+Adding a provider involves five registration points - see the [Custom Provider guide](/docs/next-supabase-turbo/monitoring/custom-monitoring-provider) for the full walkthrough. The short version:
 
 1. Add the provider name to the `MONITORING_PROVIDERS` enum in `get-monitoring-provider.ts`.
 2. Register a server `MonitoringService` in `services/get-server-monitoring-service.ts`.
 3. Register a React `MonitoringProvider` component in `components/provider.tsx`.
-4. Register a server instrumentation entry in `instrumentation.ts` — both `register` (to init the SDK) and `onRequestError` (to forward Next.js request errors) are required.
-5. Register a client instrumentation entry in `instrumentation-client.ts` — `init` and `captureException`.
+4. Register a server instrumentation entry in `instrumentation.ts` - both `register` (to init the SDK) and `onRequestError` (to forward Next.js request errors) are required.
+5. Register a client instrumentation entry in `instrumentation-client.ts` - `init` and `captureException`.
 
 {% alert type="warning" title="onRequestError is not optional" %}
 The client error boundary skips re-reporting any error that carries a `digest` because the server already captured it via `onRequestError`. A custom provider that omits this hook will silently drop every server error.

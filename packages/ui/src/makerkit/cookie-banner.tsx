@@ -39,7 +39,7 @@ export function CookieBanner() {
             </Heading>
           </div>
 
-          <div className={'text-gray-500 dark:text-gray-400'}>
+          <div className={'text-muted-foreground'}>
             <Trans i18nKey={'cookieBanner.description'} />
           </div>
 

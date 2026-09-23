@@ -124,7 +124,7 @@ export function ReportsClientPage({
     (searchParams.get('tab') as TabKey | null) ?? 'collection',
   );
 
-  // Filter state — all dimensions
+  // Filter state - all dimensions
   const [filters, setFilters] = useState<ReportsFilters>({
     unitIds: parseIds(searchParams.get('units')),
     billTypes: parseIds(searchParams.get('types')),
@@ -134,7 +134,7 @@ export function ReportsClientPage({
     paymentMode: searchParams.get('mode') ?? DEFAULT_FILTERS.paymentMode,
   });
 
-  // Per-tab data cache — null means "not yet fetched for current filter+date"
+  // Per-tab data cache - null means "not yet fetched for current filter+date"
   const [tabData, setTabData] = useState<TabData>({
     collection: null,
     outstanding: null,
@@ -179,7 +179,7 @@ export function ReportsClientPage({
    * Drop cached tab data.
    *
    * `scope: 'date'` keeps the tabs whose queries never reference the date range
-   * (occupancy, directory, ledger statement) — re-fetching those on every preset
+   * (occupancy, directory, ledger statement) - re-fetching those on every preset
    * change was pure waste and made returning to them feel slow for no reason.
    */
   const invalidateAll = useCallback((scope: 'all' | 'date' = 'all') => {
@@ -252,7 +252,7 @@ export function ReportsClientPage({
               `(${unitFilter.join(',')})`,
             );
           if (typeFilter) {
-            // can't filter payments by bill_type directly — filter client-side after join
+            // can't filter payments by bill_type directly - filter client-side after join
           }
 
           const [collectionRes, paymentsRes] = await Promise.all([
@@ -286,8 +286,8 @@ export function ReportsClientPage({
               return {
                 id: p.id,
                 paid_at: p.paid_at,
-                unit_no: bill?.units?.unit_no ?? '—',
-                bill_no: bill?.bill_no ?? '—',
+                unit_no: bill?.units?.unit_no ?? '-',
+                bill_no: bill?.bill_no ?? '-',
                 bill_type: bill?.bill_type ?? 'maintenance',
                 amount: Number(p.amount),
                 mode: p.mode,
@@ -334,7 +334,7 @@ export function ReportsClientPage({
               period: b.period,
               bill_no: b.bill_no,
               bill_type: b.bill_type ?? 'maintenance',
-              unit_no: (b.units as { unit_no: string } | null)?.unit_no ?? '—',
+              unit_no: (b.units as { unit_no: string } | null)?.unit_no ?? '-',
               total_amount: Number(b.total_amount),
               paid_amount: Number(b.paid_amount),
               advance_applied: Number(b.advance_applied ?? 0),
@@ -402,8 +402,8 @@ export function ReportsClientPage({
               return {
                 id: p.id,
                 paid_at: p.paid_at,
-                unit_no: bill?.units?.unit_no ?? '—',
-                bill_no: bill?.bill_no ?? '—',
+                unit_no: bill?.units?.unit_no ?? '-',
+                bill_no: bill?.bill_no ?? '-',
                 bill_type: bill?.bill_type ?? 'maintenance',
                 amount: Number(p.amount),
                 mode: p.mode,
@@ -422,8 +422,8 @@ export function ReportsClientPage({
               return {
                 id: p.id,
                 paid_at: p.paid_at,
-                unit_no: unit?.unit_no ?? '—',
-                bill_no: '—',
+                unit_no: unit?.unit_no ?? '-',
+                bill_no: '-',
                 bill_type: p.bill_type ?? 'maintenance',
                 amount: Number(p.amount),
                 mode: p.mode,
@@ -461,7 +461,7 @@ export function ReportsClientPage({
             (r: any) => ({
               id: r.id,
               entry_date: r.entry_date,
-              unit_no: (r.units as { unit_no: string } | null)?.unit_no ?? '—',
+              unit_no: (r.units as { unit_no: string } | null)?.unit_no ?? '-',
               entry_type: r.entry_type,
               bill_type: r.bill_type,
               direction: r.direction,
@@ -693,7 +693,7 @@ export function ReportsClientPage({
           const rows: AdvanceRow[] = Array.from(allUnitIds)
             .map((uid) => ({
               unit_id: uid,
-              unit_no: unitNoMap.get(uid) ?? '—',
+              unit_no: unitNoMap.get(uid) ?? '-',
               balance: balanceMap.get(uid) ?? 0,
               last_deposit_date: lastDepositMap.get(uid) ?? null,
               last_applied_date: lastAppliedMap.get(uid) ?? null,
@@ -785,7 +785,7 @@ export function ReportsClientPage({
             setTabData((prev) => ({ ...prev, gst_summary: { rows: gstRows } }));
           }
         } else if (tab === 'ledger_statement') {
-          // No unit picked yet — nothing to fetch, and an empty result is the
+          // No unit picked yet - nothing to fetch, and an empty result is the
           // correct state (the tab renders a "select a unit" prompt).
           if (!ledgerStatementUnitId) {
             if (!ctrl.signal.aborted) {
@@ -931,7 +931,7 @@ export function ReportsClientPage({
   );
 
   // Fetch current tab whenever it becomes null (after invalidation) or on first load.
-  // Depends on the ACTIVE tab's slice, not the whole tabData object — the object
+  // Depends on the ACTIVE tab's slice, not the whole tabData object - the object
   // identity changes on every tab's write, which re-ran this effect needlessly.
   const activeTabData = tabData[activeTab as keyof TabData];
   useEffect(() => {
@@ -1004,7 +1004,7 @@ export function ReportsClientPage({
       const next = { ...filters, ...patch };
       setFilters(next);
 
-      // Compute URL update from the already-known next state — no side effects
+      // Compute URL update from the already-known next state - no side effects
       // inside the setState updater.
       const urlPatch: Record<string, string> = {};
       const urlRemove: string[] = [];
@@ -1025,7 +1025,7 @@ export function ReportsClientPage({
       const changedKeys = Object.keys(patch);
       setTabData((prev) => {
         const next = { ...prev };
-        // date-range-independent status filter only affects outstanding client-side — no refetch
+        // date-range-independent status filter only affects outstanding client-side - no refetch
         // unit/billType changes affect: collection, outstanding, payments, cash_ledger
         if (
           changedKeys.some((k) =>
@@ -1051,7 +1051,7 @@ export function ReportsClientPage({
         <p className="font-semibold">Could not load report data</p>
         <p className="text-muted-foreground text-sm">{error}</p>
         <button
-          className="text-primary hover:text-primary/80 mt-2 text-sm underline transition-colors"
+          className="text-brand-ink hover:text-foreground mt-2 text-sm underline transition-colors"
           onClick={() => {
             invalidateAll();
           }}

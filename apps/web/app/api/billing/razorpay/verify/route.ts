@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Parallel: membership + unit/tenancy scoping.
-  // The scope query uses the body-supplied paidByRole for routing — this is
+  // The scope query uses the body-supplied paidByRole for routing - this is
   // safe because we cross-check it against the verified membership role below.
   const [{ data: membership }, { data: scopeRows }] = await Promise.all([
     client
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  // Derive canonical label from verified membership — reject if body was tampered.
+  // Derive canonical label from verified membership - reject if body was tampered.
   // This prevents a prop_owner from sending paidByRole:'Tenant' to mislabel the payment.
   const canonicalPaidByRole = role === 'prop_owner' ? 'Owner' : 'Tenant';
   if (paidByRole !== canonicalPaidByRole) {
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Fetch bills scoped to the caller's units. Exclude voided bills — a
+  // Fetch bills scoped to the caller's units. Exclude voided bills - a
   // payment should never be recorded against a cancelled bill.
   const { data: bills } = await client
     .from('bills')
@@ -143,17 +143,17 @@ export async function POST(req: NextRequest) {
 
   if (!bills || bills.length === 0) {
     // Race window: bill was voided after the Razorpay order was created but
-    // before payment was completed. Log for admin visibility — Razorpay has
+    // before payment was completed. Log for admin visibility - Razorpay has
     // captured the money and a manual refund from the dashboard may be needed.
     const logger = await getLogger();
     logger.warn(
       { razorpayOrderId, razorpayPaymentId, billIds, associationId },
-      'Razorpay verify: bills not found or all voided after payment captured — manual refund may be required',
+      'Razorpay verify: bills not found or all voided after payment captured; manual refund may be required',
     );
     return NextResponse.json(
       {
         error:
-          'One or more bills have been cancelled. Please contact your association admin — your payment will be reviewed.',
+          'One or more bills have been cancelled. Please contact your association admin; your payment will be reviewed.',
       },
       { status: 422 },
     );
@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
   const paymentIds: string[] = [];
   for (const { data: paymentId, error } of results) {
     if (error) {
-      if (error.code === '23505') continue; // duplicate — skip
+      if (error.code === '23505') continue; // duplicate - skip
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     if (paymentId) paymentIds.push(paymentId as string);

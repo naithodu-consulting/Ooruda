@@ -104,7 +104,7 @@ export function ExpenseAnalytics({ associationId }: Props) {
         />
         <KpiCard
           label={'Top category'}
-          value={data.topCategoryThisMonth ?? '—'}
+          value={data.topCategoryThisMonth ?? '-'}
         />
       </div>
 
@@ -113,9 +113,7 @@ export function ExpenseAnalytics({ associationId }: Props) {
         {/* Category donut */}
         <Card>
           <CardHeader className={'pb-2'}>
-            <CardTitle className={'text-sm font-medium'}>
-              Spend by Category
-            </CardTitle>
+            <CardTitle>Spend by Category</CardTitle>
           </CardHeader>
           <CardContent>
             {data.categoryBreakdown.length === 0 ? (
@@ -153,9 +151,7 @@ export function ExpenseAnalytics({ associationId }: Props) {
         {/* Monthly trend */}
         <Card>
           <CardHeader className={'pb-2'}>
-            <CardTitle className={'text-sm font-medium'}>
-              Monthly Trend (This FY)
-            </CardTitle>
+            <CardTitle>Monthly Trend (This FY)</CardTitle>
           </CardHeader>
           <CardContent>
             {data.monthlyTrend.every((d) => d.amount === 0) ? (
@@ -185,7 +181,7 @@ export function ExpenseAnalytics({ associationId }: Props) {
         {/* Top 10 payees */}
         <Card>
           <CardHeader className={'pb-2'}>
-            <CardTitle className={'text-sm font-medium'}>Top Payees</CardTitle>
+            <CardTitle>Top Payees</CardTitle>
           </CardHeader>
           <CardContent>
             {data.topPayees.length === 0 ? (
@@ -226,9 +222,7 @@ export function ExpenseAnalytics({ associationId }: Props) {
         {/* Payment mode breakdown */}
         <Card>
           <CardHeader className={'pb-2'}>
-            <CardTitle className={'text-sm font-medium'}>
-              Payment Modes
-            </CardTitle>
+            <CardTitle>Payment Modes</CardTitle>
           </CardHeader>
           <CardContent>
             {data.modeBreakdown.length === 0 ? (

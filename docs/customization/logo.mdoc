@@ -190,7 +190,7 @@ After updating your logo:
      {"question": "How do I make my SVG logo change color with the theme?", "answer": "Use Tailwind's fill classes on your SVG paths: fill-primary for the default theme color, or dark:fill-white to change in dark mode. Remove any hardcoded fill attributes from the SVG."},
      {"question": "What size should my logo be?", "answer": "Design for 95px width on desktop and 80px on mobile. SVGs scale automatically. For raster images, export at 2x resolution (190x64 pixels minimum) to support high-DPI displays."},
      {"question": "Can I use different logos in different parts of the app?", "answer": "Yes. You can modify the AppLogo component to accept a variant prop or create separate components. However, maintaining brand consistency is recommended."},
-     {"question": "How do I update the logo in email templates?", "answer": "Email templates do not consume the AppLogo component — most clients require an absolute URL. Edit the email components directly under packages/email-templates/src/ to swap the image (for example, the team logo URL in invite.email.tsx)."}
+     {"question": "How do I update the logo in email templates?", "answer": "Email templates do not consume the AppLogo component - most clients require an absolute URL. Edit the email components directly under packages/email-templates/src/ to swap the image (for example, the team logo URL in invite.email.tsx)."}
    ]
 /%}
 

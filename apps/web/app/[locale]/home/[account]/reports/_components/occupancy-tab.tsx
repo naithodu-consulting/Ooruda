@@ -130,7 +130,7 @@ export function OccupancyTab({
                     <TableRow key={r.unit_id}>
                       <TableCell className="font-medium">{r.unit_no}</TableCell>
                       <TableCell>{r.type}</TableCell>
-                      <TableCell>{r.floor ?? '—'}</TableCell>
+                      <TableCell>{r.floor ?? '-'}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {r.area_sqft.toLocaleString('en-IN')}
                       </TableCell>
@@ -141,19 +141,19 @@ export function OccupancyTab({
                           }
                           className={
                             r.status === 'Occupied'
-                              ? 'border-[var(--color-success)]/30 bg-[var(--color-success)]/15 text-[var(--color-success)]'
-                              : 'border-[var(--color-warning)]/40 text-[var(--color-warning)]'
+                              ? 'border-success/30 bg-success/15 text-success'
+                              : 'border-warning/40 text-warning'
                           }
                         >
                           {r.status}
                         </Badge>
                       </TableCell>
-                      <TableCell>{r.occupant_name ?? '—'}</TableCell>
+                      <TableCell>{r.occupant_name ?? '-'}</TableCell>
                       <TableCell className="tabular-nums">
-                        {r.occupant_phone ?? '—'}
+                        {r.occupant_phone ?? '-'}
                       </TableCell>
                       <TableCell className="max-w-[180px] truncate">
-                        {r.occupant_email ?? '—'}
+                        {r.occupant_email ?? '-'}
                       </TableCell>
                       <TableCell>
                         {r.occupant_role ? (
@@ -161,7 +161,7 @@ export function OccupancyTab({
                             {r.occupant_role}
                           </span>
                         ) : (
-                          '—'
+                          '-'
                         )}
                       </TableCell>
                       <TableCell className="tabular-nums">
@@ -174,7 +174,7 @@ export function OccupancyTab({
                                 year: 'numeric',
                               },
                             )
-                          : '—'}
+                          : '-'}
                       </TableCell>
                     </TableRow>
                   ))

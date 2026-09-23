@@ -122,11 +122,11 @@ export function GstSummaryTab({ rows }: Props) {
                       <TableCell className="text-right tabular-nums">
                         {formatINR(r.total_amount)}
                       </TableCell>
-                      <TableCell className="text-right text-[var(--color-success)] tabular-nums">
+                      <TableCell className="text-success text-right tabular-nums">
                         {formatINR(r.collected_gst)}
                       </TableCell>
                       <TableCell
-                        className={`text-right tabular-nums ${pendingGst > 0 ? 'text-[var(--color-warning)]' : 'text-muted-foreground'}`}
+                        className={`text-right tabular-nums ${pendingGst > 0 ? 'text-warning' : 'text-muted-foreground'}`}
                       >
                         {formatINR(Math.max(0, pendingGst))}
                       </TableCell>

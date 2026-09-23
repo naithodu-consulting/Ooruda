@@ -34,7 +34,7 @@ const RESEND_COOLDOWN_SECONDS = 30;
 const MAX_VERIFY_ATTEMPTS = 3;
 
 const slotClass =
-  'h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-[22px] font-black text-[#1a1a1a] focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12';
+  'h-13 w-11 rounded-md border-[#EADFB0] bg-white text-center text-2xl font-semibold text-foreground focus:border-[#FCD469] focus:ring-1 focus:ring-[#FCD469] focus:outline-none md:h-14 md:w-12';
 
 const EmailSchema = z.object({
   email: z.string().email({ message: 'auth.emailInvalidFormat' }),
@@ -149,7 +149,7 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
       // Force a fresh access token so the JWT carries the new email claim before
       // the middleware re-evaluates the mandatory-email gate. Without this the
       // cookie can still hold the pre-change (email-less) JWT and bounce the
-      // user straight back here — an infinite redirect loop.
+      // user straight back here - an infinite redirect loop.
       await client.auth.refreshSession();
 
       // Hard navigation so the refreshed session cookie is written before the
@@ -164,10 +164,10 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
     return (
       <div className="flex flex-col gap-y-6">
         <div className="flex flex-col gap-y-1.5">
-          <h2 className="text-[15px] font-bold text-[#1a1a1a]">
+          <h2 className="text-foreground text-xl font-semibold tracking-tight">
             <Trans i18nKey="auth.completeProfileHeading" />
           </h2>
-          <p className="text-sm text-[#6f6a5a]">
+          <p className="text-muted-foreground text-sm">
             <Trans i18nKey="auth.completeProfileSubheading" />
           </p>
         </div>
@@ -229,7 +229,7 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
   return (
     <Form {...otpForm}>
       <div className="flex w-full flex-col items-center gap-y-6">
-        <p className="text-center text-sm font-medium text-[#6f6a5a]">
+        <p className="text-muted-foreground text-center text-sm font-medium">
           <Trans i18nKey="auth.completeProfileOtpSentTo" values={{ email }} />
         </p>
 
@@ -263,7 +263,7 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
                       <InputOTPSlot index={1} className={slotClass} />
                       <InputOTPSlot index={2} className={slotClass} />
                     </InputOTPGroup>
-                    <InputOTPSeparator className="mx-1 font-bold text-[#cbbd8e]" />
+                    <InputOTPSeparator className="text-muted-foreground/50 mx-1 font-bold" />
                     <InputOTPGroup className="gap-1.5 md:gap-2">
                       <InputOTPSlot index={3} className={slotClass} />
                       <InputOTPSlot index={4} className={slotClass} />
@@ -278,7 +278,7 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
 
           <Button
             type="submit"
-            className="mt-2 flex h-12 w-full items-center justify-center gap-2 border-0 !bg-[#1a1a1a] text-[13px] font-extrabold !text-white shadow-none transition-all hover:!bg-black active:scale-[0.98]"
+            className="mt-2 flex h-12 w-full items-center justify-center gap-2 border-0 !bg-[#1a1a1a] text-sm font-semibold !text-white shadow-none transition-all hover:!bg-black active:scale-[0.98]"
             disabled={pending || tooManyAttempts}
             data-test="complete-profile-verify-button"
           >
@@ -300,7 +300,7 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
               type="button"
               variant="ghost"
               size="sm"
-              className="flex h-9 items-center gap-1.5 text-[#6f6a5a] transition-all hover:bg-[#FBF7E8] hover:text-[#1a1a1a]"
+              className="text-muted-foreground hover:text-foreground flex h-9 items-center gap-1.5 transition-all hover:bg-[#FBF7E8]"
               onClick={() => {
                 setStep('email');
                 setError(null);
@@ -317,7 +317,7 @@ export function CompleteProfileForm(props: { redirectPath: string }) {
               size="sm"
               disabled={resendSeconds > 0 || pending}
               onClick={handleResend}
-              className="h-9 text-[#6f6a5a] transition-all hover:bg-[#FBF7E8] hover:text-[#1a1a1a] disabled:text-[#6f6a5a]/40 disabled:hover:bg-transparent"
+              className="text-muted-foreground hover:text-foreground disabled:text-muted-foreground/40 h-9 transition-all hover:bg-[#FBF7E8] disabled:hover:bg-transparent"
             >
               {resendSeconds > 0 ? (
                 <Trans

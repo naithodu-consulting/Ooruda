@@ -21,7 +21,7 @@ async function getEnabledChannels(): Promise<{ sms: boolean; email: boolean }> {
     const { getLogger } = await import('@kit/shared/logger');
     const logger = await getLogger();
     logger.info(
-      '[notify] SMS/Email notifications disabled — NEXT_PUBLIC_ENABLE_SMS_EMAIL_NOTIFICATIONS is not set or false',
+      '[notify] SMS/Email notifications disabled - NEXT_PUBLIC_ENABLE_SMS_EMAIL_NOTIFICATIONS is not set or false',
     );
     return { sms: false, email: false };
   }
@@ -467,7 +467,7 @@ export interface ReminderParams {
 
 /**
  * Send a due-date reminder or overdue SMS + email notification.
- * Called from the send-reminders Edge Function — best-effort, never throws.
+ * Called from the send-reminders Edge Function - best-effort, never throws.
  */
 export async function sendReminderNotification(
   params: ReminderParams,

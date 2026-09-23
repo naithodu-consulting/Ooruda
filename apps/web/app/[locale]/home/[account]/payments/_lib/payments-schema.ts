@@ -20,7 +20,7 @@ export const RecordPaymentSchema = z.object({
   // Hidden and ignored for Razorpay payments (gateway provides its own ID).
   reference_no: z.string().max(100).optional(),
   // Date the money actually changed hands, which is not necessarily the day
-  // it was entered — cash handed to an admin is often recorded days later.
+  // it was entered - cash handed to an admin is often recorded days later.
   // 'YYYY-MM-DD' in the billing timezone; blank means "now".
   paid_on: z
     .string()

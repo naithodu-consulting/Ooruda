@@ -7,7 +7,7 @@ export default function UnitNotFound() {
         🏢
       </div>
       <div className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Unit not found</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Unit not found</h1>
         <p className="text-muted-foreground max-w-xs text-sm">
           This unit doesn&apos;t exist or doesn&apos;t belong to your
           association.
@@ -16,7 +16,7 @@ export default function UnitNotFound() {
       <Link
         href=".."
         data-test="unit-not-found-back"
-        className="text-primary hover:text-primary/80 mt-2 text-sm font-medium underline underline-offset-4 transition-colors"
+        className="text-brand-ink hover:text-foreground mt-2 text-sm font-medium underline underline-offset-4 transition-colors"
       >
         ← Back
       </Link>

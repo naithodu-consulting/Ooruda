@@ -3,7 +3,7 @@ import * as React from 'react';
 import { Path, Svg } from '@react-pdf/renderer';
 
 /**
- * Ooruda brand mark — same path data as apps/web/components/ooruda-mark.tsx
+ * Ooruda brand mark - same path data as apps/web/components/ooruda-mark.tsx
  * (ooruda-mark-on-black.svg), redrawn with react-pdf's native Svg/Path
  * primitives so it renders as crisp vector content with no image fetch.
  */

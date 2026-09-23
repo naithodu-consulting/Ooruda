@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
 /**
- * Returns the reader to wherever they came from — usually the sign-in screen,
+ * Returns the reader to wherever they came from - usually the sign-in screen,
  * which is the main route into these documents.
  *
  * `router.back()` alone is unsafe here: these URLs are opened directly by

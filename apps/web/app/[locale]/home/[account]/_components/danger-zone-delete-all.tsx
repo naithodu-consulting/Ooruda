@@ -18,7 +18,7 @@ interface DeleteResult {
 
 /**
  * Super-admin-only bulk-delete button. Only ever rendered when the caller
- * has already confirmed the current viewer is a super admin — this
+ * has already confirmed the current viewer is a super admin - this
  * component itself does no authorization, it's purely the confirm-and-call
  * UI, mirroring the units-table delete flow's TypeToConfirmDialog usage.
  */

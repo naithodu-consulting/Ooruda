@@ -71,7 +71,7 @@ export async function fetchBulkReceiptData(
   association: BulkReceiptAssociation;
   associationLogoUrl: string | null;
 }> {
-  // Fetch payments with all required joins — payments table allows admin client
+  // Fetch payments with all required joins - payments table allows admin client
   const { data: rawPayments, error: paymentsError } = await admin
     .from('payments')
     .select(

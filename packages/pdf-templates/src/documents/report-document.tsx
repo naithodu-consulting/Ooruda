@@ -57,7 +57,7 @@ const rStyles = StyleSheet.create({
   },
   kpiLabel: {
     fontSize: 7,
-    color: '#888',
+    color: '#666',
     marginBottom: 2,
     textTransform: 'uppercase',
   },
@@ -113,14 +113,14 @@ const rStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  footerText: { fontSize: 7.5, color: '#888' },
+  footerText: { fontSize: 7.5, color: '#666' },
 });
 
 // Column widths for the wide people-centric tables.
 //
 // Usable cell width is ~511pt (A4 595 − 72 page margins − 12 row padding).
 // Equal `flex: 1` columns gave Phone only ~45pt, but "+919999999998" needs
-// ~57pt at 8pt Noto Sans — it overflowed, wrapped, and collided with Role.
+// ~57pt at 8pt Noto Sans - it overflowed, wrapped, and collided with Role.
 // These weights are sized to the widest real value each column holds.
 const OCC_W = {
   unit: { flex: 1 }, // "G1 & G1A"
@@ -241,7 +241,7 @@ export interface ReportPdfData {
     | 'payments'
     | 'electricity'
   )[];
-  /** Cash ledger entries — rendered instead of financial sections when present. */
+  /** Cash ledger entries - rendered instead of financial sections when present. */
   cashLedger?: {
     totalCredits: number;
     totalDebits: number;
@@ -256,7 +256,7 @@ export interface ReportPdfData {
       notes: string;
     }[];
   };
-  /** Occupancy report rows — rendered instead of financial sections when present. */
+  /** Occupancy report rows - rendered instead of financial sections when present. */
   occupancy?: {
     rows: {
       unit_no: string;
@@ -271,7 +271,7 @@ export interface ReportPdfData {
       move_in_date: string | null;
     }[];
   };
-  /** Ledger statement rows — rendered instead of financial sections when present. */
+  /** Ledger statement rows - rendered instead of financial sections when present. */
   ledgerStatement?: {
     unitLabel: string;
     /** All-Units view shows which unit each entry belongs to. */
@@ -287,7 +287,7 @@ export interface ReportPdfData {
       payment_status: 'active' | 'reversed' | 'partial_refund' | null;
     }[];
   };
-  /** Directory rows — rendered instead of financial sections when present. */
+  /** Directory rows - rendered instead of financial sections when present. */
   directory?: {
     rows: {
       unit_no: string;
@@ -298,7 +298,7 @@ export interface ReportPdfData {
       move_in_date: string | null;
     }[];
   };
-  /** Other Charges breakdown — rendered when tab === 'other_charges'. */
+  /** Other Charges breakdown - rendered when tab === 'other_charges'. */
   otherCharges?: {
     rows: {
       charge_name: string;
@@ -315,7 +315,7 @@ export interface ReportPdfData {
       outstanding: number;
     }[];
   };
-  /** GST summary rows — rendered instead of financial sections when present. */
+  /** GST summary rows - rendered instead of financial sections when present. */
   gstSummary?: {
     rows: {
       period: string;
@@ -426,7 +426,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
         <DocumentHeader association={data.association} />
 
         <Text style={rStyles.reportTitle}>{reportTitle}</Text>
-        {/* A ledger statement is scoped by unit, not by period — labelling it
+        {/* A ledger statement is scoped by unit, not by period - labelling it
             "Period: Unit 201" would be nonsense. */}
         <Text style={rStyles.reportSubtitle}>
           {data.ledgerStatement
@@ -799,7 +799,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                   </Text>
                   <Text style={rStyles.cellRight}>{r.block_units}</Text>
                   <Text style={rStyles.cellRight}>
-                    {r.rate !== null ? formatINR(r.rate) : '—'}
+                    {r.rate !== null ? formatINR(r.rate) : '-'}
                   </Text>
                 </View>
               ))}
@@ -916,12 +916,12 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                       {r.consumed_units.toFixed(2)}
                     </Text>
                     <Text style={rStyles.cellRight}>
-                      {r.minimum_charge > 0 ? formatINR(r.minimum_charge) : '—'}
+                      {r.minimum_charge > 0 ? formatINR(r.minimum_charge) : '-'}
                     </Text>
                     <Text style={rStyles.cellRight}>
                       {r.rate_per_unit !== null
                         ? formatINR(r.rate_per_unit)
-                        : '—'}
+                        : '-'}
                     </Text>
                     <Text style={rStyles.cellRight}>
                       {formatINR(r.charged_amount)}
@@ -949,13 +949,13 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                   </View>
                   <View style={rStyles.kpiBox}>
                     <Text style={rStyles.kpiLabel}>OCCUPIED</Text>
-                    <Text style={[rStyles.kpiValue, { color: '#16a34a' }]}>
+                    <Text style={[rStyles.kpiValue, { color: '#146f35' }]}>
                       {occupied}
                     </Text>
                   </View>
                   <View style={rStyles.kpiBox}>
                     <Text style={rStyles.kpiLabel}>VACANT</Text>
-                    <Text style={[rStyles.kpiValue, { color: '#d97706' }]}>
+                    <Text style={[rStyles.kpiValue, { color: '#a14a06' }]}>
                       {vacant}
                     </Text>
                   </View>
@@ -1000,7 +1000,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                       </Text>
                       <Text style={[rStyles.cell, OCC_W.type]}>{r.type}</Text>
                       <Text style={[rStyles.cellRight, OCC_W.floor]}>
-                        {r.floor ?? '—'}
+                        {r.floor ?? '-'}
                       </Text>
                       <Text style={[rStyles.cellRight, OCC_W.area]}>
                         {r.area_sqft.toLocaleString('en-IN')}
@@ -1011,20 +1011,20 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                           OCC_W.status,
                           {
                             color:
-                              r.status === 'Occupied' ? '#16a34a' : '#d97706',
+                              r.status === 'Occupied' ? '#146f35' : '#a14a06',
                           },
                         ]}
                       >
                         {r.status}
                       </Text>
                       <Text style={[rStyles.cell, OCC_W.occupant]}>
-                        {r.occupant_name ?? '—'}
+                        {r.occupant_name ?? '-'}
                       </Text>
                       <Text style={[rStyles.cell, OCC_W.phone]}>
-                        {r.occupant_phone ?? '—'}
+                        {r.occupant_phone ?? '-'}
                       </Text>
                       <Text style={[rStyles.cell, OCC_W.role]}>
-                        {r.occupant_role ?? '—'}
+                        {r.occupant_role ?? '-'}
                       </Text>
                       <Text style={[rStyles.cell, OCC_W.moveIn]}>
                         {r.move_in_date
@@ -1036,7 +1036,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                                 year: 'numeric',
                               },
                             )
-                          : '—'}
+                          : '-'}
                       </Text>
                     </View>
                   ))}
@@ -1068,16 +1068,16 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                     <Text style={rStyles.kpiValue}>
                       {formatINR(totalDebits)}
                     </Text>
-                    <Text style={{ fontSize: 7, color: '#888' }}>
+                    <Text style={{ fontSize: 7, color: '#666' }}>
                       Bills raised
                     </Text>
                   </View>
                   <View style={rStyles.kpiBox}>
                     <Text style={rStyles.kpiLabel}>TOTAL CREDITS</Text>
-                    <Text style={[rStyles.kpiValue, { color: '#16a34a' }]}>
+                    <Text style={[rStyles.kpiValue, { color: '#146f35' }]}>
                       {formatINR(totalCredits)}
                     </Text>
-                    <Text style={{ fontSize: 7, color: '#888' }}>
+                    <Text style={{ fontSize: 7, color: '#666' }}>
                       Payments &amp; advances
                     </Text>
                   </View>
@@ -1086,12 +1086,12 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                     <Text
                       style={[
                         rStyles.kpiValue,
-                        { color: closing < 0 ? '#dc2626' : '#16a34a' },
+                        { color: closing < 0 ? '#b91c1c' : '#146f35' },
                       ]}
                     >
                       {formatINR(Math.abs(closing))}
                     </Text>
-                    <Text style={{ fontSize: 7, color: '#888' }}>
+                    <Text style={{ fontSize: 7, color: '#666' }}>
                       {closing === 0
                         ? 'Settled'
                         : closing > 0
@@ -1144,7 +1144,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                           : ''}
                       </Text>
                       <Text style={[rStyles.cell, LS_W.billNo]}>
-                        {r.bill_no ?? '—'}
+                        {r.bill_no ?? '-'}
                       </Text>
                       <Text style={[rStyles.cellRight, LS_W.debit]}>
                         {r.debit !== null ? formatINR(r.debit) : ''}
@@ -1157,7 +1157,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                           rStyles.cellRight,
                           LS_W.balance,
                           {
-                            color: r.runningBalance < 0 ? '#dc2626' : '#16a34a',
+                            color: r.runningBalance < 0 ? '#b91c1c' : '#146f35',
                           },
                         ]}
                       >
@@ -1189,13 +1189,13 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                   </View>
                   <View style={rStyles.kpiBox}>
                     <Text style={rStyles.kpiLabel}>TENANTS</Text>
-                    <Text style={[rStyles.kpiValue, { color: '#d97706' }]}>
+                    <Text style={[rStyles.kpiValue, { color: '#a14a06' }]}>
                       {tenants}
                     </Text>
                   </View>
                 </View>
                 <View style={[rStyles.table, { fontSize: 8 }]}>
-                  {/* `fixed` repeats the header on every page — directory is a
+                  {/* `fixed` repeats the header on every page - directory is a
                       standalone single-table document. */}
                   <View style={rStyles.thead} fixed>
                     <Text style={[rStyles.theadCell, DIR_W.unit]}>Unit</Text>
@@ -1218,16 +1218,16 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                       </Text>
                       <Text style={[rStyles.cell, DIR_W.name]}>{r.name}</Text>
                       <Text style={[rStyles.cell, DIR_W.phone]}>
-                        {r.phone ?? '—'}
+                        {r.phone ?? '-'}
                       </Text>
                       <Text style={[rStyles.cell, DIR_W.email]}>
-                        {r.email ?? '—'}
+                        {r.email ?? '-'}
                       </Text>
                       <Text
                         style={[
                           rStyles.cell,
                           DIR_W.role,
-                          { color: r.role === 'Owner' ? '#1d4ed8' : '#d97706' },
+                          { color: r.role === 'Owner' ? '#1d4ed8' : '#a14a06' },
                         ]}
                       >
                         {r.role}
@@ -1242,7 +1242,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                                 year: 'numeric',
                               },
                             )
-                          : '—'}
+                          : '-'}
                       </Text>
                     </View>
                   ))}
@@ -1274,16 +1274,16 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                     <Text style={rStyles.kpiValue}>
                       {formatINR(totalTaxable)}
                     </Text>
-                    <Text style={{ fontSize: 7, color: '#888' }}>
+                    <Text style={{ fontSize: 7, color: '#666' }}>
                       excl. GST
                     </Text>
                   </View>
                   <View style={rStyles.kpiBox}>
                     <Text style={rStyles.kpiLabel}>TOTAL GST BILLED</Text>
-                    <Text style={[rStyles.kpiValue, { color: '#d97706' }]}>
+                    <Text style={[rStyles.kpiValue, { color: '#a14a06' }]}>
                       {formatINR(totalGst)}
                     </Text>
-                    <Text style={{ fontSize: 7, color: '#888' }}>
+                    <Text style={{ fontSize: 7, color: '#666' }}>
                       CGST + SGST
                     </Text>
                   </View>
@@ -1292,16 +1292,16 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                     <Text style={rStyles.kpiValue}>
                       {formatINR(totalBilled)}
                     </Text>
-                    <Text style={{ fontSize: 7, color: '#888' }}>
+                    <Text style={{ fontSize: 7, color: '#666' }}>
                       taxable + GST
                     </Text>
                   </View>
                   <View style={rStyles.kpiBox}>
                     <Text style={rStyles.kpiLabel}>GST COLLECTED</Text>
-                    <Text style={[rStyles.kpiValue, { color: '#16a34a' }]}>
+                    <Text style={[rStyles.kpiValue, { color: '#146f35' }]}>
                       {formatINR(totalCollected)}
                     </Text>
-                    <Text style={{ fontSize: 7, color: '#888' }}>
+                    <Text style={{ fontSize: 7, color: '#666' }}>
                       {rate}% collection rate
                     </Text>
                   </View>
@@ -1353,13 +1353,13 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                         <Text style={rStyles.cellRight}>
                           {formatINR(r.total_amount)}
                         </Text>
-                        <Text style={[rStyles.cellRight, { color: '#16a34a' }]}>
+                        <Text style={[rStyles.cellRight, { color: '#146f35' }]}>
                           {formatINR(collectedGst)}
                         </Text>
                         <Text
                           style={[
                             rStyles.cellRight,
-                            { color: pendingGst > 0.01 ? '#d97706' : '#888' },
+                            { color: pendingGst > 0.01 ? '#a14a06' : '#666' },
                           ]}
                         >
                           {formatINR(pendingGst)}
@@ -1368,7 +1368,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                     );
                   })}
                 </View>
-                <Text style={{ fontSize: 7, color: '#888', marginTop: 8 }}>
+                <Text style={{ fontSize: 7, color: '#666', marginTop: 8 }}>
                   Collected GST is estimated proportionally. Verify against your
                   GSTIN filings.
                 </Text>
@@ -1406,10 +1406,10 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                   </View>
                   <View style={rStyles.kpiBox}>
                     <Text style={rStyles.kpiLabel}>COLLECTED</Text>
-                    <Text style={[rStyles.kpiValue, { color: '#16a34a' }]}>
+                    <Text style={[rStyles.kpiValue, { color: '#146f35' }]}>
                       {formatINR(totalCollected)}
                     </Text>
-                    <Text style={{ fontSize: 7, color: '#888' }}>
+                    <Text style={{ fontSize: 7, color: '#666' }}>
                       {rate}% collection rate
                     </Text>
                   </View>
@@ -1418,7 +1418,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                     <Text
                       style={[
                         rStyles.kpiValue,
-                        { color: totalOutstanding > 0 ? '#dc2626' : '#888' },
+                        { color: totalOutstanding > 0 ? '#b91c1c' : '#666' },
                       ]}
                     >
                       {formatINR(totalOutstanding)}
@@ -1459,7 +1459,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                         <Text
                           style={[
                             rStyles.cellRight,
-                            { color: r.outstanding > 0 ? '#d97706' : '#888' },
+                            { color: r.outstanding > 0 ? '#a14a06' : '#666' },
                           ]}
                         >
                           {formatINR(r.outstanding)}
@@ -1496,7 +1496,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                         rStyles.cellRight,
                         {
                           fontWeight: 'bold',
-                          color: totalOutstanding > 0 ? '#dc2626' : '#888',
+                          color: totalOutstanding > 0 ? '#b91c1c' : '#666',
                         },
                       ]}
                     >
@@ -1568,7 +1568,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                                   rStyles.cellRight,
                                   {
                                     color:
-                                      u.outstanding > 0 ? '#d97706' : '#888',
+                                      u.outstanding > 0 ? '#a14a06' : '#666',
                                   },
                                 ]}
                               >
@@ -1616,7 +1616,7 @@ export function ReportDocument({ data }: { data: ReportPdfData }) {
                                 rStyles.cellRight,
                                 {
                                   fontWeight: 'bold',
-                                  color: uOutstanding > 0 ? '#dc2626' : '#888',
+                                  color: uOutstanding > 0 ? '#b91c1c' : '#666',
                                 },
                               ]}
                             >

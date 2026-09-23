@@ -62,7 +62,7 @@ function computeBillMetrics(
     (sum, b) => sum + b.paid_amount + Number(b.advance_applied ?? 0),
     0,
   );
-  // outstanding must subtract advance_applied — same formula as per-bill outstanding
+  // outstanding must subtract advance_applied - same formula as per-bill outstanding
   const outstanding = bills.reduce(
     (sum, b) =>
       sum +
@@ -243,7 +243,7 @@ async function loadMyBillSummary(
   // Resolve owned vs rented separately (rather than via getAccessibleUnits'
   // collapsed list) because the two need different bill scoping: owned
   // units show every bill ever generated, but rented units must only show
-  // bills attributed to THIS tenancy — otherwise a new tenant on a unit
+  // bills attributed to THIS tenancy - otherwise a new tenant on a unit
   // would see every past tenant's bill/payment history on that unit.
   const [{ data: ownedUnits }, { data: tenancies }] = await Promise.all([
     client
@@ -313,7 +313,7 @@ async function loadMyBillSummary(
         : billsQuery.is('tenancy_id', null);
   }
 
-  // Void bills are cancelled — owners and tenants should never see them
+  // Void bills are cancelled - owners and tenants should never see them
   // as active items in their dashboard.
   billsQuery = billsQuery.neq('status', 'Void');
 

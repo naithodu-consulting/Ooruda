@@ -37,7 +37,7 @@ describe('findWorkspaceRoot', () => {
     mkdirSync(deep, { recursive: true });
     writeFileSync(join(tmp, 'pnpm-workspace.yaml'), '');
 
-    // 7 levels deep, limit is 6 — should NOT find it
+    // 7 levels deep, limit is 6 - should NOT find it
     expect(findWorkspaceRoot(deep)).toBe(deep);
   });
 

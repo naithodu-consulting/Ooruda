@@ -93,7 +93,7 @@ function daysRemaining(
 }
 
 function DaysCell({ days }: { days: number | null }) {
-  if (days === null) return <span className={'text-muted-foreground'}>—</span>;
+  if (days === null) return <span className={'text-muted-foreground'}>-</span>;
   if (days < 0)
     return (
       <span className={'text-destructive font-medium'}>
@@ -325,7 +325,7 @@ export function AmcList({
                       <TableCell>
                         <Link
                           href={`/home/${accountSlug}/amc/${c.id}`}
-                          className={'hover:text-primary text-sm font-medium'}
+                          className={'hover:text-brand-ink text-sm font-medium'}
                           data-test={'amc-contract-link'}
                         >
                           {c.name}
@@ -338,7 +338,7 @@ export function AmcList({
                       </TableCell>
                       <TableCell className={'text-sm'}>
                         {c.vendor_name ?? (
-                          <span className={'text-muted-foreground'}>—</span>
+                          <span className={'text-muted-foreground'}>-</span>
                         )}
                       </TableCell>
                       <TableCell className={'text-sm whitespace-nowrap'}>

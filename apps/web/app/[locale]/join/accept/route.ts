@@ -30,7 +30,7 @@ const InviteTokenSchema = z.string().uuid();
  *
  * SECURITY: the invite_token alone is NOT sufficient to mint a session, because
  * it is readable by members of the inviting account (RLS / data API). Only a
- * link carrying a valid `sig` — which a token-reader cannot forge — triggers the
+ * link carrying a valid `sig` - which a token-reader cannot forge - triggers the
  * one-click path. See @kit/team-accounts/invitation-signature.
  */
 export async function GET(request: NextRequest) {

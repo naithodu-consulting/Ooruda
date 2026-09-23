@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const client = getSupabaseServerClient();
 
-  // Auth check — ensure there is a session
+  // Auth check - ensure there is a session
   const {
     data: { user },
   } = await client.auth.getUser();
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // RLS on the expenses table already scopes to the association — verify membership
+  // RLS on the expenses table already scopes to the association - verify membership
   const { data: assoc } = await client
     .from('associations')
     .select('id')
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
   );
   const topCategoryThisMonth = sortedCategories[0]?.[0] ?? null;
 
-  // Monthly trend — all 12 months of this FY (Apr → Mar), zero-filled for months with no data.
+  // Monthly trend - all 12 months of this FY (Apr → Mar), zero-filled for months with no data.
   // Build the canonical 12-month list from the FY start date so the chart always shows a full year.
   const fyStartDate = from ? new Date(from + 'T00:00:00') : new Date();
   const monthlyMap = new Map<string, number>();
@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
   const monthlyTrend = Array.from(monthlyMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, amount]) => ({
-      // Show just the month abbreviation — year is redundant on a "This FY" chart
+      // Show just the month abbreviation - year is redundant on a "This FY" chart
       // and 'Aug 26' (en-IN short year) is ambiguous with a date like "26 Aug".
       month: new Date(month + '-01T00:00:00').toLocaleDateString('en-IN', {
         month: 'short',

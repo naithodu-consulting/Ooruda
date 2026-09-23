@@ -39,7 +39,7 @@ export function initializeSentryBrowserClient(
 
     // Applied AFTER `...props` so callers can't accidentally re-enable
     // Sentry's `GlobalHandlers`. `@kit/monitoring/instrumentation-client`
-    // owns `window.onerror` / `unhandledrejection` — keeping both would
+    // owns `window.onerror` / `unhandledrejection` - keeping both would
     // double-report. Caller-supplied integrations are composed in.
     integrations: composeIntegrations(userIntegrations),
   });

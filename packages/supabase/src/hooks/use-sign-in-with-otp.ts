@@ -47,7 +47,7 @@ function shouldIgnoreError(
 
   // On the sign-in path (shouldCreateUser === false), GoTrue returns an
   // "otp_disabled" / "Signups not allowed for otp" error for a non-existent
-  // account but succeeds for an existing one — an account-enumeration oracle.
+  // account but succeeds for an existing one - an account-enumeration oracle.
   // Swallow it ONLY when not creating a user so the UX is identical regardless
   // of whether the account exists. The sign-up path (shouldCreateUser !== false)
   // still surfaces genuine "signups disabled" errors.

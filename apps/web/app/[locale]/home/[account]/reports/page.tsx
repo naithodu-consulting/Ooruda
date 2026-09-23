@@ -21,7 +21,7 @@ export const metadata = { title: 'Reports' };
 export default async function ReportsPage({ params }: Props) {
   const { account } = await params;
 
-  // Reports is admin-only — prop_owner and tenant are not permitted.
+  // Reports is admin-only - prop_owner and tenant are not permitted.
   const { accountId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',

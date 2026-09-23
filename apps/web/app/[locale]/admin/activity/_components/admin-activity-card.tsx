@@ -208,7 +208,7 @@ export function AdminActivityCard(props: {
         {/* Date range */}
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">
-            <label className="text-muted-foreground text-xs font-medium">
+            <label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
               From
             </label>
             <DatePicker
@@ -219,7 +219,7 @@ export function AdminActivityCard(props: {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-muted-foreground text-xs font-medium">
+            <label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
               To
             </label>
             <DatePicker
@@ -242,7 +242,7 @@ export function AdminActivityCard(props: {
 
         {/* Association filter */}
         <div className="flex flex-col gap-1">
-          <label className="text-muted-foreground text-xs font-medium">
+          <label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
             Association
           </label>
           <SearchableSelect
@@ -325,7 +325,7 @@ export function AdminActivityCard(props: {
                               {actionLabel(row.action)}
                             </span>
                             {row.path && (
-                              <div className="text-muted-foreground mt-0.5 max-w-[176px] truncate font-mono text-[10px]">
+                              <div className="text-muted-foreground mt-0.5 max-w-[176px] truncate font-mono text-xs">
                                 {row.path}
                               </div>
                             )}
@@ -341,7 +341,7 @@ export function AdminActivityCard(props: {
                       <TableCell className="text-muted-foreground py-3.5 text-sm">
                         {truncateSummary(row.summary)}
                         {row.errorCode && (
-                          <div className="text-destructive mt-0.5 font-mono text-[10px]">
+                          <div className="text-destructive mt-0.5 font-mono text-xs">
                             {row.errorCode}
                           </div>
                         )}

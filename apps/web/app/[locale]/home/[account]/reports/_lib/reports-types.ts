@@ -269,7 +269,7 @@ export interface GstSummaryRow {
 
 /**
  * Resolve a preset key to a date range.
- * "All Time" returns empty strings — callers must skip DB filters when from/to are empty.
+ * "All Time" returns empty strings - callers must skip DB filters when from/to are empty.
  */
 export function resolvePreset(key: PresetKey | string): DateRange {
   const now = new Date();

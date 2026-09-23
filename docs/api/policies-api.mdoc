@@ -523,25 +523,25 @@ async function validateEnterpriseFeatureAccess(context: FeatureContext) {
 
 ### Core Functions
 
-- `createPolicyRegistry()` — Create a feature-specific registry
-- `definePolicy(config)` — Define a policy with metadata and configuration
-- `createPoliciesEvaluator()` — Create a policy evaluator instance
-- `allow(metadata?)` — Return a success result with optional metadata
-- `deny(reason | error)` — Return a failure result (supports strings and structured errors)
+- `createPolicyRegistry()` - Create a feature-specific registry
+- `definePolicy(config)` - Define a policy with metadata and configuration
+- `createPoliciesEvaluator()` - Create a policy evaluator instance
+- `allow(metadata?)` - Return a success result with optional metadata
+- `deny(reason | error)` - Return a failure result (supports strings and structured errors)
 
 ### Policy Evaluator Methods
 
-- `evaluator.evaluate(registry, context, operator, stage?)` — Evaluate registry policies
-- `evaluator.evaluateGroups(groups, context)` — Evaluate complex group logic
-- `evaluator.hasPoliciesForStage(registry, stage?)` — Check if policies exist for a stage
+- `evaluator.evaluate(registry, context, operator, stage?)` - Evaluate registry policies
+- `evaluator.evaluateGroups(groups, context)` - Evaluate complex group logic
+- `evaluator.hasPoliciesForStage(registry, stage?)` - Check if policies exist for a stage
 
 ### Types
 
-- `PolicyContext` — Base context interface
-- `PolicyResult` — Policy evaluation result
-- `PolicyStage` — Execution stage (`'preliminary' | 'submission' | string`)
-- `EvaluationResult` — Contains `allowed`, `reasons`, and `results` arrays
-- `PolicyGroup` — Group configuration with `operator` and `policies`
+- `PolicyContext` - Base context interface
+- `PolicyResult` - Policy evaluation result
+- `PolicyStage` - Execution stage (`'preliminary' | 'submission' | string`)
+- `EvaluationResult` - Contains `allowed`, `reasons`, and `results` arrays
+- `PolicyGroup` - Group configuration with `operator` and `policies`
 
 ## Related documentation
 

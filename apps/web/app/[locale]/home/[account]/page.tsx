@@ -62,7 +62,7 @@ async function TeamAccountHomePage({
   );
 
   // Fetch the association row here so the dashboard component can fire all its
-  // queries in a single Promise.all — eliminating one sequential DB round-trip.
+  // queries in a single Promise.all - eliminating one sequential DB round-trip.
   // This is a fast single-row indexed lookup; it does not meaningfully delay the shell.
   const client = getSupabaseServerClient();
   const { data: association } = await client

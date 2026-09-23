@@ -8,7 +8,7 @@ import { type Page, expect } from '@playwright/test';
  *
  * Seeded dev users (see `supabase/seeds/seed_test_users.sh`) all use OTP
  * `123456`. To run locally the Supabase project must accept those as test
- * OTPs — add to `apps/web/supabase/config.toml`:
+ * OTPs - add to `apps/web/supabase/config.toml`:
  *
  *   [auth.sms]
  *   enable_signup = true

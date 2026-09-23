@@ -94,7 +94,7 @@ export function CashLedgerSection({
     initialEntries ?? [],
   );
   const [loading, setLoading] = useState(false);
-  // Stable record of what the server already fetched — never mutated so it
+  // Stable record of what the server already fetched - never mutated so it
   // stays valid across React StrictMode's double-effect invocations.
   const serverFiltersRef = useRef(
     initialEntries
@@ -134,7 +134,7 @@ export function CashLedgerSection({
   useEffect(() => {
     // If the server already fetched data for the current filter state, skip.
     // Using a stable ref (never mutated) makes this safe under StrictMode's
-    // double-effect invocation — the second run sees the same ref and also skips.
+    // double-effect invocation - the second run sees the same ref and also skips.
     const sf = serverFiltersRef.current;
     if (
       sf &&
@@ -246,7 +246,7 @@ export function CashLedgerSection({
           </Select>
         </FilterField>
 
-        {/* Date range — wraps on narrow screens */}
+        {/* Date range - wraps on narrow screens */}
         <div className="flex flex-wrap items-end gap-2">
           <FilterField label="From">
             <DatePicker
@@ -285,7 +285,7 @@ export function CashLedgerSection({
           )}
         </div>
 
-        {/* Actions — full-width row on mobile */}
+        {/* Actions - full-width row on mobile */}
         {canManage && (
           <div className="flex w-full shrink-0 gap-2 sm:ml-auto sm:w-auto">
             <Button
@@ -321,7 +321,7 @@ export function CashLedgerSection({
       <Card className="overflow-hidden">
         <CardHeader className="border-b px-5 py-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold">
+            <CardTitle>
               {isAllUnits
                 ? 'All Units'
                 : selectedUnit
@@ -426,7 +426,7 @@ export function CashLedgerSection({
                         {e.entry_type === 'advance_payment' ? (
                           <div className="flex flex-col gap-0.5">
                             <span className="text-foreground font-medium">
-                              {e.paid_by_name || (e.paid_by_role ?? '—')}
+                              {e.paid_by_name || (e.paid_by_role ?? '-')}
                             </span>
                             {e.paid_by_role ? (
                               <span className="text-success inline-flex items-center gap-1 text-xs">
@@ -442,7 +442,7 @@ export function CashLedgerSection({
                         ) : (
                           <span className="text-muted-foreground">
                             {e.paid_by_name || (
-                              <span className="opacity-30">—</span>
+                              <span className="opacity-30">-</span>
                             )}
                           </span>
                         )}
@@ -457,7 +457,7 @@ export function CashLedgerSection({
                             </span>
                           </span>
                         ) : (
-                          e.notes || <span className="opacity-30">—</span>
+                          e.notes || <span className="opacity-30">-</span>
                         )}
                       </TableCell>
                       {!isAllUnits && (
@@ -537,7 +537,7 @@ function FilterField({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <Label className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+      <Label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
         {label}
       </Label>
       {children}
@@ -566,7 +566,7 @@ function AllUnitsSummary({
     return (
       <div className="text-muted-foreground flex items-center gap-2 text-sm">
         <CheckCircle2 className="text-success h-4 w-4" />
-        All units are settled — no outstanding dues or advance balances.
+        All units are settled. No outstanding dues or advance balances.
       </div>
     );
   }
@@ -620,25 +620,27 @@ function SummaryCard({
     >
       <span
         className={cn(
-          'text-[11px] font-semibold tracking-wide uppercase',
-          isCredit ? 'text-success' : 'text-red-600 dark:text-red-400',
+          'text-xs font-semibold tracking-wide uppercase',
+          isCredit ? 'text-success' : 'text-destructive',
         )}
       >
         {label}
         {count > 0 && (
-          <span className="ml-1.5 font-normal opacity-60">({count})</span>
+          <span className="text-muted-foreground ml-1.5 font-normal">
+            ({count})
+          </span>
         )}
       </span>
       <span
         className={cn(
           'mt-1 text-xl font-bold tracking-tight tabular-nums',
-          isCredit ? 'text-success' : 'text-red-700 dark:text-red-300',
+          isCredit ? 'text-success' : 'text-destructive',
         )}
       >
         {formatINR(amount)}
         <span
           className={cn(
-            'ml-1.5 text-[11px] font-semibold tracking-wide opacity-60',
+            'text-muted-foreground ml-1.5 text-xs font-semibold tracking-wide',
           )}
         >
           {suffix}
@@ -674,7 +676,7 @@ function SingleUnitBalance({ balance }: { balance: number }) {
   return (
     <div className="text-muted-foreground flex items-center gap-2 text-sm">
       <CheckCircle2 className="text-success h-4 w-4" />
-      Fully settled — no outstanding balance.
+      Fully settled. No outstanding balance.
     </div>
   );
 }
@@ -694,9 +696,7 @@ function AmountCell({
     );
   }
   return (
-    <span className="font-semibold text-red-600 dark:text-red-400">
-      {formatINR(amount)}
-    </span>
+    <span className="text-destructive font-semibold">{formatINR(amount)}</span>
   );
 }
 
@@ -705,14 +705,14 @@ function BalanceCell({ value }: { value: number }) {
     return (
       <span className="text-success font-semibold">
         {formatINR(value)}{' '}
-        <span className="text-[10px] font-normal opacity-50">↑</span>
+        <span className="text-muted-foreground text-xs font-normal">↑</span>
       </span>
     );
   if (value < 0)
     return (
-      <span className="font-semibold text-red-600 dark:text-red-400">
+      <span className="text-destructive font-semibold">
         {formatINR(Math.abs(value))}{' '}
-        <span className="text-[10px] font-normal opacity-50">↓</span>
+        <span className="text-muted-foreground text-xs font-normal">↓</span>
       </span>
     );
   return <span className="text-muted-foreground text-xs">Settled</span>;
@@ -722,12 +722,10 @@ function EntryTypeBadge({ type }: { type: string }) {
   const label = ENTRY_TYPE_LABELS[type] ?? type;
   const cls = cn(
     'text-xs font-medium',
-    type === 'due' &&
-      'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
+    type === 'due' && 'text-destructive bg-red-100 dark:bg-red-900/50',
     type === 'advance_payment' && 'bg-success/10 text-success',
     type === 'advance_applied' && 'bg-warning/10 text-warning',
-    type === 'due_payment' &&
-      'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+    type === 'due_payment' && 'text-info bg-blue-100 dark:bg-blue-900/50',
   );
   return <Badge className={cls}>{label}</Badge>;
 }

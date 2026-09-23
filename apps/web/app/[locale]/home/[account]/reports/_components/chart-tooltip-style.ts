@@ -8,7 +8,7 @@ import type {
 // Renders inside the React tree so Tailwind CSS vars resolve correctly.
 export type ChartTooltipProps = TooltipProps<ValueType, NameType>;
 
-// Shared contentStyle for tabs that still use the default Recharts tooltip —
+// Shared contentStyle for tabs that still use the default Recharts tooltip -
 // Recharts inline styles can't use CSS vars, so we keep neutral grays.
 // Prefer using the ChartTooltip component below for full theme support.
 export const TOOLTIP_STYLE = {

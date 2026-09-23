@@ -1,7 +1,7 @@
 import { cn } from '@kit/ui/utils';
 
 /**
- * Ooruda brand mark — both path elements from the official vector asset
+ * Ooruda brand mark - both path elements from the official vector asset
  * (ooruda-mark-on-black.svg). Fills with `currentColor`.
  */
 export function OorudaMark({

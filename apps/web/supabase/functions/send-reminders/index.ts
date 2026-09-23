@@ -152,7 +152,7 @@ async function sendEmail(
   return { success: false, error: `Resend HTTP ${res.status}: ${body}` };
 }
 
-// Minimal reminder email HTML (no react-email in Deno — plain inline HTML)
+// Minimal reminder email HTML (no react-email in Deno - plain inline HTML)
 function formatBillType(raw: string): string {
   return raw
     .split('_')
@@ -260,7 +260,7 @@ Deno.serve(async (req) => {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    // Optional test filters — pass in request body to restrict to one unit/association
+    // Optional test filters - pass in request body to restrict to one unit/association
     let testUnitId: string | null = null;
     let testAssociationId: string | null = null;
     try {
@@ -268,7 +268,7 @@ Deno.serve(async (req) => {
       testUnitId = body.test_unit_id ?? null;
       testAssociationId = body.test_association_id ?? null;
     } catch {
-      /* no body — cron invocation */
+      /* no body - cron invocation */
     }
 
     // Check which channels are enabled (platform defaults, association_id IS NULL)
@@ -423,10 +423,10 @@ Deno.serve(async (req) => {
           0,
           bill.total_amount - bill.paid_amount - (bill.advance_applied ?? 0),
         );
-        if (outstanding === 0) continue; // fully settled — no reminder needed
+        if (outstanding === 0) continue; // fully settled - no reminder needed
 
         const targetEntry = targetDates.find((t) => t.date === bill.due_date);
-        // In test mode targetDates may not include this bill's due_date — fall back to date comparison
+        // In test mode targetDates may not include this bill's due_date - fall back to date comparison
         const isOverdue = targetEntry
           ? targetEntry.isOverdue
           : new Date(bill.due_date) < today;
@@ -457,7 +457,7 @@ Deno.serve(async (req) => {
           ),
         );
 
-        // Fetch emails from auth.users — parallel to avoid N+1
+        // Fetch emails from auth.users - parallel to avoid N+1
         const emailResults = await Promise.all(
           recipientIds.map((uid) => supabase.auth.admin.getUserById(uid)),
         );
@@ -479,8 +479,8 @@ Deno.serve(async (req) => {
           const dueDateLabel = formatDate(bill.due_date);
 
           const notifTitle = isOverdue
-            ? `Overdue Bill — Unit ${unit.unit_no}`
-            : `Bill Reminder — Unit ${unit.unit_no}`;
+            ? `Overdue Bill - Unit ${unit.unit_no}`
+            : `Bill Reminder - Unit ${unit.unit_no}`;
           const outstandingStr = new Intl.NumberFormat('en-IN', {
             style: 'currency',
             currency: 'INR',

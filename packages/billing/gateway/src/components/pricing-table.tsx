@@ -456,7 +456,7 @@ function PlanIntervalSwitcher(
           'animate-in fade-in rounded-full transition-all focus:!ring-0',
           {
             'border-r-transparent': index === 0,
-            ['hover:text-primary text-muted-foreground']: !selected,
+            ['hover:text-brand-ink text-muted-foreground']: !selected,
             ['cursor-default']: selected,
           },
         );

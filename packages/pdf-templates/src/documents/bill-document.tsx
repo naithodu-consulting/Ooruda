@@ -27,9 +27,9 @@ export interface BillPdfLineItem {
   description: string;
   gstApplicable: boolean;
   amount: number;
-  /** Unit area (sq ft) used to compute this line item — set only for per-sqft charges. */
+  /** Unit area (sq ft) used to compute this line item - set only for per-sqft charges. */
   areaSqft?: number | null;
-  /** Rate per sq ft used to compute this line item — set only for per-sqft charges. */
+  /** Rate per sq ft used to compute this line item - set only for per-sqft charges. */
   ratePerSqft?: number | null;
 }
 
@@ -112,7 +112,7 @@ export function BillDocument({
   const addressLines = buildAddressLines(billTo, unit, association.address);
 
   // Only show Area/Rate columns when at least one line item is a per-sqft
-  // charge — an association fully on a per-unit/flat maintenance model
+  // charge - an association fully on a per-unit/flat maintenance model
   // never populates these, so its bills render the plain 2-column table.
   const hasAreaColumns = lineItems.some((item) => item.areaSqft != null);
 
@@ -211,16 +211,16 @@ export function BillDocument({
               {hasAreaColumns ? (
                 <>
                   <Text style={styles.colArea}>
-                    {item.areaSqft != null ? item.areaSqft : '—'}
+                    {item.areaSqft != null ? item.areaSqft : '-'}
                   </Text>
                   <Text style={styles.colRate}>
-                    {item.ratePerSqft != null ? item.ratePerSqft : '—'}
+                    {item.ratePerSqft != null ? item.ratePerSqft : '-'}
                   </Text>
                 </>
               ) : null}
               {showGst ? (
                 <Text style={[styles.colGst, { textAlign: 'center' }]}>
-                  {item.gstApplicable ? 'Yes' : '—'}
+                  {item.gstApplicable ? 'Yes' : '-'}
                 </Text>
               ) : null}
               <Text style={[styles.colAmount, { textAlign: 'right' }]}>
@@ -258,7 +258,7 @@ export function BillDocument({
           {advanceApplied > 0 ? (
             <View style={styles.summaryRow}>
               <Text>Advance Applied</Text>
-              <Text style={{ color: '#16A34A' }}>
+              <Text style={{ color: '#146f35' }}>
                 − {formatINR(advanceApplied)}
               </Text>
             </View>

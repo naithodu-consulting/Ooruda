@@ -11,7 +11,7 @@ import { formatINR } from '../lib/format';
 
 // A4 landscape usable width ~769pt. Column flex weights tuned to typical
 // content so nothing bleeds. IMPORTANT: react-pdf only clips text via View
-// overflow:'hidden' — all cells are wrapped in <C flex> for correct clipping.
+// overflow:'hidden' - all cells are wrapped in <C flex> for correct clipping.
 const COL = {
   billNo: 2.8, // "TPC/26-27/MNT/000001"
   period: 1.2, // "Jul 2026"
@@ -58,7 +58,7 @@ const s = StyleSheet.create({
   },
   kpiLabel: {
     fontSize: 6.5,
-    color: '#888',
+    color: '#666',
     marginBottom: 2,
     textTransform: 'uppercase',
   },
@@ -106,7 +106,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  footerText: { fontSize: 7, color: '#888' },
+  footerText: { fontSize: 7, color: '#666' },
   th: { fontSize: 7, color: '#fff', fontWeight: 'bold' },
   thR: { fontSize: 7, color: '#fff', fontWeight: 'bold', textAlign: 'right' },
   cell: { fontSize: 7.5, color: '#222' },
@@ -120,7 +120,7 @@ const s = StyleSheet.create({
   },
 });
 
-// Cell container — View clips content at column boundary. Text overflow alone
+// Cell container - View clips content at column boundary. Text overflow alone
 // is unreliable in react-pdf's layout engine.
 function C({
   flex,
@@ -160,7 +160,7 @@ function fmtPeriod(p: string) {
 }
 
 function fmtDate(iso: string) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   return new Date(iso.slice(0, 10)).toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'short',
@@ -231,7 +231,7 @@ export function BillsExportDocument({ data }: { data: BillsExportPdfData }) {
             <Text style={s.kpiValue}>
               {data.totals.totalBilled > 0
                 ? `${Math.round((data.totals.totalCollected / data.totals.totalBilled) * 100)}%`
-                : '—'}
+                : '-'}
             </Text>
           </View>
         </View>
@@ -295,23 +295,23 @@ export function BillsExportDocument({ data }: { data: BillsExportPdfData }) {
               </C>
               <C flex={COL.paid} right>
                 <Text style={s.cellR}>
-                  {b.paid_amount > 0 ? formatINR(b.paid_amount) : '—'}
+                  {b.paid_amount > 0 ? formatINR(b.paid_amount) : '-'}
                 </Text>
               </C>
               <C flex={COL.outstanding} right>
                 <Text
-                  style={isOverdue ? { ...s.cellR, color: '#dc2626' } : s.cellR}
+                  style={isOverdue ? { ...s.cellR, color: '#b91c1c' } : s.cellR}
                 >
-                  {b.outstanding > 0 ? formatINR(b.outstanding) : '—'}
+                  {b.outstanding > 0 ? formatINR(b.outstanding) : '-'}
                 </Text>
               </C>
               <C flex={COL.status}>
                 <Text
                   style={
                     isOverdue
-                      ? { ...s.cell, color: '#dc2626', fontWeight: 'bold' }
+                      ? { ...s.cell, color: '#b91c1c', fontWeight: 'bold' }
                       : b.status === 'Paid'
-                        ? { ...s.cell, color: '#16a34a' }
+                        ? { ...s.cell, color: '#146f35' }
                         : s.cell
                   }
                 >

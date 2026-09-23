@@ -187,7 +187,7 @@ export async function fetchBulkBillData(
             .eq('association_id', associationId)
             .in('period', distinctPeriods)
         : { data: [], error: null },
-      // Query 3a+3b: sub_meters — one query per unit batch + optional CommonArea
+      // Query 3a+3b: sub_meters - one query per unit batch + optional CommonArea
       Promise.all([
         distinctUnitIds.length > 0
           ? admin
@@ -381,7 +381,7 @@ function resolveBillingEntityFromLookups(
 }
 
 /**
- * Render a single bill to a Buffer using pre-fetched data — zero DB calls.
+ * Render a single bill to a Buffer using pre-fetched data - zero DB calls.
  * All data comes from the lookup maps built by fetchBulkBillData.
  */
 export async function renderBillFromPrefetch(

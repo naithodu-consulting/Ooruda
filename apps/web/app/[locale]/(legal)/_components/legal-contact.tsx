@@ -1,7 +1,7 @@
 /**
  * Registered-entity contact block. Identical across the Privacy Policy,
  * Terms of Service and Refund & Cancellation Policy, so it lives in one
- * place — these details are legally material and must not drift apart.
+ * place - these details are legally material and must not drift apart.
  */
 export function LegalContact() {
   return (

@@ -123,7 +123,7 @@ export function TenancyTimeline({ tenancies }: { tenancies: TenancyEntry[] }) {
           <div key={item.id} className="flex gap-3">
             {/* Timeline spine + dot */}
             <div className="flex w-7 flex-col items-center">
-              {/* Top connector — hidden for first item */}
+              {/* Top connector - hidden for first item */}
               <div
                 className={cn(
                   'bg-border w-px',
@@ -139,7 +139,7 @@ export function TenancyTimeline({ tenancies }: { tenancies: TenancyEntry[] }) {
                     : 'border-muted-foreground/40 bg-muted',
                 )}
               />
-              {/* Bottom connector — hidden for last item */}
+              {/* Bottom connector - hidden for last item */}
               <div
                 className={cn(
                   'bg-border w-px flex-1',

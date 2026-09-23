@@ -348,7 +348,7 @@ export function AddCashLedgerEntryDialog({
               )}
             />
 
-            {/* Paid By — only for advance payments */}
+            {/* Paid By - only for advance payments */}
             {!isDue && (
               <>
                 <FormField
@@ -389,7 +389,7 @@ export function AddCashLedgerEntryDialog({
                   )}
                 />
 
-                {/* Custom name — only when Other */}
+                {/* Custom name - only when Other */}
                 {paidByType === 'other' && (
                   <FormField
                     control={form.control}
@@ -412,7 +412,7 @@ export function AddCashLedgerEntryDialog({
               </>
             )}
 
-            {/* Date — label changes by type */}
+            {/* Date - label changes by type */}
             <FormField
               control={form.control}
               name="entry_date"

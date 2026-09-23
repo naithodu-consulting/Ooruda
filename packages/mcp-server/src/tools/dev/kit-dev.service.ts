@@ -175,7 +175,7 @@ export class KitDevService {
       try {
         await this.stopDatabase(variant);
       } catch {
-        // Best-effort — the database process may already be stopped or
+        // Best-effort - the database process may already be stopped or
         // the CLI may not be available.
       }
 

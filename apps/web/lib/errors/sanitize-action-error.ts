@@ -28,7 +28,7 @@ interface PgError {
  *
  * - Logs the full raw error + context server-side via getLogger()
  * - Classifies the error by Postgres error code and message patterns
- * - Returns a safe, user-facing message — never the raw DB/API string
+ * - Returns a safe, user-facing message - never the raw DB/API string
  *
  * ref: short timestamp code included in unrecoverable messages so users
  * can quote it to support and developers can grep server logs.
@@ -117,7 +117,7 @@ function classify(msg: string, pgCode: string): ErrorClass {
     return 'permission';
   }
 
-  // Foreign key violation — typically a "not found" for the user
+  // Foreign key violation - typically a "not found" for the user
   if (pgCode === '23503') {
     return 'not_found';
   }
@@ -130,13 +130,13 @@ const USER_MESSAGES: Record<ErrorClass, (ref: string) => string> = {
     "You don't have permission to do this. Contact your association admin if you think this is incorrect.",
 
   not_found: () =>
-    'The item could not be found. It may have been deleted — try refreshing the page.',
+    'The item could not be found. It may have been deleted; try refreshing the page.',
 
   conflict: () =>
     'This already exists. Check for a duplicate entry and try again.',
 
   // Validation messages are thrown explicitly by action code and are already
-  // user-safe — callers should pass the message string directly, not route it
+  // user-safe - callers should pass the message string directly, not route it
   // through sanitizeActionError. This class is a safety net only.
   validation: (ref) =>
     `The submitted data was invalid. Please check your input and try again. (ref: ${ref})`,

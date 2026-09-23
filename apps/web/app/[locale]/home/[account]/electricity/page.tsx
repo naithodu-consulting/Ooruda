@@ -93,7 +93,7 @@ export default async function MescomPage({ params }: Props) {
     const displayUnitNo =
       m.meter_type === 'CommonArea' && commonAreaUnit
         ? commonAreaUnit.unit_no
-        : ((m.units as unknown as { unit_no: string } | null)?.unit_no ?? '—');
+        : ((m.units as unknown as { unit_no: string } | null)?.unit_no ?? '-');
 
     return {
       id: m.id,
@@ -152,7 +152,7 @@ export default async function MescomPage({ params }: Props) {
 
   // For each bill's readings dialog, the default "previous reading" for a
   // sub-meter should be its most recent current_reading from any period
-  // BEFORE this bill's period — not the global latest. This ensures entering
+  // BEFORE this bill's period - not the global latest. This ensures entering
   // an older bill after a newer one doesn't carry forward a future reading.
   // `allReadings` is sorted ascending by period, so iterating and overwriting
   // gives us the most recent reading strictly before each bill's period.
@@ -161,7 +161,7 @@ export default async function MescomPage({ params }: Props) {
     Record<string, number>
   > = {};
   // Last minimum_charge recorded for each sub-meter strictly before each
-  // bill's period — used to pre-fill the min charge field so admins only need
+  // bill's period - used to pre-fill the min charge field so admins only need
   // to edit it when the charge actually changes.
   const lastMinChargeBeforePeriodByBill: Record<
     string,
@@ -251,7 +251,7 @@ export default async function MescomPage({ params }: Props) {
               value={
                 latestBlockRate !== null
                   ? `₹${latestBlockRate.toFixed(2)}`
-                  : '—'
+                  : '-'
               }
               sublabel={
                 latestBill

@@ -10,7 +10,6 @@ import { cn } from '@kit/ui/utils';
 const sans = SansFont({
   subsets: ['latin'],
   variable: '--font-sans-fallback',
-  fallback: ['system-ui', 'Helvetica Neue', 'Helvetica', 'Arial'],
   preload: true,
   weight: ['400', '500', '600', '700', '800', '900'],
 });

@@ -142,7 +142,7 @@ function getClassNameBuilder() {
         variant: 'numbers',
         selected: false,
         complete: true,
-        className: 'border-primary text-primary',
+        className: 'border-primary text-brand-ink',
       },
       {
         variant: 'numbers',

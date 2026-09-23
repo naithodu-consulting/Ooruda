@@ -10,7 +10,7 @@ const LEGAL_LINKS = [
 
 /**
  * Minimal footer: the registered entity and the legal documents. Ooruda has no
- * public marketing site, so there are no About/Product sections to link — the
+ * public marketing site, so there are no About/Product sections to link - the
  * previous ones pointed at Makerkit demo content. Contact details are published
  * in full on each legal page.
  */

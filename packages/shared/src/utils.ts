@@ -31,7 +31,7 @@ export function formatCurrency(params: {
  * @name DEFAULT_PHONE_COUNTRY
  * @description Default region for parsing inputs without an explicit country
  * code. The app's primary market is India, so a bare 10-digit number is treated
- * as Indian — but full E.164 numbers from any country are accepted too.
+ * as Indian - but full E.164 numbers from any country are accepted too.
  */
 export const DEFAULT_PHONE_COUNTRY: CountryCode = 'IN';
 
@@ -66,7 +66,7 @@ export function formatPhoneNumber(
   value: string | null | undefined,
   defaultCountry: CountryCode = DEFAULT_PHONE_COUNTRY,
 ): string {
-  if (!value || !value.trim()) return '—';
+  if (!value || !value.trim()) return '-';
 
   const parsed = parsePhoneNumberFromString(value.trim(), defaultCountry);
 

@@ -5,7 +5,7 @@
 * Use this file to add any global styles that are specific to Makerkit's components
  */
 
-/* Browsers default <button> to cursor:default — make every button show the
+/* Browsers default <button> to cursor:default - make every button show the
    pointer so users understand the elements are clickable. */
 button:not(:disabled) {
   cursor: pointer;
@@ -42,7 +42,7 @@ button:not(:disabled) {
 /*
  * Ooruda primary-button treatment (Warm-gold rebrand).
  * Primary CTAs are flat brand gold (#FCD469) with black text and a soft gold
- * shadow — no gradient. We target the shadcn default ("primary") button via its
+ * shadow - no gradient. We target the shadcn default ("primary") button via its
  * data-slot + the .bg-primary utility it always carries, so this wins over the
  * Tailwind .bg-primary rule without editing the upstream shadcn button or
  * touching call sites. Badges/other primary-bg elements use different
@@ -61,6 +61,48 @@ button:not(:disabled) {
 
 [data-slot='button'].bg-primary:active {
   filter: brightness(0.94);
+}
+
+/*
+ * Brand gold is a fill colour. As text it is ~1.4:1 on white, so the upstream
+ * shadcn `link` variants and link-hover styles that use `text-primary` are
+ * re-pointed at the readable gold ink instead of editing src/shadcn/.
+ */
+button.text-primary,
+a.text-primary,
+[data-slot='badge'].text-primary,
+[data-slot='empty-description'] > a:hover,
+[data-slot='field-description'] > a:hover,
+[data-slot='item-description'] > a:hover {
+  color: var(--brand-ink);
+}
+
+/*
+ * Upstream Button `size="sm"` uses text-[0.8rem] (12.8px), off the type scale
+ * and visibly smaller than default buttons placed beside it. Align it to
+ * text-sm so every button label is 14px (xs stays 12px for dense controls).
+ * Matched on the element, not data-slot: a Button rendered as a Dialog,
+ * Dropdown or Combobox trigger takes that trigger's data-slot instead.
+ */
+button.text-\[0\.8rem\],
+a.text-\[0\.8rem\] {
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+}
+
+/* Upstream FormDescription (12.8px) → 12px, matching FormMessage. */
+p.text-muted-foreground.text-\[0\.8rem\] {
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+}
+
+/*
+ * Recharts paints each legend label in its series colour (inline style), so a
+ * gold or amber series produced 1.4-2.1:1 text. The swatch beside the label
+ * still carries the series colour; the label itself reads as body text.
+ */
+.recharts-legend-item-text {
+  color: var(--foreground) !important;
 }
 
 /*
@@ -89,10 +131,18 @@ button:not(:disabled) {
 }
 
 /*
+ * Upstream group labels use text-sidebar-foreground/70, which drops below
+ * WCAG AA (3.4:1) on the cream sidebar. Use the full token (6.7:1).
+ */
+[data-slot='sidebar-group-label'] {
+  color: var(--sidebar-foreground);
+}
+
+/*
  * Keyboard focus fallback for bare interactive elements.
  *
  * The shared Button, Input and Select all define their own focus-visible ring
- * and set `outline-none`, so this rule never applies to them — the utility
+ * and set `outline-none`, so this rule never applies to them - the utility
  * layer beats the base layer. It only catches hand-rolled `<button>` and `<a>`
  * elements that define no focus styling at all: an audit found 44 of them
  * (filter pills, segmented controls, pagination), none of which were reachable

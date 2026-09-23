@@ -71,7 +71,7 @@ function getColumns(): ColumnDef<Memberships>[] {
       header: 'Phone',
       enableSorting: true,
       accessorFn: (row) => row.phone ?? '',
-      cell: ({ row }) => row.original.phone ?? '—',
+      cell: ({ row }) => row.original.phone ?? '-',
     },
     {
       header: 'Email',

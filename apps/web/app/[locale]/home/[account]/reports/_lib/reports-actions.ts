@@ -165,7 +165,7 @@ async function fetchCollectionUnitBreakdown(
   >();
   for (const b of data as any[]) {
     const uid = b.unit_id as string;
-    const unit_no = (b.units as { unit_no: string } | null)?.unit_no ?? '—';
+    const unit_no = (b.units as { unit_no: string } | null)?.unit_no ?? '-';
     const settled = Number(b.paid_amount ?? 0) + Number(b.advance_applied ?? 0);
     const outstanding = Math.max(0, Number(b.total_amount) - settled);
     const isOverdue = outstanding > 0 && new Date(b.due_date) < today;
@@ -385,7 +385,7 @@ export async function downloadCsvAction(
       rows.map((b: any) => {
         const unit = b.units as { unit_no: string } | null;
         return [
-          unit?.unit_no ?? '—',
+          unit?.unit_no ?? '-',
           b.bill_no,
           billTypeLabel(b.bill_type),
           b.period,
@@ -450,8 +450,8 @@ export async function downloadCsvAction(
       const receipt = Array.isArray(p.receipts) ? p.receipts[0] : p.receipts;
       return [
         p.paid_at?.slice(0, 10) ?? '',
-        bill?.units?.unit_no ?? '—',
-        bill?.bill_no ?? '—',
+        bill?.units?.unit_no ?? '-',
+        bill?.bill_no ?? '-',
         billTypeLabel(bill?.bill_type),
         p.amount,
         p.mode,
@@ -465,8 +465,8 @@ export async function downloadCsvAction(
       const unit = p.units as { unit_no: string } | null;
       return [
         p.paid_at?.slice(0, 10) ?? '',
-        unit?.unit_no ?? '—',
-        '—',
+        unit?.unit_no ?? '-',
+        '-',
         billTypeLabel(p.bill_type),
         p.amount,
         p.mode,
@@ -531,7 +531,7 @@ export async function downloadCsvAction(
         const unit = r.units as { unit_no: string } | null;
         return [
           r.entry_date,
-          unit?.unit_no ?? '—',
+          unit?.unit_no ?? '-',
           r.entry_type,
           billTypeLabel(r.bill_type),
           r.direction,
@@ -592,7 +592,7 @@ export async function downloadCsvAction(
     >();
     for (const b of data ?? []) {
       const uid = b.unit_id as string;
-      const unit_no = (b.units as { unit_no: string } | null)?.unit_no ?? '—';
+      const unit_no = (b.units as { unit_no: string } | null)?.unit_no ?? '-';
       const out = Math.max(
         0,
         Number(b.total_amount) -
@@ -893,7 +893,7 @@ export async function downloadPdfAction(
     payment_modes: ['payments'],
     advances: ['payments'],
     gst_summary: [],
-    // Ledger statement is per-unit and exported as CSV from within the tab —
+    // Ledger statement is per-unit and exported as CSV from within the tab -
     // it has no financial-section PDF representation.
     ledger_statement: [],
     occupancy: [],
@@ -1044,7 +1044,7 @@ export async function downloadPdfAction(
   } | null;
   const assocName = assocAccounts?.name ?? 'Association';
 
-  // Preprocess logo to a base64 data URI — react-pdf cannot pass auth headers
+  // Preprocess logo to a base64 data URI - react-pdf cannot pass auth headers
   // when fetching raw Supabase Storage URLs, causing silent fallback to the
   // OorudaMark placeholder. Use logo_url first, fall back to accounts.picture_url.
   const rawLogoUrl =
@@ -1094,7 +1094,7 @@ export async function downloadPdfAction(
       topBills: outstandingBills
         .filter((b) => outstandingAmount(b) > 0)
         .map((b) => ({
-          unit_no: (b.units as { unit_no: string } | null)?.unit_no ?? '—',
+          unit_no: (b.units as { unit_no: string } | null)?.unit_no ?? '-',
           bill_no: b.bill_no,
           bill_type: b.bill_type ?? 'maintenance',
           period: b.period,
@@ -1115,8 +1115,8 @@ export async function downloadPdfAction(
         } | null;
         return {
           paid_at: p.paid_at?.slice(0, 10) ?? '',
-          unit_no: bill?.units?.unit_no ?? '—',
-          bill_no: bill?.bill_no ?? '—',
+          unit_no: bill?.units?.unit_no ?? '-',
+          bill_no: bill?.bill_no ?? '-',
           amount: Number(p.amount),
           mode: p.mode,
         };
@@ -1249,7 +1249,7 @@ export async function downloadPdfAction(
               return nonEmpty.length > 0 ? nonEmpty : undefined;
             }
 
-            // 0 or 1 bill type — single combined section
+            // 0 or 1 bill type - single combined section
             const rows = await fetchCollectionUnitBreakdown(
               client,
               associationId,
@@ -1296,7 +1296,7 @@ export async function downloadPdfAction(
         notes: string;
       }[] = (clData ?? []).map((r: any) => ({
         entry_date: r.entry_date,
-        unit_no: (r.units as { unit_no: string } | null)?.unit_no ?? '—',
+        unit_no: (r.units as { unit_no: string } | null)?.unit_no ?? '-',
         entry_type: r.entry_type as string,
         bill_type: r.bill_type as string,
         direction: r.direction as 'credit' | 'debit',
@@ -1373,7 +1373,7 @@ export async function downloadPdfAction(
           Number(b.paid_amount ?? 0) + Number(b.advance_applied ?? 0),
           billTotal,
         );
-        const unit_no = (b.units as { unit_no: string } | null)?.unit_no ?? '—';
+        const unit_no = (b.units as { unit_no: string } | null)?.unit_no ?? '-';
         const items: { description: string; amount: number }[] =
           (b.bill_line_items as any[]) ?? [];
         for (const item of items) {
@@ -1700,7 +1700,7 @@ export async function fetchDirectoryAction(
       rows.push({
         unit_id: u.id,
         unit_no: u.unit_no,
-        name: p?.full_name ?? '—',
+        name: p?.full_name ?? '-',
         phone: p?.mobile_number ?? null,
         email: emailMap.get(u.owner_id) ?? null,
         role: 'Owner',
@@ -1713,7 +1713,7 @@ export async function fetchDirectoryAction(
       rows.push({
         unit_id: u.id,
         unit_no: u.unit_no,
-        name: p?.full_name ?? '—',
+        name: p?.full_name ?? '-',
         phone: p?.mobile_number ?? null,
         email: emailMap.get(tenancy.tenant_id) ?? null,
         role: 'Tenant',
@@ -1751,14 +1751,14 @@ export async function downloadOccupancyOrDirectoryCsvAction(
       res.rows.map((r) => [
         r.unit_no,
         r.type,
-        r.floor ?? '—',
+        r.floor ?? '-',
         r.area_sqft,
         r.status,
-        r.occupant_name ?? '—',
-        r.occupant_phone ?? '—',
-        r.occupant_email ?? '—',
-        r.occupant_role ?? '—',
-        r.move_in_date ?? '—',
+        r.occupant_name ?? '-',
+        r.occupant_phone ?? '-',
+        r.occupant_email ?? '-',
+        r.occupant_role ?? '-',
+        r.move_in_date ?? '-',
       ]),
     );
     return { success: true, csv, filename: 'occupancy_report.csv' };
@@ -1770,10 +1770,10 @@ export async function downloadOccupancyOrDirectoryCsvAction(
       res.rows.map((r) => [
         r.unit_no,
         r.name,
-        r.phone ?? '—',
-        r.email ?? '—',
+        r.phone ?? '-',
+        r.email ?? '-',
         r.role,
-        r.move_in_date ?? '—',
+        r.move_in_date ?? '-',
       ]),
     );
     return { success: true, csv, filename: 'directory.csv' };
@@ -1797,7 +1797,7 @@ function toCSVExport(headers: string[], rows: (string | number)[][]): string {
  * balance. Reuses the same accounting engine as the resident statement page so
  * advance netting and reversal handling cannot drift between the two views.
  *
- * Gated to assoc_admin only — this exposes a single unit's full financial
+ * Gated to assoc_admin only - this exposes a single unit's full financial
  * history, which billing_operator has no need to browse.
  */
 export async function fetchLedgerStatementAction(
@@ -1853,7 +1853,7 @@ export async function fetchLedgerStatementAction(
     }
   }
 
-  // Confirm the unit belongs to this association before building a statement —
+  // Confirm the unit belongs to this association before building a statement -
   // prevents a caller-supplied unit_id from reaching across associations.
   const { data: unit, error: unitError } = await client
     .from('units')

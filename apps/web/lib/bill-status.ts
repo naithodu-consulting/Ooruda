@@ -9,7 +9,7 @@ interface BillAmounts {
   paid_amount?: number;
   /**
    * Portion of the bill settled from the unit's advance credit rather than by a
-   * payment row. This is real settlement — it must be counted alongside
+   * payment row. This is real settlement - it must be counted alongside
    * `paid_amount`, otherwise an advance-settled bill reads as unpaid.
    */
   advance_applied?: number;
@@ -40,7 +40,7 @@ export function displayBillStatus(bill: BillAmounts): string {
 
     if (total === 0) return 'Paid';
 
-    // Prefer amounts over the stored status — the DB status can lag behind
+    // Prefer amounts over the stored status - the DB status can lag behind
     // payments. Fully settled by amount means Paid whatever the column says.
     if (settled >= total) return 'Paid';
 

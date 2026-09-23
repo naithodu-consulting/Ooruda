@@ -50,7 +50,7 @@ export function RazorpayAdvanceCheckoutButton({
       document.head.appendChild(script);
     }
 
-    // Reset any previously cached order — it was for a different amount/unit/type.
+    // Reset any previously cached order - it was for a different amount/unit/type.
     prefetchedOrder.current = null;
     prefetchInFlight.current = false;
 
@@ -79,7 +79,7 @@ export function RazorpayAdvanceCheckoutButton({
           };
         }
       } catch (e) {
-        // AbortError is expected on cleanup — ignore it silently.
+        // AbortError is expected on cleanup - ignore it silently.
         if (!(e instanceof DOMException && e.name === 'AbortError')) {
           prefetchedOrder.current = null;
         }
@@ -140,7 +140,7 @@ export function RazorpayAdvanceCheckoutButton({
         currency: 'INR',
         order_id: order.orderId,
         name: 'Association Billing',
-        description: `Advance deposit — Unit ${unitNo} · ${billType}`,
+        description: `Advance deposit - Unit ${unitNo} · ${billType}`,
         theme: { color: '#16a34a' },
         modal: {
           ondismiss: () => {
@@ -190,7 +190,7 @@ export function RazorpayAdvanceCheckoutButton({
               }) => {
                 clearTimeout(fallbackTimer);
                 if (data.error && !data.alreadyRecorded) {
-                  toast.warning('Advance received — confirmation delayed', {
+                  toast.warning('Advance received, confirmation delayed', {
                     id: toastId,
                     description:
                       "Contact the association if it doesn't reflect within 24h.",
@@ -208,7 +208,7 @@ export function RazorpayAdvanceCheckoutButton({
             )
             .catch(() => {
               clearTimeout(fallbackTimer);
-              toast.warning('Advance received — confirmation delayed', {
+              toast.warning('Advance received, confirmation delayed', {
                 id: toastId,
                 description:
                   "Contact the association if it doesn't reflect within 24h.",

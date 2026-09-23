@@ -26,7 +26,7 @@ interface DownloadPdfButtonProps {
 
 /**
  * A bare `<Download />` icon with no visible text reads as decoration, not a
- * control — every download affordance in the billing/payments UI goes
+ * control - every download affordance in the billing/payments UI goes
  * through this component so it's always either a labeled button or an
  * icon button with a tooltip + aria-label, never a naked icon link.
  *

@@ -137,14 +137,14 @@ function ConfiguredView({
       {/* Status row */}
       <div className="bg-muted/40 flex items-center justify-between rounded-lg border p-3">
         <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <CheckCircle2 className="text-success h-4 w-4" />
           <span className="text-sm font-medium">Razorpay configured</span>
           <Badge
             variant="outline"
             className={
               isActive
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400'
-                : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-500/10 dark:text-amber-400'
+                ? 'text-success border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-500/10'
+                : 'text-warning border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-500/10'
             }
           >
             {isActive ? 'Active' : 'Paused'}
@@ -155,18 +155,18 @@ function ConfiguredView({
         </span>
       </div>
 
-      {/* Credential rows — read-only */}
+      {/* Credential rows - read-only */}
       <div className="flex flex-col gap-2 rounded-lg border p-3">
         <CredentialRow label="Key ID" value={maskKeyId(gateway.key_id)} />
         <CredentialRow
           label="Key Secret"
-          value={gateway.has_secret ? '••••••••••••••••' : '— not set'}
+          value={gateway.has_secret ? '••••••••••••••••' : 'Not set'}
           missing={!gateway.has_secret}
         />
         <CredentialRow
           label="Webhook Secret"
           value={
-            gateway.has_webhook_secret ? '••••••••••••••••' : '— not configured'
+            gateway.has_webhook_secret ? '••••••••••••••••' : 'Not configured'
           }
         />
       </div>
@@ -213,7 +213,7 @@ function ConfiguredView({
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-500" />
+                <AlertTriangle className="text-destructive h-5 w-5" />
                 Delete Payment Gateway?
               </DialogTitle>
               <DialogDescription>
@@ -326,7 +326,7 @@ function CreateForm({ associationId }: { associationId: string }) {
 
       <Alert
         variant="default"
-        className="border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
+        className="text-warning border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-500/10"
       >
         <Shield className="h-4 w-4" />
         <AlertDescription className="text-xs">

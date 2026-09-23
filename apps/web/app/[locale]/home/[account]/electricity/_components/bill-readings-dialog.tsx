@@ -157,7 +157,7 @@ function ReadingsForm(props: {
   // Readings are decimals, so every total is rounded to 2dp at source and that
   // one value drives the comparison, the running total and the overage alike.
   // Comparing the raw float while displaying a rounded one produced a banner
-  // reading "250 / 250 units — exceeds by 0 units" on pure float drift.
+  // reading "250 / 250 units - exceeds by 0 units" on pure float drift.
   const roundUnits = (n: number) => Math.round(n * 100) / 100;
 
   const totalConsumption = roundUnits(
@@ -184,7 +184,7 @@ function ReadingsForm(props: {
 
   // Per-row guard: a current reading below the previous one is never valid (it
   // means a mis-keyed value or a replaced meter). Saving would drop the meter
-  // out of the split, so the whole form is blocked until every row is sane —
+  // out of the split, so the whole form is blocked until every row is sane -
   // the row-level counterpart to the block-total check above.
   const invalidRowLabels = (watched ?? []).flatMap((row, index) => {
     const prev = Number(row?.previousReading) || 0;
@@ -410,7 +410,7 @@ function ReadingsForm(props: {
           </div>
         </div>
 
-        {/* Inline error banner — shown live as the user types */}
+        {/* Inline error banner - shown live as the user types */}
         {hasInvalidRows ? (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />

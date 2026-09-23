@@ -6,6 +6,7 @@ import { routing } from '@kit/i18n';
 import { I18nClientProvider } from '@kit/i18n/provider';
 
 import { ErrorPageContent } from '~/components/error-page-content';
+import { getFontsClassName } from '~/lib/fonts';
 import { getRootTheme } from '~/lib/root-theme';
 
 export const generateMetadata = async () => {
@@ -24,7 +25,10 @@ const NotFoundPage = async () => {
   const { common } = await getMessages({ locale });
 
   return (
-    <html lang={locale} className={theme}>
+    <html
+      lang={locale}
+      className={`bg-background min-h-screen antialiased ${getFontsClassName(theme)}`}
+    >
       <body className="bg-background">
         <div className={'flex h-screen flex-1 flex-col'}>
           <I18nClientProvider locale={locale} messages={{ common }}>

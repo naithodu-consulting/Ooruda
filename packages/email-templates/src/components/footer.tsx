@@ -9,9 +9,9 @@ export function EmailFooter(_props: React.PropsWithChildren) {
           margin: '0 0 4px',
           textAlign: 'center' as const,
           fontSize: '12px',
-          color: '#9a9a8a',
+          color: '#6b6b5e',
           fontFamily:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
         }}
       >
         © {new Date().getFullYear()} Ooruda · Property Management
@@ -21,9 +21,9 @@ export function EmailFooter(_props: React.PropsWithChildren) {
           margin: '0 0 4px',
           textAlign: 'center' as const,
           fontSize: '11px',
-          color: '#b5b5a5',
+          color: '#6b6b5e',
           fontFamily:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
         }}
       >
         hello@ooruda.com

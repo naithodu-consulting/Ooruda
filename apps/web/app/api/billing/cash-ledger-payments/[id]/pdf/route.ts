@@ -18,11 +18,11 @@ export const GET = enhanceRouteHandler(
   async function ({ params, user }) {
     const { id } = z.object({ id: z.string().uuid() }).parse(params);
 
-    // Use the regular (authenticated) client — cash_ledger_payments has
+    // Use the regular (authenticated) client - cash_ledger_payments has
     // REVOKE ALL FROM service_role, so the admin client cannot query it.
     // The authenticated role has SELECT granted, and the clp_read RLS policy
     // allows any association member to read, so this is safe.
-    // user is injected by enhanceRouteHandler (auth: true) — no extra getUser() call.
+    // user is injected by enhanceRouteHandler (auth: true) - no extra getUser() call.
     const client = getSupabaseServerClient();
 
     const { data: payment, error: queryError } = await client

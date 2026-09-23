@@ -86,7 +86,7 @@ function compareVersions(local, upstream) {
   if (cmp > 0) return 'canary';
   if (cmp === 0) return 'success';
 
-  // Upstream is ahead — determine severity
+  // Upstream is ahead - determine severity
   if (l.major < u.major || l.minor < u.minor) return 'critical';
   if (u.patch - l.patch > 3) return 'critical';
 
@@ -162,5 +162,5 @@ function checkMakerkitVersion() {
 try {
   checkMakerkitVersion();
 } catch {
-  // Version check is informational — never block the dev server
+  // Version check is informational - never block the dev server
 }

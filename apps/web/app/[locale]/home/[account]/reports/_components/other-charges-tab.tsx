@@ -30,7 +30,7 @@ import type { OtherChargeRow, OtherChargeUnitRow } from '../_lib/reports-types';
 import { TOOLTIP_STYLE } from './chart-tooltip-style';
 import { KpiTile } from './kpi-tile';
 
-// Colour palette for bars — cycles if more charge types than colours
+// Colour palette for bars - cycles if more charge types than colours
 const PALETTE = [
   '#6366f1',
   '#f59e0b',
@@ -152,7 +152,7 @@ export function OtherChargesTab({
         const billPaid =
           Number(bill.paid_amount) + Number(bill.advance_applied);
         const unit_no =
-          (bill.units as { unit_no: string } | null)?.unit_no ?? '—';
+          (bill.units as { unit_no: string } | null)?.unit_no ?? '-';
         const uid: string = bill.unit_id;
         const isOverdue =
           billPaid < billTotal && new Date(bill.due_date) < today;
@@ -212,10 +212,10 @@ export function OtherChargesTab({
     OtherChargeUnitRow['status'],
     { label: string; className: string }
   > = {
-    paid: { label: 'Paid', className: 'text-green-700' },
-    partial: { label: 'Partial', className: 'text-amber-700' },
-    unpaid: { label: 'Unpaid', className: 'text-red-700' },
-    overdue: { label: 'Overdue', className: 'text-red-900 font-semibold' },
+    paid: { label: 'Paid', className: 'text-success' },
+    partial: { label: 'Partial', className: 'text-warning' },
+    unpaid: { label: 'Unpaid', className: 'text-destructive' },
+    overdue: { label: 'Overdue', className: 'text-destructive font-semibold' },
   };
 
   if (rows.length === 0) {
@@ -259,9 +259,7 @@ export function OtherChargesTab({
       {chartData.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">
-              Billed vs Collected by Charge Type
-            </CardTitle>
+            <CardTitle>Billed vs Collected by Charge Type</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
@@ -272,17 +270,17 @@ export function OtherChargesTab({
               >
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  stroke="hsl(var(--border))"
+                  stroke="var(--border)"
                   vertical={false}
                 />
                 <XAxis
                   dataKey="name"
-                  tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                  tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                  tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v) =>
@@ -324,10 +322,10 @@ export function OtherChargesTab({
         </Card>
       )}
 
-      {/* Charge summary table — click a row to drill down */}
+      {/* Charge summary table - click a row to drill down */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">
+          <CardTitle>
             Charge Summary
             <span className="text-muted-foreground ml-2 text-xs font-normal">
               Click a row to see unit breakdown
@@ -387,7 +385,7 @@ export function OtherChargesTab({
                           : 'text-muted-foreground'
                       }`}
                     >
-                      {r.outstanding > 0 ? formatINR(r.outstanding) : '—'}
+                      {r.outstanding > 0 ? formatINR(r.outstanding) : '-'}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-right text-xs tabular-nums">
                       {pct(r.collected, r.billed)}%
@@ -400,13 +398,13 @@ export function OtherChargesTab({
         </CardContent>
       </Card>
 
-      {/* Unit breakdown — shown when a charge row is active */}
+      {/* Unit breakdown - shown when a charge row is active */}
       {activeCharge && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">
+            <CardTitle>
               Unit Breakdown ·{' '}
-              <span className="text-primary">{activeCharge}</span>
+              <span className="text-brand-ink">{activeCharge}</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -455,7 +453,7 @@ export function OtherChargesTab({
                                 : 'text-muted-foreground'
                             }`}
                           >
-                            {r.outstanding > 0 ? formatINR(r.outstanding) : '—'}
+                            {r.outstanding > 0 ? formatINR(r.outstanding) : '-'}
                           </TableCell>
                           <TableCell
                             className={`text-right text-xs ${badge.className}`}

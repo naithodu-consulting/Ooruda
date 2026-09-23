@@ -167,7 +167,7 @@ export function ReceiptDocument({
           <View style={styles.tableRow}>
             <Text style={styles.colMode}>{payment.mode}</Text>
             <Text style={styles.colDescription}>
-              {payment.referenceNo ?? '—'}
+              {payment.referenceNo ?? '-'}
             </Text>
             <Text style={[styles.colAmount, { textAlign: 'right' }]}>
               {formatINR(payment.amount)}
@@ -175,15 +175,10 @@ export function ReceiptDocument({
           </View>
         </View>
 
-        {/* Payment context note — only for cash-ledger documents */}
+        {/* Payment context note - only for cash-ledger documents */}
         {paymentContext ? (
           <View style={[styles.section, { marginTop: 4 }]}>
-            <Text
-              style={[
-                styles.billToAddress,
-                { fontStyle: 'italic', color: '#6b7280' },
-              ]}
-            >
+            <Text style={[styles.billToAddress, { color: '#6b7280' }]}>
               {paymentContext.type === 'due_payment'
                 ? `This receipt confirms cash settlement of outstanding ${paymentContext.billTypeLabel} dues. No invoice was raised; payment was recorded directly against the unit cash ledger.`
                 : paymentContext.type === 'advance_deposit'

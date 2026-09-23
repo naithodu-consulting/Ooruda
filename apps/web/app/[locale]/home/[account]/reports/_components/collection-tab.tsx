@@ -70,19 +70,19 @@ const STATUS_BADGE: Record<
 > = {
   paid: {
     label: 'Paid',
-    className: 'border-green-200 bg-green-50 text-green-700',
+    className: 'border-green-200 bg-green-50 text-success',
   },
   partial: {
     label: 'Partial',
-    className: 'border-amber-200 bg-amber-50 text-amber-700',
+    className: 'border-amber-200 bg-amber-50 text-warning',
   },
   unpaid: {
     label: 'Unpaid',
-    className: 'border-red-200 bg-red-50 text-red-700',
+    className: 'border-red-200 bg-red-50 text-destructive',
   },
   overdue: {
     label: 'Overdue',
-    className: 'border-red-200 bg-red-100 text-red-800',
+    className: 'border-red-200 bg-red-100 text-destructive',
   },
 };
 
@@ -129,7 +129,7 @@ export function CollectionTab({
   };
   const [activeBillType, setActiveBillType] = useState<string | null>(null);
 
-  // Unit-level breakdown for the selected bill type — fetched lazily when the
+  // Unit-level breakdown for the selected bill type - fetched lazily when the
   // user clicks a donut slice. Mirrors the former "By Bill Type" tab logic.
   const [unitBreakdownRows, setUnitBreakdownRows] = useState<BillTypeUnitRow[]>(
     [],
@@ -181,7 +181,7 @@ export function CollectionTab({
       >();
       for (const b of data ?? []) {
         const uid = b.unit_id as string;
-        const unit_no = (b.units as { unit_no: string } | null)?.unit_no ?? '—';
+        const unit_no = (b.units as { unit_no: string } | null)?.unit_no ?? '-';
         const settled =
           Number(b.paid_amount ?? 0) + Number(b.advance_applied ?? 0);
         const outstanding = Math.max(0, Number(b.total_amount) - settled);
@@ -370,7 +370,7 @@ export function CollectionTab({
           <KpiTile
             label="Collected on Raised Bills"
             value={formatINR(raisedTotals.collected)}
-            // Can exceed "Total Received" — a bill settled from the unit's
+            // Can exceed "Total Received" - a bill settled from the unit's
             // advance credit counts as collected without cash arriving now.
             sub="incl. advance credit used"
             highlight={
@@ -382,7 +382,7 @@ export function CollectionTab({
           />
           <KpiTile
             label="Collection Rate"
-            value={collectionRate !== null ? `${collectionRate}%` : '—'}
+            value={collectionRate !== null ? `${collectionRate}%` : '-'}
             highlight={
               collectionRate === null
                 ? undefined
@@ -424,7 +424,7 @@ export function CollectionTab({
           />
           <KpiTile
             label="Collection Rate"
-            value={collectionRate !== null ? `${collectionRate}%` : '—'}
+            value={collectionRate !== null ? `${collectionRate}%` : '-'}
             highlight={
               collectionRate === null
                 ? undefined
@@ -445,7 +445,7 @@ export function CollectionTab({
 
       {/* Charts row */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Primary bar chart — 2/3 width */}
+        {/* Primary bar chart - 2/3 width */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
@@ -555,7 +555,7 @@ export function CollectionTab({
                   />
                   <Bar
                     dataKey="billed"
-                    fill="hsl(var(--muted-foreground))"
+                    fill="var(--muted-foreground)"
                     fillOpacity={0.35}
                     radius={[4, 4, 0, 0]}
                   />
@@ -570,7 +570,7 @@ export function CollectionTab({
           </CardContent>
         </Card>
 
-        {/* Donut — 1/3 width, always from payments by bill type */}
+        {/* Donut - 1/3 width, always from payments by bill type */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">By Bill Type</CardTitle>
@@ -660,7 +660,7 @@ export function CollectionTab({
         </Card>
       </div>
 
-      {/* Collection rate line — only shown in "Bills Raised" view when there's enough data */}
+      {/* Collection rate line - only shown in "Bills Raised" view when there's enough data */}
       {view === 'raised' && lineData.length > 1 && (
         <Card>
           <CardHeader className="pb-2">
@@ -704,7 +704,7 @@ export function CollectionTab({
                 />
                 <Line
                   dataKey={() => 100}
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="var(--muted-foreground)"
                   strokeOpacity={0.25}
                   strokeDasharray="4 4"
                   dot={false}
@@ -723,7 +723,7 @@ export function CollectionTab({
         </Card>
       )}
 
-      {/* Unit breakdown — shown when a charge type is selected in the donut.
+      {/* Unit breakdown - shown when a charge type is selected in the donut.
           In "Payments Received" view only show units that actually have
           collected amounts; in "Bills Raised" show all units. */}
       {activeBillType && (

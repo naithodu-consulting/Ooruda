@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   const client = getSupabaseServerClient();
   const admin = getSupabaseServerAdminClient();
 
-  // Authenticate first — no elevated (admin/RLS-bypassing) work until we know
+  // Authenticate first - no elevated (admin/RLS-bypassing) work until we know
   // the caller is a real session. Association lookup uses the RLS client.
   const [
     {
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
         .eq('user_id', user.id)
         .eq('account_id', assoc.account_id)
         .maybeSingle(),
-      // Pre-fetch both unit and tenancy — we'll pick the right one after knowing role.
+      // Pre-fetch both unit and tenancy - we'll pick the right one after knowing role.
       Promise.all([
         client
           .from('units')

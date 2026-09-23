@@ -122,7 +122,7 @@ export async function recordPaymentAction(
     action: 'payment.recorded',
     entityType: 'payment',
     entityId: paymentId as unknown as string,
-    summary: `Unit ${unit?.unit_no ?? '?'} — ₹${amount.toLocaleString('en-IN')} collected via ${mode}${isBackDated ? ` (back-dated to ${paid_on})` : ''}`,
+    summary: `Unit ${unit?.unit_no ?? '?'} - ₹${amount.toLocaleString('en-IN')} collected via ${mode}${isBackDated ? ` (back-dated to ${paid_on})` : ''}`,
   });
 
   // Fire payment-confirmed notification non-blocking via after()
@@ -166,7 +166,7 @@ export async function recordPaymentAction(
 }
 
 /**
- * Void (delete) a payment. Admin-only — cascades to its receipt and
+ * Void (delete) a payment. Admin-only - cascades to its receipt and
  * triggers a database-level update to recompute the bill's paid_amount/status.
  */
 export async function voidPaymentAction(
@@ -225,14 +225,14 @@ const BILLING_DOCUMENTS_BUCKET = 'billing-documents';
 
 /**
  * Super-admin-only bulk delete: wipes every payment (cascading to
- * receipts) for the association, leaving the bills themselves intact —
+ * receipts) for the association, leaving the bills themselves intact -
  * they revert to their pre-payment Unpaid/Overdue state via the existing
  * `sync_bill_payment_status` trigger.
  *
  * Authorization is enforced inside the `super_admin_delete_all_payments`
  * RPC itself (security definer, checks `is_super_admin()`), not via
  * `requireBillingAccess`, for the same reason as `deleteAllBillsAction` in
- * billing-actions.ts — a super admin viewing an "opened workspace"
+ * billing-actions.ts - a super admin viewing an "opened workspace"
  * resolves to `assoc_admin` too, so that role check can't distinguish a
  * real customer admin from a super admin doing a mass wipe.
  */

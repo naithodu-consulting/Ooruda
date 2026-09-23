@@ -169,7 +169,7 @@ function RecordPaymentForm(props: {
                   />
                 </FormControl>
                 <FormDescription>
-                  When the money was actually received — not necessarily today.
+                  When the money was actually received, not necessarily today.
                 </FormDescription>
                 <FormMessage />
               </FormItem>

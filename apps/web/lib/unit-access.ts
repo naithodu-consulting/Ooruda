@@ -64,7 +64,7 @@ export async function getAccessibleUnits(
 
   let units: { id: string; unit_no: string }[] = ownedUnits ?? [];
 
-  // Fallback: tenant with no owned units — find all active tenancy units in this association.
+  // Fallback: tenant with no owned units - find all active tenancy units in this association.
   if (units.length === 0) {
     const { data: tenancies } = await client
       .from('tenancies')

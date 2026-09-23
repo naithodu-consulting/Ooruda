@@ -1,4 +1,4 @@
-# Ooruda — Deployment Guide
+# Ooruda - Deployment Guide
 
 This guide covers everything a new developer needs to understand the environment setup, run the app locally, push database migrations safely, and deploy to staging or production.
 
@@ -10,7 +10,7 @@ Ooruda runs across three environments, each with its own Supabase database:
 
 | Environment | Supabase Project | Ref | Vercel Project | Branch | URL |
 |---|---|---|---|---|---|
-| **Local** | Docker (local) | — | — | any | `http://localhost:3000` |
+| **Local** | Docker (local) | - | - | any | `http://localhost:3000` |
 | **Staging / Dev** | Ooruda Development | `bcdosjrbkkemsqowhigj` | prop-tech-dev-tool | `release` | ooruda.vercel.app |
 | **Production** | Ooruda Production | `vkxchopjqakvftcnxwie` | ooruda | `main` | ooruda.com |
 
@@ -34,7 +34,7 @@ pnpm install
 
 ### 3. Configure environment
 
-`.env.local` is gitignored and must be created manually. By default it points at **Ooruda Development** (staging). Ask the project owner for the values — the file lives at `apps/web/.env.local` and contains:
+`.env.local` is gitignored and must be created manually. By default it points at **Ooruda Development** (staging). Ask the project owner for the values - the file lives at `apps/web/.env.local` and contains:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=         # Ooruda Development URL
@@ -98,7 +98,7 @@ pnpm supabase:web:typegen
 
 ### Pushing to Ooruda Development (staging)
 
-Always use the guardrail script — never run `supabase db push --linked` directly.
+Always use the guardrail script - never run `supabase db push --linked` directly.
 
 ```bash
 # First check what's pending on the linked remote
@@ -119,7 +119,7 @@ cd apps/web && supabase link   # enter production project ref when prompted
 # 2. Verify what's pending
 supabase migration list --linked
 
-# 3. Push — requires typing "yes" at the confirmation prompt
+# 3. Push - requires typing "yes" at the confirmation prompt
 ./scripts/db-push.sh --production
 
 # 4. Re-link back to Ooruda Development when done
@@ -152,7 +152,7 @@ cd apps/web && supabase functions deploy custom-sms-hook
 cd apps/web && supabase functions deploy custom-sms-hook
 ```
 
-Secrets for edge functions are managed via `supabase secrets set` — not via `.env.local` or Vercel. See `apps/web/supabase/functions/custom-sms-hook/index.ts` for which secrets are required.
+Secrets for edge functions are managed via `supabase secrets set` - not via `.env.local` or Vercel. See `apps/web/supabase/functions/custom-sms-hook/index.ts` for which secrets are required.
 
 ---
 
@@ -165,17 +165,17 @@ Two Vercel projects exist under the `naithodu` team:
 | `prop-tech-dev-tool` | ooruda.vercel.app | `release` | Ooruda Development |
 | `ooruda` | ooruda.com | `main` | Ooruda Production |
 
-Each project has its own environment variables in the Vercel dashboard (Settings → Environment Variables). The `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLIC_KEY`, and `SUPABASE_SECRET_KEY` are set per-project to point at the correct database — no code change or `.env.production` file is needed.
+Each project has its own environment variables in the Vercel dashboard (Settings → Environment Variables). The `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLIC_KEY`, and `SUPABASE_SECRET_KEY` are set per-project to point at the correct database - no code change or `.env.production` file is needed.
 
 **Root Directory:** Both projects are configured with Root Directory = `apps/web`. Do not change this.
 
-**`SUPABASE_ACCESS_TOKEN`** is a CLI token — it belongs in `.env.local` only, not in Vercel.
+**`SUPABASE_ACCESS_TOKEN`** is a CLI token - it belongs in `.env.local` only, not in Vercel.
 
 ---
 
 ## SMS / OTP
 
-OTP delivery uses Supabase Auth Hooks → `custom-sms-hook` edge function → 2Factor API. This is configured entirely within Supabase (function secrets + auth hook wiring) — no SMS config is needed in Vercel or `.env.local`. Test phone numbers (`919911000xxx` and `919999999xxx` series) bypass the SMS provider via Supabase's test phone list.
+OTP delivery uses Supabase Auth Hooks → `custom-sms-hook` edge function → 2Factor API. This is configured entirely within Supabase (function secrets + auth hook wiring) - no SMS config is needed in Vercel or `.env.local`. Test phone numbers (`919911000xxx` and `919999999xxx` series) bypass the SMS provider via Supabase's test phone list.
 
 ---
 
@@ -183,9 +183,9 @@ OTP delivery uses Supabase Auth Hooks → `custom-sms-hook` edge function → 2F
 
 Before pushing any change:
 
-- [ ] `pnpm typecheck` — no type errors
-- [ ] `pnpm lint:fix` — no lint errors
-- [ ] `pnpm format:fix` — code formatted
+- [ ] `pnpm typecheck` - no type errors
+- [ ] `pnpm lint:fix` - no lint errors
+- [ ] `pnpm format:fix` - code formatted
 - [ ] If schema changed: `./scripts/db-push.sh` pushed to staging and verified
 - [ ] `RELEASE_NOTES.md` updated with new section + migrations table + date
 - [ ] If merging to `main`: `./scripts/db-push.sh --production` pushed to Ooruda Production

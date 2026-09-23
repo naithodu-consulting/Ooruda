@@ -4,7 +4,7 @@ import { cn } from '@kit/ui/utils';
  * Typographic shell for legal documents.
  *
  * Note: this project does not install @tailwindcss/typography, so `prose`
- * classes are inert here — the element styling below is deliberate, not a
+ * classes are inert here - the element styling below is deliberate, not a
  * fallback. Semantic tokens only, per the project's UI conventions.
  */
 export function LegalProse(props: React.PropsWithChildren) {
@@ -18,7 +18,7 @@ export function LegalProse(props: React.PropsWithChildren) {
           '[&_p]:mb-4',
           '[&_ul]:mb-4 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-6',
           '[&_strong]:text-foreground [&_strong]:font-semibold',
-          '[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2',
+          '[&_a]:text-brand-ink [&_a]:underline [&_a]:underline-offset-2',
           '[&_address]:mt-2 [&_address]:leading-7',
         )}
       >

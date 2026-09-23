@@ -37,10 +37,10 @@ interface AlertRow {
 
 function AlertIcon({ type }: { type: string }) {
   if (type === 'warning')
-    return <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />;
+    return <TriangleAlert className="text-warning mt-0.5 h-4 w-4 shrink-0" />;
   if (type === 'error')
     return <AlertCircle className="text-destructive mt-0.5 h-4 w-4 shrink-0" />;
-  return <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />;
+  return <Info className="text-info mt-0.5 h-4 w-4 shrink-0" />;
 }
 
 // Parse bold markdown **title**\nbody format written by notify.ts
@@ -97,8 +97,7 @@ export function MyAlertsCard({
               You're all caught up
             </p>
             <p className="text-muted-foreground mt-1 text-xs">
-              System alerts — like payment failures or sync errors — appear
-              here.
+              System alerts, like payment failures or sync errors, appear here.
             </p>
           </div>
         </CardContent>
@@ -154,7 +153,7 @@ export function MyAlertsCard({
                     {text}
                   </p>
                 )}
-                <p className="text-muted-foreground/70 mt-1 text-xs">
+                <p className="text-muted-foreground mt-1 text-xs">
                   {formatDistanceToNow(new Date(alert.created_at), {
                     addSuffix: true,
                   })}

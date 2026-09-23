@@ -21,10 +21,10 @@ const PDF_MAX = 300;
 interface ExportMenuProps {
   /** All currently-filtered row IDs (used for PDF) */
   ids: string[];
-  /** Total row count — controls button label and warning threshold */
+  /** Total row count - controls button label and warning threshold */
   count: number;
   /** Noun shown in button label, e.g. "bills" or "payments" */
-  /** Called when user picks CSV — caller performs the actual download */
+  /** Called when user picks CSV - caller performs the actual download */
   onCsvExport: () => void;
   /** POST endpoint for PDF, e.g. /api/billing/bills/export/pdf */
   pdfEndpoint: string;
@@ -80,7 +80,7 @@ export function ExportMenu({
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
       toast.dismiss(toastId);
-      toast.error('Download failed — please try again.');
+      toast.error('Download failed. Please try again.');
     } finally {
       setPdfLoading(false);
     }
@@ -122,10 +122,10 @@ export function ExportMenu({
           className="gap-2.5"
           data-test="export-csv"
         >
-          <FileSpreadsheet className="size-4 shrink-0 text-green-600" />
+          <FileSpreadsheet className="text-success size-4 shrink-0" />
           <div className="flex flex-col">
             <span className="text-xs font-semibold">Download CSV</span>
-            <span className="text-muted-foreground text-[10px]">
+            <span className="text-muted-foreground text-xs">
               Spreadsheet · instant
             </span>
           </div>
@@ -139,19 +139,19 @@ export function ExportMenu({
           className="gap-2.5"
           data-test="export-pdf"
         >
-          <FileText className="size-4 shrink-0 text-red-500" />
+          <FileText className="text-destructive size-4 shrink-0" />
           <div className="flex flex-col">
             <span className="text-xs font-semibold">Download PDF Report</span>
             {overMax ? (
-              <span className="text-destructive text-[10px]">
-                Too many rows — max {PDF_MAX}. Narrow filters.
+              <span className="text-destructive text-xs">
+                Too many rows (max {PDF_MAX}). Narrow the filters.
               </span>
             ) : overWarning ? (
-              <span className="text-[10px] text-amber-600">
+              <span className="text-warning text-xs">
                 ⚠ Large export · may be slow
               </span>
             ) : (
-              <span className="text-muted-foreground text-[10px]">
+              <span className="text-muted-foreground text-xs">
                 Formatted report · server
               </span>
             )}

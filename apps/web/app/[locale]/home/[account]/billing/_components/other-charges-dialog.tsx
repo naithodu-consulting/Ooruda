@@ -393,7 +393,7 @@ function AddChargeForm(props: {
               <FormLabel>
                 Due Date{' '}
                 <span className="text-muted-foreground font-normal">
-                  (optional — overrides default)
+                  (optional; overrides default)
                 </span>
               </FormLabel>
               <FormControl>

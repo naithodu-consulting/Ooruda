@@ -1,5 +1,5 @@
 /**
- * Supabase Auth Hook — Custom SMS Provider
+ * Supabase Auth Hook - Custom SMS Provider
  *
  * Supabase calls this Edge Function instead of its built-in Twilio integration.
  * Wired in: Supabase Dashboard → Authentication → Hooks → Send SMS hook.
@@ -8,20 +8,20 @@
  *   { user: { phone }, sms: { otp } }
  *
  * Environment variables (set in Supabase Edge Function secrets):
- *   SMS_PROVIDER     — "mock" | "kaleyra" | "msg91" | "2factor"
- *   MOCK_OTP         — "true" in development (logs OTP, skips SMS send)
+ *   SMS_PROVIDER     - "mock" | "kaleyra" | "msg91" | "2factor"
+ *   MOCK_OTP         - "true" in development (logs OTP, skips SMS send)
  *
  *   Kaleyra (SMS_PROVIDER=kaleyra):
- *   KALEYRA_API_KEY              — API key from Kaleyra dashboard
- *   KALEYRA_SID                  — Account SID (e.g. AXIN1871893356IN)
- *   KALEYRA_SENDER_ID            — Registered sender/alphanumeric ID (e.g. ABCSOL)
- *   KALEYRA_SMS_TEMPLATE_ID      — DLT template ID (required for India)
- *   KALEYRA_REGION               — "IN" | "SG" | "EU" | "NA"  (default: IN)
- *   KALEYRA_CHANNEL              — "sms" | "whatsapp"  (default: sms)
- *   KALEYRA_WA_FROM              — WhatsApp sender number (when KALEYRA_CHANNEL=whatsapp)
- *   KALEYRA_WA_TEMPLATE_NAME     — Approved WA template name (when KALEYRA_CHANNEL=whatsapp)
- *   KALEYRA_WA_TEMPLATE_LANG     — Template language code (default: en)
- *   KALEYRA_WA_HAS_COPY_BUTTON   — "true" if template has a copy-code button component
+ *   KALEYRA_API_KEY              - API key from Kaleyra dashboard
+ *   KALEYRA_SID                  - Account SID (e.g. AXIN1871893356IN)
+ *   KALEYRA_SENDER_ID            - Registered sender/alphanumeric ID (e.g. ABCSOL)
+ *   KALEYRA_SMS_TEMPLATE_ID      - DLT template ID (required for India)
+ *   KALEYRA_REGION               - "IN" | "SG" | "EU" | "NA"  (default: IN)
+ *   KALEYRA_CHANNEL              - "sms" | "whatsapp"  (default: sms)
+ *   KALEYRA_WA_FROM              - WhatsApp sender number (when KALEYRA_CHANNEL=whatsapp)
+ *   KALEYRA_WA_TEMPLATE_NAME     - Approved WA template name (when KALEYRA_CHANNEL=whatsapp)
+ *   KALEYRA_WA_TEMPLATE_LANG     - Template language code (default: en)
+ *   KALEYRA_WA_HAS_COPY_BUTTON   - "true" if template has a copy-code button component
  *
  *   MSG91 (SMS_PROVIDER=msg91):
  *   MSG91_AUTH_KEY, MSG91_TEMPLATE_ID
@@ -70,7 +70,7 @@ Deno.serve(async (req: Request) => {
     } else if (provider === '2factor' || provider === 'twofactor') {
       await sendViaTwoFactor(phone, otp);
     } else {
-      // Config error — return 200 so Supabase Auth does not retry indefinitely
+      // Config error - return 200 so Supabase Auth does not retry indefinitely
       console.error(`[custom-sms-hook] Unknown SMS_PROVIDER: ${provider}`);
       return new Response(
         JSON.stringify({ error: `Unknown SMS_PROVIDER: ${provider}` }),

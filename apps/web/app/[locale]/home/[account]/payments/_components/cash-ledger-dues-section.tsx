@@ -71,7 +71,7 @@ export function CashLedgerDuesSection({
           </CardTitle>
           <CardDescription>
             {isOwnerView
-              ? 'Additional charges raised by the association — separate from your monthly bills.'
+              ? 'Additional charges raised by the association, separate from your monthly bills.'
               : 'Standalone dues not tied to a generated bill.'}
           </CardDescription>
         </CardHeader>

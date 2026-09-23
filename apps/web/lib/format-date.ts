@@ -2,12 +2,12 @@ import { BILLING_TIME_ZONE } from './billing-dates';
 
 /**
  * Format a `'YYYY-MM-DD'` string as `'DD-MM-YYYY'`. Pure string
- * reformatting — never round-trips through a `Date`, so it can't shift the
+ * reformatting - never round-trips through a `Date`, so it can't shift the
  * day across timezones. Only safe for date-only strings (no time
- * component) — use `formatTimestampDMY` for full timestamps.
+ * component) - use `formatTimestampDMY` for full timestamps.
  */
 /**
- * Format a `'YYYY-MM-DD'` string as `'5 Aug 2026'` — human-readable, no
+ * Format a `'YYYY-MM-DD'` string as `'5 Aug 2026'` - human-readable, no
  * timezone conversion (date-only input is already local).
  */
 export function formatDateReadable(ymd: string): string {
@@ -50,7 +50,7 @@ function timestampParts(iso: string): Intl.DateTimeFormatPart[] | null {
 
 /**
  * Format an ISO timestamp's date portion as `'DD-MM-YYYY'`, resolved in the
- * fixed billing timezone — unlike `formatDateDMY`, this is safe for
+ * fixed billing timezone - unlike `formatDateDMY`, this is safe for
  * timestamps (not just date-only strings), since it doesn't naively slice
  * the UTC string (which can land on the wrong calendar day in IST).
  */

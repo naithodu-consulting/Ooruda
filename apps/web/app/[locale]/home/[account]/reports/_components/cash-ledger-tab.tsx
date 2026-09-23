@@ -209,11 +209,11 @@ export function CashLedgerTab({ rows }: Props) {
             </ResponsiveContainer>
             <div className="mt-2 flex gap-4 text-xs">
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full bg-[var(--color-success)]" />
+                <span className="bg-success inline-block h-2 w-2 rounded-full" />
                 Credits
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full bg-[var(--color-warning)]" />
+                <span className="bg-warning inline-block h-2 w-2 rounded-full" />
                 Debits
               </span>
             </div>
@@ -242,7 +242,7 @@ export function CashLedgerTab({ rows }: Props) {
                     </div>
                     <div className="bg-muted relative h-2 flex-1 overflow-hidden rounded-full">
                       <div
-                        className="absolute inset-y-0 left-0 rounded-full bg-[var(--color-success)]"
+                        className="bg-success absolute inset-y-0 left-0 rounded-full"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -298,8 +298,8 @@ export function CashLedgerTab({ rows }: Props) {
                       <span
                         className={`text-xs font-semibold ${
                           r.direction === 'credit'
-                            ? 'text-[var(--color-success)]'
-                            : 'text-[var(--color-warning)]'
+                            ? 'text-success'
+                            : 'text-warning'
                         }`}
                       >
                         {r.direction === 'credit' ? '↑' : '↓'}
@@ -309,7 +309,7 @@ export function CashLedgerTab({ rows }: Props) {
                       {formatINR(r.amount)}
                     </TableCell>
                     <TableCell className="text-muted-foreground max-w-[180px] truncate text-xs">
-                      {r.notes ?? '—'}
+                      {r.notes ?? '-'}
                     </TableCell>
                   </TableRow>
                 ))}

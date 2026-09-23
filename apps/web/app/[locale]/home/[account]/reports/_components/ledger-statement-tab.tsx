@@ -82,7 +82,7 @@ export function LedgerStatementTab({
   onViewChange,
 }: Props) {
   // Totals and closing balance always reflect the full statement, never the
-  // Debits/Credits view — a filtered subtotal masquerading as a balance would
+  // Debits/Credits view - a filtered subtotal masquerading as a balance would
   // be actively misleading.
   const { totalDebits, totalCredits, closingBalance } = useMemo(() => {
     let debits = 0;
@@ -112,7 +112,7 @@ export function LedgerStatementTab({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Unit picker — primary scope selector for the statement */}
+      {/* Unit picker - primary scope selector for the statement */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-muted-foreground text-sm">Statement for</span>
         <SearchableSelect
@@ -255,7 +255,7 @@ export function LedgerStatementTab({
                               {e.payment_status === 'reversed' && (
                                 <Badge
                                   variant="outline"
-                                  className="border-[var(--color-danger)]/40 text-[var(--color-danger)]"
+                                  className="border-danger/40 text-danger"
                                 >
                                   Reversed
                                 </Badge>
@@ -263,7 +263,7 @@ export function LedgerStatementTab({
                               {e.payment_status === 'partial_refund' && (
                                 <Badge
                                   variant="outline"
-                                  className="border-[var(--color-warning)]/40 text-[var(--color-warning)]"
+                                  className="border-warning/40 text-warning"
                                 >
                                   Partly refunded
                                 </Badge>
@@ -271,7 +271,7 @@ export function LedgerStatementTab({
                             </div>
                           </TableCell>
                           <TableCell className="text-muted-foreground">
-                            {e.bill_no ?? '—'}
+                            {e.bill_no ?? '-'}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
                             {e.direction === 'debit' ? formatINR(e.amount) : ''}
@@ -287,8 +287,8 @@ export function LedgerStatementTab({
                                 e.runningBalance === 0
                                   ? ''
                                   : e.runningBalance > 0
-                                    ? 'text-[var(--color-success)]'
-                                    : 'text-[var(--color-danger)]'
+                                    ? 'text-success'
+                                    : 'text-danger'
                               }`}
                             >
                               {formatINR(Math.abs(e.runningBalance))}

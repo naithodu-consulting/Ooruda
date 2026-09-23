@@ -104,7 +104,7 @@ function getDateRange(preset: string): { from: string; to: string } | null {
       to: `${fyStart + 1}-03-31`,
     };
   }
-  return null; // 'all' and 'custom' — caller handles custom separately
+  return null; // 'all' and 'custom' - caller handles custom separately
 }
 
 function formatDate(d: string) {
@@ -577,7 +577,7 @@ export function ExpenseList({
                         </Badge>
                       ) : (
                         <span className={'text-muted-foreground text-xs'}>
-                          —
+                          -
                         </span>
                       )}
                     </TableCell>

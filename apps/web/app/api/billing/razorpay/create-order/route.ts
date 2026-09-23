@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
   }
 
   // advance_applied must be subtracted, or a bill already part-settled by
-  // cash-ledger advance credit is charged to the payer twice — and
+  // cash-ledger advance credit is charged to the payer twice - and
   // record_payment now rejects the excess, which would capture the money at
   // Razorpay with no payment row written.
   const totalOutstanding = allowedBills.reduce(

@@ -105,9 +105,9 @@ export function OwnerUnitsView({
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+            <h2 className="text-foreground text-2xl font-bold tracking-tight">
               {role === 'prop_owner' ? 'Owner Dashboard' : 'Tenant Dashboard'}
-            </h1>
+            </h2>
             <p className="text-muted-foreground text-sm">{assocName}</p>
           </div>
           <PayAdvanceDialog
@@ -200,7 +200,7 @@ export function OwnerUnitsView({
             b.status === 'Overdue',
         );
 
-        // Resolve ledger balance for this unit — needed before totalOutstanding
+        // Resolve ledger balance for this unit - needed before totalOutstanding
         const bal = ledgerBalances.find((b) => b.unit_id === unit.id);
 
         // True total: outstanding bill amounts + cash ledger dues
@@ -247,9 +247,9 @@ export function OwnerUnitsView({
         return (
           <div
             key={unit.id}
-            className={`flex flex-col gap-6 ${index > 0 ? 'border-t border-slate-100 pt-8 dark:border-slate-900' : ''}`}
+            className={`flex flex-col gap-6 ${index > 0 ? 'border-border border-t pt-8' : ''}`}
           >
-            {/* Unit label — only shown when viewing all units */}
+            {/* Unit label - only shown when viewing all units */}
             {activeUnitId === ALL && (
               <h2 className="text-foreground text-lg font-bold tracking-tight">
                 Unit {unit.unit_no}
@@ -263,21 +263,21 @@ export function OwnerUnitsView({
 
               <div className="relative z-10 flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <span className="text-[10px] font-bold tracking-wider text-white/40 uppercase">
+                  <span className="text-xs font-semibold tracking-wider text-white/70 uppercase">
                     Total amount due
                   </span>
                   <div
-                    className={`mt-1 text-5xl font-black tracking-tight ${
+                    className={`mt-1 text-3xl font-bold tracking-tight tabular-nums ${
                       totalOutstanding === 0
                         ? 'text-green-400'
                         : overallStatus === 'Overdue'
                           ? 'text-red-400'
-                          : 'text-[#F59E0B]'
+                          : 'text-amber-400'
                     }`}
                   >
                     {formatINR(totalOutstanding)}
                   </div>
-                  <div className="mt-2 text-xs text-white/50">{dueSub}</div>
+                  <div className="mt-2 text-xs text-white/70">{dueSub}</div>
                 </div>
               </div>
 
@@ -301,7 +301,7 @@ export function OwnerUnitsView({
                             {formatPeriod(period)}
                           </span>
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                               isLatest && !isOverdue
                                 ? 'bg-amber-500/20 text-amber-300'
                                 : 'bg-red-500/20 text-red-300'
@@ -310,7 +310,7 @@ export function OwnerUnitsView({
                             {isLatest && !isOverdue ? 'current' : 'overdue'}
                           </span>
                         </div>
-                        <span className="text-sm font-bold text-white">
+                        <span className="text-sm font-bold text-white tabular-nums">
                           {formatINR(amt)}
                         </span>
                       </div>
@@ -325,14 +325,14 @@ export function OwnerUnitsView({
               <div className="flex flex-wrap gap-3">
                 <Link
                   href={`/home/${account}/payments?unit=${unit.unit_no}`}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-bold shadow-sm transition-colors"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold shadow-sm transition-colors"
                 >
                   Pay now · {formatINR(totalOutstanding)}
                 </Link>
               </div>
             )}
 
-            {/* Ledger balance — side-by-side on md+ */}
+            {/* Ledger balance - side-by-side on md+ */}
             {bal && (bal.totalDue > 0 || bal.totalCredit > 0) && (
               <div
                 className={`grid gap-3 ${
@@ -345,13 +345,13 @@ export function OwnerUnitsView({
                   <div className="bg-destructive/5 border-destructive/30 border-l-destructive overflow-hidden rounded-xl border border-l-4 p-4">
                     <div className="flex items-center gap-3">
                       <div>
-                        <p className="text-destructive/70 text-xs font-semibold tracking-wide uppercase">
+                        <p className="text-destructive text-xs font-semibold tracking-wide uppercase">
                           Pending dues
                         </p>
                         <p className="text-destructive mt-1 text-2xl font-bold tabular-nums">
                           {formatINR(bal.totalDue)}
                         </p>
-                        <p className="text-destructive/50 mt-0.5 text-xs">
+                        <p className="text-muted-foreground mt-0.5 text-xs">
                           Separate from your monthly bills
                         </p>
                       </div>
@@ -363,7 +363,7 @@ export function OwnerUnitsView({
                             key={d.bill_type}
                             className="flex items-center justify-between text-xs"
                           >
-                            <span className="text-destructive/60">
+                            <span className="text-muted-foreground">
                               {billTypeLabel(d.bill_type)}
                             </span>
                             <span className="text-destructive font-medium tabular-nums">
@@ -376,27 +376,27 @@ export function OwnerUnitsView({
                   </div>
                 )}
                 {bal.totalCredit > 0 && (
-                  <div className="overflow-hidden rounded-xl border border-l-4 border-green-200 border-l-green-500 bg-green-50 p-4 dark:border-green-800 dark:border-l-green-400 dark:bg-green-950/40">
-                    <p className="text-xs font-semibold tracking-wide text-green-700 uppercase dark:text-green-400">
+                  <div className="border-success/20 border-l-success bg-success/5 overflow-hidden rounded-xl border border-l-4 p-4">
+                    <p className="text-success text-xs font-semibold tracking-wide uppercase">
                       Advance credit
                     </p>
-                    <p className="mt-1 text-2xl font-bold text-green-700 tabular-nums dark:text-green-300">
+                    <p className="text-success mt-1 text-2xl font-bold tabular-nums">
                       {formatINR(bal.totalCredit)}
                     </p>
-                    <p className="mt-0.5 text-xs text-green-600/70 dark:text-green-400/60">
+                    <p className="text-muted-foreground mt-0.5 text-xs">
                       Will be auto-applied to your future bills of the same type
                     </p>
                     {bal.credits.length >= 1 && (
-                      <div className="mt-3 flex flex-col gap-1.5 border-t border-green-200 pt-3 dark:border-green-800">
+                      <div className="border-success/20 mt-3 flex flex-col gap-1.5 border-t pt-3">
                         {bal.credits.map((c) => (
                           <div
                             key={c.bill_type}
                             className="flex items-center justify-between text-xs"
                           >
-                            <span className="text-green-600/70 dark:text-green-400/70">
+                            <span className="text-muted-foreground">
                               {billTypeLabel(c.bill_type)}
                             </span>
-                            <span className="font-medium text-green-700 tabular-nums dark:text-green-300">
+                            <span className="text-success font-medium tabular-nums">
                               {formatINR(c.amount)}
                             </span>
                           </div>
@@ -413,9 +413,7 @@ export function OwnerUnitsView({
               <Card className="border-border shadow-sm">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-bold">
-                      Bill history
-                    </CardTitle>
+                    <CardTitle>Bill history</CardTitle>
                     {unitBills.length > PREVIEW_COUNT && (
                       <Link
                         href={`/home/${account}/payments`}
@@ -474,9 +472,7 @@ export function OwnerUnitsView({
               <Card className="border-border shadow-sm">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-bold">
-                      My payments
-                    </CardTitle>
+                    <CardTitle>My payments</CardTitle>
                     {totalPaymentCount > PREVIEW_COUNT && (
                       <Link
                         href={`/home/${account}/statement`}

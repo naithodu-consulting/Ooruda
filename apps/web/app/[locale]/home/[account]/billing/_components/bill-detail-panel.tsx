@@ -23,7 +23,7 @@ interface Props {
   /** Cached detail from the parent, if this bill has been expanded before. */
   detail: BillDetail | null;
   onLoaded: (billId: string, detail: BillDetail) => void;
-  /** Supabase association UUID — needed for the void action. */
+  /** Supabase association UUID - needed for the void action. */
   associationId: string;
   /** Only assoc_admin can void bills. */
   canVoid: boolean;
@@ -97,7 +97,7 @@ export function BillDetailPanel({
 
   if (error) {
     return (
-      <div className="flex items-center gap-2 border-b px-4 py-3 pl-20 text-sm text-[var(--color-danger)]">
+      <div className="text-danger flex items-center gap-2 border-b px-4 py-3 pl-20 text-sm">
         <AlertCircle className="h-3.5 w-3.5 shrink-0" />
         <span>{error}</span>
         <button
@@ -118,7 +118,7 @@ export function BillDetailPanel({
   const lineItems = detail?.lineItems ?? [];
   const baseTotal = lineItems.reduce((s, li) => s + li.amount, 0);
 
-  // A settled bill's due date is history, not a warning — only an unpaid bill
+  // A settled bill's due date is history, not a warning - only an unpaid bill
   // that has run past its date earns the alarm colour. Compare ISO date strings
   // in the billing zone rather than `new Date(…) < new Date()`, which parses the
   // date column as UTC midnight and drifts against local time.
@@ -145,8 +145,8 @@ export function BillDetailPanel({
     bill.paid_amount === 0 &&
     bill.advance_applied === 0;
 
-  // `gst_applicable` is a property of the charge type — "taxable if this
-  // association is GST-registered" — not proof that tax was charged. Bills issued
+  // `gst_applicable` is a property of the charge type - "taxable if this
+  // association is GST-registered" - not proof that tax was charged. Bills issued
   // by a non-GST association carry the flag but no tax, so key the badge off the
   // amount actually levied.
   const gstCharged = bill.gst_amount != null && bill.gst_amount > 0;
@@ -164,16 +164,16 @@ export function BillDetailPanel({
             <span
               className={
                 overdue
-                  ? 'font-semibold text-[var(--color-danger)]'
+                  ? 'text-danger font-semibold'
                   : dueSoon
-                    ? 'font-semibold text-[var(--color-warning)]'
+                    ? 'text-warning font-semibold'
                     : 'text-foreground font-medium'
               }
             >
               {formatDateReadable(bill.due_date)}
             </span>
             {dueSoon && daysUntilDue !== null && (
-              <span className="ml-1.5 text-xs text-[var(--color-warning)]">
+              <span className="text-warning ml-1.5 text-xs">
                 ({daysUntilDue === 0 ? 'due today' : `${daysUntilDue}d left`})
               </span>
             )}
@@ -185,7 +185,7 @@ export function BillDetailPanel({
             <Button
               variant="outline"
               size="sm"
-              className="h-7 gap-1.5 border-[var(--color-danger)]/40 px-2.5 text-sm text-[var(--color-danger)] hover:border-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
+              className="border-danger/40 text-danger hover:border-danger hover:bg-danger/10 h-7 gap-1.5 px-2.5 text-sm"
               onClick={() => setVoidDialogOpen(true)}
             >
               <Ban className="h-3 w-3" />
@@ -240,19 +240,19 @@ export function BillDetailPanel({
                     <div className="min-w-0">
                       <span className="truncate">{li.description}</span>
                       {li.area_sqft != null && li.rate_per_sqft != null && (
-                        <span className="text-muted-foreground ml-1.5 text-[13px]">
+                        <span className="text-muted-foreground ml-1.5 text-sm">
                           {li.area_sqft} sqft @ ₹{li.rate_per_sqft}
                         </span>
                       )}
                       {gstCharged && li.gst_applicable && (
                         <Badge
                           variant="outline"
-                          className="ml-1.5 px-1 py-0 text-[11px]"
+                          className="ml-1.5 px-1 py-0 text-xs"
                         >
                           GST
                         </Badge>
                       )}
-                      <span className="text-muted-foreground ml-1.5 text-[13px]">
+                      <span className="text-muted-foreground ml-1.5 text-sm">
                         · {li.payer}
                       </span>
                     </div>
@@ -285,8 +285,7 @@ export function BillDetailPanel({
                 baseTotal + (bill.gst_amount ?? 0) - bill.total_amount,
               ) > 1 && (
                 <p className="text-muted-foreground mt-1 text-xs">
-                  Line items and total differ — the bill may include
-                  adjustments.
+                  Line items and total differ; the bill may include adjustments.
                 </p>
               )}
             </div>

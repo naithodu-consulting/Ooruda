@@ -116,7 +116,7 @@ export default async function BillingDraftsPage({ params }: Props) {
       .neq('status', 'Void'),
   ]);
 
-  // Only for super admins — these drive the danger-zone summary and would be
+  // Only for super admins - these drive the danger-zone summary and would be
   // wasted work for everyone else.
   let deletionCounts: {
     bills: number;

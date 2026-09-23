@@ -14,7 +14,7 @@ export type AmcStatus =
 const STATUS_CONFIG: Record<AmcStatus, { label: string; className: string }> = {
   active: {
     label: 'Active',
-    className: 'border-transparent bg-primary/10 text-primary',
+    className: 'border-transparent bg-primary/10 text-brand-ink',
   },
   due_soon: {
     label: 'Due Soon',

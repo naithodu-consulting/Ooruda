@@ -152,15 +152,15 @@ export function BillsSection(props: {
                       <TableCell className="text-right font-medium tabular-nums">
                         {unitsFmt.format(metered)}
                       </TableCell>
-                      <TableCell className="text-right font-medium text-blue-600 tabular-nums">
+                      <TableCell className="text-info text-right font-medium tabular-nums">
                         {blockRate != null
                           ? `₹${blockRate.toFixed(2)}/unit`
-                          : '—'}
+                          : '-'}
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
                         {metered > 0
                           ? `₹${(bill.invoice_amount / metered).toFixed(2)}/unit`
-                          : '—'}
+                          : '-'}
                       </TableCell>
                       {props.canManage ? (
                         <TableCell>
@@ -269,7 +269,7 @@ function AddBillForm(props: { associationId: string; onSuccess: () => void }) {
   const [isPending, startTransition] = useTransition();
 
   const now = new Date();
-  // Default to the current month — the operator uploads the MESCOM bill in the
+  // Default to the current month - the operator uploads the MESCOM bill in the
   // same month they are collecting payment (billing month = current month).
   const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 

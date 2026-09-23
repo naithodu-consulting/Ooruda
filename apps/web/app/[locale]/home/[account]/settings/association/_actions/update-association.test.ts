@@ -86,7 +86,7 @@ beforeEach(() => {
   mockSupabase([{ error: null }, { error: null }]);
 });
 
-describe('updateAssociationAction — authorization', () => {
+describe('updateAssociationAction - authorization', () => {
   it('rejects a billing_operator (association config is admin-only)', async () => {
     getAssociationRole.mockResolvedValue('billing_operator');
 
@@ -131,7 +131,7 @@ describe('updateAssociationAction — authorization', () => {
   });
 });
 
-describe('updateAssociationAction — happy path', () => {
+describe('updateAssociationAction - happy path', () => {
   it('writes association + billing_settings and returns success for assoc_admin', async () => {
     const result = await updateAssociationAction(
       ASSOCIATION_ID,
@@ -191,7 +191,7 @@ describe('updateAssociationAction — happy path', () => {
   });
 });
 
-describe('updateAssociationAction — validation', () => {
+describe('updateAssociationAction - validation', () => {
   it('rejects a malformed GSTIN', async () => {
     const result = await updateAssociationAction(
       ASSOCIATION_ID,
@@ -255,7 +255,7 @@ describe('updateAssociationAction — validation', () => {
   });
 });
 
-describe('updateAssociationAction — surfaces DB errors', () => {
+describe('updateAssociationAction - surfaces DB errors', () => {
   it('returns the associations update error verbatim', async () => {
     mockSupabase([{ error: { message: 'RLS: permission denied' } }]);
 

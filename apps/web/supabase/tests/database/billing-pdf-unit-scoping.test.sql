@@ -1,5 +1,5 @@
 -- =============================================================
--- Billing PDF download — unit-level access scoping
+-- Billing PDF download - unit-level access scoping
 -- -------------------------------------------------------------
 -- bills/payments RLS only checks association membership
 -- (is_association_member), not which unit a row belongs to. The PDF
@@ -58,11 +58,11 @@ values
 
 select makerkit.authenticate_as('pdf_tenant_a');
 
--- 1. Confirm bills RLS alone (association-wide) WOULD let tenant_a read bill B —
+-- 1. Confirm bills RLS alone (association-wide) WOULD let tenant_a read bill B -
 --    this is the gap canAccessUnit exists to close at the app layer.
 select isnt_empty(
   $$ select 1 from public.bills where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' $$,
-  'RLS alone (is_association_member) lets tenant_a SELECT unit B''s bill row — confirms unit scoping must happen in the app layer, not RLS'
+  'RLS alone (is_association_member) lets tenant_a SELECT unit B''s bill row - confirms unit scoping must happen in the app layer, not RLS'
 );
 
 -- 2. Tenant A IS the owner/tenant of unit A (the canAccessUnit check would pass)
@@ -70,7 +70,7 @@ select isnt_empty(
   $$ select 1 from public.tenancies
      where unit_id = '11111111-1111-1111-1111-111111111111'
        and tenant_id = auth.uid() $$,
-  'tenant_a has a tenancy on unit A — canAccessUnit allows their own bill'
+  'tenant_a has a tenancy on unit A - canAccessUnit allows their own bill'
 );
 
 -- 3. Tenant A is NOT the owner/tenant of unit B (the canAccessUnit check would fail)
@@ -82,7 +82,7 @@ select is_empty(
 select is_empty(
   $$ select 1 from public.tenancies
      where unit_id = '22222222-2222-2222-2222-222222222222' and tenant_id = auth.uid() $$,
-  'tenant_a has no tenancy on unit B — canAccessUnit blocks bill B, route returns 404'
+  'tenant_a has no tenancy on unit B - canAccessUnit blocks bill B, route returns 404'
 );
 
 select * from finish();

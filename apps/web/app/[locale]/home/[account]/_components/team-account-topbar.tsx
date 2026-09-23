@@ -104,7 +104,7 @@ export function TeamAccountTopbar(props: {
             render={
               <button
                 type="button"
-                className="bg-primary text-primary-foreground focus:ring-primary/50 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-xs font-black transition-transform hover:scale-105 focus:ring-2 focus:outline-none"
+                className="bg-primary text-primary-foreground focus:ring-primary/50 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-xs font-bold transition-transform hover:scale-105 focus:ring-2 focus:outline-none"
                 title={`Account options (${displayName})`}
               >
                 {initials}
@@ -167,7 +167,7 @@ function AssociationSwitcher(props: {
             size="sm"
             className="border-border bg-background text-foreground hover:bg-accent flex h-9 items-center gap-2 rounded-xl border px-3 text-xs font-bold shadow-sm"
           >
-            <div className="bg-primary text-primary-foreground flex h-5 w-5 items-center justify-center rounded text-[9px] font-black">
+            <div className="bg-primary text-primary-foreground flex h-5 w-5 items-center justify-center rounded text-xs font-bold">
               {initials}
             </div>
             <span
@@ -199,7 +199,7 @@ function AssociationSwitcher(props: {
                 acc.value === props.selectedAccount ? 'bg-muted font-bold' : ''
               }`}
             >
-              <div className="bg-primary text-primary-foreground flex h-5 w-5 items-center justify-center rounded text-[9px] font-black">
+              <div className="bg-primary text-primary-foreground flex h-5 w-5 items-center justify-center rounded text-xs font-bold">
                 {accInitials}
               </div>
               <span>{accLabel}</span>

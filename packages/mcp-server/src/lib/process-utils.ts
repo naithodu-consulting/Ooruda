@@ -22,7 +22,7 @@ export const IS_WINDOWS = platform() === 'win32';
  * without opening a visible console window.
  *
  * For native executables (git, node, docker) prefer `execFileSync` / `execFile`
- * directly — they don't need a shell.
+ * directly - they don't need a shell.
  */
 export function execFileAsync(
   command: string,

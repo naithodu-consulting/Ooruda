@@ -89,7 +89,7 @@ export async function generateBillsAction(
   const { period, billType } = parsed.data;
   const client = getSupabaseServerClient();
 
-  // Fetch units first — we need unitIds before the parallel wave below.
+  // Fetch units first - we need unitIds before the parallel wave below.
   const { data: units } = await client
     .from('units')
     .select('id, unit_no, type, area_sqft')
@@ -103,7 +103,7 @@ export async function generateBillsAction(
 
   const unitIds = unitRows.map((u) => u.id);
 
-  // All of these are independent of each other — fire in parallel.
+  // All of these are independent of each other - fire in parallel.
   const [
     { data: chargeTypes },
     { data: activeTenancies },
@@ -276,11 +276,11 @@ export async function generateBillsAction(
       // silently drops out of the split (its unit gets a zero bill and everyone
       // else's rate is computed without it); a negative reading corrupts the
       // block rate for the whole association. Both are unrecoverable once bills
-      // exist, because recording readings is locked after billing — so refuse
+      // exist, because recording readings is locked after billing - so refuse
       // up front rather than generating a wrong set.
       // A period with NO readings at all is not the dangerous case: blockRate
       // stays null, no electricity bill is written, and readings remain
-      // editable — so an "All" run can still produce maintenance/other bills
+      // editable - so an "All" run can still produce maintenance/other bills
       // exactly as before. Only a PARTIAL (or negative) set is unrecoverable.
       // An explicit "Electricity" run is always checked, since an empty period
       // would otherwise silently create nothing.
@@ -686,7 +686,7 @@ export async function generateBillsAction(
           }
 
           // The advance_applied ledger debit is written atomically inside
-          // create_bill_with_items — no separate call needed here.
+          // create_bill_with_items - no separate call needed here.
 
           created += 1;
           return true;
@@ -776,8 +776,8 @@ export async function generateBillsAction(
             }
           }
 
-          // Sinking Fund — ad-hoc. Each distinct collection generates a new SNK bill.
-          // If an SNK bill already exists for this period, skip silently — the admin
+          // Sinking Fund - ad-hoc. Each distinct collection generates a new SNK bill.
+          // If an SNK bill already exists for this period, skip silently - the admin
           // should void the existing bill before re-collecting for the same period.
           if (shouldGenSinking && sinkingItems.length > 0) {
             if (!hasSinking) {
@@ -815,7 +815,7 @@ export async function generateBillsAction(
         }
 
         // Track how many SNK bills were generated in this run (separate from `created`
-        // which spans all types — needed to gate the mark-billed step accurately).
+        // which spans all types - needed to gate the mark-billed step accurately).
         if (billsToGenerate.some((b) => b.type === 'sinking fund')) {
           sinkingCreated += 1;
         }
@@ -899,7 +899,7 @@ export async function generateBillsAction(
     after(async () => {
       const adminClient = getSupabaseServerAdminClient();
 
-      // Bills with units — no tenancies join (no FK from bills→tenancies)
+      // Bills with units - no tenancies join (no FK from bills→tenancies)
       const { data: newBills } = await adminClient
         .from('bills')
         .select(`
@@ -1320,7 +1320,7 @@ const BILLING_DOCUMENTS_BUCKET = 'billing-documents';
  * numbering, and cleans up orphaned cached PDFs from storage.
  *
  * Authorization is enforced inside the `super_admin_delete_all_bills` RPC
- * itself (security definer, checks `is_super_admin()`) — NOT via the
+ * itself (security definer, checks `is_super_admin()`) - NOT via the
  * `assoc_admin`-scoped `requireBillingAccess` helper used elsewhere in this
  * file, because a super admin viewing an "opened workspace" resolves to
  * `assoc_admin` too (see `getAssociationRole`), so that check alone can't
@@ -1348,7 +1348,7 @@ export async function deleteAllBillsAction(associationId: string): Promise<
     return { success: false, error: error.message };
   }
 
-  // Best-effort cleanup of cached PDFs orphaned by the delete above — the
+  // Best-effort cleanup of cached PDFs orphaned by the delete above - the
   // storage bucket has no FK/cascade tie to the bills table.
   const admin = getSupabaseServerAdminClient();
   for (const prefix of [

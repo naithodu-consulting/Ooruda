@@ -72,7 +72,9 @@ function AgeingBar(props: {
           style={{ width }}
         />
       </div>
-      <p className={`mt-1 text-sm font-semibold ${props.textClassName}`}>
+      <p
+        className={`mt-1 text-sm font-semibold tabular-nums ${props.textClassName}`}
+      >
         {formatINR(props.amount)}
       </p>
     </div>
@@ -118,7 +120,7 @@ export function AdminOverviewPanel({
           {`${metrics.periodDisplay} · ${staticData.totalUnits} residential units · ${staticData.occupiedUnits} occupied`}
         </p>
 
-        {/* Duration pill selector — purely client-side, no navigation */}
+        {/* Duration pill selector - purely client-side, no navigation */}
         <div
           className="bg-muted no-scrollbar flex items-center gap-0.5 overflow-x-auto rounded-full p-0.5"
           data-test="dashboard-duration-select"
@@ -204,9 +206,7 @@ export function AdminOverviewPanel({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="text-sm font-bold">
-              Collection progress
-            </CardTitle>
+            <CardTitle>Collection progress</CardTitle>
             <Badge className={badgeExtras.success}>
               {metrics.periodDisplay}
             </Badge>
@@ -215,19 +215,19 @@ export function AdminOverviewPanel({
             <div className="flex flex-col gap-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Total billed</span>
-                <span className="font-semibold">
+                <span className="font-semibold tabular-nums">
                   {formatINR(metrics.billed)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Collected</span>
-                <span className="font-semibold text-emerald-600">
+                <span className="text-success font-semibold tabular-nums">
                   {formatINR(metrics.collected)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Outstanding</span>
-                <span className="font-semibold text-amber-600">
+                <span className="text-warning font-semibold tabular-nums">
                   {formatINR(metrics.outstanding)}
                 </span>
               </div>
@@ -244,7 +244,7 @@ export function AdminOverviewPanel({
                 }}
               />
             </div>
-            <p className="mt-1.5 text-right text-xs font-semibold text-amber-600">
+            <p className="text-warning mt-1.5 text-right text-xs font-semibold">
               {metrics.billed > 0
                 ? `${Math.round((metrics.collected / metrics.billed) * 100)}% collected`
                 : 'No bills yet'}
@@ -254,7 +254,7 @@ export function AdminOverviewPanel({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-bold">Ageing analysis</CardTitle>
+            <CardTitle>Ageing analysis</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <AgeingBar
@@ -262,35 +262,35 @@ export function AdminOverviewPanel({
               amount={metrics.ageing.d0to7}
               maxAmount={ageingMax}
               colorClassName="bg-blue-500"
-              textClassName="text-blue-600"
+              textClassName="text-info"
             />
             <AgeingBar
               label="8–30 days"
               amount={metrics.ageing.d8to30}
               maxAmount={ageingMax}
               colorClassName="bg-amber-500"
-              textClassName="text-amber-600"
+              textClassName="text-warning"
             />
             <AgeingBar
               label=">30 days overdue"
               amount={metrics.ageing.d30plus}
               maxAmount={ageingMax}
               colorClassName="bg-red-500"
-              textClassName="text-red-600"
+              textClassName="text-destructive"
             />
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent activity — static, never changes with duration */}
+      {/* Recent activity - static, never changes with duration */}
       <Card>
         <CardHeader className="flex flex-col gap-2 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="text-sm font-bold">Recent activity</CardTitle>
+          <CardTitle>Recent activity</CardTitle>
           <Link
             href={`/home/${account}/audit`}
-            className="text-sm font-semibold text-orange-600 hover:text-orange-700 hover:underline"
+            className="text-warning hover:text-warning text-sm font-semibold hover:underline"
           >
-            View all &rarr;
+            View All &rarr;
           </Link>
         </CardHeader>
         <CardContent>
@@ -306,10 +306,10 @@ export function AdminOverviewPanel({
                   entry.action.includes('unit.created');
                 const isBlue = entry.action.includes('bill');
                 const badgeBg = isGreen
-                  ? 'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400'
+                  ? 'bg-green-50 text-success dark:bg-green-500/10'
                   : isBlue
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
-                    : 'bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400';
+                    ? 'bg-blue-50 text-info dark:bg-blue-500/10'
+                    : 'bg-muted text-muted-foreground';
                 const dotBg = isGreen
                   ? 'bg-green-500'
                   : isBlue

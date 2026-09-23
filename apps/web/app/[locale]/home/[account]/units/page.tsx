@@ -94,7 +94,7 @@ export default async function UnitsPage({ params }: Props) {
 
   // Resolve owner/tenant names in one query. `units.owner_id` and
   // `tenancies.tenant_id` reference auth.users, which has no PostgREST
-  // relationship to `profiles`, so we can't embed it — fetch the co-member
+  // relationship to `profiles`, so we can't embed it - fetch the co-member
   // profiles (readable via profiles_read_account_members) and map by id.
   const peopleIds = [
     ...new Set([

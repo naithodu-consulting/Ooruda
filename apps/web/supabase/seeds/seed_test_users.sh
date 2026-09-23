@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# PropOps Dev Seed — 5 test users with different roles.
+# PropOps Dev Seed - 5 test users with different roles.
 #
 # WHY A SCRIPT (not pure SQL): Supabase Auth (GoTrue) owns auth.users +
 # auth.identities + internal fields. Hand-inserting into auth.users via SQL
@@ -44,7 +44,7 @@ USERS=(
 )
 
 # Look up a user id by phone via the DB (reliable). NOTE: the GoTrue Admin API
-# GET /admin/users?phone=... does NOT filter by phone — the param is ignored and
+# GET /admin/users?phone=... does NOT filter by phone - the param is ignored and
 # it returns the first page of ALL users. Using it for existence/lookup silently
 # matches the wrong user. Always resolve by phone through the database instead.
 user_id_by_phone() {
@@ -60,7 +60,7 @@ except Exception:
 # Each test user also gets a UNIQUE synthetic email (<phone>@ooruda.test) with
 # email_confirm=true. WHY <phone> (not role): multiple test users can share a
 # role, so a role-based address would collide on profiles.email's unique
-# constraint — the phone is unique, so this never collides and needs no bypass.
+# constraint - the phone is unique, so this never collides and needs no bypass.
 # Having an email also means these users skip the mandatory-email gate and can
 # exercise the email-OTP channel (read the code from Inbucket locally).
 echo "Creating test users via GoTrue Admin API..."

@@ -299,7 +299,7 @@ export function ElectricityBillDocument({
           </View>
         </View>
 
-        {/* Paid / Outstanding summary — mirrors maintenance bill layout */}
+        {/* Paid / Outstanding summary - mirrors maintenance bill layout */}
         <View style={sharedStyles.summaryBlock}>
           <View style={sharedStyles.summaryDivider} />
           <View style={sharedStyles.summaryRowTotal}>
@@ -335,7 +335,7 @@ export function ElectricityBillDocument({
         {meters.some((m) => m.loadKva != null) ? (
           <View style={s.loadNote}>
             <Text style={s.loadNoteText}>
-              Sanctioned Load —{' '}
+              Sanctioned Load:{' '}
               {meters
                 .filter((m) => m.loadKva != null)
                 .map(

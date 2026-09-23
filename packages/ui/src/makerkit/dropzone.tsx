@@ -116,9 +116,9 @@ const DropzoneContent = ({ className }: { className?: string }) => {
           className,
         )}
       >
-        <CheckCircle size={16} className="text-primary" />
+        <CheckCircle size={16} className="text-brand-ink" />
 
-        <p className="text-primary text-sm">
+        <p className="text-brand-ink text-sm">
           <Trans
             i18nKey="common.dropzone.success"
             values={{ count: files.length }}
@@ -185,7 +185,7 @@ const DropzoneContent = ({ className }: { className?: string }) => {
                   />
                 </p>
               ) : isSuccessfullyUploaded ? (
-                <p className="text-primary text-xs">
+                <p className="text-brand-ink text-xs">
                   <Trans i18nKey="common.dropzone.success" />
                 </p>
               ) : (

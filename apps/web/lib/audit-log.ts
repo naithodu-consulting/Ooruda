@@ -24,7 +24,7 @@ export interface AuditEventParams {
   entityId?: string | null;
   /** Human-readable one-liner for the activity log */
   summary?: string | null;
-  /** Classification — defaults to 'user_action' */
+  /** Classification - defaults to 'user_action' */
   eventType?: AuditEventType;
   /** HTTP method for api_call events */
   httpMethod?: string | null;
@@ -36,7 +36,7 @@ export interface AuditEventParams {
   durationMs?: number | null;
   /** Application-level error key e.g. "INSUFFICIENT_BALANCE" */
   errorCode?: string | null;
-  /** Flexible JSON for extra context — keep small (no PII, no large payloads) */
+  /** Flexible JSON for extra context - keep small (no PII, no large payloads) */
   metadata?: Record<string, unknown> | null;
   /** Client IP (from x-forwarded-for) */
   ipAddress?: string | null;
@@ -47,14 +47,14 @@ export interface AuditEventParams {
 }
 
 /**
- * Best-effort audit/activity trail entry. Never throws — a logging failure must
+ * Best-effort audit/activity trail entry. Never throws - a logging failure must
  * not block the mutation it describes, which has already happened by call time.
  *
  * All params are optional except `action` and `entityType`.
  */
 export async function logAuditEvent(params: AuditEventParams): Promise<void> {
   try {
-    // System and auth events have no user context — must use admin client.
+    // System and auth events have no user context - must use admin client.
     // User-action events use the server client so RLS can verify the actor.
     const useAdmin =
       params.useAdminClient ??
@@ -74,7 +74,7 @@ export async function logAuditEvent(params: AuditEventParams): Promise<void> {
       actorUserId = user?.id ?? null;
     }
 
-    if (!actorUserId && !useAdmin) return; // no session, no system context — skip
+    if (!actorUserId && !useAdmin) return; // no session, no system context - skip
 
     await client.from('audit_logs').insert({
       association_id: params.associationId ?? null,
@@ -94,6 +94,6 @@ export async function logAuditEvent(params: AuditEventParams): Promise<void> {
       user_agent: params.userAgent ?? null,
     });
   } catch {
-    // intentionally silent — audit failure must never surface to the user
+    // intentionally silent - audit failure must never surface to the user
   }
 }

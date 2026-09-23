@@ -21,7 +21,7 @@ export function EmailHeader(props: React.PropsWithChildren) {
             letterSpacing: '-0.5px',
             color: '#1d1e20',
             fontFamily:
-              "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
           }}
         >
           ooruda
@@ -35,7 +35,7 @@ export function EmailHeader(props: React.PropsWithChildren) {
             color: '#5a4a10',
             textTransform: 'uppercase' as const,
             fontFamily:
-              "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
           }}
         >
           Property Management

@@ -34,9 +34,9 @@ function entryDescription(
     case 'due':
       return `${bt} bill raised`;
     case 'advance_payment':
-      return `Advance deposited — ${bt}`;
+      return `Advance deposited - ${bt}`;
     case 'advance_applied':
-      return `Advance applied — ${bt}`;
+      return `Advance applied - ${bt}`;
     case 'due_payment':
       return `${bt} paid`;
     case 'reversal':
@@ -141,7 +141,7 @@ export const GET = enhanceRouteHandler(
         .eq('association_id', association.id)
         .neq('status', 'Void')
         .order('generated_at', { ascending: true }),
-      // cash_ledger is a DB view not in generated types — cast required.
+      // cash_ledger is a DB view not in generated types - cast required.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (client as any)
         .from('cash_ledger')
@@ -282,7 +282,7 @@ export const GET = enhanceRouteHandler(
       return 0;
     });
 
-    // Apply date range filter — FY range takes precedence; custom from/to used when fy=__all__
+    // Apply date range filter - FY range takes precedence; custom from/to used when fy=__all__
     const fyRangeResult = reqFy !== FY_ALL ? fyRange(reqFy) : null;
     const range: { from: string; to: string } | null =
       fyRangeResult ??

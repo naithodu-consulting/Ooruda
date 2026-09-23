@@ -315,7 +315,7 @@ function getColumns(
         <div className="flex min-w-0 items-center gap-1.5">
           {isTest && (
             <Badge
-              className="border-warning/40 bg-warning/10 text-warning shrink-0 px-1.5 py-0 text-[10px] whitespace-nowrap"
+              className="border-warning/40 bg-warning/10 text-warning shrink-0 px-1.5 py-0 text-xs whitespace-nowrap"
               variant="outline"
             >
               Test
@@ -328,13 +328,13 @@ function getColumns(
             title={row.original.name?.trim() || undefined}
             href={`/admin/accounts/${row.original.id}`}
           >
-            {row.original.name?.trim() || '—'}
+            {row.original.name?.trim() || '-'}
           </Link>
 
           {isSA && (
             <Badge
               variant="outline"
-              className="shrink-0 px-1.5 py-0 text-[10px] whitespace-nowrap"
+              className="shrink-0 px-1.5 py-0 text-xs whitespace-nowrap"
             >
               Super Admin
             </Badge>
@@ -398,7 +398,7 @@ function getColumns(
         cell: ({ row }) => {
           const phone = formatPhoneNumber(phoneByAccountId[row.original.id]);
           return (
-            phone || <span className="text-muted-foreground text-xs">—</span>
+            phone || <span className="text-muted-foreground text-xs">-</span>
           );
         },
       },
@@ -415,7 +415,7 @@ function getColumns(
               {email}
             </span>
           ) : (
-            <span className="text-muted-foreground text-xs">—</span>
+            <span className="text-muted-foreground text-xs">-</span>
           );
         },
       },
@@ -425,7 +425,7 @@ function getColumns(
         cell: ({ row }) => {
           const memberships = membershipsByAccountId[row.original.id] ?? [];
           if (memberships.length === 0)
-            return <span className="text-muted-foreground text-xs">—</span>;
+            return <span className="text-muted-foreground text-xs">-</span>;
           return (
             <div className="flex flex-wrap gap-1">
               {memberships.map((m, i) => (
@@ -455,7 +455,7 @@ function getColumns(
                     render={
                       <Badge
                         variant="outline"
-                        className="cursor-default gap-1 border-[var(--color-success)]/40 bg-[var(--color-success)]/10 px-2 py-0.5 text-[11px] whitespace-nowrap text-[var(--color-success)]"
+                        className="border-success/40 bg-success/10 text-success cursor-default gap-1 px-2 py-0.5 text-xs whitespace-nowrap"
                       >
                         <CheckCircle2 className="h-3 w-3 shrink-0" />
                         Accepted
@@ -475,7 +475,7 @@ function getColumns(
           return (
             <Badge
               variant="outline"
-              className="cursor-default gap-1 border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 px-2 py-0.5 text-[11px] whitespace-nowrap text-[var(--color-warning)]"
+              className="border-warning/40 bg-warning/10 text-warning cursor-default gap-1 px-2 py-0.5 text-xs whitespace-nowrap"
             >
               <Clock className="h-3 w-3 shrink-0" />
               Pending

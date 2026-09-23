@@ -60,7 +60,7 @@ export function DateRangePicker({
   onCustom,
 }: Props) {
   const [open, setOpen] = useState(false);
-  // Local state for the popover — reset to current range on open
+  // Local state for the popover - reset to current range on open
   const [customFrom, setCustomFrom] = useState(from);
   const [customTo, setCustomTo] = useState(to);
 
@@ -109,7 +109,7 @@ export function DateRangePicker({
 
       {/* Custom date range popover */}
       <Popover open={open} onOpenChange={handleOpen}>
-        {/* PopoverTrigger renders as <button> — do NOT nest <Button> inside it */}
+        {/* PopoverTrigger renders as <button> - do NOT nest <Button> inside it */}
         <PopoverTrigger
           disabled={loading}
           className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 ${
@@ -132,7 +132,7 @@ export function DateRangePicker({
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-muted-foreground text-xs font-medium">
+              <label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                 From
               </label>
               <DatePicker
@@ -148,7 +148,7 @@ export function DateRangePicker({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-muted-foreground text-xs font-medium">
+              <label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                 To
               </label>
               <DatePicker

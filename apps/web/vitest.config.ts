@@ -8,7 +8,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 /**
  * Vitest config for the web app's pure unit / server-action tests.
  *
- * Scope: interface-agnostic business logic that runs without a database —
+ * Scope: interface-agnostic business logic that runs without a database -
  * RBAC helpers (`lib/rbac.ts`) and the association settings server action's
  * authorization + Zod validation. DB-backed behaviour (RLS, triggers,
  * constraints) is covered by the pgTAP suite under `supabase/tests/database`,

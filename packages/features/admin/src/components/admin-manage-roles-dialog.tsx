@@ -103,7 +103,7 @@ export function AdminManageRolesDialog(props: {
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Manage roles — {props.userName}</DialogTitle>
+          <DialogTitle>Manage roles - {props.userName}</DialogTitle>
           <DialogDescription>
             Assign this user to an association with a role, or remove an
             existing assignment.
@@ -136,7 +136,7 @@ export function AdminManageRolesDialog(props: {
                       <span className="font-medium">
                         {membership.associationName}
                       </span>{' '}
-                      — {roleLabel(membership.role)}
+                      - {roleLabel(membership.role)}
                     </span>
 
                     <Button

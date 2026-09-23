@@ -133,12 +133,12 @@ export function SubMetersSection(props: {
                     <TableCell>{meter.unit_no}</TableCell>
                     <TableCell>{meter.meter_type}</TableCell>
                     <TableCell>
-                      {meter.load_kva != null ? `${meter.load_kva} kVA` : '—'}
+                      {meter.load_kva != null ? `${meter.load_kva} kVA` : '-'}
                     </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
-                        className="border-0 bg-transparent px-0 font-bold shadow-none"
+                        className="border-0 bg-transparent px-0 font-medium shadow-none"
                       >
                         <span
                           className={cn(

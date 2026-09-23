@@ -32,7 +32,7 @@ export const UNIT_GRID =
  * Level 1 of the billing drill-down: one unit, one row.
  *
  * The row links to the unit's own billing page rather than expanding in place.
- * That keeps this list's query free of per-bill detail — the periods, charge
+ * That keeps this list's query free of per-bill detail - the periods, charge
  * types and line items are fetched only for the unit actually opened.
  */
 function UnitRowInner({ node, href, selected, onToggleSelect }: Props) {
@@ -85,7 +85,7 @@ function UnitRowInner({ node, href, selected, onToggleSelect }: Props) {
           </span>
         </div>
 
-        <div className="text-muted-foreground truncate text-[13px]">
+        <div className="text-muted-foreground truncate text-sm">
           {node.lastPeriod ? (
             <>
               {formatPeriod(node.lastPeriod)}
@@ -103,25 +103,23 @@ function UnitRowInner({ node, href, selected, onToggleSelect }: Props) {
         <div
           className={cn(
             'text-right text-base font-semibold tabular-nums',
-            node.outstanding > 0
-              ? 'text-[var(--color-warning)]'
-              : 'text-muted-foreground',
+            node.outstanding > 0 ? 'text-warning' : 'text-muted-foreground',
           )}
         >
-          {node.outstanding > 0 ? formatINR(node.outstanding) : '—'}
+          {node.outstanding > 0 ? formatINR(node.outstanding) : '-'}
         </div>
 
-        {/* Col 6 — overdue bill COUNT, never an amount, so it can't duplicate col 5 */}
+        {/* Col 6 - overdue bill COUNT, never an amount, so it can't duplicate col 5 */}
         <div className="flex justify-end">
           {node.overdueCount > 0 ? (
-            <span className="inline-flex items-center gap-0.5 text-sm font-semibold text-[var(--color-danger)] tabular-nums">
+            <span className="text-danger inline-flex items-center gap-0.5 text-sm font-semibold tabular-nums">
               {node.overdueCount}
               <span className="font-normal opacity-70">
                 {node.overdueCount === 1 ? ' bill' : ' bills'}
               </span>
             </span>
           ) : (
-            <span className="text-muted-foreground text-sm">—</span>
+            <span className="text-muted-foreground text-sm">-</span>
           )}
         </div>
       </Link>

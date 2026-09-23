@@ -108,18 +108,18 @@ export function DirectoryTab({ rows, roleFilter, onRoleFilterChange }: Props) {
                       <TableCell className="font-medium">{r.unit_no}</TableCell>
                       <TableCell>{r.name}</TableCell>
                       <TableCell className="tabular-nums">
-                        {r.phone ?? '—'}
+                        {r.phone ?? '-'}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate">
-                        {r.email ?? '—'}
+                        {r.email ?? '-'}
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
                           className={
                             r.role === 'Owner'
-                              ? 'border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300'
-                              : 'border-[var(--color-warning)]/40 text-[var(--color-warning)]'
+                              ? 'text-info border-blue-300 dark:border-blue-700'
+                              : 'border-warning/40 text-warning'
                           }
                         >
                           {r.role}
@@ -135,7 +135,7 @@ export function DirectoryTab({ rows, roleFilter, onRoleFilterChange }: Props) {
                                 year: 'numeric',
                               },
                             )
-                          : '—'}
+                          : '-'}
                       </TableCell>
                     </TableRow>
                   ))

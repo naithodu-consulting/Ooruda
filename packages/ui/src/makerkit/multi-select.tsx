@@ -24,7 +24,7 @@ import { cn } from '#lib/utils';
  * which predated the Combobox primitive and drifted from the rest of the UI in
  * three visible ways: a 14px chevron where `Select` uses 16px, a 12px tick
  * inside a hand-drawn box where `Select` uses a bare 16px tick, and no
- * arrow-key navigation — every option was a tab stop, so reaching the last of
+ * arrow-key navigation - every option was a tab stop, so reaching the last of
  * 64 units meant 64 presses of Tab.
  *
  * The public API is unchanged, so existing callers need no edits. `searchable`
@@ -43,9 +43,9 @@ export interface MultiSelectProps {
   options: MultiSelectOption[];
   selected: string[];
   onSelectionChange: (values: string[]) => void;
-  /** Shown on the trigger when nothing is selected — treated as "All" */
+  /** Shown on the trigger when nothing is selected - treated as "All" */
   placeholder: string;
-  /** Short label used in "Label: N selected" summary — e.g. "Bill Type" */
+  /** Short label used in "Label: N selected" summary - e.g. "Bill Type" */
   summaryLabel?: string;
   /** Max individual labels shown in trigger before switching to "N selected" */
   maxShownLabels?: number;
@@ -131,7 +131,7 @@ export function MultiSelect({
     >
       {/*
        * The clear button stays OUTSIDE the trigger <Button> to avoid nesting
-       * interactive elements inside a button — an HTML spec violation that
+       * interactive elements inside a button - an HTML spec violation that
        * causes accessibility tree errors and erratic touch behavior.
        * Absolute positioning keeps the layout identical to the previous design.
        */}

@@ -41,7 +41,7 @@ import {
 
 import { bulkImportSubMetersAction } from '../_lib/electricity-actions';
 
-// For CommonArea rows, unit_no MUST be "COMMON" — the backend attaches them to
+// For CommonArea rows, unit_no MUST be "COMMON" - the backend attaches them to
 // the first unit as an FK placeholder. The label (sub_meter_no) is what
 // identifies them during meter-readings import.
 
@@ -120,15 +120,15 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
     const initial_reading = initial_reading_parsed ?? 0;
 
     let error: string | undefined;
-    if (!unit_no) error = 'Unit number is missing — add it and re-upload.';
+    if (!unit_no) error = 'Unit number is missing. Add it and re-upload.';
     else if (!sub_meter_no)
-      error = 'Sub-meter number is missing — add it and re-upload.';
+      error = 'Sub-meter number is missing. Add it and re-upload.';
     else if (!meter_type)
-      error = `"${meter_type_raw}" is not a valid meter type — use "Unit" or "CommonArea".`;
+      error = `"${meter_type_raw}" is not a valid meter type. Use "Unit" or "CommonArea".`;
     else if (meter_type === 'CommonArea' && unit_no.toUpperCase() !== 'COMMON')
       error = 'Common area meters must have "COMMON" as the unit number.';
     else if (initial_reading_raw !== '' && initial_reading_parsed === null)
-      error = 'Initial reading must be a number — fix it and re-upload.';
+      error = 'Initial reading must be a number. Fix it and re-upload.';
     else if (initial_reading < 0)
       error = 'Initial reading must be 0 or greater.';
 
@@ -254,10 +254,10 @@ export function ImportSubMetersDialog({
                   className="flex w-full cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed border-orange-500/50 px-6 py-10 text-center transition-colors hover:bg-orange-50/50 dark:hover:bg-orange-950/20"
                 >
                   <CloudUpload
-                    className="h-10 w-10 text-orange-500"
+                    className="text-warning h-10 w-10"
                     strokeWidth={1.5}
                   />
-                  <p className="font-medium text-orange-600">
+                  <p className="text-warning font-medium">
                     {fileName
                       ? fileName
                       : 'Drop CSV or Excel here, or click to browse'}
@@ -284,10 +284,10 @@ export function ImportSubMetersDialog({
                 unit_no.
                 <br />
                 <span className="font-medium">initial_meter_reading</span> is
-                last month&apos;s reading at onboarding — used as the baseline
+                last month&apos;s reading at onboarding, used as the baseline
                 for the first bill.
                 <br />
-                Existing sub-meters are skipped — no overwrite.
+                Existing sub-meters are skipped (no overwrite).
               </p>
               <Button
                 variant="outline"
@@ -345,9 +345,9 @@ export function ImportSubMetersDialog({
                           <TableCell className="text-muted-foreground text-xs">
                             {row._row}
                           </TableCell>
-                          <TableCell>{row.unit_no || '—'}</TableCell>
-                          <TableCell>{row.sub_meter_no || '—'}</TableCell>
-                          <TableCell>{row.meter_type || '—'}</TableCell>
+                          <TableCell>{row.unit_no || '-'}</TableCell>
+                          <TableCell>{row.sub_meter_no || '-'}</TableCell>
+                          <TableCell>{row.meter_type || '-'}</TableCell>
                           <TableCell className="tabular-nums">
                             {row.initial_reading}
                           </TableCell>

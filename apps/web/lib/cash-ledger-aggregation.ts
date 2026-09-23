@@ -16,7 +16,7 @@ export interface UnitCashLedgerBalance {
 
 /**
  * Loads per-unit cash ledger balances for the given units.
- * Aggregates per (unit_id, bill_type) — no cross-unit netting.
+ * Aggregates per (unit_id, bill_type) - no cross-unit netting.
  */
 export async function loadUnitLedgerBalances(
   associationId: string,

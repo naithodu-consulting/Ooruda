@@ -23,8 +23,8 @@ export function ConsentGate({ consentRequired }: { consentRequired: boolean }) {
    *
    * Critically, content that is *not* scrollable counts as already read. This
    * gate is a full-screen overlay with no escape, so a document short enough to
-   * fit — at browser zoom-out, on a tall viewport, or if this text is ever
-   * shortened — would otherwise fire no scroll event, leave the button disabled
+   * fit - at browser zoom-out, on a tall viewport, or if this text is ever
+   * shortened - would otherwise fire no scroll event, leave the button disabled
    * forever, and lock the user out of the app entirely.
    */
   const measure = useCallback(() => {
@@ -122,7 +122,7 @@ export function ConsentGate({ consentRequired }: { consentRequired: boolean }) {
                 href="/terms-of-service"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary underline underline-offset-2"
+                className="text-brand-ink underline underline-offset-2"
               >
                 Ooruda Terms of Service
               </a>
@@ -131,7 +131,7 @@ export function ConsentGate({ consentRequired }: { consentRequired: boolean }) {
                 href="/privacy-policy"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary underline underline-offset-2"
+                className="text-brand-ink underline underline-offset-2"
               >
                 Ooruda Privacy Policy
               </a>
@@ -140,7 +140,7 @@ export function ConsentGate({ consentRequired }: { consentRequired: boolean }) {
                 href="/refund-policy"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary underline underline-offset-2"
+                className="text-brand-ink underline underline-offset-2"
               >
                 Ooruda Refund &amp; Cancellation Policy
               </a>
@@ -207,7 +207,7 @@ export function ConsentGate({ consentRequired }: { consentRequired: boolean }) {
               contacting{' '}
               <a
                 href="mailto:hello@ooruda.com"
-                className="text-primary underline underline-offset-2"
+                className="text-brand-ink underline underline-offset-2"
               >
                 hello@ooruda.com
               </a>
@@ -249,7 +249,7 @@ export function ConsentGate({ consentRequired }: { consentRequired: boolean }) {
                 matters, please contact{' '}
                 <a
                   href="mailto:hello@ooruda.com"
-                  className="text-primary underline underline-offset-2"
+                  className="text-brand-ink underline underline-offset-2"
                 >
                   hello@ooruda.com
                 </a>

@@ -15,7 +15,7 @@ import { getAssociationRole } from '~/lib/rbac';
 const LOGO_MAX_PX = 208;
 const LOGO_BUCKET = 'account_image';
 
-// Cached processed logos — keyed by raw Storage URL. Survives the process
+// Cached processed logos - keyed by raw Storage URL. Survives the process
 // lifetime so the logo download + sharp resize only happens once per deploy.
 const logoCache = new Map<string, string>();
 
@@ -44,7 +44,7 @@ export async function preprocessLogoForPdf(
 
   const logger = await getLogger();
   try {
-    // account_image is a public bucket — prefer a direct HTTP fetch so that
+    // account_image is a public bucket - prefer a direct HTTP fetch so that
     // cross-environment URLs resolve correctly (e.g. dev DB storing a
     // production Storage URL, which the dev admin client cannot access).
     // Fall back to the admin SDK download for cases where the direct fetch
@@ -86,7 +86,7 @@ export async function preprocessLogoForPdf(
     if (!buffer) return null;
 
     const sharp = (await import('sharp')).default;
-    // Check for alpha channel before JPEG conversion — JPEG has no transparency
+    // Check for alpha channel before JPEG conversion - JPEG has no transparency
     // support, so any alpha pixels map to black by default. Flatten against white
     // when the source has an alpha channel (PNG, WEBP, etc.) so the logo renders
     // on the white PDF background as intended.
@@ -115,16 +115,16 @@ const BUCKET = 'billing-documents';
 const pendingPdfGenerations = new Map<string, Promise<GeneratedPdf | null>>();
 
 export interface GeneratedPdf {
-  /** Raw bytes — set when the PDF was just rendered (cache miss). */
+  /** Raw bytes - set when the PDF was just rendered (cache miss). */
   bytes?: Buffer;
-  /** Signed Storage URL — set when the PDF was already cached (cache hit). Redirect the browser here directly to avoid proxying through Next.js. */
+  /** Signed Storage URL - set when the PDF was already cached (cache hit). Redirect the browser here directly to avoid proxying through Next.js. */
   signedUrl?: string;
   filename: string;
 }
 
 /**
  * The `bills`/`payments` RLS policy only checks association membership
- * (`is_association_member`), not which unit a row belongs to — any role,
+ * (`is_association_member`), not which unit a row belongs to - any role,
  * including tenant/prop_owner, can SELECT any bill in their association.
  * Unit-level scoping ("my unit only") is enforced at the app layer
  * everywhere else (see association-dashboard.tsx's owned/tenancy lookup),
@@ -132,7 +132,7 @@ export interface GeneratedPdf {
  *
  * Owners may access every bill/receipt for a unit they own, regardless of
  * which tenancy was active when it was generated. Tenants may only access
- * bills/receipts attributed to their OWN tenancy (`billTenancyId`) — a bill
+ * bills/receipts attributed to their OWN tenancy (`billTenancyId`) - a bill
  * with no tenancy_id predates any tenant (self-occupied period) and stays
  * accessible, but a bill attributed to a *different* tenancy belongs to a
  * past or future tenant on the same unit and must stay hidden from this one.
@@ -194,14 +194,14 @@ type TenancyBillingRow = {
 };
 
 /**
- * Resolves the billing entity for a unit — used for BILL PDFs only.
+ * Resolves the billing entity for a unit - used for BILL PDFs only.
  * - bill_to=auto: use the tenancy that was active when the bill was
  *   generated, if any, else owner.
  * - bill_to=owner: always owner.
  * - bill_to=tenant: use that tenancy if present, else fall back to owner.
  *
  * `tenancyId` is the specific tenancy row the bill was attributed to at
- * generation time (`bills.tenancy_id`) — NOT "whichever tenancy happens to
+ * generation time (`bills.tenancy_id`) - NOT "whichever tenancy happens to
  * be active right now". Resolving against the current active tenancy would
  * make an old bill's "Bill To" name silently change to a new tenant's name
  * after a tenancy turnover and PDF cache regeneration.
@@ -234,7 +234,7 @@ async function resolveBillingEntity(
         companyGstin: tenancy.company_gstin,
       };
     }
-    // tenancies.tenant_id → auth.users(id), not profiles.id — PostgREST cannot
+    // tenancies.tenant_id → auth.users(id), not profiles.id - PostgREST cannot
     // resolve profiles() as an embedded join from tenancies. Fetch separately.
     const { data: profileData } = await admin
       .from('profiles')
@@ -283,7 +283,7 @@ async function resolveBillingEntity(
 }
 
 /**
- * Resolves the PAYER entity for RECEIPT PDFs — "Received From".
+ * Resolves the PAYER entity for RECEIPT PDFs - "Received From".
  *
  * Uses `paid_by_role` (the explicit choice made at payment time) rather than
  * `bill_to` (the billing preference on the unit), so the receipt always
@@ -386,7 +386,7 @@ export async function getOrGenerateBillPdf(
   opts?: { skipAuth?: boolean },
 ): Promise<GeneratedPdf | null> {
   // Auth is checked independently for every caller before consulting the
-  // dedup map — without this, a concurrent second request could receive the
+  // dedup map - without this, a concurrent second request could receive the
   // shared in-flight promise before its auth is checked.
   if (!opts?.skipAuth) {
     const client = getSupabaseServerClient();
@@ -418,7 +418,7 @@ export async function getOrGenerateBillPdf(
     // Fetch the bill using the admin client to ensure we get the full
     // nested association + accounts join (which might otherwise be filtered
     // by RLS for non-members, obscuring the logo). Auth was already confirmed
-    // by canAccessUnit() before this generate() closure was entered — the
+    // by canAccessUnit() before this generate() closure was entered - the
     // second check is intentionally removed to avoid 6+ serial DB calls.
     const { data: bill, error: billError } = await admin
       .from('bills')
@@ -457,7 +457,7 @@ export async function getOrGenerateBillPdf(
       if (signed?.signedUrl) {
         return { signedUrl: signed.signedUrl, filename };
       }
-      // Signed URL creation failed (e.g. object missing) — fall through and regenerate.
+      // Signed URL creation failed (e.g. object missing) - fall through and regenerate.
     }
 
     const association = bill.associations;
@@ -499,7 +499,7 @@ export async function getOrGenerateBillPdf(
       // bill, query by meter_type + units join instead of unit_id.
       const isCommonAreaBill = unitData.type === 'Common Area';
 
-      // Fetch mescom_bill, sub_meters, billing entity, and logo in parallel —
+      // Fetch mescom_bill, sub_meters, billing entity, and logo in parallel -
       // none of these depend on each other.
       const [{ data: mescomBill }, { data: subMeters }, billTo, logoUrl] =
         await Promise.all([
@@ -734,7 +734,7 @@ export async function getOrGenerateBillPdf(
         'Failed to cache generated bill PDF in storage',
       );
     } else {
-      // bills.update and audit can run concurrently — saves ~100ms vs sequential.
+      // bills.update and audit can run concurrently - saves ~100ms vs sequential.
       await Promise.all([
         admin
           .from('bills')
@@ -767,7 +767,7 @@ export async function getOrGenerateBillPdf(
 
 /**
  * Best-effort background PDF pre-render called after bill generation.
- * Skips auth — only invoke from server-side generation flows (generateBillsAction).
+ * Skips auth - only invoke from server-side generation flows (generateBillsAction).
  * Errors are logged and swallowed so one failed render never blocks the others.
  */
 export async function preRenderBillPdf(billId: string): Promise<void> {
@@ -777,7 +777,7 @@ export async function preRenderBillPdf(billId: string): Promise<void> {
     const logger = await getLogger();
     logger.error(
       { billId, err },
-      'preRenderBillPdf: background render failed — will render on first download instead',
+      'preRenderBillPdf: background render failed - will render on first download instead',
     );
   }
 }
@@ -789,7 +789,7 @@ export async function getOrGenerateReceiptPdf(
   paymentId: string,
   opts?: { skipAuth?: boolean },
 ): Promise<GeneratedPdf | null> {
-  // Auth pre-check before the dedup map — see getOrGenerateBillPdf for rationale.
+  // Auth pre-check before the dedup map - see getOrGenerateBillPdf for rationale.
   if (!opts?.skipAuth) {
     const authClient = getSupabaseServerClient();
     const { data: paymentMeta } = await authClient
@@ -847,7 +847,7 @@ export async function getOrGenerateReceiptPdf(
           filename: `${existingReceiptNo}.pdf`,
         };
       }
-      // Object missing from storage — fall through to regenerate.
+      // Object missing from storage - fall through to regenerate.
     }
 
     // Cache miss: fetch with full joins to render the PDF.
@@ -916,7 +916,7 @@ export async function getOrGenerateReceiptPdf(
       if (signed?.signedUrl) {
         return { signedUrl: signed.signedUrl, filename };
       }
-      // Signed URL creation failed (e.g. object missing) — fall through and regenerate.
+      // Signed URL creation failed (e.g. object missing) - fall through and regenerate.
     }
 
     type ExtendedUnit = {
@@ -1105,7 +1105,7 @@ export async function getOrGenerateAdvanceApplicationPdf(
     }
 
     // Fetch full record for PDF generation.
-    // Use authClient — advance_application_receipts has REVOKE ALL FROM service_role.
+    // Use authClient - advance_application_receipts has REVOKE ALL FROM service_role.
     const { data: receipt, error } = await authClient
       .from('advance_application_receipts')
       .select(
@@ -1180,7 +1180,7 @@ export async function getOrGenerateAdvanceApplicationPdf(
     // Resolve "Received From" as whoever paid the advance into the ledger.
     // The advance_application_receipts row is a debit; the original credit
     // entries for that unit/bill_type carry paid_by_user_id and paid_by_name.
-    // Use the most recent advance credit as the attributed payer — it is the
+    // Use the most recent advance credit as the attributed payer - it is the
     // best approximation when multiple deposits exist.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cashLedgerAdmin = admin as any;
@@ -1198,7 +1198,7 @@ export async function getOrGenerateAdvanceApplicationPdf(
           .maybeSingle(),
       ).then(async ({ data: creditEntry }: { data: unknown }) => {
         if (!creditEntry) {
-          // No advance credit found — fall back to owner.
+          // No advance credit found - fall back to owner.
           return resolvePayerEntity('Owner', unitData, null);
         }
         const entry = creditEntry as {
@@ -1221,7 +1221,7 @@ export async function getOrGenerateAdvanceApplicationPdf(
             companyGstin: null,
           } satisfies BillingEntityData;
         }
-        // paid_by_user_id is null — admin entered free-text name
+        // paid_by_user_id is null - admin entered free-text name
         return {
           isCompany: false,
           name: entry.paid_by_name || null,

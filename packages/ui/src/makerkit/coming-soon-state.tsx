@@ -4,11 +4,10 @@ import { cn } from '../lib/utils';
 import { Badge } from '../shadcn/badge';
 
 const colorVariants = {
-  amber: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
-  blue: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400',
-  green: 'bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400',
-  purple:
-    'bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400',
+  amber: 'bg-amber-50 text-warning dark:bg-amber-500/10',
+  blue: 'bg-blue-50 text-info dark:bg-blue-500/10',
+  green: 'bg-green-50 text-success dark:bg-green-500/10',
+  purple: 'bg-purple-50 text-purple-600 dark:bg-purple-500/10',
 };
 
 export function ComingSoonState({

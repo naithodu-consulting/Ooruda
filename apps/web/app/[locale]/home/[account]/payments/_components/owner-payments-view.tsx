@@ -278,27 +278,27 @@ export function OwnerPaymentsView({
       : 'bg-success/10';
 
   const heroIconColor = hasOverdue
-    ? 'text-red-500 dark:text-red-400'
+    ? 'text-destructive'
     : totalOwed > 0
       ? 'text-warning'
       : 'text-success';
 
   const heroAmtColor = hasOverdue
-    ? 'text-red-600 dark:text-red-400'
+    ? 'text-destructive'
     : totalOwed > 0
       ? 'text-warning'
       : 'text-success';
 
   const heroSubLabel =
     totalOwed === 0
-      ? "Nothing due — you're all paid up."
+      ? "Nothing due. You're all paid up."
       : hasOverdue
         ? `${overdueCount} overdue · ${mostOverdueDays} day${mostOverdueDays !== 1 ? 's' : ''} late`
         : `${outstanding.length} item${outstanding.length !== 1 ? 's' : ''} pending`;
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Hero — total outstanding */}
+      {/* Hero - total outstanding */}
       <Card className={`border-l-4 ${heroLeftBorder} ${heroBg}`}>
         <CardContent className="px-5 py-4">
           <div className="flex items-start gap-4">
@@ -312,7 +312,7 @@ export function OwnerPaymentsView({
                 Total outstanding
               </p>
               <p
-                className={`mt-0.5 text-3xl font-black tabular-nums ${heroAmtColor}`}
+                className={`mt-0.5 text-3xl font-bold tracking-tight tabular-nums ${heroAmtColor}`}
               >
                 {totalOwed === 0 ? 'All clear' : formatINR(totalOwed)}
               </p>
@@ -322,7 +322,7 @@ export function OwnerPaymentsView({
               {totalOwed > 0 && hasCashDues && payableBills.length > 0 && (
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <div className="bg-background/70 border-border rounded-lg border p-2.5">
-                    <p className="text-muted-foreground text-[10px] font-semibold tracking-wide uppercase">
+                    <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                       Bills
                     </p>
                     <p
@@ -344,7 +344,7 @@ export function OwnerPaymentsView({
                     )}
                   </div>
                   <div className="bg-background/70 border-border rounded-lg border p-2.5">
-                    <p className="text-muted-foreground text-[10px] font-semibold tracking-wide uppercase">
+                    <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                       Dues
                     </p>
                     <p className="text-foreground mt-0.5 text-base font-bold tabular-nums">
@@ -370,7 +370,7 @@ export function OwnerPaymentsView({
                         );
                       }
                       return (
-                        <p className="text-muted-foreground mt-2 text-[11px]">
+                        <p className="text-muted-foreground mt-2 text-xs">
                           Pay below ↓
                         </p>
                       );
@@ -409,7 +409,7 @@ export function OwnerPaymentsView({
               </span>
             </div>
             <CardDescription>
-              All outstanding charges, sorted by urgencyAdvance paid —
+              All outstanding charges, sorted by urgency.
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-3 p-0">
@@ -448,17 +448,17 @@ export function OwnerPaymentsView({
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             {item.kind === 'bill' && item.isOverdue && (
-                              <span className="inline-flex items-center rounded bg-red-50 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                              <span className="text-destructive inline-flex items-center rounded bg-red-50 px-1.5 py-0.5 text-xs leading-none font-medium dark:bg-red-500/10">
                                 Overdue
                               </span>
                             )}
                             {item.kind === 'bill' && !item.isOverdue && (
-                              <span className="bg-warning/10 text-warning inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-semibold">
+                              <span className="bg-warning/10 text-warning inline-flex items-center rounded px-1.5 py-0.5 text-xs leading-none font-medium">
                                 Due
                               </span>
                             )}
                             {item.kind === 'due' && (
-                              <span className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
+                              <span className="text-info inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs leading-none font-medium dark:bg-blue-500/10">
                                 Due
                               </span>
                             )}
@@ -473,7 +473,7 @@ export function OwnerPaymentsView({
                             </span>
                           </div>
                           {item.kind === 'bill' && item.billNo && (
-                            <p className="text-muted-foreground/60 mt-0.5 text-[11px]">
+                            <p className="text-muted-foreground mt-0.5 text-xs">
                               {item.billNo}
                             </p>
                           )}
@@ -483,7 +483,7 @@ export function OwnerPaymentsView({
                             <span
                               className={
                                 item.isOverdue
-                                  ? 'text-red-600 dark:text-red-400'
+                                  ? 'text-destructive'
                                   : 'text-muted-foreground'
                               }
                             >
@@ -498,12 +498,12 @@ export function OwnerPaymentsView({
                               {item.isOverdue && ` · ${item.daysOverdue}d late`}
                             </span>
                           ) : (
-                            <span className="text-muted-foreground/60 text-xs">
-                              —
+                            <span className="text-muted-foreground text-xs">
+                              -
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="py-3 pr-4 text-right text-sm font-bold text-red-600 tabular-nums dark:text-red-400">
+                        <TableCell className="text-destructive py-3 pr-4 text-right text-sm font-bold tabular-nums">
                           {formatINR(item.outstanding)}
                         </TableCell>
                         {canPay && (
@@ -603,7 +603,7 @@ export function OwnerPaymentsView({
                                 · {periodLabel(fp.period)}
                               </span>
                             </p>
-                            <p className="text-muted-foreground/60 mt-0.5 text-[11px]">
+                            <p className="text-muted-foreground mt-0.5 text-xs">
                               {fp.billNo}
                               {fp.mode ? ` · via ${fp.mode}` : ''}
                               {fp.receipt_no ? ` · ${fp.receipt_no}` : ''}
@@ -652,7 +652,7 @@ export function OwnerPaymentsView({
                                 · Advance Deposit
                               </span>
                             </p>
-                            <p className="text-muted-foreground/60 mt-0.5 text-[11px]">
+                            <p className="text-muted-foreground mt-0.5 text-xs">
                               {adv.razorpay_payment_id
                                 ? `via Razorpay · ${adv.razorpay_payment_id}`
                                 : 'Cash / Manual'}
@@ -702,7 +702,7 @@ export function OwnerPaymentsView({
                               · Due
                             </span>
                           </p>
-                          <p className="text-muted-foreground/60 mt-0.5 text-[11px]">
+                          <p className="text-muted-foreground mt-0.5 text-xs">
                             {dp.mode ? `via ${dp.mode}` : ''}
                             {receiptNo ? ` · ${receiptNo}` : ''}
                           </p>

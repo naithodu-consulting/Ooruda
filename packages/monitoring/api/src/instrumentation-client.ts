@@ -42,7 +42,7 @@ clientInstrumentationRegistry.register('sentry', async () => {
 
 // Module-level promise so `captureClientException` callers can await the
 // same lazy init that `registerClientMonitoringInstrumentation` kicks off.
-// `null` once init succeeds (resolved) or fails (rejected) — we still keep
+// `null` once init succeeds (resolved) or fails (rejected) - we still keep
 // the resolved promise; nulling out just lets us short-circuit `register`
 // when called twice.
 let initPromise: Promise<ClientInstrumentationRegistration | null> | null =
@@ -82,7 +82,7 @@ function loadInstrumentation() {
  * @name registerClientMonitoringInstrumentation
  * @description Install provider-agnostic global error handlers and lazily
  * load the configured monitoring provider. The handlers are owned by this
- * module — not by any specific provider — and forward unhandled errors
+ * module - not by any specific provider - and forward unhandled errors
  * through the registered provider's `captureException`. Errors that fire
  * before the provider chunk finishes loading are buffered, then replayed.
  */
@@ -117,7 +117,7 @@ export function registerClientMonitoringInstrumentation() {
   window.addEventListener('error', onError);
   window.addEventListener('unhandledrejection', onRejection);
 
-  // Kick the lazy load immediately — the Sentry chunk fetches in parallel
+  // Kick the lazy load immediately - the Sentry chunk fetches in parallel
   // with hydration without blocking it, and any errors that fire in the
   // meantime sit in the buffer.
   void loadInstrumentation().then((instrumentation) => {

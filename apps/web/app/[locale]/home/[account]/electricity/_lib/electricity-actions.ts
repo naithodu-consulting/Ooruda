@@ -33,7 +33,7 @@ async function requireAssocAdmin(
 }
 
 /**
- * Add a sub-meter to a unit (or a common-area meter). Admin-only — mirrors
+ * Add a sub-meter to a unit (or a common-area meter). Admin-only - mirrors
  * `admin_insert` on `sub_meters`.
  */
 export async function createSubMeterAction(
@@ -58,7 +58,7 @@ export async function createSubMeterAction(
   const client = getSupabaseServerClient();
 
   // Defense-in-depth: confirm the unit actually belongs to this association
-  // before inserting — RLS would reject it anyway, but this gives a friendly
+  // before inserting - RLS would reject it anyway, but this gives a friendly
   // message instead of a raw policy violation.
   const { data: unit } = await client
     .from('units')
@@ -139,7 +139,7 @@ export async function setSubMeterActiveAction(
 }
 
 /**
- * Upload a Electricity bill for a billing period. Admin-only — mirrors
+ * Upload a Electricity bill for a billing period. Admin-only - mirrors
  * `admin_insert` on `mescom_bills`.
  */
 export async function createElectricityBillAction(
@@ -205,7 +205,7 @@ export async function createElectricityBillAction(
 }
 
 /**
- * Delete a Electricity bill. Super-admin only — mirrors the delete-unit
+ * Delete a Electricity bill. Super-admin only - mirrors the delete-unit
  * restriction, since removing a bill also drops its meter readings.
  */
 export async function deleteElectricityBillAction(
@@ -321,7 +321,7 @@ export async function bulkImportMeterReadingsAction(
 
   const client = getSupabaseServerClient();
 
-  // Fetch units, mescom bills, and generated-bill count in parallel — none
+  // Fetch units, mescom bills, and generated-bill count in parallel - none
   // of these depend on each other.
   const [{ data: units }, { data: bills }, { count: generatedBillCount }] =
     await Promise.all([
@@ -548,7 +548,7 @@ export async function bulkImportMeterReadingsAction(
 
   // Block-total guard: sub-meters can never consume more than the main
   // Electricity meter. The manual readings dialog refuses to save such a set,
-  // so the CSV path must refuse too — otherwise an over-block set lands in the
+  // so the CSV path must refuse too - otherwise an over-block set lands in the
   // DB and inflates the block rate for every unit at bill generation.
   //
   // The total is the period's state AFTER this import: the rows being written
@@ -570,7 +570,7 @@ export async function bulkImportMeterReadingsAction(
       retainedUnits += Math.max(0, existing.consumed_units ?? 0);
     }
 
-    // Readings are decimals, so round before comparing and displaying —
+    // Readings are decimals, so round before comparing and displaying -
     // otherwise float drift both trips the guard on an exact match and prints
     // totals like "270.00000000000003".
     const totalUnits = Math.round((incomingUnits + retainedUnits) * 100) / 100;
@@ -745,7 +745,7 @@ export type SubMeterImportResult = {
 
 /**
  * Bulk-import sub-meters from CSV. Super-admin only.
- * Existing (unit_id + meter_label) pairs are skipped — no overwrite.
+ * Existing (unit_id + meter_label) pairs are skipped - no overwrite.
  */
 export async function bulkImportSubMetersAction(
   associationId: string,
@@ -825,7 +825,7 @@ export async function bulkImportSubMetersAction(
     let unitId: string | undefined;
 
     if (isCommon) {
-      // For CommonArea meters, unit_no is ignored — attach to the first unit as
+      // For CommonArea meters, unit_no is ignored - attach to the first unit as
       // a placeholder so the FK is satisfied; matching during readings uses label only.
       unitId = units?.[0]?.id;
       if (!unitId) {

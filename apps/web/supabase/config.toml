@@ -54,13 +54,13 @@ jwt_expiry = 3600
 enable_signup = true
 enable_manual_linking = true
 
-# Phone / SMS auth — test numbers bypass the SMS hook and always accept OTP 123456.
+# Phone / SMS auth - test numbers bypass the SMS hook and always accept OTP 123456.
 # These match the seed_test_users.sh phone numbers (no '+' prefix).
 [auth.sms]
 enable_signup = true
 enable_confirmations = true
 
-# Twilio stub — only here to satisfy GoTrue's requirement for a provider so that
+# Twilio stub - only here to satisfy GoTrue's requirement for a provider so that
 # GOTRUE_EXTERNAL_PHONE_ENABLED=true. Test OTP numbers bypass this entirely.
 # The send_sms hook below overrides actual delivery for real numbers.
 [auth.sms.twilio]
@@ -150,7 +150,7 @@ enable_signup = false
 # addresses. If disabled, only the new email is required to confirm.
 # MUST be false here: the add-email and change-email flows use a single OTP
 # verification of the NEW address. Legacy phone-only users have no old email to
-# confirm, and a user changing email may have lost access to the old one — both
+# confirm, and a user changing email may have lost access to the old one - both
 # of which a double-confirm would dead-end. Only the new address is verified.
 double_confirm_changes = false
 # If enabled, users need to confirm their email address before signing in.
@@ -215,7 +215,7 @@ backend = "postgres"
 
 [functions.custom-sms-hook]
 # Supabase Auth's "Send SMS" hook calls this function as a signed webhook, not
-# as a user request — there's no Supabase JWT in the Authorization header.
+# as a user request - there's no Supabase JWT in the Authorization header.
 # With verify_jwt left at its default (true), the Edge Functions gateway
 # rejects every invocation with 401 before the function code ever runs,
 # which GoTrue then surfaces to the client as a generic auth error. This is

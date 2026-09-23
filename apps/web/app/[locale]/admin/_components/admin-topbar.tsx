@@ -49,8 +49,8 @@ export function AdminTopbar() {
           className="flex items-center gap-2 lg:hidden"
           aria-label="Admin home"
         >
-          <OorudaMark size={24} className="text-[#1a1a1a]" />
-          <span className="text-[15px] font-black tracking-tight text-[#1a1a1a] lowercase">
+          <OorudaMark size={24} className="text-foreground" />
+          <span className="text-foreground text-base font-black tracking-tight lowercase">
             ooruda
           </span>
         </Link>
@@ -131,7 +131,7 @@ export function AdminTopbar() {
             render={
               <button
                 type="button"
-                className="hidden h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-[#f59e0b] text-xs font-black text-slate-950 transition-transform hover:scale-105 focus:ring-2 focus:ring-[#f59e0b]/50 focus:outline-none lg:flex"
+                className="text-primary-foreground hidden h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-[#f59e0b] text-xs font-bold transition-transform hover:scale-105 focus:ring-2 focus:ring-[#f59e0b]/50 focus:outline-none lg:flex"
                 title={`Account options (${displayName})`}
               >
                 {initials}

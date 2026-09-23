@@ -329,7 +329,7 @@ export function WorkspaceDropdown({
             <DropdownMenuItem
               render={
                 <Link
-                  className="flex items-center gap-x-2 text-yellow-700 hover:text-yellow-600 dark:text-yellow-500"
+                  className="text-warning hover:text-warning flex items-center gap-x-2"
                   href="/admin"
                   data-test="workspace-admin-link"
                 >

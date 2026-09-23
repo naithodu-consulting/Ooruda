@@ -216,7 +216,7 @@ export function createKitDevDeps(rootPath = process.cwd()): KitDevServiceDeps {
         supabaseStudioPort =
           parseTomlSectionPort(toml, 'studio') ?? supabaseStudioPort;
       } catch {
-        // config.toml not present or unreadable — use defaults.
+        // config.toml not present or unreadable - use defaults.
       }
 
       return {

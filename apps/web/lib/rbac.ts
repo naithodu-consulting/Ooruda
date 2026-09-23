@@ -91,7 +91,7 @@ export async function requireRole(
  * (not the account slug), or null if they have no membership.
  *
  * Use this in Server Actions for an explicit authorization check before a
- * mutation — defense-in-depth on top of the database RLS policies.
+ * mutation - defense-in-depth on top of the database RLS policies.
  */
 export async function getAssociationRole(
   associationId: string,

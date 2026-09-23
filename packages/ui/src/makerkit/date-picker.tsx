@@ -20,8 +20,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '../shadcn/popover';
  * This is deliberate. Postgres `date` columns come back from PostgREST as
  * plain `'YYYY-MM-DD'`, and the obvious conversions silently move the day:
  *
- *   new Date('2026-06-10')        // UTC midnight — 10 Jun becomes 9 Jun in IST
- *   someDate.toISOString()        // re-anchors to UTC — same shift, other way
+ *   new Date('2026-06-10')        // UTC midnight - 10 Jun becomes 9 Jun in IST
+ *   someDate.toISOString()        // re-anchors to UTC - same shift, other way
  *
  * Either one is a day's drift near midnight, which on a bill due date or a
  * payment date is a real accounting error. The conversions below stay in local
@@ -120,7 +120,7 @@ export function DatePicker({
     // react-day-picker treats a click on the already-selected day as a
     // toggle and hands back `undefined` (see `useSingle`: "If the date is
     // the same, clear the selection"). A user re-clicking the highlighted
-    // day means "yes, this one", not "clear it" — and on a payment or due
+    // day means "yes, this one", not "clear it" - and on a payment or due
     // date that silently wrote an empty value. Clearing stays deliberate,
     // via the `clearable` X below.
     if (!date) {

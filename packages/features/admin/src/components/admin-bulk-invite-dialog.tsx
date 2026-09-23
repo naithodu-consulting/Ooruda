@@ -135,7 +135,7 @@ function parseAssocFormat(
     const ownerPhone = cleanPhoneCell(r['owner_mobile_no'] ?? '');
     const ownerNameRaw = r['owner_name'] ?? '';
     // Split joint-person ownership (e.g. "UJWAL N SALIAN & HARSHALATHA U SALIAN") to
-    // the first name only — one account per phone. Do NOT split if either side looks
+    // the first name only - one account per phone. Do NOT split if either side looks
     // like a company name (e.g. "Patel & Sons LLP", "Ernst & Young Advisory").
     const ownerName = (() => {
       if (!ownerNameRaw.includes(' & ')) return ownerNameRaw;
@@ -151,7 +151,7 @@ function parseAssocFormat(
 
     // For SELF OCCUPIED rows, the tenant column holds the occupying firm name
     // (grey "informational" cells used for billing). Only treat it as a company
-    // name if it actually matches a business-entity pattern — avoids setting
+    // name if it actually matches a business-entity pattern - avoids setting
     // owner_is_company=true when an individual's name appears in that cell.
     const selfOccupiedCompanyName =
       isSelfOccupied && tenantNameRaw && isCompanyName(tenantNameRaw)
@@ -382,7 +382,7 @@ export function AdminBulkInviteDialog(
                   Template
                 </Button>
               </div>
-              <pre className="font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap">
+              <pre className="font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
                 {`phone,name,email,role,association_name\n9911000001,Rajesh Kumar,rajesh@example.com,prop_owner,Sunrise Apartments\n9922000002,Priya Shah,,tenant,Sunrise Apartments`}
               </pre>
               <p className="mt-2.5 flex flex-wrap gap-1">
@@ -404,7 +404,7 @@ export function AdminBulkInviteDialog(
                   also accepted for{' '}
                   <span className="font-semibold">{props.associationName}</span>
                   . <span className="font-medium">UNIT_STATUS</span> is
-                  mandatory —{' '}
+                  mandatory:{' '}
                   <code className="bg-background rounded px-1">
                     SELF OCCUPIED
                   </code>{' '}
@@ -446,7 +446,7 @@ export function AdminBulkInviteDialog(
                         {row.phone}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {row.name || '—'}
+                        {row.name || '-'}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-xs">
@@ -454,10 +454,10 @@ export function AdminBulkInviteDialog(
                         </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-xs">
-                        {row.unit_no || '—'}
+                        {row.unit_no || '-'}
                       </TableCell>
                       <TableCell className="text-xs">
-                        {row.unit_status ?? '—'}
+                        {row.unit_status ?? '-'}
                       </TableCell>
                     </TableRow>
                   ))}

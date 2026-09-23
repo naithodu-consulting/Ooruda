@@ -53,7 +53,7 @@ const s = StyleSheet.create({
   },
   kpiLabel: {
     fontSize: 6.5,
-    color: '#888',
+    color: '#666',
     marginBottom: 2,
     textTransform: 'uppercase',
   },
@@ -101,11 +101,11 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  footerText: { fontSize: 7, color: '#888' },
+  footerText: { fontSize: 7, color: '#666' },
   th: { fontSize: 7, color: '#fff', fontWeight: 'bold' },
   thR: { fontSize: 7, color: '#fff', fontWeight: 'bold', textAlign: 'right' },
   cell: { fontSize: 7.5, color: '#222' },
-  cellMuted: { fontSize: 7, color: '#888' },
+  cellMuted: { fontSize: 7, color: '#666' },
   cellR: { fontSize: 7.5, color: '#222', textAlign: 'right' },
   cellBold: { fontSize: 7.5, fontWeight: 'bold', color: NAVY },
   cellBoldR: {
@@ -139,7 +139,7 @@ function C({
 }
 
 function fmtDate(iso: string) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'short',
@@ -244,7 +244,7 @@ export function ExpensesExportDocument({
                 ) : null}
               </C>
               <C flex={COL.category}>
-                <Text style={s.cell}>{e.category_name ?? '—'}</Text>
+                <Text style={s.cell}>{e.category_name ?? '-'}</Text>
               </C>
               <C flex={COL.payee}>
                 <Text style={s.cell}>{e.payee_name}</Text>

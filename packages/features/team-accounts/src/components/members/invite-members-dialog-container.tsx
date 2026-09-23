@@ -395,7 +395,7 @@ function useFetchInvitationsPolicies({
       // createInvitationsAction independently enforces checkInvitationPermissions
       // and evaluateInvitationsPolicies server-side. So if the preflight endpoint
       // is unavailable (e.g. routing 404/500), we must degrade to "allowed" and
-      // let the server action be the authority — never hard-block the dialog.
+      // let the server action be the authority - never hard-block the dialog.
       const permissive = {
         allowed: true,
         reasons: [],

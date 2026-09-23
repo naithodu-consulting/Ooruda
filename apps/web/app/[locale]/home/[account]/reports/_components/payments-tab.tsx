@@ -90,9 +90,9 @@ export function PaymentsTab({ payments }: Props) {
     modeCount.set(p.mode, (modeCount.get(p.mode) ?? 0) + 1);
   }
   const topMode =
-    [...modeCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
+    [...modeCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '-';
 
-  // Timeline data — group by week if range > 2 months, else by day
+  // Timeline data - group by week if range > 2 months, else by day
   const timelineData = useMemo(() => {
     const byKey = new Map<string, number>();
     const rangeMs =
@@ -203,11 +203,11 @@ export function PaymentsTab({ payments }: Props) {
 
       {/* Charts row 1 */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Timeline area — 2/3 */}
+        {/* Timeline area - 2/3 */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Payment Timeline</CardTitle>
-            <CardDescription>Cash flow — when residents pay</CardDescription>
+            <CardDescription>Cash flow: when residents pay</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
@@ -229,7 +229,7 @@ export function PaymentsTab({ payments }: Props) {
                 />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 10 }}
+                  tick={{ fontSize: 11 }}
                   tickLine={false}
                   axisLine={false}
                   interval="preserveStartEnd"
@@ -259,7 +259,7 @@ export function PaymentsTab({ payments }: Props) {
           </CardContent>
         </Card>
 
-        {/* Mode donut — 1/3 */}
+        {/* Mode donut - 1/3 */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Payment Mode</CardTitle>
@@ -421,23 +421,23 @@ export function PaymentsTab({ payments }: Props) {
                       {formatINR(p.amount)}
                     </TableCell>
                     <TableCell>
-                      <span className="bg-muted rounded px-1.5 py-0.5 text-[11px]">
+                      <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
                         {p.mode}
                       </span>
                     </TableCell>
                     <TableCell>
                       <span
-                        className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        className={`rounded px-1.5 py-0.5 text-xs font-medium ${
                           p.source === 'cash_ledger'
-                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
-                            : 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400'
+                            ? 'text-success bg-emerald-100 dark:bg-emerald-950'
+                            : 'bg-violet-100 text-violet-700 dark:bg-violet-950'
                         }`}
                       >
                         {p.source === 'cash_ledger' ? 'Cash' : 'Online'}
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
-                      {p.receipt_no ?? '—'}
+                      {p.receipt_no ?? '-'}
                     </TableCell>
                   </TableRow>
                 ))}

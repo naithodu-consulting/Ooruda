@@ -32,7 +32,7 @@ export const metadata = { title: 'Bills by Unit · Billing' };
  * Level 2: every unit, one row each, with its billed/outstanding roll-up.
  *
  * Deliberately does not join `bill_line_items`. The list renders no line-item
- * detail — that belongs to level 3, which is scoped to a single unit.
+ * detail - that belongs to level 3, which is scoped to a single unit.
  */
 export default async function BillingUnitsPage({
   params,
@@ -156,7 +156,7 @@ export default async function BillingUnitsPage({
     period: b.period,
     bill_no: b.bill_no,
     bill_type: b.bill_type,
-    unit_no: unitNoById.get(b.unit_id) ?? '—',
+    unit_no: unitNoById.get(b.unit_id) ?? '-',
     total_amount: b.total_amount,
     paid_amount: b.paid_amount,
     advance_applied: b.advance_applied,

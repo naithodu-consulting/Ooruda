@@ -111,7 +111,7 @@ export function actionLabel(action: string): string {
 }
 
 export function truncateSummary(summary: string | null, max = 90): string {
-  if (!summary) return '—';
+  if (!summary) return '-';
   const braceIdx = summary.search(/[{[]/);
   const stripped = braceIdx > 0 ? summary.slice(0, braceIdx).trim() : '';
   const text = stripped || (braceIdx === 0 ? 'An error occurred.' : summary);
@@ -128,7 +128,7 @@ export function TypeBadge({
 }) {
   if ((statusCode !== null && statusCode >= 500) || eventType === 'error')
     return (
-      <Badge variant="destructive" className="text-[10px]">
+      <Badge variant="destructive" className="text-xs">
         Error{statusCode ? ` · ${statusCode}` : ''}
       </Badge>
     );
@@ -136,20 +136,20 @@ export function TypeBadge({
     return (
       <Badge
         variant="outline"
-        className="border-amber-300 text-[10px] text-amber-700"
+        className="text-warning border-amber-300 text-xs"
       >
         {statusCode}
       </Badge>
     );
   if (eventType === 'system_event')
     return (
-      <Badge variant="secondary" className="text-[10px]">
+      <Badge variant="secondary" className="text-xs">
         System
       </Badge>
     );
   if (eventType === 'auth_event')
     return (
-      <Badge variant="outline" className="text-[10px]">
+      <Badge variant="outline" className="text-xs">
         Auth
       </Badge>
     );
@@ -159,7 +159,7 @@ export function TypeBadge({
 /** @deprecated use TypeBadge */
 export const StatusBadge = TypeBadge;
 
-/** All tabs — used in super-admin view which can see auth + system events. */
+/** All tabs - used in super-admin view which can see auth + system events. */
 export const ADMIN_EVENT_TYPE_TABS = [
   { key: '', label: 'All' },
   { key: 'user_action', label: 'User Actions' },

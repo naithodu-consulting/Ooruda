@@ -38,7 +38,7 @@ const AssociationSchema = z.object({
     .max(200)
     .nullable()
     .transform((v) => v || null),
-  // sanctioned_load_kva — informational only (total load for the association
+  // sanctioned_load_kva - informational only (total load for the association
   // from the electricity board). Individual sub-meter load_kva values are what
   // drive minimum-charge calculations; this field is for admin reference only.
   sanctioned_load_kva: z.preprocess(
@@ -107,7 +107,7 @@ export async function updateAssociationAction(
   formData: FormData,
 ): Promise<UpdateAssociationState> {
   // Explicit authorization check (defense-in-depth on top of RLS).
-  // Editing association config — including status, GST and branding — is an
+  // Editing association config - including status, GST and branding - is an
   // admin-only task; the underlying `associations` RLS policy is assoc_admin.
   const role = await getAssociationRole(associationId);
 
@@ -252,7 +252,7 @@ export async function updateChargeTypeCalcMethodAction(
     const logger = await getLogger();
     logger.warn(
       { associationId, action: 'updateChargeTypeCalcMethod', chargeTypeId: id },
-      'Permission denied — super admin required',
+      'Permission denied: super admin required',
     );
     return {
       success: false,
@@ -332,7 +332,7 @@ export async function toggleChargeTypeAction(
   id: string,
   isActive: boolean,
 ): Promise<{ success: boolean; error?: string }> {
-  // Toggling charge types is allowed for admins and billing operators —
+  // Toggling charge types is allowed for admins and billing operators -
   // mirrors the `operator_update` RLS policy on charge_types.
   const role = await getAssociationRole(associationId);
 
@@ -381,7 +381,7 @@ const CreateGatewaySchema = z.object({
 
 export type GatewayActionState = { success?: boolean; error?: string } | null;
 
-// Insert-only — credentials cannot be edited after creation.
+// Insert-only - credentials cannot be edited after creation.
 // To rotate keys, delete and re-create.
 export async function createPaymentGatewayAction(
   associationId: string,

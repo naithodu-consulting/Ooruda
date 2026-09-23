@@ -84,7 +84,7 @@ select throws_ok(
 );
 
 -- no invitations should have been created by any of the blocked inserts.
--- NOTE: select id (not *) — authenticated may not read the invite_token column.
+-- NOTE: select id (not *) - authenticated may not read the invite_token column.
 select makerkit.authenticate_as('inv_owner');
 
 select is_empty(

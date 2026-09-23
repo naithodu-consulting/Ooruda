@@ -62,7 +62,7 @@ export const POST = enhanceRouteHandler(
             .eq('status', 'active')
             .maybeSingle(),
         ]),
-        // association_payment_gateways has no RLS for regular users — admin client required.
+        // association_payment_gateways has no RLS for regular users - admin client required.
         admin
           .from('association_payment_gateways')
           .select('key_id, key_secret, is_active')

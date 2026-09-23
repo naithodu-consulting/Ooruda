@@ -36,7 +36,7 @@ export default async function CashLedgerPage({ params }: Props) {
   ]);
 
   // Owners and tenants see their balance on the dashboard and Payments page.
-  // The Cash Ledger is an admin/operator tool — redirect them away.
+  // The Cash Ledger is an admin/operator tool - redirect them away.
   if (role === 'prop_owner' || role === 'tenant') {
     redirect(`/home/${account}/payments`);
   }
@@ -72,7 +72,7 @@ export default async function CashLedgerPage({ params }: Props) {
       .select('id, unit_no')
       .eq('association_id', association.id)
       .order('unit_no'),
-    // Direct query — requireRole already authenticated; no extra auth re-check.
+    // Direct query - requireRole already authenticated; no extra auth re-check.
     // Scoped to current FY so the initial load is fast.
     uc(client)
       .from('cash_ledger')

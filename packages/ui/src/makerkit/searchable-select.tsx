@@ -18,7 +18,7 @@ import {
 /**
  * A Select that can be typed into.
  *
- * Use this wherever the option list grows with the data — units, billing
+ * Use this wherever the option list grows with the data - units, billing
  * periods, eligible owners and tenants, associations, expense categories. A
  * plain Select is a fixed-height scrolling window, which stops working long
  * before the list stops growing: an association with 64 units already means
@@ -26,7 +26,7 @@ import {
  *
  * Deliberately NOT for bounded lists. Payment modes, bill types and unit types
  * are four or five fixed options, and a search field above them is friction
- * rather than help — keep `Select` there.
+ * rather than help - keep `Select` there.
  *
  * Composes the untouched `shadcn/combobox` (Base UI), so filtering, keyboard
  * navigation and the ARIA combobox/listbox wiring come from upstream.
@@ -131,8 +131,8 @@ export function SearchableSelect({
                 </span>
               ) : (
                 // A value with no matching item falls back to the raw value
-                // rather than the placeholder. `items` can lag the value —
-                // still loading, or the option was filtered out — and showing
+                // rather than the placeholder. `items` can lag the value -
+                // still loading, or the option was filtered out - and showing
                 // the placeholder there reads as "nothing selected" for a
                 // field that does hold one, hiding the mismatch from the user.
                 <span className="truncate">{value || placeholder}</span>

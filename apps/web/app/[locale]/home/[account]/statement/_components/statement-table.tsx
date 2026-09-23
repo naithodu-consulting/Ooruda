@@ -61,31 +61,31 @@ function TypeBadge({ entryType }: { entryType: StatementEntry['entry_type'] }) {
   switch (entryType) {
     case 'due':
       return (
-        <span className="inline-flex shrink-0 items-center rounded bg-red-50 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-400">
+        <span className="text-destructive inline-flex shrink-0 items-center rounded bg-red-50 px-1.5 py-0.5 text-xs leading-none font-medium dark:bg-red-500/10">
           Due
         </span>
       );
     case 'due_payment':
       return (
-        <span className="inline-flex shrink-0 items-center rounded bg-green-50 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-green-700 dark:bg-green-500/10 dark:text-green-400">
+        <span className="text-success inline-flex shrink-0 items-center rounded bg-green-50 px-1.5 py-0.5 text-xs leading-none font-medium dark:bg-green-500/10">
           Payment
         </span>
       );
     case 'advance_payment':
       return (
-        <span className="inline-flex shrink-0 items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
+        <span className="text-info inline-flex shrink-0 items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs leading-none font-medium dark:bg-blue-500/10">
           Advance
         </span>
       );
     case 'advance_applied':
       return (
-        <span className="inline-flex shrink-0 items-center rounded bg-purple-50 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-purple-700 dark:bg-purple-500/10 dark:text-purple-400">
+        <span className="inline-flex shrink-0 items-center rounded bg-purple-50 px-1.5 py-0.5 text-xs leading-none font-medium text-purple-700 dark:bg-purple-500/10">
           Advance used
         </span>
       );
     case 'reversal':
       return (
-        <span className="inline-flex shrink-0 items-center rounded bg-orange-50 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-400">
+        <span className="text-warning inline-flex shrink-0 items-center rounded bg-orange-50 px-1.5 py-0.5 text-xs leading-none font-medium dark:bg-orange-500/10">
           Refunded
         </span>
       );
@@ -132,7 +132,7 @@ function entrySubtext(entry: StatementEntry): string | null {
     return entry.notes ?? 'Refunded by Razorpay';
   }
   if (entry.entry_type === 'due') {
-    // Only show a structured bill reference — never raw notes (which can be
+    // Only show a structured bill reference - never raw notes (which can be
     // truncated system strings like "Maintain dur").
     return entry.bill_no ?? null;
   }
@@ -167,7 +167,7 @@ function entryDownloadUrl(entry: StatementEntry): string | null {
     return ledgerId ? `/api/billing/advance-payments/${ledgerId}/pdf` : null;
   }
   if (entry.entry_type === 'due_payment') {
-    // Bill payment: id is "payment-{uuid}" — use the receipts endpoint directly.
+    // Bill payment: id is "payment-{uuid}" - use the receipts endpoint directly.
     if (entry.id.startsWith('payment-')) {
       const paymentId = entry.id.slice('payment-'.length);
       return `/api/billing/receipts/${paymentId}/pdf`;
@@ -225,7 +225,7 @@ function OpeningBalanceRow({
     balance === 0
       ? 'text-muted-foreground'
       : balance > 0
-        ? 'text-green-600 dark:text-green-400'
+        ? 'text-success'
         : 'text-destructive';
   return (
     <TableRow className="bg-muted/30">
@@ -247,7 +247,7 @@ function OpeningBalanceRow({
       >
         {formatINR(Math.abs(balance))}
         {balance !== 0 && (
-          <span className="ml-1 text-[10px] font-normal opacity-60">
+          <span className="text-muted-foreground ml-1 text-xs font-normal">
             {balance > 0 ? '↑' : '↓'}
           </span>
         )}
@@ -297,7 +297,7 @@ function toCsv(
   return [...meta, [], header, ...dataRows].map((r) => r.join(',')).join('\n');
 }
 
-// Effective credit delta for an entry — used by opening balance and running balance.
+// Effective credit delta for an entry - used by opening balance and running balance.
 // Full reversals (payment_status='reversed') contribute 0: the bill debit already
 // represents the outstanding amount. Partial refunds contribute the net amount
 // (amount - refunded_amount) since the bill trigger has already adjusted paid_amount.
@@ -391,7 +391,7 @@ export function StatementTable({
     return Array.from(set).sort();
   }, [entries]);
 
-  // Build filter option labels — for other_charges, surface actual charge names.
+  // Build filter option labels - for other_charges, surface actual charge names.
   const billTypeOptions = useMemo(() => {
     return billTypes.map((bt) => {
       if (bt === 'other_charges') {
@@ -428,7 +428,7 @@ export function StatementTable({
     return Array.from(set).sort().reverse();
   }, [entries]);
 
-  // Annotate FYs with transaction counts — hints at older history volumes.
+  // Annotate FYs with transaction counts - hints at older history volumes.
   const fyWithCounts = useMemo(() => {
     return fiscalYears.map((fy) => {
       const range = fyRange(fy);
@@ -449,7 +449,7 @@ export function StatementTable({
       if (!customFrom && !customTo) return null;
       const from = customFrom || '0000-01-01';
       const to = customTo || '9999-12-31';
-      // Inverted range — no results, return a sentinel that matches nothing
+      // Inverted range - no results, return a sentinel that matches nothing
       if (customFrom && customTo && customFrom > customTo)
         return { from: customTo, to: customFrom, inverted: true as const };
       return { from, to };
@@ -570,10 +570,10 @@ export function StatementTable({
     closingBalance === 0
       ? 'text-muted-foreground'
       : closingBalance > 0
-        ? 'text-green-600 dark:text-green-400'
+        ? 'text-success'
         : 'text-destructive';
 
-  // Balance display: never show a "+" prefix — color carries the sentiment.
+  // Balance display: never show a "+" prefix - color carries the sentiment.
   // ₹0 is shown in muted (neutral, neither good nor bad).
   const fmtBalance = (n: number) => formatINR(Math.abs(n));
 
@@ -624,9 +624,9 @@ export function StatementTable({
         </div>
       )}
 
-      {/* Summary cards — closing balance dominates (full-width on mobile) */}
+      {/* Summary cards - closing balance dominates (full-width on mobile) */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        {/* Closing balance — full-width on mobile, accent border by state */}
+        {/* Closing balance - full-width on mobile, accent border by state */}
         <Card
           className={`col-span-2 sm:col-span-1 ${
             closingBalance < 0
@@ -641,7 +641,7 @@ export function StatementTable({
               Balance
             </p>
             <p
-              className={`mt-1.5 text-3xl font-bold tabular-nums ${closingBalanceColor}`}
+              className={`mt-1.5 text-3xl font-bold tracking-tight tabular-nums ${closingBalanceColor}`}
             >
               {fmtBalance(closingBalance)}
             </p>
@@ -649,7 +649,7 @@ export function StatementTable({
               {closingBalanceSub}
             </p>
             {hasAdvances && closingBalance < 0 && (
-              <p className="text-muted-foreground mt-2 text-[11px] leading-relaxed">
+              <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
                 Note: Your advance payments are specific for a charge type. For
                 example, a Maintenance advance only covers Maintenance bills.
                 Check Payments to see exactly what you owe.
@@ -658,7 +658,7 @@ export function StatementTable({
             <div className="mt-2.5">
               <Link
                 href={`/home/${account}/payments`}
-                className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-amber-600"
+                className="bg-warning hover:bg-warning/90 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-white transition-colors"
               >
                 Payments <ArrowRight className="h-3 w-3" />
               </Link>
@@ -672,7 +672,7 @@ export function StatementTable({
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               Total paid in
             </p>
-            <p className="mt-1 text-2xl font-bold text-green-600 tabular-nums dark:text-green-400">
+            <p className="text-success mt-1 text-2xl font-bold tabular-nums">
               {formatINR(totalCredits)}
             </p>
             <p className="text-muted-foreground mt-0.5 text-xs">
@@ -680,15 +680,15 @@ export function StatementTable({
             </p>
             {hasAdvances && hasPayments && (
               <div className="mt-2 flex flex-col gap-0.5 border-t pt-2">
-                <div className="flex justify-between text-[11px]">
+                <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Payments</span>
-                  <span className="font-medium text-green-600 tabular-nums dark:text-green-400">
+                  <span className="text-success font-medium tabular-nums">
                     {formatINR(totalPaymentCredits)}
                   </span>
                 </div>
-                <div className="flex justify-between text-[11px]">
+                <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Advances</span>
-                  <span className="font-medium text-green-600 tabular-nums dark:text-green-400">
+                  <span className="text-success font-medium tabular-nums">
                     {formatINR(totalAdvanceCredits)}
                   </span>
                 </div>
@@ -753,7 +753,7 @@ export function StatementTable({
                 </DropdownMenu>
               )}
               <Select value={fyFilter} onValueChange={handleFyChange}>
-                <SelectTrigger className="h-8 w-[130px] text-xs">
+                <SelectTrigger className="h-8 w-[130px] text-sm">
                   <SelectValue>{activePeriodLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -790,7 +790,7 @@ export function StatementTable({
                 </div>
               )}
               <Select value={billTypeFilter} onValueChange={handleTypeChange}>
-                <SelectTrigger className="h-8 max-w-[160px] text-xs">
+                <SelectTrigger className="h-8 max-w-[160px] text-sm">
                   <SelectValue className="truncate">
                     {activeBillTypeLabel}
                   </SelectValue>
@@ -862,7 +862,7 @@ export function StatementTable({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {/* Opening balance — top when oldest-first, bottom when newest-first */}
+                  {/* Opening balance - top when oldest-first, bottom when newest-first */}
                   {showOpeningRow && dateSortAsc && (
                     <OpeningBalanceRow
                       balance={openingBalance!}
@@ -885,11 +885,11 @@ export function StatementTable({
                       e.runningBalance === 0
                         ? 'text-muted-foreground'
                         : e.runningBalance > 0
-                          ? 'text-green-600 dark:text-green-400'
+                          ? 'text-success'
                           : 'text-destructive';
                     return (
                       <TableRow key={e.id}>
-                        <TableCell className="text-muted-foreground w-[72px] min-w-[72px] py-3 pl-4 text-xs whitespace-nowrap tabular-nums">
+                        <TableCell className="text-muted-foreground w-[72px] min-w-[72px] py-3 pl-4 text-sm whitespace-nowrap tabular-nums">
                           {dateLabel}
                         </TableCell>
                         <TableCell className="py-3">
@@ -897,28 +897,28 @@ export function StatementTable({
                             <TypeBadge entryType={e.entry_type} />
                             <div className="min-w-0">
                               <span
-                                className={`text-foreground block text-sm font-medium ${
+                                className={`block text-sm font-medium ${
                                   e.payment_status === 'reversed'
-                                    ? 'line-through opacity-50'
-                                    : ''
+                                    ? 'text-muted-foreground line-through'
+                                    : 'text-foreground'
                                 }`}
                               >
                                 {entryDescription(e)}
                               </span>
                               {e.payment_status === 'reversed' && (
-                                <span className="border-destructive/30 bg-destructive/10 text-destructive inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
+                                <span className="border-destructive/30 bg-destructive/10 text-destructive inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
                                   Refunded
                                 </span>
                               )}
                               {e.payment_status === 'partial_refund' &&
                                 e.refunded_amount && (
-                                  <span className="inline-flex items-center rounded-full border border-orange-300/50 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-orange-700 uppercase dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-400">
+                                  <span className="text-warning inline-flex items-center rounded-full border border-orange-300/50 bg-orange-50 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase dark:border-orange-500/30 dark:bg-orange-500/10">
                                     Partial refund ·{' '}
                                     {formatINR(e.refunded_amount)}
                                   </span>
                                 )}
                               {subtext && (
-                                <span className="text-muted-foreground/60 mt-0.5 block text-[11px]">
+                                <span className="text-muted-foreground mt-0.5 block text-xs">
                                   {subtext}
                                 </span>
                               )}
@@ -927,7 +927,7 @@ export function StatementTable({
                                   href={downloadUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-muted-foreground/60 hover:text-primary mt-1 inline-flex items-center gap-1 text-[11px] transition-colors"
+                                  className="text-muted-foreground hover:text-brand-ink mt-1 inline-flex items-center gap-1 text-xs transition-colors"
                                 >
                                   <Download className="h-3 w-3" />
                                   Download receipt
@@ -940,7 +940,7 @@ export function StatementTable({
                         <TableCell className="text-destructive hidden py-3 text-right text-sm font-semibold whitespace-nowrap tabular-nums sm:table-cell">
                           {e.direction === 'debit' ? formatINR(e.amount) : ''}
                         </TableCell>
-                        <TableCell className="hidden py-3 text-right text-sm font-semibold whitespace-nowrap text-green-600 tabular-nums sm:table-cell dark:text-green-400">
+                        <TableCell className="text-success hidden py-3 text-right text-sm font-semibold whitespace-nowrap tabular-nums sm:table-cell">
                           {e.direction === 'credit' ? formatINR(e.amount) : ''}
                         </TableCell>
                         {/* Mobile: single Amount column with sign color */}
@@ -948,7 +948,7 @@ export function StatementTable({
                           className={`table-cell py-3 text-right text-sm font-semibold whitespace-nowrap tabular-nums sm:hidden ${
                             e.direction === 'debit'
                               ? 'text-destructive'
-                              : 'text-green-600 dark:text-green-400'
+                              : 'text-success'
                           }`}
                         >
                           {e.direction === 'debit' ? '−' : '+'}
@@ -959,7 +959,7 @@ export function StatementTable({
                         >
                           {formatINR(Math.abs(e.runningBalance))}
                           {e.runningBalance !== 0 && (
-                            <span className="ml-1 text-[10px] font-normal opacity-60">
+                            <span className="text-muted-foreground ml-1 text-xs font-normal">
                               {e.runningBalance > 0 ? '↑' : '↓'}
                             </span>
                           )}
@@ -967,7 +967,7 @@ export function StatementTable({
                       </TableRow>
                     );
                   })}
-                  {/* Opening balance — bottom when newest-first */}
+                  {/* Opening balance - bottom when newest-first */}
                   {showOpeningRow && !dateSortAsc && (
                     <OpeningBalanceRow
                       balance={openingBalance!}
@@ -990,7 +990,7 @@ export function StatementTable({
                     <TableCell className="text-destructive hidden py-3 text-right text-sm font-bold whitespace-nowrap tabular-nums sm:table-cell">
                       {formatINR(totalDebits)}
                     </TableCell>
-                    <TableCell className="hidden py-3 text-right text-sm font-bold whitespace-nowrap text-green-600 tabular-nums sm:table-cell dark:text-green-400">
+                    <TableCell className="text-success hidden py-3 text-right text-sm font-bold whitespace-nowrap tabular-nums sm:table-cell">
                       {formatINR(totalCredits)}
                     </TableCell>
                     <TableCell

@@ -4,7 +4,7 @@ import { LegalBackButton } from './legal-back-button';
 
 /**
  * Deliberately minimal: a way back, and the wordmark. No navigation, and no
- * sign-in button — readers reach these documents *from* the sign-in screen,
+ * sign-in button - readers reach these documents *from* the sign-in screen,
  * so offering to send them there is circular.
  *
  * The three-column grid keeps the wordmark optically centred regardless of

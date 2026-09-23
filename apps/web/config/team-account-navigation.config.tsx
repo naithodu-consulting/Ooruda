@@ -172,7 +172,7 @@ type SidebarConfig = ReturnType<typeof getTeamAccountSidebarConfig>;
 /**
  * Filter a sidebar config down to the nav items the given role may see,
  * dropping any section left with no visible children. Pages remain protected
- * by requireRole() regardless — this only controls what the sidebar shows.
+ * by requireRole() regardless - this only controls what the sidebar shows.
  */
 export function filterSidebarConfigByRole(
   config: SidebarConfig,

@@ -89,7 +89,7 @@ export const POST = enhanceRouteHandler(
           .eq('status', 'active')
           .maybeSingle(),
       ]),
-      // association_payment_gateways has no RLS for regular users — admin client required.
+      // association_payment_gateways has no RLS for regular users - admin client required.
       admin
         .from('association_payment_gateways')
         .select('key_id, key_secret, is_active')
@@ -117,7 +117,7 @@ export const POST = enhanceRouteHandler(
       );
     }
 
-    // HMAC verification — ensures the payment was initiated through our order
+    // HMAC verification - ensures the payment was initiated through our order
     const expectedSignature = crypto
       .createHmac('sha256', gateway.key_secret)
       .update(`${razorpayOrderId}|${razorpayPaymentId}`)
@@ -145,7 +145,7 @@ export const POST = enhanceRouteHandler(
       });
     }
 
-    // Fetch actual captured amount from Razorpay — never trust the client-supplied amount
+    // Fetch actual captured amount from Razorpay - never trust the client-supplied amount
     const rzpCredentials = Buffer.from(
       `${gateway.key_id}:${gateway.key_secret}`,
     ).toString('base64');

@@ -75,7 +75,7 @@ export const POST = enhanceRouteHandler(
 
     const admin = getSupabaseServerAdminClient();
 
-    // Resolve association_id so we can scope all queries — prevents a caller
+    // Resolve association_id so we can scope all queries - prevents a caller
     // from requesting payment IDs belonging to a different association.
     const { data: assocRow } = await admin
       .from('associations')
@@ -145,7 +145,7 @@ export const POST = enhanceRouteHandler(
             }
 
             if (bytes) {
-              // voucherNo alone is unique; unit_no requires another fetch — skip folder grouping
+              // voucherNo alone is unique; unit_no requires another fetch - skip folder grouping
               files[`advance-vouchers/${voucherNo.replace(/\//g, '-')}.pdf`] =
                 bytes;
             }

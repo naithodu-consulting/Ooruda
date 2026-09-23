@@ -23,7 +23,7 @@
  * Theme variables
   */
 :root {
-  /* Ooruda brand — "Warm gold" (Option B): gold #FCD469, black, white,
+  /* Ooruda brand - "Warm gold" (Option B): gold #FCD469, black, white,
      on a warm cream canvas. Gold is light, so it always carries black text. */
   --background: #fffdf5; /* warm cream canvas */
   --foreground: #141414;
@@ -39,7 +39,7 @@
   --muted-foreground: #6f6a5a;
   --accent: #f7eac2; /* pale gold hover */
   --accent-foreground: #1a1a1a;
-  --destructive: oklch(0.58 0.22 27);
+  --destructive: #b91c1c;
   --border: #eae3d2;
   --input: #eae3d2;
   --ring: #fcd469;
@@ -51,23 +51,28 @@
   --radius: 0.625rem;
   /* Ooruda: warm pale-gold sidebar with solid-gold active state + black text */
   --sidebar: #fdf3d4;
-  --sidebar-foreground: #8a7320;
+  --sidebar-foreground: #665412;
   --sidebar-primary: #fcd469;
   --sidebar-primary-foreground: #1a1a1a;
   --sidebar-accent: #f5e6a8;
   --sidebar-accent-foreground: #1a1a1a;
   --sidebar-border: #f0e2b0;
   --sidebar-ring: #fcd469;
-  /* Sidebar footer — intentionally dark to contrast with the warm-cream sidebar body */
+  /* Sidebar footer - intentionally dark to contrast with the warm-cream sidebar body */
   --sidebar-footer-bg: #050b14;
   --sidebar-footer-border: #1f2d3d;
   --sidebar-footer-fg: #ffffff;
   --sidebar-footer-fg-muted: #94a3b8;
-  /* Semantic status colours — used for financial/status indicators across the app */
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-  --color-danger: #dc2626;
-  --color-info: #2563eb;
+  /* Semantic status colours. Every shade clears WCAG AA (4.5:1) as text on
+     card, canvas, muted and its own 10% tint. */
+  --success: #146f35;
+  --warning: #a14a06;
+  --warning-foreground: #a14a06;
+  --danger: #b91c1c;
+  --info: #1d4ed8;
+  /* Readable gold for text. Brand gold (--primary) is a fill colour: as text
+     it is ~1.4:1 on white and unreadable. */
+  --brand-ink: #7a5c0a;
 }
 
 /* Ooruda is light-only for the Warm-gold rebrand. We mirror the :root
@@ -88,7 +93,7 @@
   --muted-foreground: #6f6a5a;
   --accent: #f7eac2;
   --accent-foreground: #1a1a1a;
-  --destructive: oklch(0.58 0.22 27);
+  --destructive: #b91c1c;
   --border: #eae3d2;
   --input: #eae3d2;
   --ring: #fcd469;
@@ -98,7 +103,7 @@
   --chart-4: #c9c2ae;
   --chart-5: #1a1a1a;
   --sidebar: #fdf3d4;
-  --sidebar-foreground: #8a7320;
+  --sidebar-foreground: #665412;
   --sidebar-primary: #fcd469;
   --sidebar-primary-foreground: #1a1a1a;
   --sidebar-accent: #f5e6a8;
@@ -109,8 +114,12 @@
   --sidebar-footer-border: #1f2d3d;
   --sidebar-footer-fg: #ffffff;
   --sidebar-footer-fg-muted: #94a3b8;
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-  --color-danger: #dc2626;
-  --color-info: #2563eb;
+  --success: #146f35;
+  --warning: #a14a06;
+  --warning-foreground: #a14a06;
+  --danger: #b91c1c;
+  --info: #1d4ed8;
+  /* Readable gold for text. Brand gold (--primary) is a fill colour: as text
+     it is ~1.4:1 on white and unreadable. */
+  --brand-ink: #7a5c0a;
 }
