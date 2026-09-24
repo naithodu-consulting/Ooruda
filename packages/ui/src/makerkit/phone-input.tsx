@@ -15,7 +15,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../shadcn/select';
+} from './select';
 
 import {
   InputGroup,

@@ -10,7 +10,8 @@
     }
   },
   "exports": {
-    ".": "./src/index.tsx"
+    ".": "./src/index.tsx",
+    "./bill-type-labels": "./src/lib/bill-type-labels.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .turbo node_modules",

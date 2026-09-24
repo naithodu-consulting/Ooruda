@@ -11,12 +11,14 @@ import { Page, PageNavigation } from '@kit/ui/page';
 import { SidebarProvider } from '@kit/ui/sidebar';
 
 import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.config';
+import { requireUserInServerComponent } from '~/lib/server/require-user-in-server-component';
 
 // local imports
 import { ConsentGate } from '../_components/consent-gate';
 import { TeamAccountLayoutSidebar } from './_components/team-account-layout-sidebar';
 import { TeamAccountNavigationMenu } from './_components/team-account-navigation-menu';
 import { TeamAccountTopbar } from './_components/team-account-topbar';
+import { loadAssociationFeatures } from './_lib/server/association-features.loader';
 import { loadTeamWorkspace } from './_lib/server/team-account-workspace.loader';
 
 type TeamWorkspaceLayoutProps = React.PropsWithChildren<{
@@ -40,9 +42,23 @@ async function SidebarLayout({
 }: React.PropsWithChildren<{
   account: string;
 }>) {
-  const [data, state] = await Promise.all([
+  const client = getSupabaseServerClient();
+
+  // One parallel stage: the workspace, layout cookies, this association's
+  // feature switches (request-cached, shared with the gated pages)
+  // and the user's consent status. The user lookup is request-cached and
+  // shared with the workspace loader.
+  const [data, state, features, { data: consentProfile }] = await Promise.all([
     loadTeamWorkspace(account),
     getLayoutState(account),
+    loadAssociationFeatures(account),
+    requireUserInServerComponent().then((user) =>
+      client
+        .from('profiles')
+        .select('consent_accepted_at')
+        .eq('id', user.id)
+        .single(),
+    ),
   ]);
 
   if (!data) {
@@ -55,45 +71,14 @@ async function SidebarLayout({
     image: picture_url,
   }));
 
-  // Load per-association feature flags and consent status in parallel.
-  const client = getSupabaseServerClient();
-  const [{ data: assocFlags }, { data: consentProfile }] = await Promise.all([
-    client
-      .from('associations')
-      .select('id, cash_ledger_enabled')
-      .eq('account_id', data.account.id)
-      .single(),
-    client
-      .from('profiles')
-      .select('consent_accepted_at')
-      .eq('id', data.user.id)
-      .single(),
-  ]);
-
-  // Feature flags keyed to this association only
-  const associationId = assocFlags?.id ?? '';
-  const { data: featureFlags } = associationId
-    ? await (client as any)
-        .from('association_feature_flags')
-        .select('feature, enabled')
-        .eq('association_id', associationId)
-        .in('feature', ['expense_tracker', 'amc_reminder'])
-    : { data: [] };
-
-  const enabledFeatures = new Set<string>(
-    (featureFlags ?? [])
-      .filter((f: { enabled: boolean }) => f.enabled)
-      .map((f: { feature: string }) => f.feature),
-  );
-
   const disabledNavKeys: string[] = [];
-  if (assocFlags?.cash_ledger_enabled === false) {
+  if (!features.cashLedgerEnabled) {
     disabledNavKeys.push('association.nav.cashLedger');
   }
-  if (!enabledFeatures.has('expense_tracker')) {
+  if (!features.isEnabled('expense_tracker')) {
     disabledNavKeys.push('association.nav.expenses');
   }
-  if (!enabledFeatures.has('amc_reminder')) {
+  if (!features.isEnabled('amc_reminder')) {
     disabledNavKeys.push('association.nav.amc');
   }
 

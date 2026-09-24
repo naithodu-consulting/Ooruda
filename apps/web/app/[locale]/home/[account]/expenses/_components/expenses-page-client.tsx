@@ -2,10 +2,24 @@
 
 import { useState } from 'react';
 
+import dynamic from 'next/dynamic';
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@kit/ui/tabs';
 
-import { ExpenseAnalytics } from './expense-analytics';
 import { ExpenseList } from './expense-list';
+
+// Analytics is a secondary tab built on Recharts (~250 KB). Lazy-load it so
+// the default list view doesn't pay for the chart library.
+const ExpenseAnalytics = dynamic(
+  () =>
+    import('./expense-analytics').then((m) => ({
+      default: m.ExpenseAnalytics,
+    })),
+  {
+    ssr: false,
+    loading: () => <div className="bg-muted h-64 animate-pulse rounded-lg" />,
+  },
+);
 
 interface Category {
   id: string;

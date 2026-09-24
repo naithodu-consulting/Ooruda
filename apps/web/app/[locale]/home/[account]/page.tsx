@@ -2,7 +2,6 @@ import { Suspense } from 'react';
 
 import { getTranslations } from 'next-intl/server';
 
-import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { PageBody } from '@kit/ui/page';
 import { Skeleton } from '@kit/ui/skeleton';
@@ -56,25 +55,20 @@ async function TeamAccountHomePage({
 }: TeamAccountHomePageProps) {
   const [{ account }, { d }] = await Promise.all([params, searchParams]);
   const duration = d ?? 'all';
-  const { role, accountId, userId } = await requireRole(
-    account,
-    PROPOPS_ROLES.slice(),
-  );
+  const {
+    role,
+    accountId,
+    userId,
+    associationId: assocId,
+    associationStatus,
+    accountName,
+  } = await requireRole(account, PROPOPS_ROLES.slice());
 
-  // Fetch the association row here so the dashboard component can fire all its
-  // queries in a single Promise.all - eliminating one sequential DB round-trip.
-  // This is a fast single-row indexed lookup; it does not meaningfully delay the shell.
-  const client = getSupabaseServerClient();
-  const { data: association } = await client
-    .from('associations')
-    .select('id, status, accounts(name)')
-    .eq('account_id', accountId)
-    .single();
-
-  const associationId = association?.id ?? '';
-  const associationStatus = association?.status ?? '';
-  const assocName =
-    (association?.accounts as { name?: string } | null)?.name ?? '';
+  // The association id, status and name come from requireRole's single
+  // request-cached lookup, so the dashboard can fire all its queries in one
+  // Promise.all with no extra round trip here.
+  const associationId = assocId ?? '';
+  const assocName = accountName ?? '';
 
   return (
     <PageBody>
@@ -89,7 +83,7 @@ async function TeamAccountHomePage({
           account={account}
           accountId={accountId}
           associationId={associationId}
-          associationStatus={associationStatus}
+          associationStatus={associationStatus ?? ''}
           assocName={assocName}
           userId={userId}
           role={role}

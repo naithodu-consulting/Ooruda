@@ -1,6 +1,10 @@
 'use client';
 
-import * as XLSX from 'xlsx';
+/**
+ * `xlsx` is several hundred KB, and these helpers are only used from import
+ * dialogs. Load it on demand so it stays out of the pages' initial bundle.
+ */
+const loadXlsx = () => import('xlsx');
 
 /**
  * Normalizes a header string: lowercase + trim + collapse internal spaces to underscore.
@@ -21,8 +25,9 @@ export function parseSpreadsheetFile(
     const reader = new FileReader();
 
     if (file.name.toLowerCase().endsWith('.xlsx')) {
-      reader.onload = (ev) => {
+      reader.onload = async (ev) => {
         try {
+          const XLSX = await loadXlsx();
           const data = new Uint8Array(ev.target!.result as ArrayBuffer);
           const wb = XLSX.read(data, { type: 'array' });
           const ws = wb.Sheets[wb.SheetNames[0]!]!;
@@ -84,8 +89,10 @@ export function downloadXlsxTemplate(
   sampleRows: (string | number | null | undefined)[][],
 ) {
   const data = [headers, ...sampleRows];
-  const ws = XLSX.utils.aoa_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Template');
-  XLSX.writeFile(wb, filename);
+  void loadXlsx().then((XLSX) => {
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+    XLSX.writeFile(wb, filename);
+  });
 }

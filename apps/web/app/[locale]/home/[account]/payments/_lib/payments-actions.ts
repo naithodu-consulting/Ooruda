@@ -6,6 +6,7 @@ import { after } from 'next/server';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { preRenderPaymentDocumentsAfterResponse } from '~/home/[account]/billing/_lib/server/pdf-generation';
 import { logAuditEvent } from '~/lib/audit-log';
 import { todayInBillingZone } from '~/lib/billing-dates';
 import { sanitizeActionError } from '~/lib/errors/sanitize-action-error';
@@ -124,6 +125,12 @@ export async function recordPaymentAction(
     entityId: paymentId as unknown as string,
     summary: `Unit ${unit?.unit_no ?? '?'} - ₹${amount.toLocaleString('en-IN')} collected via ${mode}${isBackDated ? ` (back-dated to ${paid_on})` : ''}`,
   });
+
+  // Render + cache the receipt and the (now invalidated) bill PDF after the
+  // response, so their first download is instant.
+  preRenderPaymentDocumentsAfterResponse([
+    { paymentId: paymentId as unknown as string, billId },
+  ]);
 
   // Fire payment-confirmed notification non-blocking via after()
   if (bill && unit?.owner_id) {

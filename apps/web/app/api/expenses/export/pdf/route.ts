@@ -3,15 +3,13 @@ import { NextResponse } from 'next/server';
 import * as z from 'zod';
 
 import { enhanceRouteHandler } from '@kit/next/routes';
-import {
-  renderExpensesExportPdf,
-  type ExpenseExportRow,
-} from '@kit/pdf-templates';
+import type { ExpenseExportRow } from '@kit/pdf-templates';
 import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
-import { sanitizeLogoUrl } from '~/lib/server/sanitize-logo-url';
+import { preprocessLogoForPdf } from '~/home/[account]/billing/_lib/server/pdf-generation';
+import { loadPdfRenderer } from '~/lib/server/pdf-renderer';
 
 const BodySchema = z.object({
   associationId: z.string().uuid(),
@@ -40,6 +38,10 @@ export const POST = enhanceRouteHandler(
     const client = getSupabaseServerClient();
     const admin = getSupabaseServerAdminClient();
 
+    // Start loading/warming the renderer now; it overlaps the queries below.
+    const rendererPromise = loadPdfRenderer();
+    rendererPromise.catch(() => undefined);
+
     // Build query - RLS enforces association scoping automatically.
     let query = client
       .from('expenses')
@@ -55,7 +57,15 @@ export const POST = enhanceRouteHandler(
     if (body.categoryId) query = query.eq('category_id', body.categoryId);
     if (body.mode) query = query.eq('mode_of_payment', body.mode);
 
-    const { data: rows, error } = await query;
+    // The expenses and the association branding are independent - one stage.
+    const [{ data: rows, error }, { data: assoc }] = await Promise.all([
+      query,
+      admin
+        .from('associations')
+        .select('address, gstin, email, phone, accounts(name, picture_url)')
+        .eq('id', body.associationId)
+        .single(),
+    ]);
 
     if (error) {
       logger.error({ error }, 'expenses: export PDF fetch failed');
@@ -90,18 +100,15 @@ export const POST = enhanceRouteHandler(
       );
     }
 
-    // Association branding
-    const { data: assoc } = await admin
-      .from('associations')
-      .select('address, gstin, email, phone, accounts(name, picture_url)')
-      .eq('id', body.associationId)
-      .single();
-
     type Assoc = typeof assoc & {
       accounts: { name: string; picture_url: string | null } | null;
     };
     const assocData = assoc as unknown as Assoc;
-    const rawLogoUrl = assocData?.accounts?.picture_url ?? null;
+    // The resized, process-cached logo rather than the full-size original,
+    // which react-pdf would otherwise download and decode on every export.
+    const logoPromise = preprocessLogoForPdf(
+      assocData?.accounts?.picture_url ?? null,
+    );
 
     const expenses: ExpenseExportRow[] = filtered.map((e) => ({
       date_of_payment: e.date_of_payment,
@@ -126,6 +133,10 @@ export const POST = enhanceRouteHandler(
     });
 
     try {
+      const [{ renderExpensesExportPdf }, logoUrl] = await Promise.all([
+        rendererPromise,
+        logoPromise,
+      ]);
       const pdfBytes = await renderExpensesExportPdf({
         association: {
           name: assocData?.accounts?.name ?? 'Association',
@@ -133,7 +144,7 @@ export const POST = enhanceRouteHandler(
           gstin: assocData?.gstin ?? null,
           panNumber: null,
           registrationNumber: null,
-          logoUrl: sanitizeLogoUrl(rawLogoUrl),
+          logoUrl,
           email: assocData?.email ?? null,
           phone: assocData?.phone ?? null,
         },

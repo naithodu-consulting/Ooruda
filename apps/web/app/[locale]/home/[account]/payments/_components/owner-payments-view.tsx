@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 
 import { AlertCircle, ArrowRight } from 'lucide-react';
 
-import { billTypeLabel } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 import {
   Card,
   CardContent,

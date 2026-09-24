@@ -57,59 +57,59 @@ export async function generateMetadata({ params }: Props) {
  */
 export default async function UnitBillingPage({ params }: Props) {
   const { account, unitId } = await params;
-  const { accountId, role } = await requireRole(account, [
+  const { role, associationId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
   ]);
 
   const client = getSupabaseServerClient();
 
-  const { data: association } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const association = associationId ? { id: associationId } : null;
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  // Scoped by association_id as well as id - a unit belonging to another
-  // association must read as missing, not as forbidden.
-  const { data: unit } = await client
-    .from('units')
-    .select(
-      'id, unit_no, floor, owner_id, owner_is_company, owner_company_name',
-    )
-    .eq('id', unitId)
-    .eq('association_id', association.id)
-    .maybeSingle();
+  // Everything is scoped by association_id as well as id, so the queries can
+  // run in parallel - a unit belonging to another association reads as
+  // missing, not as forbidden.
+  const [
+    { data: unit },
+    billsResult,
+    pendingChargesResult,
+    pendingSinkingChargesResult,
+  ] = await Promise.all([
+    client
+      .from('units')
+      .select(
+        'id, unit_no, floor, owner_id, owner_is_company, owner_company_name',
+      )
+      .eq('id', unitId)
+      .eq('association_id', association.id)
+      .maybeSingle(),
+    client
+      .from('bills')
+      .select(UNIT_BILL_SELECT)
+      .eq('association_id', association.id)
+      .eq('unit_id', unitId)
+      .order('period', { ascending: false })
+      .order('bill_no'),
+    client
+      .from('pending_other_charges')
+      .select('id, unit_id, period, label, amount, due_date')
+      .eq('association_id', association.id)
+      .eq('unit_id', unitId)
+      .eq('billed', false),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (client as any)
+      .from('pending_sinking_fund_charges')
+      .select('id, unit_id, period, label, amount, due_date')
+      .eq('association_id', association.id)
+      .eq('unit_id', unitId)
+      .eq('billed', false),
+  ]);
 
   if (!unit) notFound();
-
-  const [billsResult, pendingChargesResult, pendingSinkingChargesResult] =
-    await Promise.all([
-      client
-        .from('bills')
-        .select(UNIT_BILL_SELECT)
-        .eq('association_id', association.id)
-        .eq('unit_id', unitId)
-        .order('period', { ascending: false })
-        .order('bill_no'),
-      client
-        .from('pending_other_charges')
-        .select('id, unit_id, period, label, amount, due_date')
-        .eq('association_id', association.id)
-        .eq('unit_id', unitId)
-        .eq('billed', false),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (client as any)
-        .from('pending_sinking_fund_charges')
-        .select('id, unit_id, period, label, amount, due_date')
-        .eq('association_id', association.id)
-        .eq('unit_id', unitId)
-        .eq('billed', false),
-    ]);
 
   let ownerName: string | null = unit.owner_is_company
     ? (unit.owner_company_name ?? null)

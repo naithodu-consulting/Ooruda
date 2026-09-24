@@ -36,16 +36,22 @@ function UserHomeLayout({ children }: React.PropsWithChildren) {
 export default UserHomeLayout;
 
 async function SidebarLayout({ children }: React.PropsWithChildren) {
-  const [workspace, state] = await Promise.all([
+  // The super-admin check runs alongside the workspace load: this layout is
+  // the post-login landing, and usually only redirects onward.
+  const [workspace, state, superAdmin] = await Promise.all([
     loadUserWorkspace().catch(() => null),
     getLayoutState(),
+    isSuperAdmin(getSupabaseServerClient()),
   ]);
 
   if (!workspace) {
     redirect('/');
   }
 
-  await redirectIfSuperAdmin();
+  if (superAdmin) {
+    redirect(pathsConfig.app.admin);
+  }
+
   await redirectIfTeamsOnly(workspace);
 
   const client = getSupabaseServerClient();
@@ -77,9 +83,15 @@ async function SidebarLayout({ children }: React.PropsWithChildren) {
 }
 
 async function HeaderLayout({ children }: React.PropsWithChildren) {
-  const workspace = await loadUserWorkspace();
+  const [workspace, superAdmin] = await Promise.all([
+    loadUserWorkspace(),
+    isSuperAdmin(getSupabaseServerClient()),
+  ]);
 
-  await redirectIfSuperAdmin();
+  if (superAdmin) {
+    redirect(pathsConfig.app.admin);
+  }
+
   await redirectIfTeamsOnly(workspace);
 
   return (
@@ -113,14 +125,6 @@ function MobileNavigation({
       <HomeMobileNavigation workspace={workspace} />
     </>
   );
-}
-
-async function redirectIfSuperAdmin() {
-  const client = getSupabaseServerClient();
-
-  if (await isSuperAdmin(client)) {
-    redirect(pathsConfig.app.admin);
-  }
 }
 
 async function redirectIfTeamsOnly(

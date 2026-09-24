@@ -1,4 +1,4 @@
-import { billTypeLabel } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 
 export { billTypeLabel };
 

@@ -30,18 +30,14 @@ export default async function StatementPage({ params, searchParams }: Props) {
     from: initialFrom,
     to: initialTo,
   } = await searchParams;
-  const { accountId, userId } = await requireRole(account, [
+  const { userId, associationId } = await requireRole(account, [
     'prop_owner',
     'tenant',
   ]);
 
   const client = getSupabaseServerClient();
 
-  const { data: association } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const association = associationId ? { id: associationId } : null;
 
   if (!association) {
     throw new Error('Unable to load association for this account.');

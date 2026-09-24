@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 
+import { preRenderPaymentDocumentsAfterResponse } from '~/home/[account]/billing/_lib/server/pdf-generation';
 import { logAuditEvent } from '~/lib/audit-log';
 
 import crypto from 'crypto';
@@ -396,6 +397,7 @@ export async function POST(req: NextRequest) {
   }
 
   const paymentBatchId = billIds.length > 1 ? crypto.randomUUID() : null;
+  const recorded: { paymentId: string; billId: string }[] = [];
 
   for (const bill of bills) {
     // Must match record_payment's own check, or the RPC rejects the amount
@@ -406,7 +408,7 @@ export async function POST(req: NextRequest) {
       Number(bill.advance_applied ?? 0);
     if (outstanding <= 0) continue;
 
-    const { error } = await admin.rpc('record_payment', {
+    const { data: paymentId, error } = await admin.rpc('record_payment', {
       p_bill_id: bill.id,
       p_association_id: associationId,
       p_amount: outstanding,
@@ -430,7 +432,15 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    if (paymentId) {
+      recorded.push({ paymentId: paymentId as string, billId: bill.id });
+    }
   }
+
+  // Render + cache the receipts and the (now invalidated) bill PDFs after the
+  // response, so the payer's first download is instant.
+  preRenderPaymentDocumentsAfterResponse(recorded);
 
   void logAuditEvent({
     associationId,

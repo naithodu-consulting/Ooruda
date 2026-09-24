@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { renderToBuffer } from '@react-pdf/renderer';
+import { Document, Page, Text, renderToBuffer } from '@react-pdf/renderer';
 
 import { registerPdfFonts } from './assets/fonts/register';
 import {
@@ -123,4 +123,32 @@ export async function renderPaymentsExportPdf(
 ): Promise<Buffer> {
   registerPdfFonts();
   return renderToBuffer(<PaymentsExportDocument data={data} />);
+}
+
+let warmUp: Promise<void> | null = null;
+
+/**
+ * Primes the renderer once per process: registers the fonts and renders a
+ * throwaway page that uses both weights. The first render in a process pays
+ * for font parsing and layout-engine initialisation (~1s); callers start this
+ * while their database queries are in flight so the real render is warm.
+ * Safe to call repeatedly - it only ever runs once.
+ */
+export function warmPdfRenderer(): Promise<void> {
+  warmUp ??= (async () => {
+    registerPdfFonts();
+    await renderToBuffer(
+      <Document>
+        <Page size="A4" style={{ fontFamily: 'Noto Sans' }}>
+          <Text>Warm up ₹ 0123456789</Text>
+          <Text style={{ fontWeight: 'bold' }}>Warm up ₹ 0123456789</Text>
+        </Page>
+      </Document>,
+    );
+  })().catch(() => {
+    // A failed warm-up must never block a real render; allow a retry.
+    warmUp = null;
+  });
+
+  return warmUp;
 }

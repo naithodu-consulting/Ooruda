@@ -3,14 +3,21 @@ import { NextResponse } from 'next/server';
 import * as z from 'zod';
 
 import { enhanceRouteHandler } from '@kit/next/routes';
-import { billTypeLabel, renderReceiptPdf } from '@kit/pdf-templates';
-import type { BillingEntityData } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { preprocessLogoForPdf } from '~/home/[account]/billing/_lib/server/pdf-generation';
-import { resolveOwnerEntity } from '~/lib/server/billing-entity';
+import { resolvePaidByEntity } from '~/lib/server/billing-entity';
+import {
+  cachePdfInBackground,
+  contentCachePath,
+  pdfAttachmentResponse,
+  signCachedPdfPath,
+} from '~/lib/server/pdf-cache';
+import { loadPdfRenderer } from '~/lib/server/pdf-renderer';
+import { canReadUnitDocument } from '~/lib/server/unit-document-access';
 
 export const runtime = 'nodejs';
 
@@ -92,96 +99,52 @@ export const GET = enhanceRouteHandler(
       );
     }
 
-    const { data: membership } = await client
-      .from('accounts_memberships')
-      .select('account_role')
-      .eq('user_id', user.id)
-      .eq('account_id', assoc.account_id)
-      .maybeSingle();
+    const receiptNo = `ADV-${id.slice(0, 8).toUpperCase()}`;
+    const filename = `advance-deposit-unit${unitData.unit_no}-${receiptNo}.pdf`;
+    const cachePath = contentCachePath(
+      'advance-deposits',
+      entry.association_id as string,
+      id,
+      entry,
+    );
 
-    if (!membership) {
+    const adminClient = getSupabaseServerAdminClient();
+    const paidByRole = (entry.paid_by_role as string | null) ?? 'Owner';
+    const storedTenancyId = entry.tenancy_id as string | null;
+
+    // Everything below is independent, so it runs as one parallel stage:
+    // the access check, the Storage cache lookup, and (for a cache miss) the
+    // payer, the logo and the warmed-up renderer. Nothing is returned until
+    // the caller is confirmed to be allowed to see this receipt.
+    const rendererPromise = loadPdfRenderer();
+    rendererPromise.catch(() => undefined);
+
+    const [authorized, cachedUrl, receivedFrom, logoUrl] = await Promise.all([
+      canReadUnitDocument(client, {
+        userId: user.id,
+        accountId: assoc.account_id,
+        unitId: entry.unit_id as string,
+        ownerId: unitData.owner_id,
+      }),
+      signCachedPdfPath(cachePath, filename),
+      resolvePaidByEntity(paidByRole, storedTenancyId, unitData, adminClient),
+      preprocessLogoForPdf(assoc.accounts.picture_url),
+    ]);
+
+    if (!authorized) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const isAdmin =
-      membership.account_role === 'assoc_admin' ||
-      membership.account_role === 'billing_operator';
-
-    if (!isAdmin) {
-      const isOwner = unitData.owner_id === user.id;
-      if (!isOwner) {
-        const { data: tenancy } = await client
-          .from('tenancies')
-          .select('id')
-          .eq('tenant_id', user.id)
-          .eq('unit_id', entry.unit_id)
-          .eq('status', 'active')
-          .maybeSingle();
-
-        if (!tenancy) {
-          return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-      }
+    if (cachedUrl) {
+      return NextResponse.redirect(cachedUrl);
     }
-
-    const receiptNo = `ADV-${id.slice(0, 8).toUpperCase()}`;
 
     const entryDate = new Date(entry.entry_date + 'T00:00:00');
     const period = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}`;
 
-    const paidByRole = (entry.paid_by_role as string | null) ?? 'Owner';
-    const storedTenancyId = entry.tenancy_id as string | null;
-    const adminClient = getSupabaseServerAdminClient();
-
-    let receivedFrom: BillingEntityData;
-    if (paidByRole === 'Tenant' && storedTenancyId) {
-      const { data: tenancy } = await adminClient
-        .from('tenancies')
-        .select(
-          'tenant_id, is_company, company_name, company_address, company_gstin',
-        )
-        .eq('id', storedTenancyId)
-        .maybeSingle();
-
-      if (tenancy) {
-        if ((tenancy as unknown as { is_company: boolean }).is_company) {
-          receivedFrom = {
-            isCompany: true,
-            name: (tenancy as unknown as { company_name: string | null })
-              .company_name,
-            companyAddress: (
-              tenancy as unknown as { company_address: string | null }
-            ).company_address,
-            companyGstin: (
-              tenancy as unknown as { company_gstin: string | null }
-            ).company_gstin,
-          };
-        } else {
-          const { data: profile } = await adminClient
-            .from('profiles')
-            .select('full_name')
-            .eq('id', (tenancy as unknown as { tenant_id: string }).tenant_id)
-            .maybeSingle();
-          receivedFrom = {
-            isCompany: false,
-            name:
-              (profile as { full_name: string | null } | null)?.full_name ??
-              null,
-            companyAddress: null,
-            companyGstin: null,
-          };
-        }
-      } else {
-        receivedFrom = await resolveOwnerEntity(unitData, adminClient);
-      }
-    } else {
-      receivedFrom = await resolveOwnerEntity(unitData, adminClient);
-    }
-
-    const logoUrl = await preprocessLogoForPdf(assoc.accounts.picture_url);
-
     let bytes: Buffer;
     try {
+      const { renderReceiptPdf } = await rendererPromise;
       bytes = await renderReceiptPdf({
         association: {
           name: assoc.accounts.name,
@@ -231,16 +194,9 @@ export const GET = enhanceRouteHandler(
       );
     }
 
-    const unitNo = unitData.unit_no;
-    const filename = `advance-deposit-unit${unitNo}-${receiptNo}.pdf`;
+    cachePdfInBackground(cachePath, bytes);
 
-    return new Response(new Uint8Array(bytes), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
-    });
+    return pdfAttachmentResponse(bytes, filename);
   },
   { auth: true },
 );

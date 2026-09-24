@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 
 import { enhanceRouteHandler } from '@kit/next/routes';
-import { billTypeLabel, renderStatementPdf } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 import { getLogger } from '@kit/shared/logger';
-import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
+
+import { preprocessLogoForPdf } from '~/home/[account]/billing/_lib/server/pdf-generation';
+import { loadPdfRenderer } from '~/lib/server/pdf-renderer';
 
 const FY_ALL = '__all__';
 
@@ -63,7 +65,6 @@ function effectiveDelta(e: {
 export const GET = enhanceRouteHandler(
   async function ({ request, user }) {
     const client = getSupabaseServerClient();
-    const admin = getSupabaseServerAdminClient();
 
     const { searchParams } = new URL(request.url);
     const accountSlug = searchParams.get('account') ?? '';
@@ -73,14 +74,37 @@ export const GET = enhanceRouteHandler(
     const reqFrom = searchParams.get('from') ?? '';
     const reqTo = searchParams.get('to') ?? '';
 
-    // Resolve account → association in a single query via embedded join.
-    const { data: association } = await client
-      .from('associations')
-      .select(
-        'id, address, gstin, pan_number, registration_number, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts!inner(slug, name, picture_url)',
-      )
-      .eq('accounts.slug', accountSlug)
-      .maybeSingle();
+    // Start loading/warming the renderer now; it overlaps the queries below.
+    const rendererPromise = loadPdfRenderer();
+    rendererPromise.catch(() => undefined);
+
+    // The association and the caller's accessible units (same logic as the
+    // statement page) are all resolved from the account slug, so they load
+    // in one parallel stage.
+    const [{ data: association }, { data: ownedUnits }, { data: tenancies }] =
+      await Promise.all([
+        client
+          .from('associations')
+          .select(
+            'id, address, gstin, pan_number, registration_number, email, phone, bank_account_name, bank_account_number, bank_name, bank_ifsc, bank_branch, accounts!inner(slug, name, picture_url)',
+          )
+          .eq('accounts.slug', accountSlug)
+          .maybeSingle(),
+        client
+          .from('units')
+          .select('id, unit_no, associations!inner(accounts!inner(slug))')
+          .eq('associations.accounts.slug', accountSlug)
+          .eq('owner_id', user.id)
+          .order('unit_no'),
+        client
+          .from('tenancies')
+          .select(
+            'id, unit_id, units!inner(id, unit_no, associations!inner(accounts!inner(slug)))',
+          )
+          .eq('tenant_id', user.id)
+          .eq('status', 'active')
+          .eq('units.associations.accounts.slug', accountSlug),
+      ]);
 
     if (!association) {
       return NextResponse.json(
@@ -89,29 +113,20 @@ export const GET = enhanceRouteHandler(
       );
     }
 
-    // Resolve accessible units (same logic as statement page).
-    const [{ data: ownedUnits }, { data: tenancies }] = await Promise.all([
-      client
-        .from('units')
-        .select('id, unit_no')
-        .eq('association_id', association.id)
-        .eq('owner_id', user.id)
-        .order('unit_no'),
-      client
-        .from('tenancies')
-        .select('id, unit_id, units!inner(id, unit_no, association_id)')
-        .eq('tenant_id', user.id)
-        .eq('status', 'active')
-        .eq('units.association_id', association.id),
-    ]);
-
-    const ownedUnitList = (ownedUnits ?? []) as {
-      id: string;
-      unit_no: string;
-    }[];
-    const rentedUnitList = (tenancies ?? []).map(
-      (t) => t.units as unknown as { id: string; unit_no: string },
+    // The resized, process-cached logo - fetched while the ledger loads.
+    const logoPromise = preprocessLogoForPdf(
+      (association.accounts as unknown as { picture_url: string | null } | null)
+        ?.picture_url,
     );
+
+    const ownedUnitList = (ownedUnits ?? []).map((u) => ({
+      id: u.id,
+      unit_no: u.unit_no,
+    }));
+    const rentedUnitList = (tenancies ?? []).map((t) => {
+      const unit = t.units as unknown as { id: string; unit_no: string };
+      return { id: unit.id, unit_no: unit.unit_no };
+    });
 
     const seenIds = new Set<string>();
     const allUnits: { id: string; unit_no: string }[] = [];
@@ -358,17 +373,11 @@ export const GET = enhanceRouteHandler(
     };
     const assocData = association as unknown as AssocData;
 
-    // Fetch association logo URL (signed if stored in Supabase storage)
-    let logoUrl: string | null = assocData.accounts?.picture_url ?? null;
-    if (logoUrl?.startsWith('association-logos/')) {
-      const { data: signed } = await admin.storage
-        .from('avatars')
-        .createSignedUrl(logoUrl, 300);
-      logoUrl = signed?.signedUrl ?? null;
-    }
+    const logoUrl = await logoPromise;
 
     let bytes: Buffer;
     try {
+      const { renderStatementPdf } = await rendererPromise;
       bytes = await renderStatementPdf({
         association: {
           name: assocData.accounts?.name ?? 'Association',

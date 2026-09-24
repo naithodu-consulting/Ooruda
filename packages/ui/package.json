@@ -34,7 +34,7 @@
     "./progress": "./src/shadcn/progress.tsx",
     "./scroll-area": "./src/shadcn/scroll-area.tsx",
     "./searchable-select": "./src/makerkit/searchable-select.tsx",
-    "./select": "./src/shadcn/select.tsx",
+    "./select": "./src/makerkit/select.tsx",
     "./sheet": "./src/shadcn/sheet.tsx",
     "./slider": "./src/shadcn/slider.tsx",
     "./table": "./src/shadcn/table.tsx",

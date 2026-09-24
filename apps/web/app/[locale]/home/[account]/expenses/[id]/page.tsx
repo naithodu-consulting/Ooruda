@@ -24,18 +24,14 @@ export const metadata = { title: 'Expense Detail' };
 export default async function ExpenseDetailPage({ params }: Props) {
   const { account, id } = await params;
 
-  const { accountId } = await requireRole(account, [
+  const { associationId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
   ]);
 
   const client = getSupabaseServerClient();
 
-  const { data: assoc } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const assoc = associationId ? { id: associationId } : null;
 
   if (!assoc) redirect(`/home/${account}`);
 

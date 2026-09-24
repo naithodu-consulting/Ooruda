@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 
-import { billTypeLabel } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 import { Badge } from '@kit/ui/badge';
 import {
   Card,

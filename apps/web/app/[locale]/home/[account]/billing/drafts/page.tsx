@@ -36,21 +36,14 @@ export const metadata = { title: 'Draft Bills · Billing' };
  */
 export default async function BillingDraftsPage({ params }: Props) {
   const { account } = await params;
-  const { accountId, role } = await requireRole(account, [
+  const { role, associationId, isSuperAdmin } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
   ]);
 
   const client = getSupabaseServerClient();
 
-  const [{ data: isSuperAdmin }, { data: association }] = await Promise.all([
-    client.rpc('is_super_admin'),
-    client
-      .from('associations')
-      .select('id')
-      .eq('account_id', accountId)
-      .single(),
-  ]);
+  const association = associationId ? { id: associationId } : null;
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');

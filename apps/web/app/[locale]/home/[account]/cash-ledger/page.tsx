@@ -7,6 +7,7 @@ import { Trans } from '@kit/ui/trans';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { loadAssociationFeatures } from '../_lib/server/association-features.loader';
 import { CashLedgerSection } from './_components/cash-ledger-section';
 import type { CashLedgerEntryRow } from './_lib/cash-ledger-actions';
 
@@ -28,7 +29,7 @@ function currentFYDates(): { from: string; to: string } {
 
 export default async function CashLedgerPage({ params }: Props) {
   const { account } = await params;
-  const { accountId, role } = await requireRole(account, [
+  const { role, associationId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
     'prop_owner',
@@ -43,18 +44,16 @@ export default async function CashLedgerPage({ params }: Props) {
 
   const client = getSupabaseServerClient();
 
-  const { data: association } = await client
-    .from('associations')
-    .select('id, cash_ledger_enabled')
-    .eq('account_id', accountId)
-    .single();
+  const association = associationId ? { id: associationId } : null;
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  // Feature gate: redirect to dashboard if cash ledger is disabled for this association.
-  if (association.cash_ledger_enabled === false) {
+  // Feature gate: redirect to dashboard if cash ledger is disabled for this
+  // association (request-cached, already loaded by the layout).
+  const features = await loadAssociationFeatures(account);
+  if (!features.cashLedgerEnabled) {
     redirect(`/home/${account}`);
   }
 

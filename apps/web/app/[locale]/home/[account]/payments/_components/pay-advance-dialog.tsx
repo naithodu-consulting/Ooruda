@@ -9,7 +9,7 @@ import { PlusCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { billTypeLabel } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 import { Button } from '@kit/ui/button';
 import {
   Dialog,

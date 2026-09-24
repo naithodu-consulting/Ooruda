@@ -54,82 +54,98 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
     params,
     searchParams,
   ]);
-  const { accountId, role, userId } = await requireRole(account, [
-    'assoc_admin',
-    'billing_operator',
-    'prop_owner',
-    'tenant',
-  ]);
+  const { role, userId, associationId, isSuperAdmin } = await requireRole(
+    account,
+    ['assoc_admin', 'billing_operator', 'prop_owner', 'tenant'],
+  );
 
   const client = getSupabaseServerClient();
 
-  // isSuperAdmin gates the "Delete all payments" danger-zone action - a
-  // super admin viewing an "opened workspace" resolves `role` to
-  // 'assoc_admin' too, so this must be checked independently of `role`.
-  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
-
-  const { data: association } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const association = associationId ? { id: associationId } : null;
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  let deletionCounts: { payments: number; receipts: number } | null = null;
-  if (isSuperAdmin) {
-    const [{ count: paymentsCount }, { count: receiptsCount }] =
-      await Promise.all([
-        client
+  const isUserRestricted = role === 'prop_owner' || role === 'tenant';
+
+  // Everything below is independent, so it runs as one parallel stage
+  // instead of one round trip after another.
+  //
+  // - isSuperAdmin gates the "Delete all payments" danger-zone action. A
+  //   super admin viewing an "opened workspace" resolves `role` to
+  //   'assoc_admin' too, so it is checked independently of `role`.
+  // - Owners/tenants: resolve their unit IDs first (needed to scope the
+  //   bills query). A user may own one unit and rent another in the same
+  //   association, so both are resolved independently:
+  //   - owned units: the user sees every bill ever generated for them.
+  //   - rented units: the user must only see bills attributed to their OWN
+  //     tenancy (bills.tenancy_id) - otherwise a new tenant on a unit would
+  //     see every past tenant's bill/payment history on that same unit.
+  // - Owners/tenants: check whether the association has an active gateway.
+  const [
+    paymentsCountResult,
+    receiptsCountResult,
+    ownedUnitsResult,
+    tenanciesResult,
+    gatewayResult,
+  ] = await Promise.all([
+    isSuperAdmin
+      ? client
           .from('payments')
           .select('id', { count: 'exact', head: true })
-          .eq('association_id', association.id),
-        client
+          .eq('association_id', association.id)
+      : null,
+    isSuperAdmin
+      ? client
           .from('receipts')
           .select('id, payments!inner(association_id)', {
             count: 'exact',
             head: true,
           })
-          .eq('payments.association_id', association.id),
-      ]);
-    deletionCounts = {
-      payments: paymentsCount ?? 0,
-      receipts: receiptsCount ?? 0,
-    };
-  }
+          .eq('payments.association_id', association.id)
+      : null,
+    isUserRestricted
+      ? client
+          .from('units')
+          .select('id, unit_no')
+          .eq('association_id', association.id)
+          .eq('owner_id', userId)
+      : null,
+    isUserRestricted
+      ? client
+          .from('tenancies')
+          .select('id, unit_id, units!inner(association_id, unit_no)')
+          .eq('tenant_id', userId)
+          .eq('status', 'active')
+          .eq('units.association_id', association.id)
+      : null,
+    isUserRestricted
+      ? getSupabaseServerAdminClient()
+          .from('association_payment_gateways')
+          .select('is_active')
+          .eq('association_id', association.id)
+          .maybeSingle()
+      : null,
+  ]);
 
-  const isUserRestricted = role === 'prop_owner' || role === 'tenant';
+  const deletionCounts: { payments: number; receipts: number } | null =
+    isSuperAdmin
+      ? {
+          payments: paymentsCountResult?.count ?? 0,
+          receipts: receiptsCountResult?.count ?? 0,
+        }
+      : null;
 
-  // For owners/tenants resolve their unit IDs first (needed to scope the
-  // query). A user may own one unit and rent another in the same
-  // association, so we resolve both independently:
-  // - owned units: the user sees every bill ever generated for them.
-  // - rented units: the user must only see bills attributed to their OWN
-  //   tenancy (bills.tenancy_id) - otherwise a new tenant on a unit would
-  //   see every past tenant's bill/payment history on that same unit.
-  let ownedUnitIds: string[] = [];
-  let rentedUnitIds: string[] = [];
-  let myTenancyIds: string[] = [];
+  const gatewayActive = gatewayResult?.data?.is_active ?? false;
+
+  const ownedUnits = ownedUnitsResult?.data ?? [];
+  const tenancies = tenanciesResult?.data ?? [];
+  const ownedUnitIds = ownedUnits.map((u) => u.id);
+  const rentedUnitIds = tenancies.map((t) => t.unit_id);
+  const myTenancyIds = tenancies.map((t) => t.id);
+
   if (isUserRestricted) {
-    const [{ data: ownedUnits }, { data: tenancies }] = await Promise.all([
-      client
-        .from('units')
-        .select('id')
-        .eq('association_id', association.id)
-        .eq('owner_id', userId),
-      client
-        .from('tenancies')
-        .select('id, unit_id, units!inner(association_id)')
-        .eq('tenant_id', userId)
-        .eq('status', 'active')
-        .eq('units.association_id', association.id),
-    ]);
-    ownedUnitIds = (ownedUnits ?? []).map((u) => u.id);
-    rentedUnitIds = (tenancies ?? []).map((t) => t.unit_id);
-    myTenancyIds = (tenancies ?? []).map((t) => t.id);
-
     if (ownedUnitIds.length === 0 && rentedUnitIds.length === 0) {
       return (
         <PageBody>
@@ -152,18 +168,6 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
         </PageBody>
       );
     }
-  }
-
-  // For owners/tenants check if this association has an active payment gateway.
-  let gatewayActive = false;
-  if (isUserRestricted) {
-    const admin = getSupabaseServerAdminClient();
-    const { data: gateway } = await admin
-      .from('association_payment_gateways')
-      .select('is_active')
-      .eq('association_id', association.id)
-      .maybeSingle();
-    gatewayActive = gateway?.is_active ?? false;
   }
 
   // Load all bills in one query - client filters instantly in-memory.
@@ -224,21 +228,26 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
   // netting). For admins/operators use the association-wide RPC which covers all
   // units and includes the negative-balance filter already.
 
-  // Resolve unit info once (needed both for balances and advance history)
-  const unitsWithInfo: { id: string; unit_no: string }[] =
-    isUserRestricted && allUnitIds.length > 0
-      ? await client
-          .from('units')
-          .select('id, unit_no')
-          .in('id', allUnitIds)
-          .then(({ data }) => (data ?? []) as { id: string; unit_no: string }[])
-      : [];
+  // Unit numbers come back with the lookups above, so no extra query is
+  // needed (needed both for balances and advance history).
+  const unitNoById = new Map<string, string>();
+  for (const u of ownedUnits) unitNoById.set(u.id, u.unit_no);
+  for (const t of tenancies) {
+    const unit = t.units as unknown as { unit_no: string } | null;
+    if (unit) unitNoById.set(t.unit_id, unit.unit_no);
+  }
+  const unitsWithInfo: { id: string; unit_no: string }[] = [...unitNoById]
+    .map(([id, unit_no]) => ({ id, unit_no }))
+    .sort((a, b) =>
+      a.unit_no.localeCompare(b.unit_no, undefined, { numeric: true }),
+    );
 
   const [
     { data: bills },
     rawDues,
     { data: rawDuePaymentHistory },
     { data: rawAdvanceHistory },
+    { data: activeTenancies },
   ] = await Promise.all([
     query,
     isUserRestricted
@@ -298,6 +307,16 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
           .order('entry_date', { ascending: false })
           .limit(10)
       : Promise.resolve({ data: [] }),
+    // Admin view: which units have an active tenancy, so PayDueDialog can
+    // enable/disable the "Tenant" paid-by option. Fetched association-wide
+    // (at most one row per unit) so it doesn't wait on the dues result.
+    !isUserRestricted
+      ? client
+          .from('tenancies')
+          .select('unit_id, units!inner(association_id)')
+          .eq('status', 'active')
+          .eq('units.association_id', association.id)
+      : Promise.resolve({ data: [] as { unit_id: string }[] }),
   ]);
 
   type DuePaymentHistoryRow = {
@@ -341,20 +360,9 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
       }[])
     : [];
 
-  // For admin view: determine which due units have an active tenancy so the
-  // PayDueDialog can enable/disable the "Tenant" paid-by option correctly.
-  let unitsWithActiveTenancy = new Set<string>();
-  if (!isUserRestricted && rawDuesArray.length > 0) {
-    const dueUnitIds = [...new Set(rawDuesArray.map((r) => r.unit_id))];
-    const { data: activeTenancies } = await client
-      .from('tenancies')
-      .select('unit_id')
-      .in('unit_id', dueUnitIds)
-      .eq('status', 'active');
-    unitsWithActiveTenancy = new Set(
-      (activeTenancies ?? []).map((t) => t.unit_id),
-    );
-  }
+  const unitsWithActiveTenancy = new Set(
+    (activeTenancies ?? []).map((t) => t.unit_id),
+  );
 
   const cashLedgerDues: CashLedgerDueRow[] = rawDuesArray.map((r) => ({
     ...r,

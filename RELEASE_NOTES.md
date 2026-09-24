@@ -4,6 +4,45 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v2.3 - Page Load & PDF Download Performance - 2026-09-24
+
+Critical review of page load and PDF download time across all roles. No behaviour or permission changes.
+
+### Page loads
+
+- `requireRole` (every workspace page) now resolves role, association, account and super-admin status in **one round trip**, cached per request and shared with the layout. It was four sequential calls, one of them to the Supabase Auth server. The per-page association lookup that followed it is gone from 19 pages.
+- Workspace layout: workspace, cookies, feature flags and consent load in one parallel stage (was three). Feature flags are request-cached and reused by the Expenses, AMC and Cash Ledger gates.
+- Sequential DB stages cut on the heaviest pages: Payments (owner/tenant 7 → 2), Units 5 → 2, Electricity 4 → 1, Dashboard (admin: 11 queries → 5 in one stage; owner: 5 → 2), Association settings 3 → 1, unit detail and unit billing 4 → 2, Notifications 4 → 2, post-login redirect 2 → 1.
+- Less JavaScript on first load: the PDF renderer no longer ships to the Dashboard, Payments, Statement and Reports pages (a bill-type label helper was pulling it in); `xlsx` loads only when an import runs; the Expenses analytics charts load only when that tab opens.
+
+### PDF downloads
+
+- Every download path reviewed: bill, receipt, advance voucher, advance deposit, cash-ledger receipt (by id and by receipt number), statement, expenses export, reports (all tabs + unit account statement), bills ZIP, receipts ZIP.
+- The PDF renderer is loaded only when a render is needed and is warmed up while the route's queries run, so cached downloads never load it and the first render in a process no longer pays the ~1s start-up on its own.
+- Cached downloads sign the Storage URL in parallel with the access check (the URL is only returned once access is confirmed). Access checks are one query plus the super-admin check instead of four sequential calls.
+- Fresh renders are returned immediately and written to the Storage cache after the response.
+- Advance deposits and cash-ledger receipts are now cached (content-addressed, so any change to what they print gets a new cache entry). The two cash-ledger receipt routes share one implementation.
+- Receipts and the affected bill are pre-rendered right after a payment is recorded (manual, Razorpay verify and webhook), so their first download is a cache hit.
+- Statement and expenses exports use the resized, process-cached logo instead of downloading and decoding the full-size original on every export. Logo fetches are time-boxed and de-duplicated.
+- ZIPs: receipts ZIP now reuses cached receipts (it re-rendered every one before); receipts and vouchers build in parallel; newly rendered PDFs are cached for next time; PDFs are stored, not re-deflated; Storage downloads are time-boxed.
+- Fixed: cached downloads were saved as "Download bill PDF" with no `.pdf` extension (the filename header isn't readable across the Storage redirect). The name now travels in the signed URL.
+- Fixed: advance voucher PDFs were never cached (see migration below), so every download re-rendered.
+
+Measured on a local production build: cached bill 0.1-0.3s, uncached bill 0.3s warm, receipt 0.1-0.2s, statement ~0.1s, expenses export 0.4-0.7s, reports PDF 0.8s warm, 19-receipt ZIP 0.6s, 30-bill ZIP 2.8s with 17 renders. First request on a cold process 0.9-1.4s.
+
+### Dropdowns
+
+- Plain `Select` dropdowns now open below their field (start-aligned) like `SearchableSelect`, instead of overlaying the trigger and hiding the label and help text above it. Done once via `@kit/ui/select`; upstream shadcn is untouched.
+- Admin dialogs whose lists grow with the platform (association owner, user's association, manage-roles association) now use `SearchableSelect`.
+
+**Deployment note:** production Supabase is in Tokyo (`ap-northeast-1`) and dev in Mumbai (`ap-south-1`). Set each Vercel project's Function Region to match (`hnd1` for `ooruda`, `bom1` for `prop-tech-dev-tool`); with the default US region every database call crosses the Pacific.
+
+| Migration | Change |
+| --- | --- |
+| `20260924000001_advance_application_pdf_cache_grant.sql` | Grants `service_role` SELECT and column-level UPDATE (`pdf_url` only) on `advance_application_receipts`, so the cached voucher PDF path can be recorded |
+
+---
+
 ## v2.3 - Typography & Colour Accessibility Pass - 2026-09-23
 
 App-wide font audit (every screen, all four roles, desktop + 360px, plus PDFs and emails) and fixes. No database changes.

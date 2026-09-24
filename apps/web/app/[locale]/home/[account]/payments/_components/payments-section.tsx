@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { ChevronLeft, ChevronRight, Download, Loader2 } from 'lucide-react';
 
-import { billTypeLabel } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import {

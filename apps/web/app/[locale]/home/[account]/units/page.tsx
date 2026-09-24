@@ -30,88 +30,90 @@ export const metadata = { title: 'Units & Owners' };
 
 export default async function UnitsPage({ params }: Props) {
   const { account } = await params;
-  const { accountId, role } = await requireRole(account, [
-    'assoc_admin',
-    'billing_operator',
-  ]);
+  const { accountId, role, associationId, isSuperAdmin } = await requireRole(
+    account,
+    ['assoc_admin', 'billing_operator'],
+  );
 
   const client = getSupabaseServerClient();
 
-  const [{ data: isSuperAdmin }, { data: association }] = await Promise.all([
-    client.rpc('is_super_admin'),
-    client
-      .from('associations')
-      .select('id')
-      .eq('account_id', accountId)
-      .single(),
-  ]);
+  const association = associationId ? { id: associationId } : null;
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  const { data: units } = await client
-    .from('units')
-    .select(
-      'id, unit_no, type, floor, area_sqft, door_no, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin, bill_to, status',
-    )
-    .eq('association_id', association.id)
-    .neq('type', 'Common Area')
-    .order('unit_no');
+  const canManage = role === 'assoc_admin';
+
+  // One parallel stage for all base data. Tenancies and open bills are
+  // scoped by association rather than by the unit id list, so they don't
+  // have to wait for the units query.
+  const [
+    { data: units },
+    { data: tenancies },
+    { data: openBills },
+    { data: members },
+  ] = await Promise.all([
+    client
+      .from('units')
+      .select(
+        'id, unit_no, type, floor, area_sqft, door_no, owner_id, owner_is_company, owner_company_name, owner_company_address, owner_company_gstin, bill_to, status',
+      )
+      .eq('association_id', association.id)
+      .neq('type', 'Common Area')
+      .order('unit_no'),
+    client
+      .from('tenancies')
+      .select('id, unit_id, tenant_id, start_date, units!inner(association_id)')
+      .eq('units.association_id', association.id)
+      .eq('status', 'active'),
+    client
+      .from('bills')
+      .select(
+        'unit_id, status, due_date, total_amount, paid_amount, advance_applied',
+      )
+      .eq('association_id', association.id)
+      .in('status', ['Unpaid', 'Partial', 'Overdue']),
+    canManage
+      ? client
+          .from('accounts_memberships')
+          .select('user_id, account_role')
+          .eq('account_id', accountId)
+          .in('account_role', ['prop_owner', 'tenant'])
+      : Promise.resolve({
+          data: [] as { user_id: string; account_role: string }[],
+        }),
+  ]);
 
   const unitRows = (units ?? []) as UnitRow[];
-  const unitIds = unitRows.map((u) => u.id);
-
-  const [{ data: tenancies }, { data: openBills }] = await Promise.all([
-    unitIds.length
-      ? client
-          .from('tenancies')
-          .select('id, unit_id, tenant_id, start_date')
-          .in('unit_id', unitIds)
-          .eq('status', 'active')
-      : Promise.resolve({
-          data: [] as {
-            id: string;
-            unit_id: string;
-            tenant_id: string;
-            start_date: string;
-          }[],
-        }),
-    unitIds.length
-      ? client
-          .from('bills')
-          .select(
-            'unit_id, status, due_date, total_amount, paid_amount, advance_applied',
-          )
-          .in('unit_id', unitIds)
-          .in('status', ['Unpaid', 'Partial', 'Overdue'])
-      : Promise.resolve({ data: null }),
-  ]);
 
   const activeTenancies = tenancies ?? [];
   const tenancyByUnit: Record<string, (typeof activeTenancies)[number]> =
     Object.fromEntries(activeTenancies.map((t) => [t.unit_id, t]));
 
-  // Resolve owner/tenant names in one query. `units.owner_id` and
+  // Resolve owner, tenant and member names in one query. `units.owner_id` and
   // `tenancies.tenant_id` reference auth.users, which has no PostgREST
   // relationship to `profiles`, so we can't embed it - fetch the co-member
   // profiles (readable via profiles_read_account_members) and map by id.
-  const peopleIds = [
-    ...new Set([
-      ...unitRows.map((u) => u.owner_id).filter(Boolean),
+  const occupantIds = new Set(
+    [
+      ...unitRows.map((u) => u.owner_id),
       ...activeTenancies.map((t) => t.tenant_id),
-    ]),
-  ] as string[];
+    ].filter(Boolean) as string[],
+  );
+  const profileIds = [
+    ...new Set([...occupantIds, ...(members ?? []).map((m) => m.user_id)]),
+  ];
 
-  let people: Record<string, OwnerInfo> = {};
+  let profilesById: Record<string, OwnerInfo> = {};
 
-  if (peopleIds.length > 0) {
+  if (profileIds.length > 0) {
     const { data: profiles } = await client
       .from('profiles')
       .select('id, full_name, mobile_number')
-      .in('id', peopleIds);
+      .in('id', profileIds);
 
-    people = Object.fromEntries(
+    profilesById = Object.fromEntries(
       (profiles ?? []).map((p) => [
         p.id,
         { full_name: p.full_name, mobile_number: p.mobile_number },
@@ -119,44 +121,24 @@ export default async function UnitsPage({ params }: Props) {
     );
   }
 
+  // Only owners and tenants go to the client; member profiles are used
+  // server-side for the picker labels below.
+  const people: Record<string, OwnerInfo> = Object.fromEntries(
+    Object.entries(profilesById).filter(([id]) => occupantIds.has(id)),
+  );
+
   const overdueUnitIds = new Set(
     (openBills ?? [])
       .filter((bill) => displayBillStatus(bill) === 'Overdue')
       .map((bill) => bill.unit_id),
   );
 
-  const canManage = role === 'assoc_admin';
-
   let eligibleOwners: MemberOption[] = [];
   let eligibleTenants: MemberOption[] = [];
 
   if (canManage) {
-    const { data: members } = await client
-      .from('accounts_memberships')
-      .select('user_id, account_role')
-      .eq('account_id', accountId)
-      .in('account_role', ['prop_owner', 'tenant']);
-
-    const memberIds = [...new Set((members ?? []).map((m) => m.user_id))];
-
-    let memberProfiles: Record<string, OwnerInfo> = {};
-
-    if (memberIds.length > 0) {
-      const { data: profiles } = await client
-        .from('profiles')
-        .select('id, full_name, mobile_number')
-        .in('id', memberIds);
-
-      memberProfiles = Object.fromEntries(
-        (profiles ?? []).map((p) => [
-          p.id,
-          { full_name: p.full_name, mobile_number: p.mobile_number },
-        ]),
-      );
-    }
-
     const toOption = (userId: string): MemberOption => {
-      const info = memberProfiles[userId];
+      const info = profilesById[userId];
 
       return {
         id: userId,

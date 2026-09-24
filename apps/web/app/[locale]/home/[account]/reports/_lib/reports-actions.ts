@@ -1,16 +1,14 @@
 'use server';
 
 import 'server-only';
-import {
-  billTypeLabel,
-  renderReportPdf,
-  type ReportPdfData,
-} from '@kit/pdf-templates';
+import type { ReportPdfData } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { preprocessLogoForPdf } from '~/home/[account]/billing/_lib/server/pdf-generation';
 import { getAssociationRole } from '~/lib/rbac';
+import { loadPdfRenderer } from '~/lib/server/pdf-renderer';
 
 import { buildStatementEntries } from '../../statement/_lib/server/statement.service';
 import { LEDGER_ALL_UNITS, type ReportsFilters } from './reports-types';
@@ -868,6 +866,10 @@ export async function downloadPdfAction(
   tab: TabKey | 'all',
   filters: Partial<ReportsFilters> = {},
 ): Promise<ActionResult<{ base64: string; filename: string }>> {
+  // Start loading/warming the renderer; it overlaps the report queries.
+  const rendererPromise = loadPdfRenderer();
+  rendererPromise.catch(() => undefined);
+
   const {
     client,
     association,
@@ -1489,6 +1491,7 @@ export async function downloadPdfAction(
   };
 
   try {
+    const { renderReportPdf } = await rendererPromise;
     const buffer = await renderReportPdf(data);
     const base64 = buffer.toString('base64');
     return {
@@ -1891,6 +1894,10 @@ export async function downloadLedgerStatementPdfAction(
   associationId: string,
   unitId: string,
 ): Promise<ActionResult<{ base64: string; filename: string }>> {
+  // Start loading/warming the renderer; it overlaps the queries below.
+  const rendererPromise = loadPdfRenderer();
+  rendererPromise.catch(() => undefined);
+
   const role = await getAssociationRole(associationId);
   if (role !== 'assoc_admin') {
     return { success: false, error: 'Access denied.' };
@@ -1969,6 +1976,7 @@ export async function downloadLedgerStatementPdfAction(
     },
   };
 
+  const { renderReportPdf } = await rendererPromise;
   const buffer = await renderReportPdf(data);
   const slug = isAllUnits
     ? 'all_units'

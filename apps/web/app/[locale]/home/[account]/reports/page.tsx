@@ -22,18 +22,14 @@ export default async function ReportsPage({ params }: Props) {
   const { account } = await params;
 
   // Reports is admin-only - prop_owner and tenant are not permitted.
-  const { accountId } = await requireRole(account, [
+  const { associationId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
   ]);
 
   const client = getSupabaseServerClient();
 
-  const { data: association } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const association = associationId ? { id: associationId } : null;
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');

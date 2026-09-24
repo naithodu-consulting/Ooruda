@@ -9,7 +9,6 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { BillingEntityData } from '@kit/pdf-templates';
-import { renderBillPdf, renderElectricityBillPdf } from '@kit/pdf-templates';
 import { getLogger } from '@kit/shared/logger';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -388,7 +387,12 @@ export async function renderBillFromPrefetch(
   bill: BulkBillRecord,
   logoDataUri: string | null,
   lookups: BulkLookups,
+  renderer: Pick<
+    typeof import('@kit/pdf-templates'),
+    'renderBillPdf' | 'renderElectricityBillPdf'
+  >,
 ): Promise<Buffer | null> {
+  const { renderBillPdf, renderElectricityBillPdf } = renderer;
   if (!bill.units || !bill.associations) return null;
 
   const unitData = bill.units;

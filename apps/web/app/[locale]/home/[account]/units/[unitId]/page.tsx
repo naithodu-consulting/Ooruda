@@ -38,7 +38,7 @@ const areaFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
 export default async function UnitDetailPage({ params }: Props) {
   const { account, unitId } = await params;
-  const { accountId } = await requireRole(account, [
+  const { associationId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
   ]);
@@ -46,34 +46,32 @@ export default async function UnitDetailPage({ params }: Props) {
   const client = getSupabaseServerClient();
 
   // Resolve association for this account
-  const { data: association } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const association = associationId ? { id: associationId } : null;
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  // Fetch unit - 404 if not found or not in this association
-  const { data: unit } = await client
-    .from('units')
-    .select('id, unit_no, type, floor, area_sqft, owner_id, status')
-    .eq('id', unitId)
-    .eq('association_id', association.id)
-    .single();
+  // Fetch the unit and ALL its tenancies (active and ended, newest first) in
+  // parallel. Tenancies are only used once the unit is confirmed to belong to
+  // this association - 404 otherwise.
+  const [{ data: unit }, { data: tenancies }] = await Promise.all([
+    client
+      .from('units')
+      .select('id, unit_no, type, floor, area_sqft, owner_id, status')
+      .eq('id', unitId)
+      .eq('association_id', association.id)
+      .single(),
+    client
+      .from('tenancies')
+      .select('id, tenant_id, start_date, end_date, status')
+      .eq('unit_id', unitId)
+      .order('start_date', { ascending: false }),
+  ]);
 
   if (!unit) {
     notFound();
   }
-
-  // Fetch ALL tenancies for this unit (both active and ended), newest first
-  const { data: tenancies } = await client
-    .from('tenancies')
-    .select('id, tenant_id, start_date, end_date, status')
-    .eq('unit_id', unit.id)
-    .order('start_date', { ascending: false });
 
   const allTenancies = tenancies ?? [];
 

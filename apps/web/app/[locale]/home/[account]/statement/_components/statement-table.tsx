@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 import { ArrowRight, ChevronDown, ChevronUp, Download } from 'lucide-react';
 
-import { billTypeLabel } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 import {
   Card,
   CardContent,

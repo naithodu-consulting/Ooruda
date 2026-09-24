@@ -6,6 +6,7 @@ import { PageBody } from '@kit/ui/page';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { loadAssociationFeatures } from '../_lib/server/association-features.loader';
 import { AmcPageClient } from './_components/amc-page-client';
 import { createAmcService } from './_lib/server/amc.service';
 
@@ -19,27 +20,19 @@ export const metadata = { title: 'AMC Reminder' };
 export default async function AmcPage({ params, searchParams }: Props) {
   const [{ account }, sp] = await Promise.all([params, searchParams]);
 
-  const { accountId } = await requireRole(account, ['assoc_admin']);
+  const { associationId } = await requireRole(account, ['assoc_admin']);
 
   const client = getSupabaseServerClient();
 
   // Check feature flag
-  const { data: assoc } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const assoc = associationId ? { id: associationId } : null;
 
   if (!assoc) redirect(`/home/${account}`);
 
-  const { data: flag } = await (client as any)
-    .from('association_feature_flags')
-    .select('enabled')
-    .eq('association_id', assoc.id)
-    .eq('feature', 'amc_reminder')
-    .maybeSingle();
+  // Feature gate (request-cached, already loaded by the layout)
+  const features = await loadAssociationFeatures(account);
 
-  if (!flag?.enabled) redirect(`/home/${account}`);
+  if (!features.isEnabled('amc_reminder')) redirect(`/home/${account}`);
 
   const service = createAmcService(client);
   const [stats, reminderSettings] = await Promise.all([

@@ -26,65 +26,56 @@ export const metadata = { title: 'Electricity' };
 
 export default async function MescomPage({ params }: Props) {
   const { account } = await params;
-  const { accountId, role } = await requireRole(account, [
+  const { role, associationId, isSuperAdmin } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
   ]);
 
   const client = getSupabaseServerClient();
 
-  const [{ data: association }, { data: isSuperAdmin }] = await Promise.all([
-    client
-      .from('associations')
-      .select('id')
-      .eq('account_id', accountId)
-      .single(),
-    client.rpc('is_super_admin'),
-  ]);
+  const association = associationId ? { id: associationId } : null;
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  const { data: units } = await client
-    .from('units')
-    .select('id, unit_no, type')
-    .eq('association_id', association.id)
-    .order('unit_no');
+  // One parallel stage. Sub-meters and readings are scoped to the
+  // association through their unit (rather than by an id list), so they
+  // don't wait for the units query.
+  const [{ data: units }, subMetersResult, billsResult, { data: readings }] =
+    await Promise.all([
+      client
+        .from('units')
+        .select('id, unit_no, type')
+        .eq('association_id', association.id)
+        .order('unit_no'),
+      client
+        .from('sub_meters')
+        .select(
+          'id, meter_label, meter_type, is_active, unit_id, load_kva, units!inner(unit_no, association_id)',
+        )
+        .eq('units.association_id', association.id)
+        .order('meter_label'),
+      client
+        .from('mescom_bills')
+        .select(
+          'id, period, invoice_amount, block_consumption_units, period_start, period_end',
+        )
+        .eq('association_id', association.id)
+        .order('period', { ascending: false }),
+      // Readings of active sub-meters only.
+      client
+        .from('meter_readings')
+        .select(
+          'sub_meter_id, mescom_bill_id, period, previous_reading, current_reading, minimum_charge, sub_meters!inner(is_active, units!inner(association_id))',
+        )
+        .eq('sub_meters.is_active', true)
+        .eq('sub_meters.units.association_id', association.id)
+        .order('period', { ascending: true }),
+    ]);
 
   const unitRows = units ?? [];
   const commonAreaUnit = unitRows.find((u) => u.type === 'Common Area');
-
-  const unitIds = unitRows.map((u) => u.id);
-
-  const [subMetersResult, billsResult] = await Promise.all([
-    unitIds.length
-      ? client
-          .from('sub_meters')
-          .select(
-            'id, meter_label, meter_type, is_active, unit_id, load_kva, units(unit_no)',
-          )
-          .in('unit_id', unitIds)
-          .order('meter_label')
-      : Promise.resolve({
-          data: [] as {
-            id: string;
-            meter_label: string;
-            meter_type: string;
-            is_active: boolean;
-            unit_id: string;
-            load_kva: number | null;
-            units: { unit_no: string } | null;
-          }[],
-        }),
-    client
-      .from('mescom_bills')
-      .select(
-        'id, period, invoice_amount, block_consumption_units, period_start, period_end',
-      )
-      .eq('association_id', association.id)
-      .order('period', { ascending: false }),
-  ]);
 
   const subMeterRows: SubMeterRow[] = (subMetersResult.data ?? []).map((m) => {
     // CommonArea sub-meters are stored with unit_id pointing to a placeholder
@@ -107,19 +98,8 @@ export default async function MescomPage({ params }: Props) {
   });
 
   const activeSubMeters = subMeterRows.filter((m) => m.is_active);
-  const activeSubMeterIds = activeSubMeters.map((m) => m.id);
 
   const billRows: ElectricityBillRow[] = billsResult.data ?? [];
-
-  const { data: readings } = activeSubMeterIds.length
-    ? await client
-        .from('meter_readings')
-        .select(
-          'sub_meter_id, mescom_bill_id, period, previous_reading, current_reading, minimum_charge',
-        )
-        .in('sub_meter_id', activeSubMeterIds)
-        .order('period', { ascending: true })
-    : { data: [] };
 
   const allReadings = readings ?? [];
 

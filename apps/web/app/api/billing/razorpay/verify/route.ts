@@ -4,6 +4,8 @@ import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { preRenderPaymentDocumentsAfterResponse } from '~/home/[account]/billing/_lib/server/pdf-generation';
+
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
@@ -162,40 +164,50 @@ export async function POST(req: NextRequest) {
   const paymentBatchId = billIds.length > 1 ? crypto.randomUUID() : null;
 
   // Record payments in parallel.
+  const payableBills = bills.filter(
+    (b) =>
+      Number(b.total_amount) -
+        Number(b.paid_amount) -
+        Number(b.advance_applied ?? 0) >
+      0,
+  );
   const results = await Promise.all(
-    bills
-      .filter(
-        (b) =>
-          Number(b.total_amount) -
-            Number(b.paid_amount) -
-            Number(b.advance_applied ?? 0) >
-          0,
-      )
-      .map((bill) =>
-        client.rpc('record_payment', {
-          p_bill_id: bill.id,
-          p_association_id: associationId,
-          p_amount:
-            Number(bill.total_amount) -
-            Number(bill.paid_amount) -
-            Number(bill.advance_applied ?? 0),
-          p_mode: 'Razorpay',
-          p_paid_by_role: canonicalPaidByRole,
-          p_razorpay_payment_id: razorpayPaymentId,
-          p_razorpay_order_id: razorpayOrderId,
-          p_payment_batch_id: paymentBatchId ?? undefined,
-        }),
-      ),
+    payableBills.map((bill) =>
+      client.rpc('record_payment', {
+        p_bill_id: bill.id,
+        p_association_id: associationId,
+        p_amount:
+          Number(bill.total_amount) -
+          Number(bill.paid_amount) -
+          Number(bill.advance_applied ?? 0),
+        p_mode: 'Razorpay',
+        p_paid_by_role: canonicalPaidByRole,
+        p_razorpay_payment_id: razorpayPaymentId,
+        p_razorpay_order_id: razorpayOrderId,
+        p_payment_batch_id: paymentBatchId ?? undefined,
+      }),
+    ),
   );
 
   const paymentIds: string[] = [];
-  for (const { data: paymentId, error } of results) {
+  const recorded: { paymentId: string; billId: string }[] = [];
+  for (const [index, { data: paymentId, error }] of results.entries()) {
     if (error) {
       if (error.code === '23505') continue; // duplicate - skip
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    if (paymentId) paymentIds.push(paymentId as string);
+    if (paymentId) {
+      paymentIds.push(paymentId as string);
+      recorded.push({
+        paymentId: paymentId as string,
+        billId: payableBills[index]!.id,
+      });
+    }
   }
+
+  // Render + cache the receipts and the (now invalidated) bill PDFs after the
+  // response, so the payer's first download is instant.
+  preRenderPaymentDocumentsAfterResponse(recorded);
 
   return NextResponse.json({ paymentIds });
 }

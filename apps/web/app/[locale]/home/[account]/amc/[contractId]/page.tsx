@@ -18,15 +18,11 @@ export const metadata = { title: 'AMC Contract' };
 export default async function AmcDetailPage({ params }: Props) {
   const { account, contractId } = await params;
 
-  const { accountId } = await requireRole(account, ['assoc_admin']);
+  const { associationId } = await requireRole(account, ['assoc_admin']);
 
   const client = getSupabaseServerClient();
 
-  const { data: assoc } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const assoc = associationId ? { id: associationId } : null;
 
   if (!assoc) redirect(`/home/${account}`);
 

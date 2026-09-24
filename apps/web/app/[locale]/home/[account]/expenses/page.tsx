@@ -6,6 +6,7 @@ import { PageBody } from '@kit/ui/page';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { loadAssociationFeatures } from '../_lib/server/association-features.loader';
 import { ExpensesPageClient } from './_components/expenses-page-client';
 
 interface Props {
@@ -25,7 +26,7 @@ export const metadata = { title: 'Expense Tracker' };
 export default async function ExpensesPage({ params, searchParams }: Props) {
   const [{ account }, sp] = await Promise.all([params, searchParams]);
 
-  const { accountId } = await requireRole(account, [
+  const { associationId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
   ]);
@@ -33,23 +34,14 @@ export default async function ExpensesPage({ params, searchParams }: Props) {
   const client = getSupabaseServerClient();
 
   // We need to get the association id from the account id
-  const { data: assoc } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const assoc = associationId ? { id: associationId } : null;
 
   if (!assoc) redirect(`/home/${account}`);
 
-  // Check feature flag
-  const { data: flag } = await (client as any)
-    .from('association_feature_flags')
-    .select('enabled')
-    .eq('association_id', assoc.id)
-    .eq('feature', 'expense_tracker')
-    .maybeSingle();
+  // Feature gate (request-cached, already loaded by the layout)
+  const features = await loadAssociationFeatures(account);
 
-  if (!flag?.enabled) redirect(`/home/${account}`);
+  if (!features.isEnabled('expense_tracker')) redirect(`/home/${account}`);
 
   // Load in parallel: categories, vendors, and initial expense list
   const [categoriesRes, vendorsRes, expensesRes] = await Promise.all([
