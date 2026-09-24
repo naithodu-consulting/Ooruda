@@ -265,6 +265,31 @@ Same merge should also revisit `(marketing)/layout.tsx`, which still performs a 
 
 ---
 
+## SEO / GEO / AEO - public site improvements
+
+**Priority:** High once the product is ready to be discovered. Audit done 2026-09-24 against `main` and live https://ooruda.com.
+
+### Current state
+
+- Done (Sept SEO commit): robots.txt (blocks `/home`, `/admin`, `/api`; AI crawlers allowed), sitemap, title/description, Open Graph + Twitter tags with OG image, Organization / SoftwareApplication / WebSite JSON-LD, one H1 then H2/H3, image alt text.
+- Gaps: the homepage is ~200 words of generic copy; title is "Ooruda — Private Beta"; no canonical; `www.ooruda.com` serves 200 (duplicate host); no `llms.txt`; no FAQ/feature/pricing pages; no India/GST/MESCOM wording; `sameAs` points to an unverified Twitter; hero images hotlinked from Unsplash/Pexels; `lang="en"` not `en-IN`; homepage lastmod stale (2026-07-19); root layout reads `headers()` (CSRF token) so every public page renders dynamically - one cold request took 4.2s.
+
+### Actions (in priority order)
+
+1. **Keep the landing page on the v2.3 → main merge.** `/` must stay the public landing page and be listed in the sitemap - see "Sitemap omits the production homepage" above. Otherwise the homepage disappears from search.
+2. **Rewrite the homepage around what the product does** (~800-1,200 words): one-line definition, a section per module (billing + GST invoices, electricity sub-metering, payments + receipts, cash ledger, owner/tenant portal, reports), who it is for, where it works (India), how onboarding works. Retitle, e.g. "Ooruda – Billing & Management Software for Commercial Property Associations in India"; make title/description match the OG copy. *Needs wording/positioning input.*
+3. **Add 3-5 focused pages** - Features (per module), Pricing (even "contact us"), FAQ, About, Security & data. Each: clear H1, a one-paragraph direct answer at the top, a short FAQ. Add them to the sitemap.
+4. **Structured data to match:** FAQPage on the FAQ; SoftwareApplication with `offers`, `areaServed: IN` and a feature list; BreadcrumbList on inner pages; Organization with real `sameAs` (LinkedIn etc.) and a contactPoint. Remove/replace the Twitter `sameAs` if the account doesn't exist.
+5. **Fix duplicate host + canonicals:** redirect `www` → apex in Vercel domain settings (dashboard, not code); add a per-page canonical on each public page (not in the root layout - it would be inherited app-wide).
+6. **Add `/llms.txt`:** plain-text summary of what Ooruda is, who it is for, key features, links to the pages above.
+7. **Off-site presence (biggest GEO lever, non-code):** LinkedIn company page, Google Business Profile, SaaS directories (G2, Capterra, Indian SaaS directories); 1-2 topical articles, e.g. "How to split a commercial electricity bill across sub-meters", "GST on association maintenance charges".
+8. **Make public pages static/cacheable:** stop the root layout reading `headers()` for public routes so the landing page prerenders (removes the cold-start delay).
+9. **Small items:** self-host the hero images (and use `next/image`), set `lang="en-IN"`, keep sitemap lastmod accurate.
+
+Code: 1, 2, 3, 4, 5 (canonical), 6, 8, 9. Dashboard/off-site: 5 (www redirect), 7.
+
+---
+
 ## UI Component Modernization - site-wide audit
 
 **Priority:** Medium  

@@ -194,7 +194,9 @@ export function PageHeader({
         </div>
 
         <If condition={title}>
-          <div className={cn(displaySidebarTrigger && 'pl-7')}>
+          {/* Indent past the sidebar trigger only where it is shown (lg+);
+              below that the trigger is hidden and the indent was a gap. */}
+          <div className={cn(displaySidebarTrigger && 'lg:pl-7')}>
             <PageTitle>{title}</PageTitle>
           </div>
         </If>

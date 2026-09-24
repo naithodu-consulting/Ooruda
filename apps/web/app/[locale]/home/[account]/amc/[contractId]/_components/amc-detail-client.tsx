@@ -108,8 +108,9 @@ export function AmcDetailClient({
 
   return (
     <div className={'flex flex-col gap-y-6'}>
-      {/* Back + actions */}
-      <div className={'flex items-center justify-between gap-2'}>
+      {/* Back + actions - wraps on narrow screens so the actions drop below
+          the back link instead of running off the edge. */}
+      <div className={'flex flex-wrap items-center justify-between gap-2'}>
         <Button
           variant={'ghost'}
           size={'sm'}
@@ -120,7 +121,7 @@ export function AmcDetailClient({
         </Button>
 
         {!contractData['terminated_at'] && (
-          <div className={'flex gap-2'}>
+          <div className={'flex flex-wrap gap-2'}>
             <Button
               variant={'outline'}
               size={'sm'}

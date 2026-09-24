@@ -8,6 +8,7 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
 import { getAssociationRole, getCurrentUserId } from '~/lib/rbac';
+import { safePdfFilename } from '~/lib/server/pdf-cache';
 import { loadPdfRenderer } from '~/lib/server/pdf-renderer';
 const LOGO_MAX_PX = 208;
 const LOGO_BUCKET = 'account_image';
@@ -212,7 +213,7 @@ async function signCachedPdf(
 
   const { data } = await getSupabaseServerAdminClient()
     .storage.from(BUCKET)
-    .createSignedUrl(path, 300, { download: filename });
+    .createSignedUrl(path, 300, { download: safePdfFilename(filename) });
 
   return data?.signedUrl ?? null;
 }

@@ -6,6 +6,7 @@ import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { preprocessLogoForPdf } from '~/home/[account]/billing/_lib/server/pdf-generation';
+import { safePdfFilename } from '~/lib/server/pdf-cache';
 import { loadPdfRenderer } from '~/lib/server/pdf-renderer';
 
 const FY_ALL = '__all__';
@@ -423,7 +424,7 @@ export const GET = enhanceRouteHandler(
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename="${safePdfFilename(filename)}"`,
       },
     });
   },

@@ -4,6 +4,39 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## v2.3 - Regression Pass: Responsive, Sign-in Limits, PDF Cache & Settings Fixes - 2026-09-24
+
+Full-app regression pass (126 automated cases, every page × role at 360/768/1280 px, all PDF types, key flows - see `apps/e2e/tests/ooruda/regression/CHECKLIST.md`) and the fixes it produced.
+
+### Sign-in
+- Rate limit reworked (`proxy.ts`): only sign-in submissions count (page loads, prefetches and redirects under `/auth` no longer do), and the limit is 20/min per IP instead of 5. One mistyped code, or several users behind one carrier/office IP, no longer locks people out.
+- When the limit is hit the form now says "Too many attempts. Please try again in N seconds" and disables the button until the window resets (it previously did nothing). Other failed sends now show an error instead of failing silently.
+
+### PDFs
+- Download filenames no longer contain slashes (`SRT-26-27-OTH-000008.pdf`); cached downloads opened in a new tab were saved as `SRT%2F26-27…`.
+- Cached bill / receipt / voucher PDFs are cleared when the association's branding changes (logo, name, address, GST/PAN, contact, bank details, signatory), so PDFs rendered before a logo upload no longer show the default mark. Existing caches reset once (see migration).
+
+### Responsive / UI
+- Page titles on mobile/tablet no longer indented for the (desktop-only) sidebar button - every workspace page.
+- AMC contract detail: actions wrap instead of overflowing 135px on phones.
+- Audit log (and super-admin Activity): details column wraps, so Status and time stay visible; every event row has an icon, errors show the warning icon first.
+- Bill detail panel aligns with the bill name at all widths.
+- Reports Directory KPI tiles collapse on phones; mobile top-bar avatar shows initials instead of "?".
+- Date picker: month and year dropdowns in the calendar header.
+
+### Settings
+- Profile settings show only Login & Security for sign-in details: MakerKit's separate email editor and the linked-accounts card (which could only unlink phone/email sign-in) are removed; MFA is hidden until a recovery path exists.
+- Fixed a hydration error (React #418) on settings pages when account data was already cached.
+
+### Testing
+- New Playwright suite `apps/e2e/tests/ooruda/regression` (`playwright.ooruda.config.ts`): page matrix per role, responsive overflow, PDF/ZIP downloads and access control, sign-in and core flows.
+
+| Migration | Change |
+| --- | --- |
+| `20260924000002_invalidate_pdf_cache_on_branding_change.sql` | `invalidate_association_pdf_cache()` + triggers on `associations` / `accounts` branding columns clear cached bill, receipt and advance-voucher PDF paths; one-time reset of existing cached paths |
+
+---
+
 ## v2.3 - Page Load & PDF Download Performance - 2026-09-24
 
 Critical review of page load and PDF download time across all roles. No behaviour or permission changes.

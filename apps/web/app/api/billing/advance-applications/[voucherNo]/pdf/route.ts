@@ -6,6 +6,7 @@ import { enhanceRouteHandler } from '@kit/next/routes';
 import { getLogger } from '@kit/shared/logger';
 
 import { getOrGenerateAdvanceApplicationPdf } from '~/home/[account]/billing/_lib/server/pdf-generation';
+import { safePdfFilename } from '~/lib/server/pdf-cache';
 
 // Voucher numbers: new format PRM/26-27/MNT/000001 (slashes are percent-encoded in URLs).
 // Legacy format ADV-MAIN-A1B2C3-A1 (alphanum + hyphens) also matches.
@@ -51,7 +52,7 @@ export const GET = enhanceRouteHandler(
     return new NextResponse(new Uint8Array(pdf.bytes!), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${pdf.filename}"`,
+        'Content-Disposition': `attachment; filename="${safePdfFilename(pdf.filename)}"`,
         'Cache-Control': 'private, max-age=3600',
       },
     });

@@ -87,7 +87,7 @@ export function BillDetailPanel({
 
   if (loading) {
     return (
-      <div className="space-y-2 border-b px-4 py-3 pl-20">
+      <div className="space-y-2 border-b py-3 pr-3 pl-[74px] sm:pr-4 sm:pl-[106px]">
         <Skeleton className="h-3 w-32" />
         <Skeleton className="h-3 w-full" />
         <Skeleton className="h-3 w-3/4" />
@@ -97,7 +97,7 @@ export function BillDetailPanel({
 
   if (error) {
     return (
-      <div className="text-danger flex items-center gap-2 border-b px-4 py-3 pl-20 text-sm">
+      <div className="text-danger flex items-center gap-2 border-b py-3 pr-3 pl-[74px] text-sm sm:pr-4 sm:pl-[106px]">
         <AlertCircle className="h-3.5 w-3.5 shrink-0" />
         <span>{error}</span>
         <button
@@ -151,8 +151,10 @@ export function BillDetailPanel({
   // amount actually levied.
   const gstCharged = bill.gst_amount != null && bill.gst_amount > 0;
 
+  // Indent matches the bill row's name column (row padding + 18px chevron
+  // column + 8px gap) so the panel reads as that bill's content.
   return (
-    <div className="border-b px-4 py-4 pl-20">
+    <div className="border-b py-4 pr-3 pl-[74px] sm:pr-4 sm:pl-[106px]">
       {/* Action bar: period + due date + download + void */}
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">

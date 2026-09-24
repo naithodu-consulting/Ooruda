@@ -95,6 +95,12 @@ export function DatePicker({
   const minDate = ymdToLocalDate(min);
   const maxDate = ymdToLocalDate(max);
 
+  // Year range offered by the dropdown: the field's own bounds when given,
+  // otherwise 2000 through five years ahead (covers historical imports and
+  // future due dates).
+  const startMonth = minDate ?? new Date(2000, 0, 1);
+  const endMonth = maxDate ?? new Date(new Date().getFullYear() + 5, 11, 31);
+
   // react-day-picker's Matcher requires real Dates, so only include the bounds
   // that were actually supplied.
   const disabledMatchers = [
@@ -171,6 +177,12 @@ export function DatePicker({
         <PopoverContent className="w-auto p-0" align="start">
           <Calendar
             mode="single"
+            // Month + year dropdowns in the header, so moving years doesn't
+            // mean paging through every month (e.g. a date of birth, or a
+            // back-dated entry from last year).
+            captionLayout="dropdown"
+            startMonth={startMonth}
+            endMonth={endMonth}
             selected={selected}
             defaultMonth={selected}
             onSelect={handleSelect}

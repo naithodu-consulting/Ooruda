@@ -15,6 +15,19 @@ const BUCKET = 'billing-documents';
 const PDF_TEMPLATE_VERSION = 1;
 
 /**
+ * A download filename that survives every path unchanged.
+ *
+ * Bill and receipt numbers contain slashes (`SRT/26-27/OTH/000008`), which
+ * browsers rewrite to underscores in Content-Disposition and which
+ * supabase-js double-encodes in a signed URL's `download` parameter - so a
+ * cached download was saved as `SRT%2F26-27%2F…`. Use hyphens instead and
+ * keep to characters that need no encoding anywhere.
+ */
+export function safePdfFilename(name: string): string {
+  return name.replace(/[\\/]+/g, '-').replace(/[^\w.\- ]+/g, '-');
+}
+
+/**
  * Storage path for a PDF whose source row has no `pdf_url` column to record
  * a cached render in (advance deposits, cash-ledger payment receipts).
  *
@@ -49,7 +62,7 @@ export async function signCachedPdfPath(
 ): Promise<string | null> {
   const { data } = await getSupabaseServerAdminClient()
     .storage.from(BUCKET)
-    .createSignedUrl(path, 300, { download: filename });
+    .createSignedUrl(path, 300, { download: safePdfFilename(filename) });
 
   return data?.signedUrl ?? null;
 }
@@ -77,7 +90,7 @@ export function pdfAttachmentResponse(bytes: Buffer, filename: string) {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Disposition': `attachment; filename="${safePdfFilename(filename)}"`,
       'Cache-Control': 'private, no-store',
     },
   });

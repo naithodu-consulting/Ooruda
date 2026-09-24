@@ -46,7 +46,7 @@ export function DirectoryTab({ rows, roleFilter, onRoleFilterChange }: Props) {
   return (
     <div className="flex flex-col gap-6">
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-3">
         <KpiTile label="Total Entries" value={String(rows.length)} />
         <KpiTile label="Owners" value={String(owners)} />
         <KpiTile label="Tenants" value={String(tenants)} highlight="amber" />

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import {
+  Activity,
   AlertTriangle,
   Banknote,
   Building2,
@@ -21,9 +22,17 @@ import { cn } from '@kit/ui/utils';
 /** Maps an action key prefix to a Lucide icon for the event row. */
 export function ActionIcon({ action }: { action: string }) {
   const cls = 'text-muted-foreground h-4 w-4 shrink-0';
+  // Errors first, so a failed payment shows the warning, not the banknote.
+  if (action.includes('error') || action.includes('failed'))
+    return <AlertTriangle className="text-destructive h-4 w-4 shrink-0" />;
   if (action.startsWith('payment') || action.startsWith('razorpay'))
     return <Banknote className={cls} />;
-  if (action.startsWith('bill') || action.startsWith('bills'))
+  if (
+    action.startsWith('bill') ||
+    action.startsWith('receipt') ||
+    action.startsWith('advance') ||
+    action.startsWith('cash_ledger')
+  )
     return <FileText className={cls} />;
   if (
     action.startsWith('meter') ||
@@ -39,9 +48,8 @@ export function ActionIcon({ action }: { action: string }) {
     action.startsWith('notifications')
   )
     return <Settings className={cls} />;
-  if (action.includes('error') || action.includes('failed'))
-    return <AlertTriangle className="text-destructive h-4 w-4 shrink-0" />;
-  return null;
+  // Every row gets an icon so the event labels line up.
+  return <Activity className={cls} />;
 }
 
 export const ACTION_LABELS: Record<string, string> = {

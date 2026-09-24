@@ -44,9 +44,26 @@ interface RateLimitBucket {
 // Map key: "<route-group>:<ip>"
 const rateLimitStore = new Map<string, RateLimitBucket>();
 
-const RATE_LIMIT_RULES = [
-  // Auth routes (sign-in, OTP, password reset) - 5 per minute
-  { pathPrefix: '/auth', limit: 5, windowMs: 60_000, group: 'auth' },
+const RATE_LIMIT_RULES: {
+  pathPrefix: string;
+  limit: number;
+  windowMs: number;
+  group: string;
+  /** Only count these methods; all methods when omitted. */
+  methods?: string[];
+}[] = [
+  // Auth submissions (send code, verify, invitation checks) - 20 per minute.
+  // Only POSTs count: sign-in form actions are POSTs to the page URL. Page
+  // loads, prefetches and redirects under /auth used to count too, so one
+  // sign-in used 3-5 of the old 5/min budget and a single mistyped code - or
+  // several people behind one carrier/office IP - locked users out.
+  {
+    pathPrefix: '/auth',
+    limit: 20,
+    windowMs: 60_000,
+    group: 'auth',
+    methods: ['POST'],
+  },
   // API routes - 30 per 10 seconds
   { pathPrefix: '/api', limit: 30, windowMs: 10_000, group: 'api' },
 ];
@@ -54,10 +71,13 @@ const RATE_LIMIT_RULES = [
 function checkRateLimit(
   ip: string,
   pathname: string,
+  method: string,
 ): { limited: boolean; retryAfter?: number } {
   const normalized = getNormalizedPathname(pathname);
-  const rule = RATE_LIMIT_RULES.find((r) =>
-    normalized.startsWith(r.pathPrefix),
+  const rule = RATE_LIMIT_RULES.find(
+    (r) =>
+      normalized.startsWith(r.pathPrefix) &&
+      (!r.methods || r.methods.includes(method)),
   );
   if (!rule) return { limited: false };
 
@@ -108,7 +128,11 @@ export default async function proxy(request: NextRequest) {
     request.headers.get('x-real-ip') ??
     '0.0.0.0';
 
-  const { limited, retryAfter } = checkRateLimit(ip, request.nextUrl.pathname);
+  const { limited, retryAfter } = checkRateLimit(
+    ip,
+    request.nextUrl.pathname,
+    request.method,
+  );
   if (limited) {
     return new NextResponse('Too Many Requests', {
       status: 429,

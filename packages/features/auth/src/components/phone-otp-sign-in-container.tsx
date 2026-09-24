@@ -13,6 +13,7 @@ import * as z from 'zod';
 import { normalizePhoneNumber, getSafeRedirectPath } from '@kit/shared/utils';
 import { useSignInWithOtp } from '@kit/supabase/hooks/use-sign-in-with-otp';
 import { useVerifyOtp } from '@kit/supabase/hooks/use-verify-otp';
+import { Alert, AlertDescription } from '@kit/ui/alert';
 import { Button } from '@kit/ui/button';
 import {
   Form,
@@ -47,6 +48,9 @@ const CHANNEL_CONFIG = {
 } as const;
 
 type Channel = keyof typeof CHANNEL_CONFIG;
+
+/** Matches the /auth rate-limit window in apps/web/proxy.ts. */
+const RATE_LIMIT_WINDOW_SECONDS = 60;
 type Step = 'identifier' | 'otp';
 
 const PhoneSchema = z.object({
@@ -76,6 +80,41 @@ export function PhoneOtpSignInContainer() {
   const [resendSeconds, setResendSeconds] = useState(0);
   const [verifyAttempts, setVerifyAttempts] = useState(0);
   const [localError, setLocalError] = useState<string | Error | null>(null);
+  // Seconds left on the app's per-IP sign-in rate limit (proxy.ts, 60s
+  // window). The form can't read the 429's Retry-After from a server action,
+  // so it counts the window down itself.
+  const [rateLimitSeconds, setRateLimitSeconds] = useState(0);
+
+  useEffect(() => {
+    if (rateLimitSeconds <= 0) return;
+    const timer = setTimeout(() => setRateLimitSeconds((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [rateLimitSeconds]);
+
+  /**
+   * Surfaces a failed send instead of swallowing it. A request blocked by the
+   * sign-in rate limit reaches the form as a server action that got a non-RSC
+   * (429) response; anything else shows the generic error.
+   */
+  const handleSendError = (error: unknown) => {
+    console.error(error);
+    const message = error instanceof Error ? error.message : String(error);
+
+    // Next.js rethrows the 429 body ("Too Many Requests"); older versions
+    // report a generic unexpected-response error instead.
+    if (
+      /too many requests|unexpected response was received from the server/i.test(
+        message,
+      )
+    ) {
+      setLocalError(null);
+      setRateLimitSeconds(RATE_LIMIT_WINDOW_SECONDS);
+      return;
+    }
+
+    // Supabase auth errors are already shown via signInMutation.error.
+    if (!signInMutation.error) setLocalError('default');
+  };
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const signInMutation = useSignInWithOtp();
@@ -165,7 +204,7 @@ export function PhoneOtpSignInContainer() {
       otpForm.reset();
       setStep('otp');
     } catch (e) {
-      console.error(e);
+      handleSendError(e);
     }
   };
 
@@ -182,7 +221,7 @@ export function PhoneOtpSignInContainer() {
       otpForm.reset();
       setStep('otp');
     } catch (e) {
-      console.error(e);
+      handleSendError(e);
     }
   };
 
@@ -197,7 +236,7 @@ export function PhoneOtpSignInContainer() {
       setVerifyAttempts(0);
       otpForm.reset();
     } catch (e) {
-      console.error(e);
+      handleSendError(e);
     }
   };
 
@@ -244,6 +283,7 @@ export function PhoneOtpSignInContainer() {
           onSubmit={phoneForm.handleSubmit(handleSendPhone)}
         >
           <AuthErrorAlert error={localError || signInMutation.error} />
+          <RateLimitNotice seconds={rateLimitSeconds} />
 
           <FormField
             name="phone"
@@ -273,7 +313,7 @@ export function PhoneOtpSignInContainer() {
           <Button
             type="submit"
             className="!text-primary-foreground w-full border border-[#FCD469] !bg-[#FCD469] font-semibold shadow-none hover:!bg-[#f0c740]"
-            disabled={signInMutation.isPending}
+            disabled={signInMutation.isPending || rateLimitSeconds > 0}
             data-test="phone-send-otp-button"
           >
             {signInMutation.isPending ? (
@@ -311,6 +351,7 @@ export function PhoneOtpSignInContainer() {
           }}
         >
           <AuthErrorAlert error={localError || signInMutation.error} />
+          <RateLimitNotice seconds={rateLimitSeconds} />
 
           <FormField
             name="email"
@@ -347,7 +388,7 @@ export function PhoneOtpSignInContainer() {
           <Button
             type="submit"
             className="!text-primary-foreground w-full border border-[#FCD469] !bg-[#FCD469] font-semibold shadow-none hover:!bg-[#f0c740]"
-            disabled={signInMutation.isPending}
+            disabled={signInMutation.isPending || rateLimitSeconds > 0}
             data-test="email-send-otp-button"
           >
             {signInMutation.isPending ? (
@@ -404,6 +445,7 @@ export function PhoneOtpSignInContainer() {
 
           {/* surface failures from resending the OTP, not just verification */}
           <AuthErrorAlert error={localError || signInMutation.error} />
+          <RateLimitNotice seconds={rateLimitSeconds} />
 
           {tooManyAttempts && (
             <p className="text-destructive text-center text-sm font-semibold">
@@ -517,7 +559,11 @@ export function PhoneOtpSignInContainer() {
               type="button"
               variant="ghost"
               size="sm"
-              disabled={resendSeconds > 0 || signInMutation.isPending}
+              disabled={
+                resendSeconds > 0 ||
+                signInMutation.isPending ||
+                rateLimitSeconds > 0
+              }
               onClick={handleResend}
               data-test="resend-otp-button"
               className="text-muted-foreground hover:text-foreground disabled:text-muted-foreground/40 h-9 transition-all hover:bg-[#FBF7E8] disabled:hover:bg-transparent"
@@ -570,5 +616,17 @@ function ChannelToggle({
       </Button>
       <span className="h-px flex-1 bg-[#EADFB0]" />
     </div>
+  );
+}
+
+function RateLimitNotice({ seconds }: { seconds: number }) {
+  if (seconds <= 0) return null;
+
+  return (
+    <Alert variant={'destructive'} data-test={'auth-rate-limit-notice'}>
+      <AlertDescription>
+        <Trans i18nKey={'auth.tooManyAttempts'} values={{ seconds }} />
+      </AlertDescription>
+    </Alert>
   );
 }

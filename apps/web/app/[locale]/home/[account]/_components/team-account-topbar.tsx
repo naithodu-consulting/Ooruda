@@ -57,7 +57,9 @@ export function TeamAccountTopbar(props: {
   const { data: personalAccount } = usePersonalAccountData(props.userId);
   const signOutMutation = useSignOut();
 
-  const displayName = personalAccount?.name ?? '';
+  // Same fallback as the sidebar's account menu, so both avatars agree for
+  // users who haven't set a name (phone sign-ups).
+  const displayName = personalAccount?.name || props.user?.email || '';
   const initials = displayName
     ? displayName
         .split(' ')

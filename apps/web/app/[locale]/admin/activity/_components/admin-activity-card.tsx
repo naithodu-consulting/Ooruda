@@ -338,7 +338,7 @@ export function AdminActivityCard(props: {
                       <TableCell className="text-muted-foreground py-3.5 text-sm">
                         {row.association}
                       </TableCell>
-                      <TableCell className="text-muted-foreground py-3.5 text-sm">
+                      <TableCell className="text-muted-foreground min-w-56 py-3.5 text-sm break-words whitespace-normal">
                         {truncateSummary(row.summary)}
                         {row.errorCode && (
                           <div className="text-destructive mt-0.5 font-mono text-xs">

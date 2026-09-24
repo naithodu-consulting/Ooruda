@@ -181,7 +181,9 @@ export function AuditLogCard(props: {
                       <TableCell className="py-3.5">
                         <RoleBadge roleLabel={row.actorRoleLabel} />
                       </TableCell>
-                      <TableCell className="text-muted-foreground py-3.5 text-sm">
+                      {/* Details wraps (table cells default to nowrap), so long summaries
+                          don't widen the table and push Status/Time off-screen. */}
+                      <TableCell className="text-muted-foreground min-w-56 py-3.5 text-sm break-words whitespace-normal">
                         {truncateSummary(row.summary)}
                         {row.errorCode && (
                           <div className="text-destructive mt-0.5 font-mono text-xs">
