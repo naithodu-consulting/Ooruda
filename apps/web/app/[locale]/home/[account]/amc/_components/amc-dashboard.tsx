@@ -194,7 +194,7 @@ export function AmcDashboard({ accountSlug, stats }: Props) {
             className={'w-full sm:w-auto'}
             render={
               <Link
-                href={`/home/${accountSlug}/amc?tab=list`}
+                href={`/home/${accountSlug}/amc?tab=list&status=expired`}
                 data-test={'view-expired-btn'}
               />
             }

@@ -12,7 +12,7 @@ import { createAmcService } from './_lib/server/amc.service';
 
 interface Props {
   params: Promise<{ account: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; status?: string }>;
 }
 
 export const metadata = { title: 'AMC Reminder' };
@@ -51,11 +51,15 @@ export default async function AmcPage({ params, searchParams }: Props) {
       />
       <PageBody>
         <AmcPageClient
+          // Remount when the URL's tab/status change on the same page, so
+          // links such as "View Expired" switch tab and apply the filter.
+          key={`${sp.tab ?? ''}|${sp.status ?? ''}`}
           associationId={assoc.id}
           accountSlug={account}
           stats={stats}
           reminderSettings={reminderSettings}
           defaultTab={sp.tab ?? 'dashboard'}
+          defaultStatus={sp.status ?? ''}
         />
       </PageBody>
     </>

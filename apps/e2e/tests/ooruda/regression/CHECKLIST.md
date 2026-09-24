@@ -8,7 +8,7 @@ backed by local Supabase. Automated cases live in this folder:
 OORUDA_BASE_URL=http://localhost:3002 pnpm exec playwright test -c playwright.ooruda.config.ts
 ```
 
-**Result: 126 / 126 automated cases pass (2m 20s).** Legend: ✅ automated pass ·
+**Result: 128 / 128 automated cases pass.** Legend: ✅ automated pass ·
 👁 verified manually in the browser · ⚠️ finding (see bottom).
 
 Test accounts (sandbox-residency-test): admin 9911000006 · billing operator
@@ -89,6 +89,9 @@ Test accounts (sandbox-residency-test): admin 9911000006 · billing operator
 | 5.4 | Units status filters | ✅ |
 | 5.5 | Owner dashboard shows own units | ✅ |
 | 5.6 | Profile settings: only Login & Security; old email/MFA/linked cards hidden | ✅ |
+| 5.9 | AMC "View Expired": direct link, in-page navigation, unknown status ignored | ✅ |
+| 5.10 | Owner "Pay now": unit focus, foreign unit ignored, "Show all units" | ✅ |
+| 5.11 | Every non-destructive button/link on every page × role (915 controls) | 👁 crawl — all working |
 | 5.7 | Record payment / void payment / generate bills / Razorpay | Not automated (mutates billing data) — manual check recommended |
 | 5.8 | Invite member, change phone/email (OTP) | Not automated — manual check recommended |
 

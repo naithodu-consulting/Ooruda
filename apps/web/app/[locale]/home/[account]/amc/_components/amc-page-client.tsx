@@ -46,6 +46,8 @@ interface Props {
   stats: DashboardStats;
   reminderSettings: { remindDaysBefore: number };
   defaultTab: string;
+  /** Status filter to open the contract list with (e.g. from "View Expired"). */
+  defaultStatus?: string;
 }
 
 export function AmcPageClient({
@@ -54,14 +56,12 @@ export function AmcPageClient({
   stats,
   reminderSettings,
   defaultTab,
+  defaultStatus = '',
 }: Props) {
-  const [activeTab, setActiveTab] = useState(
-    defaultTab === 'settings'
-      ? 'settings'
-      : defaultTab === 'list'
-        ? 'list'
-        : 'dashboard',
-  );
+  // Seeded from ?tab= once; the page remounts this component when ?tab= or
+  // ?status= change (see its `key`), so same-page links like the dashboard's
+  // "View Expired" land on the right tab.
+  const [activeTab, setActiveTab] = useState(toTab(defaultTab));
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className={'w-full'}>
@@ -87,6 +87,7 @@ export function AmcPageClient({
 
       <TabsContent value={'list'} className={'mt-0'}>
         <AmcList
+          initialStatusFilter={defaultStatus}
           associationId={associationId}
           accountSlug={accountSlug}
           initialContracts={stats.all}
@@ -101,4 +102,12 @@ export function AmcPageClient({
       </TabsContent>
     </Tabs>
   );
+}
+
+function toTab(tab: string) {
+  return tab === 'settings'
+    ? 'settings'
+    : tab === 'list'
+      ? 'list'
+      : 'dashboard';
 }

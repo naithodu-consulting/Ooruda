@@ -99,6 +99,11 @@ interface Props {
   paidByRole: 'Owner' | 'Tenant';
   account: string;
   showUnitColumn: boolean;
+  /**
+   * Limit what's owed to one unit (e.g. from a unit card's "Pay now"). Payment
+   * history still shows every unit.
+   */
+  focusUnitNo?: string | null;
 }
 
 function periodLabel(period: string): string {
@@ -124,6 +129,7 @@ export function OwnerPaymentsView({
   paidByRole,
   account,
   showUnitColumn,
+  focusUnitNo = null,
 }: Props) {
   const router = useRouter();
 
@@ -140,8 +146,10 @@ export function OwnerPaymentsView({
     hasCashDues,
   } = useMemo(() => {
     const items: OutstandingItem[] = [];
+    const inFocus = (unitNo?: string) => !focusUnitNo || unitNo === focusUnitNo;
 
     for (const b of bills) {
+      if (!inFocus(b.unit_no)) continue;
       const owed = b.total_amount - b.paid_amount - (b.advance_applied ?? 0);
       if (owed <= 0.009) continue;
       const status = displayBillStatus(b);
@@ -168,6 +176,7 @@ export function OwnerPaymentsView({
     }
 
     for (const d of dues) {
+      if (!inFocus(d.unit_no)) continue;
       items.push({
         kind: 'due',
         unitId: d.unit_id,
@@ -257,7 +266,7 @@ export function OwnerPaymentsView({
       recentPayments,
       hasCashDues,
     };
-  }, [bills, dues, duePaymentHistory, advanceHistory]);
+  }, [bills, dues, duePaymentHistory, advanceHistory, focusUnitNo]);
 
   const heroBg = hasOverdue
     ? 'bg-red-50/60 dark:bg-red-950/30'
@@ -298,6 +307,24 @@ export function OwnerPaymentsView({
 
   return (
     <div className="flex flex-col gap-6">
+      {focusUnitNo && (
+        <div
+          className="bg-muted/40 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-2.5 text-sm"
+          data-test="payments-unit-focus"
+        >
+          <span>
+            Showing what's due for <strong>Unit {focusUnitNo}</strong>
+          </span>
+          <Link
+            href={`/home/${account}/payments`}
+            className="text-brand-ink font-medium underline-offset-2 hover:underline"
+            data-test="payments-show-all-units"
+          >
+            Show all units
+          </Link>
+        </div>
+      )}
+
       {/* Hero - total outstanding */}
       <Card className={`border-l-4 ${heroLeftBorder} ${heroBg}`}>
         <CardContent className="px-5 py-4">

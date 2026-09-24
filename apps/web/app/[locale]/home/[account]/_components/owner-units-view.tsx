@@ -324,7 +324,7 @@ export function OwnerUnitsView({
             {totalOutstanding > 0 && (
               <div className="flex flex-wrap gap-3">
                 <Link
-                  href={`/home/${account}/payments?unit=${unit.unit_no}`}
+                  href={`/home/${account}/payments?unit=${encodeURIComponent(unit.unit_no)}`}
                   className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold shadow-sm transition-colors"
                 >
                   Pay now · {formatINR(totalOutstanding)}

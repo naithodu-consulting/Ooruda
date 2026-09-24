@@ -28,6 +28,12 @@ Full-app regression pass (126 automated cases, every page × role at 360/768/128
 - Profile settings show only Login & Security for sign-in details: MakerKit's separate email editor and the linked-accounts card (which could only unlink phone/email sign-in) are removed; MFA is hidden until a recovery path exists.
 - Fixed a hydration error (React #418) on settings pages when account data was already cached.
 
+### Buttons (app-wide button audit)
+- 915 controls clicked/followed across every page and role; no dead links or buttons besides the two below.
+- AMC "View Expired" now opens All Contracts filtered to Expired (tabs follow `?tab=`/`?status=`; unknown statuses are ignored).
+- Owner "Pay now" on a unit card now opens Payments limited to that unit, with a "Show all units" link (only the owner's own units are honoured).
+- Add Expense: title and payee start empty instead of undefined (fixes a controlled/uncontrolled input warning).
+
 ### Testing
 - New Playwright suite `apps/e2e/tests/ooruda/regression` (`playwright.ooruda.config.ts`): page matrix per role, responsive overflow, PDF/ZIP downloads and access control, sign-in and core flows.
 

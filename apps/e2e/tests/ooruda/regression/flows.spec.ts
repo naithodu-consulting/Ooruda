@@ -124,15 +124,42 @@ test.describe('admin flows', () => {
     expect.soft(issues.consoleErrors).toEqual([]);
   });
 
+  test('AMC: "View Expired" deep link opens the filtered list', async ({
+    page,
+  }) => {
+    const statusOf = () =>
+      page.locator('[data-test="status-filter-select"]').innerText();
+    const listTab = page.locator('[data-test="amc-tab-list"]');
+
+    // Direct link.
+    await page.goto(`${WS}/amc?tab=list&status=expired`);
+    await settle(page);
+    await expect(listTab).toHaveAttribute('aria-selected', 'true');
+    expect((await statusOf()).trim()).toBe('Expired');
+
+    // Same-page navigation from the dashboard tab, as the button does.
+    await page.goto(`${WS}/amc`);
+    await settle(page);
+    await page.evaluate(() =>
+      (
+        window as unknown as { next: { router: { push: (u: string) => void } } }
+      ).next.router.push(`${location.pathname}?tab=list&status=expired`),
+    );
+    await expect(listTab).toHaveAttribute('aria-selected', 'true');
+    expect((await statusOf()).trim()).toBe('Expired');
+
+    // Unknown status is ignored rather than filtering to nothing.
+    await page.goto(`${WS}/amc?tab=list&status=bogus`);
+    await settle(page);
+    expect((await statusOf()).trim()).toBe('All Statuses');
+  });
+
   test('mobile: navigation menu opens and navigates', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto(WS);
     await settle(page);
 
-    await page
-      .getByRole('button', { name: /menu|sidebar/i })
-      .first()
-      .click();
+    await page.click('[data-test="mobile-sidebar-toggle"]');
     await page.getByRole('link', { name: 'Payments' }).first().click();
     await page.waitForURL(/\/payments/);
     await settle(page);
@@ -148,6 +175,27 @@ test.describe('owner flows', () => {
     await settle(page);
     await expect(page.getByText(/410|A2/).first()).toBeVisible();
     expect.soft(issues.consoleErrors).toEqual([]);
+  });
+
+  test('payments: "Pay now" unit focus and "Show all units"', async ({
+    page,
+  }) => {
+    const banner = page.locator('[data-test="payments-unit-focus"]');
+
+    await page.goto(`${WS}/payments?unit=A2`);
+    await settle(page);
+    await expect(banner).toContainText('Unit A2');
+
+    // A unit the owner doesn't have is ignored.
+    await page.goto(`${WS}/payments?unit=ZZZ`);
+    await settle(page);
+    await expect(banner).toHaveCount(0);
+
+    await page.goto(`${WS}/payments?unit=410`);
+    await settle(page);
+    await page.click('[data-test="payments-show-all-units"]');
+    await page.waitForURL((u) => !u.search.includes('unit='));
+    await expect(banner).toHaveCount(0);
   });
 
   test('statement: switches units', async ({ page }) => {

@@ -68,6 +68,11 @@ export function AddExpenseDialog({
     resolver: zodResolver(ExpenseSchema),
     defaultValues: {
       associationId,
+      // Text inputs start as '' (not undefined) so they're controlled from the
+      // first render - otherwise React warns when typing, and again when the
+      // form resets after saving.
+      title: '',
+      payeeName: '',
       payor: 'Association',
       modeOfPayment: 'UPI' as const,
       recurring: false,

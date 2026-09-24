@@ -24,7 +24,7 @@ import {
 
 interface Props {
   params: Promise<{ account: string }>;
-  searchParams: Promise<{ duration?: string; status?: string }>;
+  searchParams: Promise<{ duration?: string; status?: string; unit?: string }>;
 }
 
 export const metadata = { title: 'Payments' };
@@ -50,10 +50,8 @@ const BILL_WITH_PAYMENTS_SELECT =
   'id, period, bill_no, bill_type, total_amount, paid_amount, advance_applied, status, due_date, tenancy_id, units(unit_no), payments(id, amount, mode, reference_no, paid_by_role, paid_at, receipts(receipt_no)), advance_application_receipts(id, voucher_no, amount, applied_at)';
 
 export default async function PaymentsPage({ params, searchParams }: Props) {
-  const [{ account }, { duration, status }] = await Promise.all([
-    params,
-    searchParams,
-  ]);
+  const [{ account }, { duration, status, unit: unitParam }] =
+    await Promise.all([params, searchParams]);
   const { role, userId, associationId, isSuperAdmin } = await requireRole(
     account,
     ['assoc_admin', 'billing_operator', 'prop_owner', 'tenant'],
@@ -461,6 +459,14 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
           paidByRole={role === 'prop_owner' ? 'Owner' : 'Tenant'}
           account={account}
           showUnitColumn={allUnitCount > 1}
+          // Only honour ?unit= for one of the caller's own units, and only
+          // when there's more than one to choose from.
+          focusUnitNo={
+            allUnitCount > 1 &&
+            unitsWithInfo.some((u) => u.unit_no === unitParam)
+              ? unitParam
+              : null
+          }
         />
       </PageBody>
     );

@@ -78,6 +78,7 @@ export function TeamAccountTopbar(props: {
           size="icon-sm"
           className="border-border bg-background shrink-0 lg:hidden"
           onClick={toggleSidebar}
+          data-test="mobile-sidebar-toggle"
         >
           <Menu className="h-5 w-5" />
           <span className="sr-only">Toggle Sidebar</span>

@@ -115,17 +115,24 @@ interface Props {
   associationId: string;
   accountSlug: string;
   initialContracts: AmcContractRow[];
+  /** Status to pre-filter by, e.g. 'expired' from the dashboard. */
+  initialStatusFilter?: string;
 }
 
 export function AmcList({
   associationId,
   accountSlug,
   initialContracts,
+  initialStatusFilter = '',
 }: Props) {
   const [contracts, setContracts] =
     useState<AmcContractRow[]>(initialContracts);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  // Only accept a known status from the URL - an unknown one would filter
+  // to nothing while the dropdown still read "All Statuses".
+  const [statusFilter, setStatusFilter] = useState(
+    initialStatusFilter in STATUS_DISPLAY ? initialStatusFilter : '',
+  );
   const [categoryFilter, setCategoryFilter] = useState('');
   const [sortBy, setSortBy] = useState<'end_date' | 'contract_value'>(
     'end_date',
