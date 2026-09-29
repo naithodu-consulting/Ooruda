@@ -553,6 +553,94 @@ test.describe.serial('villa product (M0)', () => {
     await page.context().close();
   });
 
+  test('villa manager records a guest ID and marks IDs checked', async ({
+    browser,
+  }) => {
+    test.skip(!VILLA_SITE.key || !bookingCode, 'no booking created');
+
+    const uploads = process.env.VILLA_E2E_UPLOADS === 'true';
+    const page = await signedInPage(browser, VILLA_MANAGER.phone);
+    const issues = watchPage(page);
+
+    await page.goto(`${VILLA_HOME}/bookings?q=${bookingCode}`);
+    await page.waitForURL(/\/bookings\/[0-9a-f-]{36}/);
+    await settle(page);
+
+    const panel = page.locator('[data-test="villa-guest-ids"]');
+    await expect(panel).toContainText('0 of 4 adults');
+    await expect(
+      panel.locator('[data-test="villa-guest-ids-request"]'),
+    ).toHaveAttribute('href', /^https:\/\/wa\.me\/919876543210\?text=/);
+
+    // The first ID defaults to the lead guest who booked.
+    await page.click('[data-test="villa-guest-ids-add"]');
+    await expect(page.locator('[data-test="villa-add-id-name"]')).toHaveValue(
+      `E2E Guest ${STAMP}`,
+    );
+    await page.fill('[data-test="villa-add-id-number"]', '2345 6789 0123');
+
+    if (uploads) {
+      // A minimal real JPEG header: the server checks the bytes, not the name.
+      await page.setInputFiles('[data-test="villa-add-id-file"]', {
+        name: 'aadhaar.jpg',
+        mimeType: 'image/jpeg',
+        buffer: Buffer.from([
+          0xff,
+          0xd8,
+          0xff,
+          0xe0,
+          ...Array(64).fill(0),
+          0xff,
+          0xd9,
+        ]),
+      });
+    }
+
+    await page.click('[data-test="villa-add-id-submit"]');
+    await expect(
+      page.getByText(uploads ? 'ID saved' : 'ID recorded'),
+    ).toBeVisible();
+
+    const doc = panel.locator('[data-test="villa-guest-doc"]');
+    await expect(doc).toContainText('XXXX XXXX 0123');
+    await expect(panel).toContainText('1 of 4 adults');
+    // The full number is never shown (nor stored).
+    await expect(page.locator('body')).not.toContainText('234567890123');
+    await expect(page.locator('body')).not.toContainText('2345 6789 0123');
+    // Recording an ID tells the guest site it was received.
+    await expect(
+      page.locator('[data-test="villa-booking-id-status"]'),
+    ).toHaveText('ID received');
+
+    if (uploads) {
+      const href = await doc
+        .locator('[data-test="villa-guest-doc-view"]')
+        .getAttribute('href');
+      const view = await page.request.get(href!, { maxRedirects: 0 });
+      expect(view.status()).toBe(302);
+      const file = await page.request.get(view.headers()['location']!);
+      expect(file.status()).toBe(200);
+    }
+
+    await page.click('[data-test="villa-guest-ids-mark-verified"]');
+    await expect(
+      page.locator('[data-test="villa-booking-id-status"]'),
+    ).toHaveText('ID verified');
+    await expect(doc).toContainText('Checked');
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    if (SHOTS) await panel.screenshot({ path: `${SHOTS}/guest-ids-1280.png` });
+    const overflow = await measureOverflow(page, 360);
+    expect(
+      overflow.docOverflow,
+      overflow.offenders.join(' | '),
+    ).toBeLessThanOrEqual(0);
+    if (SHOTS) await panel.screenshot({ path: `${SHOTS}/guest-ids-360.png` });
+
+    expect(issues.serverErrors).toEqual([]);
+    await page.context().close();
+  });
+
   test('villa manager cancels the booking with a reason', async ({
     browser,
   }) => {

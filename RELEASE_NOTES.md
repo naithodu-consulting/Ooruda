@@ -4,6 +4,35 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 (M4) - Guests and ID Documents - 2026-09-30
+
+A **Guests and IDs** section on every villa booking, and a villa section in Ooruda's Privacy Policy. No change for association users.
+
+### Guests and IDs (booking page)
+- Record an ID for each adult guest: type (Aadhaar, passport, driving licence, voter ID, other) and number. **Only the last 4 characters are ever kept** (`XXXX XXXX 1234`); the full number is never stored, and the database refuses 5 or more digits in a row.
+- The first ID defaults to the lead guest who booked. Guests are kept in a register per villa, one per phone number, so returning guests are recognised (repeat-guest reports come with M6).
+- **Ask for IDs on WhatsApp**: opens a chat with the guest carrying only the booking code and, when the villa's WhatsApp number is set (Villa Settings > Policies), the booking site's share link in its exact wording.
+- **IDs received on WhatsApp** / **Mark IDs checked** update the guest's booking page on the booking site (never downgrading "checked"). Recording an ID marks it received automatically.
+- **Storing ID photos is built but switched off** (`VILLA_GUEST_ID_UPLOADS`), until the booking site's privacy notice is live too (villa-booking TODO 7). Until then staff record IDs "seen in person" with no photo.
+- When switched on: photos (JPEG, PNG, WebP, PDF up to 10 MB, checked by content, not name) go to a private bucket that members cannot read directly. Opening one records who viewed it first (refused if that record cannot be written), then gives a 60-second link. Owners can delete a photo early; a note of what was held stays.
+- **Deleted automatically 30 days after check-out**, and immediately when a booking is cancelled. The purge runs on the scheduled route and on dashboard visits, retries file by file, and records each deletion.
+- Owners see who uploaded, viewed, checked, deleted or purged each ID (access record, append-only).
+
+### Privacy Policy
+- New section 5, "Villa Guests and Identity Documents": what is collected, why (statutory guest records), who can see it, masked numbers only, every view recorded, deletion 30 days after check-out. Sections renumbered; last updated 30 Sep 2026.
+
+### Safety
+- Guests, booking links and ID records are read-only for members at the database; only the server writes them, after checking the role and the booking. A villa still holding ID photos cannot be deleted (no orphaned files).
+
+### Testing
+- pgTAP `villa-m4-guest-ids.test.sql` (28): masking constraint, server-only writes, private bucket, owner-only access record, other villas see nothing, one lead guest, WhatsApp number owner-only, deletion guards.
+- Vitest: ID masking per type, retention date, WhatsApp links in the contract wording, file-type sniffing.
+- Playwright (full regression, 143 of 144 passing; the one failure is the known, pre-existing expense-save flake in `TODO.md`, green on 3 reruns): manager records an ID, full number never on the page, site status received then verified. With uploads on (`web-prod-3002-id-uploads`): photo upload, recorded view through the signed link, purge on cancellation.
+
+| Migration | Change |
+| --- | --- |
+| `20260929194538_villa_m4_guests_ids.sql` | `villa_guests`, `villa_booking_guests`, `villa_guest_documents` (masked numbers, retention date), `villa_guest_document_access` (append-only), private bucket `villa-guest-docs`, `villa_properties.whatsapp_number`, guard against deleting a villa with stored IDs |
+
 ## Villa v1.0 (M3b) - Calendar, Blocked Dates, Dashboard Figures - 2026-09-30
 
 A **Calendar** page and a working villa **Dashboard** for villa owners and managers. No change for association users.

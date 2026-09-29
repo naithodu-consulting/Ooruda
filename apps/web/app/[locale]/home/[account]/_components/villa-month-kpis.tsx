@@ -7,6 +7,7 @@ import { Card, CardContent } from '@kit/ui/card';
 import { formatINR } from '~/lib/format-inr';
 import { todayIst } from '~/lib/villa-db/dates';
 import { monthRange } from '~/lib/villa/calendar';
+import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
 import { SELLING_STATUSES, monthKpis } from '~/lib/villa/kpis';
 import { MIRROR_STALE_MS, syncPropertyMirror } from '~/lib/villa/mirror';
 
@@ -51,6 +52,19 @@ export async function VillaMonthKpis(props: {
   const failing = lastError > lastSync;
   const stale = now - lastSync > MIRROR_STALE_MS;
   const backingOff = failing && now - lastError < MIRROR_STALE_MS;
+
+  // Guest ID retention also runs on dashboard visits, so deletion never
+  // depends on the scheduler alone. Cheap when nothing is due.
+  after(async () => {
+    try {
+      await purgeExpiredGuestIds(props.accountId);
+    } catch (error) {
+      (await getLogger()).error(
+        { accountId: props.accountId, error: String(error) },
+        'villa dashboard id purge failed',
+      );
+    }
+  });
 
   if (stale && !backingOff) {
     const { accountId, propertyId } = props;

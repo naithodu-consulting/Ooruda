@@ -569,3 +569,50 @@ export async function listBookingsForSync(
 
   return (data ?? []).map((row) => toBooking(row as BookingRow));
 }
+
+/**
+ * Updates the guest-ID status the guest's booking page shows (contract
+ * §5.7). 'received' never downgrades a booking that is already 'verified'.
+ * Only live stays (confirmed or checked out) are changed.
+ */
+export async function setIdStatus(
+  site: VillaSite,
+  bookingId: string,
+  status: 'received' | 'verified',
+  actorUserId: string | null,
+): Promise<SiteBooking> {
+  return withSyncLog(site, `booking.id_${status}`, actorUserId, async () => {
+    let query = site.client
+      .from('bookings')
+      .update({ id_status: status, updated_at: new Date().toISOString() })
+      .eq('id', bookingId)
+      .eq('property_id', site.sitePropertyId)
+      .in('status', ['confirmed', 'completed']);
+
+    if (status === 'received') query = query.eq('id_status', 'pending');
+
+    const { data, error } = await query.select(BOOKING_COLUMNS).maybeSingle();
+
+    if (error) throw fromSiteWriteError(error);
+
+    if (data) {
+      const booking = toBooking(data as BookingRow);
+      return { result: booking, siteId: booking.bookingCode ?? booking.id };
+    }
+
+    const existing = await getBooking(site, bookingId);
+
+    if (!existing) throw new VillaDbError('NOT_FOUND', `booking ${bookingId}`);
+
+    if (!['confirmed', 'completed'].includes(existing.status)) {
+      throw new VillaDbError(
+        'CONFLICT',
+        `booking ${bookingId} is ${existing.status}`,
+        `IDs can be recorded only for a confirmed stay. This one is ${existing.status}.`,
+      );
+    }
+
+    // Already received or verified: nothing to change.
+    return { result: existing, siteId: existing.bookingCode ?? existing.id };
+  });
+}

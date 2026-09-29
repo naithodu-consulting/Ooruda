@@ -23,6 +23,7 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
+import { PhoneInput } from '@kit/ui/phone-input';
 import { toast } from '@kit/ui/sonner';
 import { Switch } from '@kit/ui/switch';
 
@@ -38,6 +39,7 @@ export function PoliciesForm(props: {
   canEdit: boolean;
   managersCanCancel: boolean;
   otaBufferNights: number;
+  whatsappNumber: string | null;
   retentionDays: number;
 }) {
   const form = useForm<PoliciesInput>({
@@ -47,6 +49,7 @@ export function PoliciesForm(props: {
       propertyId: props.propertyId,
       managersCanCancel: props.managersCanCancel,
       otaBufferNights: props.otaBufferNights,
+      whatsappNumber: props.whatsappNumber ?? '',
     },
   });
 
@@ -146,15 +149,44 @@ export function PoliciesForm(props: {
               Guest ID documents
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm" data-test={'villa-policies-retention'}>
-              Kept for <strong>{props.retentionDays} days</strong> after
-              check-out, then deleted automatically.
-            </p>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Set by Ooruda to match the privacy policy. Contact support to
-              change it.
-            </p>
+          <CardContent className="flex flex-col gap-4">
+            <FormField
+              name="whatsappNumber"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem className="max-w-sm">
+                  <FormLabel>Villa WhatsApp number</FormLabel>
+                  <FormControl
+                    render={
+                      <PhoneInput
+                        name={field.name}
+                        ref={field.ref}
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        disabled={disabled}
+                        data-test={'villa-policies-whatsapp'}
+                      />
+                    }
+                  />
+                  <FormDescription>
+                    Guests send their ID photos here. Used in the ID request you
+                    send from a booking.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div>
+              <p className="text-sm" data-test={'villa-policies-retention'}>
+                Kept for <strong>{props.retentionDays} days</strong> after
+                check-out, then deleted automatically.
+              </p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Set by Ooruda to match the privacy policy. Contact support to
+                change it.
+              </p>
+            </div>
           </CardContent>
         </Card>
 

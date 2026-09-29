@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -11,6 +13,7 @@ import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import { PageBody } from '@kit/ui/page';
+import { Skeleton } from '@kit/ui/skeleton';
 
 import pathsConfig from '~/config/paths.config';
 import { formatDateReadable, formatTimestampDMY } from '~/lib/format-date';
@@ -33,6 +36,7 @@ import { selectVillaProperty } from '~/lib/villa/properties';
 import { TeamAccountLayoutPageHeader } from '../../_components/team-account-layout-page-header';
 import { CancelBookingDialog } from '../_components/cancel-booking-dialog';
 import { CompleteStayButton } from '../_components/complete-stay-button';
+import { GuestIdsSection } from '../_components/guest-ids-section';
 
 export const metadata = { title: 'Booking' };
 
@@ -298,6 +302,17 @@ export default async function BookingPage({ params, searchParams }: Props) {
               </dl>
             </CardContent>
           </Card>
+
+          <Suspense
+            fallback={<Skeleton className="h-40 rounded-xl lg:col-span-2" />}
+          >
+            <GuestIdsSection
+              accountId={accountId}
+              propertyId={propertyId}
+              booking={booking}
+              role={role}
+            />
+          </Suspense>
 
           <Card className="bg-card lg:col-span-2">
             <CardHeader>

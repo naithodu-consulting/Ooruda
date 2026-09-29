@@ -149,6 +149,13 @@ export const PoliciesSchema = z.object({
   ...ids,
   managersCanCancel: z.boolean(),
   otaBufferNights: z.coerce.number().int().min(0).max(14),
+  // Where guests send their IDs. Optional.
+  whatsappNumber: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || normalizePhoneNumber(v) !== null, {
+      message: 'Enter a valid WhatsApp number, or leave it empty',
+    }),
 });
 
 export type PoliciesInput = z.input<typeof PoliciesSchema>;

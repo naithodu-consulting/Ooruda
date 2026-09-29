@@ -17,8 +17,10 @@ import {
   markStayCompleted,
 } from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
+import { todayIst } from '~/lib/villa-db/dates';
 import { VillaDbError } from '~/lib/villa-db/errors';
 import { getPricingInputs } from '~/lib/villa-db/rates';
+import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
 import { mirrorBooking } from '~/lib/villa/mirror';
 import { fromPaise, fromPaiseToString } from '~/lib/villa/money';
 import { type QuoteError, quoteStay } from '~/lib/villa/pricing';
@@ -122,6 +124,40 @@ export function createBookingsService(client: Client) {
         'villa booking activity write failed',
       );
     }
+  }
+
+  /**
+   * A cancelled stay has no reason to keep guest ID photos: bring their
+   * deletion forward to today and purge now. Best-effort; the next purge run
+   * picks up anything missed.
+   */
+  async function releaseGuestIds(
+    accountId: string,
+    propertyId: string,
+    bookingId: string,
+  ) {
+    const { error } = await getSupabaseServerAdminClient()
+      .from('villa_guest_documents')
+      .update({ purge_after: todayIst() })
+      .eq('account_id', accountId)
+      .eq('property_id', propertyId)
+      .eq('site_booking_id', bookingId)
+      .is('purged_at', null);
+
+    if (error) {
+      (await getLogger()).error(
+        { bookingId, code: error.code },
+        'villa cancel: guest id purge date update failed',
+      );
+      return;
+    }
+
+    await purgeExpiredGuestIds(accountId).catch(async (e: unknown) =>
+      (await getLogger()).error(
+        { bookingId, error: String(e) },
+        'villa cancel: guest id purge failed',
+      ),
+    );
   }
 
   return {
@@ -296,6 +332,7 @@ export function createBookingsService(client: Client) {
         actor,
       );
       await mirrorBooking(site, booking);
+      await releaseGuestIds(input.accountId, input.propertyId, booking.id);
 
       return booking;
     },
