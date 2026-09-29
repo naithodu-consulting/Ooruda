@@ -18,6 +18,7 @@ import {
 import { NavigationConfigSchema } from '@kit/ui/navigation-schema';
 
 import pathsConfig from '~/config/paths.config';
+import { productForRole } from '~/lib/roles';
 
 const iconClasses = 'w-4 h-4 shrink-0';
 
@@ -115,9 +116,48 @@ const getRoutes = (account: string) => [
   },
 ];
 
-export function getTeamAccountSidebarConfig(account: string) {
+// Villa product workspace. Grows milestone by milestone
+// (OORUDA_VILLA_PLAN.md §5, §12); keys live in the `villa` i18n namespace.
+const getVillaRoutes = (account: string) => [
+  {
+    label: 'villa.nav.portfolio',
+    children: [
+      {
+        label: 'villa.nav.dashboard',
+        path: pathsConfig.app.accountHome.replace('[account]', account),
+        Icon: <LayoutDashboard className={iconClasses} />,
+        highlightMatch: `${pathsConfig.app.home}$`,
+      },
+    ],
+  },
+  {
+    label: 'villa.nav.admin',
+    children: [
+      {
+        label: 'villa.nav.members',
+        path: pathsConfig.app.accountMembers.replace('[account]', account),
+        Icon: <Users className={iconClasses} />,
+      },
+    ],
+  },
+];
+
+/**
+ * Sidebar config for a team workspace.
+ *
+ * `role` selects the product: villa roles only ever exist on villa accounts
+ * (enforced by a database trigger), so the role alone identifies the
+ * workspace's product. Callers that only need layout settings (style,
+ * collapse) can omit it — those are identical for both products.
+ */
+export function getTeamAccountSidebarConfig(
+  account: string,
+  role?: string | null,
+) {
+  const product = productForRole(role);
+
   return NavigationConfigSchema.parse({
-    routes: getRoutes(account),
+    routes: product === 'villa' ? getVillaRoutes(account) : getRoutes(account),
     style: process.env.NEXT_PUBLIC_TEAM_NAVIGATION_STYLE,
     sidebarCollapsed: process.env.NEXT_PUBLIC_TEAM_SIDEBAR_COLLAPSED,
     sidebarCollapsedStyle: process.env.NEXT_PUBLIC_SIDEBAR_COLLAPSIBLE_STYLE,
@@ -127,9 +167,13 @@ export function getTeamAccountSidebarConfig(account: string) {
 // Which nav items each Ooruda role may see (by i18n label key). Owners and
 // tenants get a minimal portal (dashboard + payments) per the prototype;
 // billing operators see operations + insights but not the Admin section;
-// assoc_admin sees everything. The platform super admin uses /admin, not this
-// team-workspace nav, so it isn't listed here.
-const ROLE_NAV_ALLOWLIST: Record<string, readonly string[] | '*'> = {
+// assoc_admin sees everything. A super-admin opening a workspace acts as
+// assoc_admin (association) or villa_owner (villa).
+//
+// Deny by default: a role missing from this map sees NO nav items. (It used
+// to see everything, which would have shown villa roles the whole
+// association sidebar.)
+const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
   assoc_admin: [
     'association.nav.dashboard',
     'association.nav.units',
@@ -165,6 +209,8 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[] | '*'> = {
     'association.nav.payments',
     'association.nav.statement',
   ],
+  villa_owner: ['villa.nav.dashboard', 'villa.nav.members'],
+  villa_manager: ['villa.nav.dashboard'],
 };
 
 type SidebarConfig = ReturnType<typeof getTeamAccountSidebarConfig>;
@@ -193,8 +239,8 @@ export function filterSidebarConfigByRole(
           if (!('label' in item)) return false;
           const label = item.label as string;
           if (disabledNavKeys.includes(label)) return false;
-          // unknown role or full access → only apply disabled keys filter
-          if (!allowed || allowed === '*') return true;
+          // unknown or missing role → nothing (deny by default)
+          if (!allowed) return false;
           return allowed.includes(label);
         }),
       };

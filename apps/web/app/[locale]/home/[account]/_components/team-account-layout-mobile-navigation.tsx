@@ -94,7 +94,7 @@ export const TeamAccountLayoutMobileNavigation = (
           <MobileNavRouteLinks
             routes={
               filterSidebarConfigByRole(
-                getTeamAccountSidebarConfig(props.account),
+                getTeamAccountSidebarConfig(props.account, props.role),
                 props.role,
               ).routes
             }

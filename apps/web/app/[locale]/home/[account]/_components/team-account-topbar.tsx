@@ -21,12 +21,13 @@ import type { AccountModel } from '~/components/workspace-dropdown';
 import featureFlagsConfig from '~/config/feature-flags.config';
 import pathsConfig from '~/config/paths.config';
 import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.config';
+import { productForRole } from '~/lib/roles';
 
 import { TeamAccountNotifications } from './team-account-notifications';
 
-function useCurrentNavLabel(account: string): string {
+function useCurrentNavLabel(account: string, role: string | null): string {
   const pathname = usePathname();
-  const config = getTeamAccountSidebarConfig(account);
+  const config = getTeamAccountSidebarConfig(account, role);
 
   let bestMatch: { label: string; path: string } | null = null;
 
@@ -42,7 +43,12 @@ function useCurrentNavLabel(account: string): string {
     }
   }
 
-  return bestMatch?.label ?? 'association.nav.dashboard';
+  return (
+    bestMatch?.label ??
+    (productForRole(role) === 'villa'
+      ? 'villa.nav.dashboard'
+      : 'association.nav.dashboard')
+  );
 }
 
 export function TeamAccountTopbar(props: {
@@ -53,7 +59,7 @@ export function TeamAccountTopbar(props: {
   accounts: AccountModel[];
   user: { email?: string | null } | null;
 }) {
-  const labelKey = useCurrentNavLabel(props.account);
+  const labelKey = useCurrentNavLabel(props.account, props.role);
   const { data: personalAccount } = usePersonalAccountData(props.userId);
   const signOutMutation = useSignOut();
 

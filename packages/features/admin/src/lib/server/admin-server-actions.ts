@@ -345,33 +345,46 @@ export const createUserAction = adminActionClient
  */
 export const createAssociationAction = adminActionClient
   .inputSchema(CreateAssociationSchema)
-  .action(async ({ parsedInput: { name, ownerId }, ctx }) => {
+  .action(async ({ parsedInput: { name, ownerId, productType }, ctx }) => {
     const adminClient = getSupabaseServerAdminClient();
     const logger = await getLogger();
+    const isVilla = productType === 'villa';
+    const label = isVilla ? 'villa account' : 'association';
 
-    logger.info({ name, ownerId }, `Super Admin is creating an association...`);
+    logger.info(
+      { name, ownerId, productType },
+      `Super Admin is creating a ${label}...`,
+    );
 
-    const { data, error } = await adminClient.rpc('create_team_account', {
-      account_name: name,
-      user_id: ownerId,
-    });
+    // Villa accounts are created by their own RPC, which sets product_type in
+    // the INSERT (so no associations row is auto-created) and makes the
+    // owner a villa_owner.
+    const { data, error } = isVilla
+      ? await adminClient.rpc('create_villa_account', {
+          account_name: name,
+          user_id: ownerId,
+        })
+      : await adminClient.rpc('create_team_account', {
+          account_name: name,
+          user_id: ownerId,
+        });
 
     if (error) {
-      logger.error({ error }, `Error creating association`);
-      throw new Error(`Error creating association: ${error.message}`);
+      logger.error({ error }, `Error creating ${label}`);
+      throw new Error(`Error creating ${label}: ${error.message}`);
     }
 
     logger.info(
-      { accountId: data?.id, name },
-      `Super Admin has successfully created an association`,
+      { accountId: data?.id, name, productType },
+      `Super Admin has successfully created a ${label}`,
     );
 
     void logAdminAudit(
       ctx.user.id,
-      'admin.association.created',
+      isVilla ? 'admin.villa.created' : 'admin.association.created',
       'account',
       data?.id ?? null,
-      `Association created: ${name}`,
+      `${isVilla ? 'Villa account' : 'Association'} created: ${name}`,
     );
 
     revalidatePath(`/admin/accounts`);

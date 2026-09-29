@@ -3,6 +3,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 
 import { loadTeamWorkspace } from '~/home/[account]/_lib/server/team-account-workspace.loader';
 import { Database } from '~/lib/database.types';
+import { productForRole } from '~/lib/roles';
 
 import { loadAssocAdminPermissions } from './assoc-permissions.loader';
 
@@ -22,7 +23,7 @@ export async function loadMembersPageData(
     loadAccountMembers(client, slug),
     loadInvitations(client, slug),
     canAddMember(),
-    loadAssocAdminPermissions(client, account.id),
+    loadAssocAdminPermissions(client, account.id, productForRole(account.role)),
   ]);
 
   return [

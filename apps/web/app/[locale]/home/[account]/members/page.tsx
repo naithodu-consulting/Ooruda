@@ -21,8 +21,11 @@ import { If } from '@kit/ui/if';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
+import { productForRole } from '~/lib/roles';
+
 // local imports
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { DEFAULT_INVITE_ROLES } from './_lib/server/assoc-permissions.loader';
 import { loadMembersPageData } from './_lib/server/members-page.loader';
 
 interface TeamAccountMembersPageProps {
@@ -65,7 +68,10 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
         canInvite: () => true,
         canEdit: () => true,
         canDelete: () => true,
-        allowedInviteRoles: ['prop_owner', 'billing_operator', 'tenant'],
+        allowedInviteRoles:
+          productForRole(account.role) === 'villa'
+            ? DEFAULT_INVITE_ROLES.villa
+            : ['prop_owner', 'billing_operator', 'tenant'],
         // Undefined => no per-role gating; super-admins bypass these checks.
         editableRoles: undefined,
         deletableRoles: undefined,

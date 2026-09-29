@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 const updateMock = vi.fn();
+const upsertMock = vi.fn();
 const eqMock = vi.fn();
 const fromMock = vi.fn();
 
@@ -43,18 +44,18 @@ const ASSOCIATION_ID = '11111111-1111-1111-1111-111111111111';
 const VALID_GSTIN = '29ABCDE1234F1Z5';
 
 /**
- * Build a Supabase query-builder mock whose `.update().eq()` resolves to the
- * given error (or none). `associations` and `billing_settings` are updated in
- * sequence, so we hand back per-table results in call order.
+ * Build a Supabase query-builder mock. `associations` is written with
+ * `.update().eq()` and then `billing_settings` with `.upsert()`; both resolve
+ * to the given per-write results in call order.
  */
 function mockSupabase(results: Array<{ error: { message: string } | null }>) {
   let call = 0;
+  const next = () => Promise.resolve(results[call++] ?? { error: null });
 
-  eqMock.mockImplementation(() =>
-    Promise.resolve(results[call++] ?? { error: null }),
-  );
+  eqMock.mockImplementation(next);
+  upsertMock.mockImplementation(next);
   updateMock.mockReturnValue({ eq: eqMock });
-  fromMock.mockReturnValue({ update: updateMock });
+  fromMock.mockReturnValue({ update: updateMock, upsert: upsertMock });
 }
 
 function formDataFrom(fields: Record<string, string>) {
@@ -77,7 +78,6 @@ const validFields = {
   electricity_due_day: '15',
   maintenance_due_day: '15',
   other_charges_due_day: '15',
-  minimum_electricity_charge: '250',
 };
 
 beforeEach(() => {
@@ -156,15 +156,18 @@ describe('updateAssociationAction - happy path', () => {
     );
     expect(eqMock).toHaveBeenNthCalledWith(1, 'id', ASSOCIATION_ID);
 
-    // billing_settings updated, scoped to association_id, with coerced numbers.
+    // billing_settings upserted for this association (it may not have a row
+    // yet), keyed on association_id, with the due days coerced to numbers.
     expect(fromMock).toHaveBeenNthCalledWith(2, 'billing_settings');
-    expect(updateMock).toHaveBeenNthCalledWith(2, {
-      electricity_due_day: 15,
-      maintenance_due_day: 15,
-      other_charges_due_day: 15,
-      minimum_electricity_charge: 250,
-    });
-    expect(eqMock).toHaveBeenNthCalledWith(2, 'association_id', ASSOCIATION_ID);
+    expect(upsertMock).toHaveBeenCalledWith(
+      {
+        electricity_due_day: 15,
+        maintenance_due_day: 15,
+        other_charges_due_day: 15,
+        association_id: ASSOCIATION_ID,
+      },
+      { onConflict: 'association_id' },
+    );
   });
 
   it('coerces the gst_enabled checkbox: anything other than "on" is false', async () => {
@@ -201,7 +204,7 @@ describe('updateAssociationAction - validation', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Invalid form data. Check GSTIN format.',
+      error: 'Invalid form data. Check GSTIN, PAN, IFSC, or email format.',
     });
     expect(fromMock).not.toHaveBeenCalled();
   });
@@ -243,20 +246,10 @@ describe('updateAssociationAction - validation', () => {
     // assert the billing write specifically did not.
     expect(fromMock).not.toHaveBeenCalledWith('billing_settings');
   });
-
-  it('rejects a negative minimum electricity charge', async () => {
-    const result = await updateAssociationAction(
-      ASSOCIATION_ID,
-      null,
-      formDataFrom({ ...validFields, minimum_electricity_charge: '-5' }),
-    );
-
-    expect(result?.success).toBe(false);
-  });
 });
 
 describe('updateAssociationAction - surfaces DB errors', () => {
-  it('returns the associations update error verbatim', async () => {
+  it('hides the raw associations error behind a generic message', async () => {
     mockSupabase([{ error: { message: 'RLS: permission denied' } }]);
 
     const result = await updateAssociationAction(
@@ -265,12 +258,16 @@ describe('updateAssociationAction - surfaces DB errors', () => {
       formDataFrom(validFields),
     );
 
-    expect(result).toEqual({ success: false, error: 'RLS: permission denied' });
+    // Raw database errors are sanitised (security hardening, v2.3): the user
+    // gets a generic message with a support reference, never the DB text.
+    expect(result?.success).toBe(false);
+    expect(result?.error).not.toContain('RLS');
+    expect(result?.error).toMatch(/\(ref: [\w-]+\)/);
     // Should not proceed to billing_settings once the first write failed.
     expect(fromMock).toHaveBeenCalledTimes(1);
   });
 
-  it('returns the billing_settings update error verbatim', async () => {
+  it('hides the raw billing_settings error behind a generic message', async () => {
     mockSupabase([
       { error: null },
       { error: { message: 'billing write failed' } },
@@ -282,7 +279,9 @@ describe('updateAssociationAction - surfaces DB errors', () => {
       formDataFrom(validFields),
     );
 
-    expect(result).toEqual({ success: false, error: 'billing write failed' });
+    expect(result?.success).toBe(false);
+    expect(result?.error).not.toContain('billing write failed');
+    expect(result?.error).toMatch(/\(ref: [\w-]+\)/);
   });
 });
 
@@ -326,7 +325,11 @@ describe('toggleChargeTypeAction', () => {
         true,
       );
 
-      expect(result).toEqual({ success: false, error: 'Not authorized.' });
+      expect(result).toEqual({
+        success: false,
+        error:
+          "You don't have the required permission. Contact your association admin.",
+      });
       expect(fromMock).not.toHaveBeenCalled();
     },
   );

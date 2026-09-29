@@ -2,6 +2,13 @@ import 'server-only';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 import { Database } from '~/lib/database.types';
+import { type ProductType } from '~/lib/roles';
+
+/** Roles an inviter may grant when no per-role gating is configured. */
+export const DEFAULT_INVITE_ROLES: Record<ProductType, string[]> = {
+  association: ['assoc_admin', 'billing_operator', 'prop_owner', 'tenant'],
+  villa: ['villa_owner', 'villa_manager'],
+};
 
 export interface AssocAdminPermissionEntry {
   targetRole: string;
@@ -31,7 +38,21 @@ export interface AssocAdminPermissionMap {
 export async function loadAssocAdminPermissions(
   client: SupabaseClient<Database>,
   associationId: string,
+  productType: ProductType = 'association',
 ): Promise<AssocAdminPermissionMap> {
+  // Per-role invite gating is an association feature (configured by the
+  // super-admin per association); villa accounts use plain role hierarchy.
+  if (productType === 'villa') {
+    return {
+      canInvite: () => true,
+      canEdit: () => true,
+      canDelete: () => true,
+      allowedInviteRoles: DEFAULT_INVITE_ROLES.villa,
+      editableRoles: undefined,
+      deletableRoles: undefined,
+    };
+  }
+
   const { data } = await client
     .from('assoc_admin_permissions')
     .select('target_role, can_invite, can_edit, can_delete')
@@ -52,12 +73,7 @@ export async function loadAssocAdminPermissions(
       canInvite: () => true,
       canEdit: () => true,
       canDelete: () => true,
-      allowedInviteRoles: [
-        'assoc_admin',
-        'billing_operator',
-        'prop_owner',
-        'tenant',
-      ],
+      allowedInviteRoles: DEFAULT_INVITE_ROLES[productType],
       editableRoles: undefined,
       deletableRoles: undefined,
     };

@@ -1,0 +1,20 @@
+{
+  "nav": {
+    "portfolio": "Portfolio",
+    "dashboard": "Dashboard",
+    "operations": "Operations",
+    "admin": "Admin",
+    "members": "Members"
+  },
+  "roles": {
+    "villa_owner": "Villa Owner",
+    "villa_manager": "Villa Manager"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "setupTitle": "Your villa workspace is ready",
+    "setupDescription": "Properties, calendar, bookings, guests and reports are being set up for this workspace. You can invite your villa manager from Members in the meantime.",
+    "inviteManager": "Invite a manager",
+    "signedInAs": "You are signed in as"
+  }
+}

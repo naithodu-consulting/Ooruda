@@ -5,16 +5,22 @@ import { notFound, redirect } from 'next/navigation';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import {
+  type AppRole,
+  type PropOpsRole,
+  type ProductType,
+  SUPER_ADMIN_ROLE_BY_PRODUCT,
+} from '~/lib/roles';
 import { requireUserInServerComponent } from '~/lib/server/require-user-in-server-component';
 
-export const PROPOPS_ROLES = [
-  'assoc_admin',
-  'billing_operator',
-  'prop_owner',
-  'tenant',
-] as const;
-
-export type PropOpsRole = (typeof PROPOPS_ROLES)[number];
+export {
+  PROPOPS_ROLES,
+  VILLA_ROLES,
+  type AppRole,
+  type PropOpsRole,
+  type ProductType,
+  type VillaRole,
+} from '~/lib/roles';
 
 export const ROLE_HIERARCHY: Record<PropOpsRole, number> = {
   assoc_admin: 1,
@@ -31,7 +37,8 @@ export const ROLE_LABELS: Record<PropOpsRole, string> = {
 };
 
 type ResolvedRole = {
-  role: PropOpsRole | null;
+  role: AppRole | null;
+  productType: ProductType;
   accountId: string;
   accountName: string;
   associationId: string | null;
@@ -57,7 +64,7 @@ const resolveRole = cache(
       client
         .from('accounts')
         .select(
-          'id, name, associations(id, status), accounts_memberships(account_role)',
+          'id, name, product_type, associations(id, status), accounts_memberships(account_role)',
         )
         .eq('slug', accountSlug)
         .eq('is_personal_account', false)
@@ -72,11 +79,13 @@ const resolveRole = cache(
 
     const association = one(account.associations);
     const membership = one(account.accounts_memberships);
+    const productType = (account.product_type ?? 'association') as ProductType;
 
     return {
       role: isSuperAdmin
-        ? 'assoc_admin'
-        : ((membership?.account_role as PropOpsRole | undefined) ?? null),
+        ? SUPER_ADMIN_ROLE_BY_PRODUCT[productType]
+        : ((membership?.account_role as AppRole | undefined) ?? null),
+      productType,
       accountId: account.id,
       accountName: account.name,
       associationId: association?.id ?? null,
@@ -92,22 +101,43 @@ function one<T>(value: T | T[] | null | undefined): T | null {
 }
 
 /**
+ * The caller's account context (role, product, ids) without asserting a role.
+ *
+ * Shares `requireRole`'s cached lookup, so calling both in one request costs
+ * one round trip. Use it where a page must branch on the product before it
+ * knows which roles to require (e.g. the account home page).
+ */
+export async function getAccountContext(accountSlug: string) {
+  return resolveRole(accountSlug);
+}
+
+/**
  * Asserts the authenticated user holds one of `allowedRoles` in the given
- * association (identified by its MakerKit account slug).
+ * account (identified by its MakerKit account slug), and that the account is
+ * of the expected product.
  *
  * - Redirects to /auth/sign-in if not logged in.
  * - 404s if the account slug doesn't exist.
+ * - Redirects to the account home if the account belongs to a different
+ *   product (e.g. a villa account opening an association page). The account
+ *   home renders the right dashboard for either product, so this never loops.
  * - Redirects to /home if the user has no membership or the wrong role.
+ *
+ * `product` defaults to 'association', so every existing association page is
+ * gated against villa accounts without being edited. Pass 'any' for pages
+ * shared by both products.
  *
  * Also returns the association id, so pages need no second lookup for it.
  *
  * Use in Server Components and Route Handlers (never in Client Components).
  */
-export async function requireRole(
+export async function requireRole<R extends AppRole>(
   accountSlug: string,
-  allowedRoles: PropOpsRole[],
+  allowedRoles: readonly R[],
+  product: ProductType | 'any' = 'association',
 ): Promise<{
-  role: PropOpsRole;
+  role: R;
+  productType: ProductType;
   accountId: string;
   accountName: string;
   associationId: string | null;
@@ -117,11 +147,15 @@ export async function requireRole(
 }> {
   const { role, ...rest } = await resolveRole(accountSlug);
 
-  if (!role || !allowedRoles.includes(role)) {
+  if (product !== 'any' && rest.productType !== product) {
+    redirect(`/home/${accountSlug}`);
+  }
+
+  if (!role || !(allowedRoles as readonly AppRole[]).includes(role)) {
     redirect('/home');
   }
 
-  return { role, ...rest };
+  return { role: role as R, ...rest };
 }
 
 /**

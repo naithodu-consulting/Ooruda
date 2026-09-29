@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAction } from 'next-safe-action/hooks';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import {
@@ -41,15 +41,16 @@ import { toast } from '@kit/ui/sonner';
 
 import { createUserAction } from '../lib/server/admin-server-actions';
 import {
-  ASSIGNABLE_ROLES,
   CreateUserSchema,
   CreateUserSchemaType,
   ROLE_LABELS,
+  ROLES_BY_PRODUCT,
 } from '../lib/server/schema/create-user.schema';
 
 interface AssociationOption {
   id: string;
   name: string;
+  productType?: 'association' | 'villa';
 }
 
 export function AdminCreateUserDialog(
@@ -70,6 +71,18 @@ export function AdminCreateUserDialog(
     },
     mode: 'onChange',
   });
+
+  // Only offer roles valid for the selected account's product; the database
+  // rejects anything else (enforce_role_product_match).
+  const selectedAssociationId = useWatch({
+    control: form.control,
+    name: 'associationId',
+  });
+  const roleOptions =
+    ROLES_BY_PRODUCT[
+      props.associations.find((a) => a.id === selectedAssociationId)
+        ?.productType ?? 'association'
+    ];
 
   const { execute, result } = useAction(createUserAction, {
     onExecute: () => setIsPending(true),
@@ -200,7 +213,10 @@ export function AdminCreateUserDialog(
                         label: association.name,
                       }))}
                       value={field.value}
-                      onChange={field.onChange}
+                      onChange={(value) => {
+                        field.onChange(value);
+                        form.resetField('role');
+                      }}
                       onBlur={field.onBlur}
                       placeholder="Select an association"
                       searchPlaceholder="Search associations…"
@@ -231,7 +247,7 @@ export function AdminCreateUserDialog(
                     </FormControl>
 
                     <SelectContent>
-                      {ASSIGNABLE_ROLES.map((role) => (
+                      {roleOptions.map((role) => (
                         <SelectItem key={role} value={role}>
                           {ROLE_LABELS[role]}
                         </SelectItem>

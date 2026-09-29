@@ -13,13 +13,29 @@ export const ASSIGNABLE_ROLES = [
   'billing_operator',
   'prop_owner',
   'tenant',
+  'villa_owner',
+  'villa_manager',
 ] as const;
 
-export const ROLE_LABELS: Record<(typeof ASSIGNABLE_ROLES)[number], string> = {
+export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
+
+export const ROLE_LABELS: Record<AssignableRole, string> = {
   assoc_admin: 'Association Admin',
   billing_operator: 'Billing Operator',
   prop_owner: 'Property Owner',
   tenant: 'Tenant',
+  villa_owner: 'Villa Owner',
+  villa_manager: 'Villa Manager',
+};
+
+// A role can only be held on an account of its product (enforced by the
+// `enforce_role_product_match` trigger); UIs use this to offer only valid ones.
+export const ROLES_BY_PRODUCT: Record<
+  'association' | 'villa',
+  readonly AssignableRole[]
+> = {
+  association: ['assoc_admin', 'billing_operator', 'prop_owner', 'tenant'],
+  villa: ['villa_owner', 'villa_manager'],
 };
 
 // Email is mandatory: it is the secondary (email-OTP) login identity and is

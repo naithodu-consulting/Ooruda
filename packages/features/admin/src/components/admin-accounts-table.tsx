@@ -90,7 +90,11 @@ export function AdminAccountsTable(props: {
   const form = useForm({ defaultValues: { query: '' } });
 
   const associationOptions: AssociationOption[] = props.associations.map(
-    (a) => ({ id: a.id, name: a.name }),
+    (a) => ({
+      id: a.id,
+      name: a.name,
+      productType: a.product_type === 'villa' ? 'villa' : 'association',
+    }),
   );
   const userOptions = props.users.map((u) => ({
     id: u.id,
@@ -219,8 +223,8 @@ export function AdminAccountsTable(props: {
               {activeTab === 'team' && (
                 <AdminCreateAssociationDialog users={userOptions}>
                   <Button data-test="admin-create-association-button">
-                    <span className="hidden sm:inline">Create Association</span>
-                    <span className="sm:hidden">+ Assoc</span>
+                    <span className="hidden sm:inline">Create Account</span>
+                    <span className="sm:hidden">+ Account</span>
                   </Button>
                 </AdminCreateAssociationDialog>
               )}
@@ -330,6 +334,16 @@ function getColumns(
           >
             {row.original.name?.trim() || '-'}
           </Link>
+
+          {type === 'team' && row.original.product_type === 'villa' && (
+            <Badge
+              variant="outline"
+              className="shrink-0 px-1.5 py-0 text-xs whitespace-nowrap"
+              data-test={'admin-account-villa-badge'}
+            >
+              Villa
+            </Badge>
+          )}
 
           {isSA && (
             <Badge

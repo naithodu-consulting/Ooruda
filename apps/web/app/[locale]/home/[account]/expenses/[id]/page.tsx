@@ -81,6 +81,7 @@ export default async function ExpenseDetailPage({ params }: Props) {
             <Button
               variant={'ghost'}
               size={'sm'}
+              nativeButton={false}
               render={<Link href={`/home/${account}/expenses`} />}
             >
               <ArrowLeft className={'mr-1.5 h-4 w-4'} />

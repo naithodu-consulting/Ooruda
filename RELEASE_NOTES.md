@@ -4,6 +4,38 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 (M0) - Villa Product Foundations - 2026-09-27
+
+First step of **Ooruda Villa**, a villa operator workspace that lives beside associations on the same app and database (plan: `OORUDA_VILLA_PLAN.md`). No change for association users.
+
+### Villa accounts
+- Every team account now has a product type: `association` (all existing accounts) or `villa`. It is set at creation and cannot be changed.
+- Super-admin **Accounts → Create Account** now asks for the account type. Villa accounts are created with their owner as **Villa Owner** and get no association record, so no billing, units or electricity data can ever attach to them. Villa accounts show a "Villa" badge in the list.
+- New roles **Villa Owner** and **Villa Manager**. A database rule stops a villa role being given on an association account and vice versa, whichever screen or script tries it.
+
+### Villa workspace
+- A villa account opens at the usual `/home/<account>` address with its own sidebar (Dashboard, Members for owners; Dashboard for managers) and a setup dashboard. Properties, calendar, bookings, guests and reports follow in later milestones.
+- Association pages (Billing, Units, Electricity, Payments and the rest) send a villa account back to its dashboard.
+- Villa owners can invite a Villa Manager from Members; the role pickers only ever offer roles of the account's own product (association admins never see villa roles).
+- A super-admin opening a villa account acts as Villa Owner.
+
+### Fixes found on the way
+- The sidebar used to show **every** item to a role it did not recognise; it now shows nothing. All four association roles are unaffected.
+- Super-admin role dropdowns (Create User, Edit User, Manage Roles) only offer roles valid for the selected account.
+- `role_permissions` inserts could silently do nothing when the id sequence lagged behind existing rows; the migration resyncs it.
+- Ownership transfer now promotes the new owner to the account's own top role (Villa Owner on villa accounts; unchanged Association Admin elsewhere). It previously always used Association Admin.
+- Expense and AMC detail pages: "Back" link buttons no longer log a Base UI `nativeButton` warning.
+- Association settings unit tests updated to the current action (billing settings upsert, sanitised DB errors, current messages); the obsolete minimum-charge case was removed.
+
+### Testing
+- pgTAP: `villa-m0-foundations.test.sql` (20 assertions: product type, roles, invariants, immutability, `villa_role()`, RPC privileges). The rest of the pgTAP suite gives identical results with and without this migration.
+- Unit: `lib/roles.test.ts` (product mapping, levels, villa vs association nav, deny-by-default).
+- Playwright: `tests/ooruda/regression/villa.spec.ts` (create villa account, owner and manager workspaces, association pages redirect, invite with villa roles, owner's association membership unaffected, association admin never offered villa roles).
+
+| Migration | Change |
+| --- | --- |
+| `20260927110925_villa_m0_foundations.sql` | `accounts.product_type` (immutable) and `roles.product_type`; product-aware `transfer_team_account_ownership` via new `get_upper_role_for_account()`; `villa_owner` (10) and `villa_manager` (11) roles with permissions; role/product match trigger on memberships and invitations; association auto-create skips villa accounts; `create_villa_account()` (service role only); `villa_role()` RLS helper; `role_permissions` id sequence resync |
+
 ## v2.3 - Regression Pass: Responsive, Sign-in Limits, PDF Cache & Settings Fixes - 2026-09-24
 
 Full-app regression pass (126 automated cases, every page × role at 360/768/1280 px, all PDF types, key flows - see `apps/e2e/tests/ooruda/regression/CHECKLIST.md`) and the fixes it produced.

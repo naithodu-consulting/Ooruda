@@ -7,6 +7,8 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { createTeamAccountsApi } from '@kit/team-accounts/api';
 
 import pathsConfig from '~/config/paths.config';
+import { getAccountContext } from '~/lib/rbac';
+import { ROLE_HIERARCHY_LEVEL_BY_ROLE } from '~/lib/roles';
 import { requireUserInServerComponent } from '~/lib/server/require-user-in-server-component';
 
 export type TeamAccountWorkspace = Awaited<
@@ -35,6 +37,11 @@ async function workspaceLoader(accountSlug: string) {
   ]);
 
   if (isSuperAdmin) {
+    // A super-admin acts as the top role of the workspace's product
+    // (assoc_admin or villa_owner). Request-cached; shared with requireRole.
+    const { role: superAdminRole } = await getAccountContext(accountSlug);
+    const actingRole = superAdminRole ?? 'assoc_admin';
+
     if (!workspace.data?.account) {
       // Super admin isn't a member, so fetch account directly
       const { data: rawAccount } = await client
@@ -54,8 +61,8 @@ async function workspaceLoader(accountSlug: string) {
           picture_url: rawAccount.picture_url || '',
           slug: rawAccount.slug || '',
           primary_owner_user_id: rawAccount.primary_owner_user_id || '',
-          role: 'assoc_admin',
-          role_hierarchy_level: 1,
+          role: actingRole,
+          role_hierarchy_level: ROLE_HIERARCHY_LEVEL_BY_ROLE[actingRole],
           subscription_status: 'active',
           permissions: [],
         } as any, // Cast to avoid complex type matching
@@ -63,7 +70,7 @@ async function workspaceLoader(accountSlug: string) {
       };
     } else {
       // Super admin is a member, but upgrade role for UI full access
-      workspace.data.account.role = 'assoc_admin';
+      workspace.data.account.role = actingRole;
     }
   } else if (!workspace.data?.account) {
     // Normal user, not a member

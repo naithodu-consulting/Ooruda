@@ -114,6 +114,7 @@ export function AmcDetailClient({
         <Button
           variant={'ghost'}
           size={'sm'}
+          nativeButton={false}
           render={<Link href={`/home/${accountSlug}/amc`} />}
         >
           <ArrowLeft className={'mr-1.5 h-4 w-4'} />

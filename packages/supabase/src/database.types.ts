@@ -44,6 +44,7 @@ export type Database = {
           name: string
           picture_url: string | null
           primary_owner_user_id: string
+          product_type: string
           public_data: Json
           slug: string | null
           updated_at: string | null
@@ -58,6 +59,7 @@ export type Database = {
           name: string
           picture_url?: string | null
           primary_owner_user_id?: string
+          product_type?: string
           public_data?: Json
           slug?: string | null
           updated_at?: string | null
@@ -72,6 +74,7 @@ export type Database = {
           name?: string
           picture_url?: string | null
           primary_owner_user_id?: string
+          product_type?: string
           public_data?: Json
           slug?: string | null
           updated_at?: string | null
@@ -2132,14 +2135,17 @@ export type Database = {
         Row: {
           hierarchy_level: number
           name: string
+          product_type: string
         }
         Insert: {
           hierarchy_level: number
           name: string
+          product_type?: string
         }
         Update: {
           hierarchy_level?: number
           name?: string
+          product_type?: string
         }
         Relationships: []
       }
@@ -2720,6 +2726,31 @@ export type Database = {
           name: string
           picture_url: string | null
           primary_owner_user_id: string
+          product_type: string
+          public_data: Json
+          slug: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "accounts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_villa_account: {
+        Args: { account_name: string; account_slug?: string; user_id: string }
+        Returns: {
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          id: string
+          is_personal_account: boolean
+          name: string
+          picture_url: string | null
+          primary_owner_user_id: string
+          product_type: string
           public_data: Json
           slug: string | null
           updated_at: string | null
@@ -2854,6 +2885,10 @@ export type Database = {
           target_user_id: string
         }
         Returns: boolean
+      }
+      invalidate_association_pdf_cache: {
+        Args: { p_association_id: string }
+        Returns: undefined
       }
       invite_to_association_by_phone: {
         Args: {
@@ -3058,6 +3093,7 @@ export type Database = {
         }
         Returns: Json
       }
+      villa_role: { Args: { p_account_id: string }; Returns: string }
       void_bill: {
         Args: { p_bill_id: string; p_reason: string }
         Returns: undefined

@@ -33,6 +33,7 @@ import {
 } from '../lib/server/admin-server-actions';
 import {
   ASSIGNABLE_ROLES,
+  ROLES_BY_PRODUCT,
   ROLE_LABELS,
 } from '../lib/server/schema/create-user.schema';
 
@@ -41,6 +42,7 @@ type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 export interface AssociationOption {
   id: string;
   name: string;
+  productType?: 'association' | 'villa';
 }
 
 export interface UserMembership {
@@ -67,6 +69,13 @@ export function AdminManageRolesDialog(props: {
     props.associations[0]?.id ?? '',
   );
   const [role, setRole] = useState<string>('');
+
+  // Only offer roles valid for the selected account's product; the database
+  // rejects anything else (enforce_role_product_match).
+  const selectedProduct =
+    props.associations.find((a) => a.id === associationId)?.productType ??
+    'association';
+  const roleOptions = ROLES_BY_PRODUCT[selectedProduct];
 
   const setRoleAction = useAction(setUserRoleAction, {
     onSuccess: () => {
@@ -172,7 +181,10 @@ export function AdminManageRolesDialog(props: {
                   label: association.name,
                 }))}
                 value={associationId}
-                onChange={setAssociationId}
+                onChange={(value) => {
+                  setAssociationId(value);
+                  setRole('');
+                }}
                 placeholder="Select an association"
                 searchPlaceholder="Search associations…"
                 emptyMessage="No associations found"
@@ -191,7 +203,7 @@ export function AdminManageRolesDialog(props: {
                 </SelectTrigger>
 
                 <SelectContent>
-                  {ASSIGNABLE_ROLES.map((r) => (
+                  {roleOptions.map((r) => (
                     <SelectItem key={r} value={r}>
                       {ROLE_LABELS[r]}
                     </SelectItem>

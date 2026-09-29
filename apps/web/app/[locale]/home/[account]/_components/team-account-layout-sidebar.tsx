@@ -15,6 +15,7 @@ import {
   filterSidebarConfigByRole,
   getTeamAccountSidebarConfig,
 } from '~/config/team-account-navigation.config';
+import { VILLA_ROLE_LABELS, isVillaRole } from '~/lib/roles';
 
 import { TeamAccountLayoutSidebarNavigation } from './team-account-layout-sidebar-navigation';
 import { TeamAccountSidebarBrand } from './team-account-sidebar-brand';
@@ -32,7 +33,7 @@ export function TeamAccountLayoutSidebar(props: {
   const { data: personalAccountData } = usePersonalAccountData(user.id);
 
   const config = filterSidebarConfigByRole(
-    getTeamAccountSidebarConfig(account),
+    getTeamAccountSidebarConfig(account, role),
     role,
     disabledNavKeys,
   );
@@ -58,6 +59,8 @@ export function TeamAccountLayoutSidebar(props: {
     roleLabel = 'Tenant';
   } else if (role === 'billing_operator') {
     roleLabel = 'Billing Operator';
+  } else if (isVillaRole(role)) {
+    roleLabel = VILLA_ROLE_LABELS[role];
   } else {
     roleLabel = role ?? '';
   }
