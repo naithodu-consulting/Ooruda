@@ -4,6 +4,43 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 (M2) - Villa Settings: Rates, Add-ons, Contacts, Policies - 2026-09-29
+
+A **Villa Settings** page for villa accounts (owners edit; managers see it read-only). No change for association users.
+
+### Rates & guests (saved on the booking site)
+- Weekday and weekend nightly rates, guests included, maximum guests, the extra-guest rate and an optional second tier, and check-in / check-out times. Saved straight to the guest booking site, so new online bookings and phone quotes use the same numbers; existing bookings keep their price.
+- The extra-guest pricing is spelled out as you type (e.g. "Guests 9-11 pay ₹1,000 each per night; guests 12-14 pay ₹700").
+- **Ideal for (guests)**: the site's "Ideal for 8–14 guests" line and its default guest count; kept at or below the maximum so checkout can't break.
+- Rules the booking site enforces are checked as you type, under the field (both second-tier fields or neither; the tier must start after the included guests).
+
+### Seasonal rates (saved on the booking site)
+- List, add and remove seasonal/holiday rates. Owners pick the **first and last night** (not the check-out day); overlapping rates are refused with the name of the clash.
+
+### Add-ons, emergency contacts, policies (saved in Ooruda)
+- **Add-ons** (extra bed, breakfast, BBQ, early check-in…): price and how it is charged (per stay / night / guest per night / each); switch one off without deleting it. For bookings and invoices in Ooruda; the guest site does not sell add-ons yet.
+- **Emergency contacts** per villa: type, name, phone (stored in international format, tap to call), notes, and whether to include it in the guest welcome email.
+- **Policies**: let managers cancel bookings (refund overrides stay owner-only), buffer nights for online travel sites, and the guest-ID retention period (30 days, shown read-only; changed only by Ooruda).
+
+- A villa account with more than one property gets a villa switcher above the tabs.
+
+### Fixes found in review
+- A super-admin editing a villa's settings had one change (the OTA buffer) silently dropped; it now saves.
+- Editing or removing an add-on or contact that no longer exists says so, instead of claiming success.
+- Add-on names are unique regardless of case.
+- A failed database read shows an error instead of looking like "nothing set up yet".
+- **Form labels (app-wide fix in `@kit/ui/form`)**: `FormControl` pointed each field's `aria-labelledby` at the field itself, so screen readers read a field's value as its name. The villa forms now pass fields through `FormControl`'s `render` prop and are correctly labelled; other forms in the app still need the same one-line change (tracked separately).
+- Confirmation dialogs use a plain button row (the dialog footer's grey band clashed with the white dialog).
+
+### Testing
+- pgTAP `villa-m2-settings.test.sql` (17): owner writes, manager and other-villa isolation, a row cannot point at another account's property, E.164 and price checks, case-insensitive add-on names, retention not owner-editable, super-admin edits applied.
+- Vitest: base-rate validation against the site's rules (6) and a save/read-back/restore round trip on a real local booking-site database.
+- Playwright (`villa.spec.ts`): owner edits every tab (incl. adding and removing a seasonal rate through the date pickers), fields found by their labels, manager read-only, no horizontal overflow at 360px; the suite now always releases its booking-site link, even after a failure.
+
+| Migration | Change |
+| --- | --- |
+| `20260929131714_villa_m2_settings_addons_contacts.sql` | `villa_account_settings`, `villa_addons` (case-insensitive unique name), `villa_emergency_contacts` (members read, owners write); `villa_properties.ota_buffer_nights` (owner) and `retention_days` (default 30, super-admin only); owner update policy on `villa_properties` admits super-admins; `kit.assert_villa_row_scope()` |
+
 ## Villa v1.0 (M1) - Connection to the Villa Booking Site - 2026-09-29
 
 Ooruda Villa can now read and write the villa's guest booking site database (bookings, blocked dates, rates), as that site's integration contract prescribes. No change for association users.

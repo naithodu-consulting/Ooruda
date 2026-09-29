@@ -6,10 +6,11 @@
 
 import * as React from 'react';
 
+import { useRender } from '@base-ui/react/use-render';
+
 import { cn } from '../lib/utils';
 import {
   Form,
-  FormControl,
   FormDescription,
   FormField,
   FormItem,
@@ -17,6 +18,38 @@ import {
   useFormField,
 } from '../shadcn/form';
 import { Trans } from './trans';
+
+// Replaces the shadcn FormControl, which sets aria-labelledby to the control's
+// OWN id: the field then labels itself, and its accessible name becomes its
+// value ("12000") instead of its label ("Weekday nights"). Without that
+// attribute, FormLabel's htmlFor={formItemId} names the control correctly.
+// Otherwise identical. Pass the field via `render` so the id and aria props
+// land on the real input: <FormControl render={<Input {...field} />} />.
+const FormControl: React.FC<
+  React.PropsWithChildren & {
+    className?: string;
+    render?: React.ReactElement;
+  }
+> = ({ ...props }) => {
+  const { error, formItemId, formDescriptionId, formMessageId } =
+    useFormField();
+
+  return useRender({
+    defaultTagName: 'div',
+    render: props.render,
+    props: {
+      ...props,
+      id: formItemId,
+      'aria-describedby': !error
+        ? `${formDescriptionId}`
+        : `${formDescriptionId} ${formMessageId}`,
+      'aria-invalid': !!error,
+      className: cn(props.className),
+      children: props.children,
+    },
+  });
+};
+FormControl.displayName = 'FormControl';
 
 const FormMessage: React.FC<
   React.ComponentPropsWithRef<'p'> & { params?: Record<string, unknown> }

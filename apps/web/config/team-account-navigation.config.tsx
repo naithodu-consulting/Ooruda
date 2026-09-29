@@ -138,6 +138,14 @@ const getVillaRoutes = (account: string) => [
         path: pathsConfig.app.accountMembers.replace('[account]', account),
         Icon: <Users className={iconClasses} />,
       },
+      {
+        label: 'villa.nav.settings',
+        path: pathsConfig.app.accountVillaSettings.replace(
+          '[account]',
+          account,
+        ),
+        Icon: <Settings className={iconClasses} />,
+      },
     ],
   },
 ];
@@ -209,8 +217,13 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
     'association.nav.payments',
     'association.nav.statement',
   ],
-  villa_owner: ['villa.nav.dashboard', 'villa.nav.members'],
-  villa_manager: ['villa.nav.dashboard'],
+  villa_owner: [
+    'villa.nav.dashboard',
+    'villa.nav.members',
+    'villa.nav.settings',
+  ],
+  // Managers see settings read-only (rates, contacts they need on shift).
+  villa_manager: ['villa.nav.dashboard', 'villa.nav.settings'],
 };
 
 type SidebarConfig = ReturnType<typeof getTeamAccountSidebarConfig>;

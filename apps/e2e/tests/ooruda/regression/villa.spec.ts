@@ -3,6 +3,7 @@ import { type Browser, type Page, expect, test } from '@playwright/test';
 import {
   authFile,
   expectNoErrorBoundary,
+  measureOverflow,
   settle,
   signIn,
   uniqueClientIp,
@@ -72,11 +73,77 @@ async function openAdminAccount(page: Page, name: string) {
   await page.goto(href!);
 }
 
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/** Picks 'YYYY-MM-DD' in the app's DatePicker (react-day-picker dropdowns). */
+async function pickDate(page: Page, trigger: string, ymd: string) {
+  const [y, m, d] = ymd.split('-').map(Number) as [number, number, number];
+
+  await page.click(`[data-test="${trigger}"]`);
+  // Scope to the calendar just opened (always last in the DOM): an earlier
+  // picker's calendar can still be mounted.
+  await page
+    .locator('select[aria-label="Choose the Year"]')
+    .last()
+    .selectOption(String(y));
+  await page
+    .locator('select[aria-label="Choose the Month"]')
+    .last()
+    .selectOption(String(m - 1));
+  await page
+    .locator('[role="grid"]')
+    .last()
+    .getByRole('button', {
+      name: new RegExp(`${MONTHS[m - 1]} ${d}(st|nd|rd|th)?, ${y}`),
+    })
+    .click();
+}
+
 function sidebar(page: Page) {
   return page.locator('[data-sidebar="sidebar"]').first();
 }
 
 test.describe.serial('villa product (M0)', () => {
+  // Always release the booking-site property, even when a test above failed:
+  // a site property may be linked to only one villa account, so a leftover
+  // link would block every later run.
+  test.afterAll(async ({ browser }) => {
+    if (!VILLA_SITE.key) return;
+
+    const context = await browser.newContext({
+      storageState: authFile('superAdmin'),
+    });
+    const page = await context.newPage();
+
+    try {
+      await openAdminAccount(page, VILLA_NAME);
+      const button = page.locator(
+        '[data-test="admin-disconnect-villa-site-button"]',
+      );
+
+      if ((await button.count()) > 0) {
+        await button.first().click();
+        await page.click('[data-test="admin-disconnect-villa-site-confirm"]');
+        await expect(page.getByText('Booking site disconnected')).toBeVisible();
+      }
+    } finally {
+      await context.close();
+    }
+  });
+
   test('super-admin creates a villa account', async ({ browser }) => {
     const context = await browser.newContext({
       storageState: authFile('superAdmin'),
@@ -214,6 +281,91 @@ test.describe.serial('villa product (M0)', () => {
     await page.context().close();
   });
 
+  test('villa owner manages villa settings', async ({ browser }) => {
+    test.skip(!VILLA_SITE.key, 'VILLA_DB_TEST_SERVICE_ROLE_KEY not set');
+
+    const page = await signedInPage(browser, VILLA_OWNER.phone);
+    const issues = watchPage(page);
+
+    await page.goto(VILLA_HOME);
+    await settle(page);
+    await sidebar(page).getByRole('link', { name: 'Villa Settings' }).click();
+    await page.waitForURL(/\/villa-settings/);
+    await settle(page);
+
+    // Rates & guests: live values from the booking site, in plain words.
+    await expect(
+      page.locator('[data-test="villa-rates-weekdayNightly"]'),
+    ).not.toHaveValue('');
+    // The ₹ fields are real labelled inputs (label → input, for screen readers).
+    await expect(page.getByLabel('Weekday nights')).not.toHaveValue('');
+    await expect(page.getByLabel('Ideal for (guests)')).not.toHaveValue('');
+    await expect(
+      page.locator('[data-test="villa-rates-extras-summary"]'),
+    ).toContainText('each per night');
+    await expect(page.locator('[data-test="villa-rates-save"]')).toBeDisabled();
+
+    // Seasonal rates: add one far in the future, then remove it.
+    await page.click('[data-test="villa-settings-tab-seasonal"]');
+    await page.fill('[data-test="villa-seasonal-name"]', `E2E rate ${STAMP}`);
+    await pickDate(page, 'villa-seasonal-first', '2030-12-20');
+    await pickDate(page, 'villa-seasonal-last', '2030-12-22');
+    await page.fill('[data-test="villa-seasonal-rate"]', '15500');
+    await page.click('[data-test="villa-seasonal-submit"]');
+    await expect(page.getByText('Seasonal rate added')).toBeVisible();
+
+    const rule = page.locator('[data-test="villa-seasonal-row"]', {
+      hasText: `E2E rate ${STAMP}`,
+    });
+    await expect(rule).toContainText('3 nights');
+    await expect(rule).toContainText('15,500');
+    await rule.locator('[data-test="villa-seasonal-delete"]').click();
+    await page.click('[data-test="villa-seasonal-delete-confirm"]');
+    await expect(rule).toHaveCount(0);
+
+    // Add-on.
+    await page.click('[data-test="villa-settings-tab-addons"]');
+    await page.click('[data-test="villa-addon-new"]');
+    await page.fill('[data-test="villa-addon-name"]', 'Extra bed');
+    await page.fill('[data-test="villa-addon-price"]', '1000');
+    await page.click('[data-test="villa-addon-save"]');
+    await expect(
+      page.locator('[data-test="villa-addon-row"]', { hasText: 'Extra bed' }),
+    ).toContainText('per night');
+
+    // Emergency contact, normalised to E.164 and tap-to-call.
+    await page.click('[data-test="villa-settings-tab-contacts"]');
+    await page.click('[data-test="villa-contact-new"]');
+    await page.fill('[data-test="villa-contact-name"]', 'Caretaker Ramesh');
+    await page.fill('[data-test="villa-contact-phone"]', '9876543210');
+    await page.click('[data-test="villa-contact-save"]');
+    const contact = page.locator('[data-test="villa-contact-row"]', {
+      hasText: 'Caretaker Ramesh',
+    });
+    await expect(
+      contact.locator('[data-test="villa-contact-call"]'),
+    ).toHaveAttribute('href', 'tel:+919876543210');
+
+    // Policies: managers may cancel.
+    await page.click('[data-test="villa-settings-tab-policies"]');
+    await expect(
+      page.locator('[data-test="villa-policies-retention"]'),
+    ).toContainText('30 days');
+    await page.click('[data-test="villa-policies-managers-cancel"]');
+    await page.click('[data-test="villa-policies-save"]');
+    await expect(page.getByText('Settings saved')).toBeVisible();
+
+    // Phone width: no horizontal overflow.
+    const overflow = await measureOverflow(page, 360);
+    expect(
+      overflow.docOverflow,
+      overflow.offenders.join(' | '),
+    ).toBeLessThanOrEqual(0);
+
+    expect(issues.serverErrors).toEqual([]);
+    await page.context().close();
+  });
+
   test('villa owner invites a villa manager with villa roles only', async ({
     browser,
   }) => {
@@ -280,9 +432,44 @@ test.describe.serial('villa product (M0)', () => {
 
     const nav = sidebar(page);
     await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+    await expect(
+      nav.getByRole('link', { name: 'Villa Settings' }),
+    ).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Members' })).toHaveCount(0);
 
     expect(issues.serverErrors).toEqual([]);
+    await page.context().close();
+  });
+
+  test('villa manager sees villa settings read-only', async ({ browser }) => {
+    test.skip(!VILLA_SITE.key, 'VILLA_DB_TEST_SERVICE_ROLE_KEY not set');
+
+    const page = await signedInPage(browser, VILLA_MANAGER.phone);
+
+    await page.goto(`${VILLA_HOME}/villa-settings`);
+    await settle(page);
+
+    await expect(
+      page.locator('[data-test="villa-settings-read-only"]'),
+    ).toBeVisible();
+    await expect(
+      page.locator('[data-test="villa-rates-weekdayNightly"]'),
+    ).toBeDisabled();
+    await expect(page.locator('[data-test="villa-rates-save"]')).toHaveCount(0);
+
+    await page.click('[data-test="villa-settings-tab-contacts"]');
+    await expect(
+      page.locator('[data-test="villa-contact-row"]', {
+        hasText: 'Caretaker Ramesh',
+      }),
+    ).toBeVisible();
+    await expect(page.locator('[data-test="villa-contact-new"]')).toHaveCount(
+      0,
+    );
+
+    await page.click('[data-test="villa-settings-tab-addons"]');
+    await expect(page.locator('[data-test="villa-addon-new"]')).toHaveCount(0);
+
     await page.context().close();
   });
 

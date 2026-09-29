@@ -4,7 +4,8 @@
     "dashboard": "Dashboard",
     "operations": "Operations",
     "admin": "Admin",
-    "members": "Members"
+    "members": "Members",
+    "settings": "Villa Settings"
   },
   "roles": {
     "villa_owner": "Villa Owner",

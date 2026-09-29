@@ -1,0 +1,176 @@
+'use client';
+
+import { zodResolver } from '@hookform/resolvers/zod';
+import { ShieldCheck } from 'lucide-react';
+import { useAction } from 'next-safe-action/hooks';
+import { useForm } from 'react-hook-form';
+
+import { Button } from '@kit/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@kit/ui/card';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@kit/ui/form';
+import { Input } from '@kit/ui/input';
+import { toast } from '@kit/ui/sonner';
+import { Switch } from '@kit/ui/switch';
+
+import {
+  type PoliciesInput,
+  PoliciesSchema,
+} from '../_lib/schemas/villa-settings.schema';
+import { savePoliciesAction } from '../_lib/server/villa-settings-actions';
+
+export function PoliciesForm(props: {
+  accountId: string;
+  propertyId: string;
+  canEdit: boolean;
+  managersCanCancel: boolean;
+  otaBufferNights: number;
+  retentionDays: number;
+}) {
+  const form = useForm<PoliciesInput>({
+    resolver: zodResolver(PoliciesSchema),
+    defaultValues: {
+      accountId: props.accountId,
+      propertyId: props.propertyId,
+      managersCanCancel: props.managersCanCancel,
+      otaBufferNights: props.otaBufferNights,
+    },
+  });
+
+  const { execute, isPending } = useAction(savePoliciesAction, {
+    onSuccess: () => {
+      toast.success('Settings saved');
+      form.reset(form.getValues());
+    },
+    onError: ({ error }) =>
+      toast.error(error.serverError ?? 'Could not save the settings.'),
+  });
+
+  const disabled = !props.canEdit || isPending;
+
+  return (
+    <Form {...form}>
+      <form
+        data-test={'villa-policies-form'}
+        className="flex flex-col gap-4"
+        onSubmit={form.handleSubmit((values) => execute(values))}
+      >
+        <Card className="bg-card">
+          <CardHeader>
+            <CardTitle className="text-base">Cancellations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FormField
+              name="managersCanCancel"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3">
+                  <div className="flex flex-col gap-1">
+                    <FormLabel>Let managers cancel bookings</FormLabel>
+                    <FormDescription>
+                      Managers can then cancel and refund by the cancellation
+                      policy. Changing a refund amount always stays with the
+                      owner.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      disabled={disabled}
+                      data-test={'villa-policies-managers-cancel'}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card">
+          <CardHeader>
+            <CardTitle className="text-base">Online travel sites</CardTitle>
+            <CardDescription>
+              When you block dates or take a phone booking, booking sites like
+              MakeMyTrip can take a few minutes to catch up.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FormField
+              name="otaBufferNights"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem className="max-w-xs">
+                  <FormLabel>Buffer nights around manual blocks</FormLabel>
+                  <FormControl
+                    render={
+                      <Input
+                        {...field}
+                        value={
+                          (field.value as string | number | undefined) ?? ''
+                        }
+                        inputMode="numeric"
+                        disabled={disabled}
+                        data-test={'villa-policies-ota-buffer'}
+                      />
+                    }
+                  />
+                  <FormDescription>
+                    0 to 14. Use 0 if you do not list on OTAs.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ShieldCheck className="text-muted-foreground h-4 w-4" />
+              Guest ID documents
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm" data-test={'villa-policies-retention'}>
+              Kept for <strong>{props.retentionDays} days</strong> after
+              check-out, then deleted automatically.
+            </p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Set by Ooruda to match the privacy policy. Contact support to
+              change it.
+            </p>
+          </CardContent>
+        </Card>
+
+        {props.canEdit ? (
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              disabled={isPending || !form.formState.isDirty}
+              className="w-full sm:w-auto"
+              data-test={'villa-policies-save'}
+            >
+              {isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
+        ) : null}
+      </form>
+    </Form>
+  );
+}

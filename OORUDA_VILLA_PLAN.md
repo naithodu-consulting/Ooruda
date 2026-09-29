@@ -774,6 +774,13 @@ feature flag, dark**, until the `villa-booking` half (atomic enforcement inside
 | 17 | Discount ceiling **25%**; above needs super-admin approval. |
 | 18 | **Managers** mark stays completed at check-out. |
 
+### Settled on 2026-09-29
+
+| # | Decision |
+|---|---|
+| 19 | **Invoice numbering: the villa-booking database is the single allocator** (`V19/26-27/INV/NNNNNN`, its `allocate_invoice_number`, added 2026-09-28 in `00038_gst_invoices.sql`). Ooruda issues invoices *through* it and never numbers invoices itself. This supersedes the `INV/26-27/NNNN` Ooruda series in §9. |
+| 20 | **Tax invoice at check-out** (confirmed again): receipt vouchers for money received earlier, one tax invoice when the manager marks the stay completed. Requires the site's invoice trigger to fire on `completed` instead of confirmed+paid (villa-booking TODO 8c). |
+
 ### Still open
 
 1. A one-line CA confirmation of §9 before the first live invoice. Not blocking the build.

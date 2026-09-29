@@ -93,3 +93,16 @@ dependencies are visible from here:
 - **`rbac.ts` `ROLE_HIERARCHY`** duplicates the association half of `ROLE_HIERARCHY_LEVEL_BY_ROLE`.
 - **Shared `create_team_account(..., p_product)`** could replace the separate `create_villa_account`.
 
+## Deferred from the M2 review (2026-09-29)
+
+- **Translate the villa settings screens.** Labels and messages are plain English,
+  like the other Ooruda feature forms (Expenses, AMC). Move them to `villa.json`
+  when the villa module is translated.
+- **App-wide form labels.** `@kit/ui/form`'s `FormControl` is fixed (makerkit
+  layer); the ~190 non-villa form fields still pass the input as a child instead
+  of via `render`, so their labels are not tied to the input. Tracked as a
+  separate task.
+- **Editing a seasonal rate** is delete-and-re-add for now.
+- **Add-on history for invoices (M5):** invoice lines must snapshot the add-on's
+  name, price and unit at the time, since add-ons can be edited or removed.
+

@@ -2524,6 +2524,194 @@ export type Database = {
           },
         ]
       }
+      villa_account_settings: {
+        Row: {
+          account_id: string
+          created_at: string
+          managers_can_cancel: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          managers_can_cancel?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          managers_can_cancel?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_account_settings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_account_settings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_account_settings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_addons: {
+        Row: {
+          account_id: string
+          created_at: string
+          description: string | null
+          display_order: number
+          id: string
+          is_active: boolean
+          name: string
+          price: number
+          pricing_unit: string
+          property_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          price: number
+          pricing_unit: string
+          property_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          price?: number
+          pricing_unit?: string
+          property_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_addons_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_addons_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_addons_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_addons_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_emergency_contacts: {
+        Row: {
+          account_id: string
+          category: string
+          created_at: string
+          display_order: number
+          id: string
+          name: string
+          notes: string | null
+          phone: string
+          property_id: string
+          share_with_guests: boolean
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          category: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          name: string
+          notes?: string | null
+          phone: string
+          property_id: string
+          share_with_guests?: boolean
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          category?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string
+          property_id?: string
+          share_with_guests?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_emergency_contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_emergency_contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_emergency_contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_emergency_contacts_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       villa_properties: {
         Row: {
           account_id: string
@@ -2532,6 +2720,8 @@ export type Database = {
           id: string
           is_test: boolean
           name: string
+          ota_buffer_nights: number
+          retention_days: number
           site_credentials_ref: string | null
           site_project_ref: string | null
           site_property_id: string | null
@@ -2545,6 +2735,8 @@ export type Database = {
           id?: string
           is_test?: boolean
           name: string
+          ota_buffer_nights?: number
+          retention_days?: number
           site_credentials_ref?: string | null
           site_project_ref?: string | null
           site_property_id?: string | null
@@ -2558,6 +2750,8 @@ export type Database = {
           id?: string
           is_test?: boolean
           name?: string
+          ota_buffer_nights?: number
+          retention_days?: number
           site_credentials_ref?: string | null
           site_project_ref?: string | null
           site_property_id?: string | null

@@ -72,3 +72,16 @@ export function nightsList(from: string, to: string): string[] {
 export function todayIst(now?: Date): string {
   return todayInBillingZone(now);
 }
+
+/**
+ * People think in "first night … last night"; the booking site stores
+ * [start, morning after the last night). These convert between the two, so
+ * no screen ever does the ±1 itself.
+ */
+export function lastNightOf(endExclusive: string): string {
+  return addDays(endExclusive, -1);
+}
+
+export function endAfterLastNight(lastNight: string): string {
+  return addDays(lastNight, 1);
+}

@@ -18,7 +18,12 @@ import {
 } from './bookings';
 import type { VillaSite } from './client';
 import { addDays } from './dates';
-import { createPricingRule, deletePricingRule, getBaseRates } from './rates';
+import {
+  createPricingRule,
+  deletePricingRule,
+  getBaseRates,
+  updateBaseRates,
+} from './rates';
 import type { Database as VillaDatabase } from './villa-db.types';
 
 /**
@@ -99,6 +104,44 @@ run('villa-db adapter against a local villa-booking database', () => {
     expect(rates.weekdayNightly).toBeGreaterThan(0);
     expect(Number.isInteger(rates.weekdayNightly * 100)).toBe(true);
     expect(rates.maxGuests).toBeGreaterThanOrEqual(rates.includedGuests);
+  });
+
+  it('saves base rates on the site and reads them back', async () => {
+    const original = await getBaseRates(site);
+    const restore = {
+      weekdayNightly: original.weekdayNightly,
+      weekendNightly: original.weekendNightly,
+      extraGuestRate: original.extraGuestRate,
+      extraGuestTier2Rate: original.extraGuestTier2Rate,
+      extraGuestTier2From: original.extraGuestTier2From,
+      includedGuests: original.includedGuests,
+      maxGuests: original.maxGuests,
+      idealGuests: original.idealOccupancy ?? original.includedGuests,
+      checkInTime: (original.checkInTime ?? '14:00').slice(0, 5),
+      checkOutTime: (original.checkOutTime ?? '11:00').slice(0, 5),
+    };
+
+    try {
+      const saved = await updateBaseRates(
+        site,
+        {
+          ...restore,
+          weekdayNightly: '12345.50',
+          extraGuestTier2Rate: null,
+          extraGuestTier2From: null,
+          checkInTime: '13:30',
+        },
+        null,
+      );
+
+      expect(saved.weekdayNightly).toBe(12345.5);
+      expect(saved.extraGuestTier2From).toBeNull();
+      expect(saved.checkInTime?.slice(0, 5)).toBe('13:30');
+    } finally {
+      const back = await updateBaseRates(site, restore, null);
+      expect(back.weekdayNightly).toBe(original.weekdayNightly);
+      expect(back.extraGuestTier2From).toBe(original.extraGuestTier2From);
+    }
   });
 
   it('reports a free window as available', async () => {
