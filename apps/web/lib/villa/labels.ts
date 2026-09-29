@@ -147,3 +147,13 @@ export function formatGuests(b: {
 export function formatNights(n: number): string {
   return plural(n, 'night', 'nights');
 }
+
+export const BLOCK_REASON_LABELS: Record<string, string> = {
+  maintenance: 'Maintenance',
+  owner_hold: "Owner's own use",
+  offline_booking: 'Offline booking',
+};
+
+export function blockReasonLabel(reason: string | null): string {
+  return reason ? (BLOCK_REASON_LABELS[reason] ?? reason) : 'Blocked';
+}

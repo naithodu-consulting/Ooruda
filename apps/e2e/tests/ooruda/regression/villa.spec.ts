@@ -43,6 +43,12 @@ const STAY_IN = ymdPlus('2030-02-01', Math.floor(Math.random() * 300));
 const STAY_OUT = ymdPlus(STAY_IN, 2);
 let bookingCode = '';
 
+// M3b: three nights to block, a different year from the stay above.
+const BLOCK_FIRST = ymdPlus('2031-02-01', Math.floor(Math.random() * 300));
+const BLOCK_MIDDLE = ymdPlus(BLOCK_FIRST, 1);
+const BLOCK_LAST = ymdPlus(BLOCK_FIRST, 2);
+const SHOTS = process.env.VILLA_E2E_SHOTS;
+
 // M1: the local villa-booking stack (only ever a local database). The key is
 // that stack's default service key, supplied by the environment, never
 // committed. Without it the booking-site connection tests are skipped.
@@ -578,6 +584,148 @@ test.describe.serial('villa product (M0)', () => {
       page.locator('[data-test="villa-booking-cancel-open"]'),
     ).toHaveCount(0);
 
+    await page.context().close();
+  });
+
+  test('villa manager blocks nights on the calendar and unblocks them', async ({
+    browser,
+  }) => {
+    test.skip(!VILLA_SITE.key, 'VILLA_DB_TEST_SERVICE_ROLE_KEY not set');
+
+    const page = await signedInPage(browser, VILLA_MANAGER.phone);
+    const issues = watchPage(page);
+    const day = (ymd: string) =>
+      page.locator(`[data-test="villa-calendar-day-${ymd}"]`);
+
+    await page.goto(VILLA_HOME);
+    await settle(page);
+    await sidebar(page).getByRole('link', { name: 'Calendar' }).click();
+    await page.waitForURL(/\/calendar/);
+    await settle(page);
+    await expectNoErrorBoundary(page);
+
+    // Block three nights.
+    await page.click('[data-test="villa-block-new"]');
+    await pickDate(page, 'villa-block-first-night', BLOCK_FIRST);
+    await pickDate(page, 'villa-block-last-night', BLOCK_LAST);
+    await page.fill('[data-test="villa-block-notes"]', 'E2E pool work');
+    await page.click('[data-test="villa-block-submit"]');
+    await expect(page.getByText('Dates blocked')).toBeVisible();
+
+    // The month grid shows all three nights, and not the morning after.
+    await page.goto(`${VILLA_HOME}/calendar?month=${BLOCK_FIRST.slice(0, 7)}`);
+    await settle(page);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    for (const ymd of [BLOCK_FIRST, BLOCK_MIDDLE, BLOCK_LAST]) {
+      if (ymd.slice(0, 7) !== BLOCK_FIRST.slice(0, 7)) continue;
+      await expect(
+        day(ymd).locator('[data-test="villa-calendar-block"]'),
+      ).toHaveCount(1);
+    }
+    if (SHOTS)
+      await page.screenshot({
+        path: `${SHOTS}/calendar-1280.png`,
+        fullPage: true,
+      });
+
+    // Unblock only the middle night; the first and last stay blocked.
+    await day(BLOCK_FIRST)
+      .locator('[data-test="villa-calendar-block"]')
+      .click();
+    await expect(
+      page.locator('[data-test="villa-release-dialog"]'),
+    ).toContainText('E2E pool work');
+    await expect(
+      page.locator('[data-test="villa-release-dialog"]'),
+    ).not.toContainText('ooruda:');
+    await pickDate(page, 'villa-release-first-night', BLOCK_MIDDLE);
+    await pickDate(page, 'villa-release-last-night', BLOCK_MIDDLE);
+    await page.click('[data-test="villa-release-submit"]');
+    await expect(page.getByText('Nights opened for booking')).toBeVisible();
+
+    await page.goto(`${VILLA_HOME}/calendar?month=${BLOCK_MIDDLE.slice(0, 7)}`);
+    await settle(page);
+    await expect(
+      day(BLOCK_MIDDLE).locator('[data-test="villa-calendar-block"]'),
+    ).toHaveCount(0);
+
+    // Phone width: the agenda replaces the grid, with no sideways scroll.
+    const overflow = await measureOverflow(page, 360);
+    expect(
+      overflow.docOverflow,
+      overflow.offenders.join(' | '),
+    ).toBeLessThanOrEqual(0);
+    await expect(
+      page.locator('[data-test="villa-calendar-agenda"]'),
+    ).toBeVisible();
+    if (SHOTS)
+      await page.screenshot({
+        path: `${SHOTS}/calendar-360.png`,
+        fullPage: true,
+      });
+
+    // Clean up: release what is left so repeated runs never pile up blocks.
+    for (const ymd of [BLOCK_FIRST, BLOCK_LAST]) {
+      await page.goto(`${VILLA_HOME}/calendar?month=${ymd.slice(0, 7)}`);
+      await settle(page);
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await day(ymd).locator('[data-test="villa-calendar-block"]').click();
+      await page.click('[data-test="villa-release-submit"]');
+      await expect(page.getByText('Nights opened for booking')).toBeVisible();
+    }
+
+    expect(issues.serverErrors).toEqual([]);
+    await page.context().close();
+  });
+
+  test('villa owner sees today and this month on the dashboard', async ({
+    browser,
+  }) => {
+    test.skip(!VILLA_SITE.key, 'VILLA_DB_TEST_SERVICE_ROLE_KEY not set');
+
+    const page = await signedInPage(browser, VILLA_OWNER.phone);
+    const issues = watchPage(page);
+
+    await page.goto(VILLA_HOME);
+    await settle(page);
+    await expectNoErrorBoundary(page);
+
+    await expect(page.locator('[data-test="villa-today"]')).toBeVisible();
+    await expect(
+      page.locator('[data-test="villa-kpi-occupancy"]'),
+    ).toContainText('%');
+    // The mirror fills in the background after a visit: reload until it has.
+    const synced = page.locator('[data-test="villa-kpis-synced"]');
+    await expect
+      .poll(
+        async () => {
+          await page.reload();
+          await settle(page);
+          return synced.innerText();
+        },
+        { timeout: 30_000, intervals: [1_000, 2_000, 3_000] },
+      )
+      .toContain('Figures updated');
+    await expect(synced).not.toContainText('failed');
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    if (SHOTS)
+      await page.screenshot({
+        path: `${SHOTS}/dashboard-1280.png`,
+        fullPage: true,
+      });
+    const overflow = await measureOverflow(page, 360);
+    expect(
+      overflow.docOverflow,
+      overflow.offenders.join(' | '),
+    ).toBeLessThanOrEqual(0);
+    if (SHOTS)
+      await page.screenshot({
+        path: `${SHOTS}/dashboard-360.png`,
+        fullPage: true,
+      });
+
+    expect(issues.serverErrors).toEqual([]);
     await page.context().close();
   });
 

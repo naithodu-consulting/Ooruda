@@ -19,6 +19,7 @@ import {
 import { getVillaSite } from '~/lib/villa-db/client';
 import { VillaDbError } from '~/lib/villa-db/errors';
 import { getPricingInputs } from '~/lib/villa-db/rates';
+import { mirrorBooking } from '~/lib/villa/mirror';
 import { fromPaise, fromPaiseToString } from '~/lib/villa/money';
 import { type QuoteError, quoteStay } from '~/lib/villa/pricing';
 
@@ -234,6 +235,7 @@ export function createBookingsService(client: Client) {
         },
         actor,
       );
+      await mirrorBooking(site, booking, input.isEvent ? 'event' : 'stay');
 
       return booking;
     },
@@ -293,6 +295,7 @@ export function createBookingsService(client: Client) {
         },
         actor,
       );
+      await mirrorBooking(site, booking);
 
       return booking;
     },
@@ -310,6 +313,7 @@ export function createBookingsService(client: Client) {
         },
         actor,
       );
+      await mirrorBooking(site, booking);
 
       return booking;
     },

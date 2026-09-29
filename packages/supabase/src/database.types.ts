@@ -2716,6 +2716,125 @@ export type Database = {
           },
         ]
       }
+      villa_bookings_mirror: {
+        Row: {
+          account_id: string
+          adults: number
+          base_amount: number
+          booking_code: string | null
+          booking_kind: string
+          channel: string | null
+          check_in: string
+          check_out: string
+          children: number
+          extra_guest_amount: number
+          guest_email: string | null
+          guest_name: string
+          guest_phone: string | null
+          id_status: string | null
+          infants: number
+          invoice_number: string | null
+          nights: number
+          payment_status: string
+          property_id: string
+          reference_number: string
+          site_booking_id: string
+          site_property_id: string
+          site_updated_at: string | null
+          status: string
+          synced_at: string
+          tax_amount: number
+          total_amount: number
+        }
+        Insert: {
+          account_id: string
+          adults: number
+          base_amount: number
+          booking_code?: string | null
+          booking_kind?: string
+          channel?: string | null
+          check_in: string
+          check_out: string
+          children: number
+          extra_guest_amount: number
+          guest_email?: string | null
+          guest_name: string
+          guest_phone?: string | null
+          id_status?: string | null
+          infants: number
+          invoice_number?: string | null
+          nights: number
+          payment_status: string
+          property_id: string
+          reference_number: string
+          site_booking_id: string
+          site_property_id: string
+          site_updated_at?: string | null
+          status: string
+          synced_at?: string
+          tax_amount: number
+          total_amount: number
+        }
+        Update: {
+          account_id?: string
+          adults?: number
+          base_amount?: number
+          booking_code?: string | null
+          booking_kind?: string
+          channel?: string | null
+          check_in?: string
+          check_out?: string
+          children?: number
+          extra_guest_amount?: number
+          guest_email?: string | null
+          guest_name?: string
+          guest_phone?: string | null
+          id_status?: string | null
+          infants?: number
+          invoice_number?: string | null
+          nights?: number
+          payment_status?: string
+          property_id?: string
+          reference_number?: string
+          site_booking_id?: string
+          site_property_id?: string
+          site_updated_at?: string | null
+          status?: string
+          synced_at?: string
+          tax_amount?: number
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_bookings_mirror_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_bookings_mirror_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_bookings_mirror_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_bookings_mirror_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       villa_cancellation_reasons: {
         Row: {
           code: string
@@ -2812,6 +2931,71 @@ export type Database = {
             foreignKeyName: "villa_emergency_contacts_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_mirror_sync_state: {
+        Row: {
+          account_id: string
+          full_site_property_id: string | null
+          last_error: string | null
+          last_error_at: string | null
+          last_full_at: string | null
+          last_synced_at: string | null
+          property_id: string
+          rows_synced: number
+          sync_started_at: string | null
+        }
+        Insert: {
+          account_id: string
+          full_site_property_id?: string | null
+          last_error?: string | null
+          last_error_at?: string | null
+          last_full_at?: string | null
+          last_synced_at?: string | null
+          property_id: string
+          rows_synced?: number
+          sync_started_at?: string | null
+        }
+        Update: {
+          account_id?: string
+          full_site_property_id?: string | null
+          last_error?: string | null
+          last_error_at?: string | null
+          last_full_at?: string | null
+          last_synced_at?: string | null
+          property_id?: string
+          rows_synced?: number
+          sync_started_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_mirror_sync_state_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_mirror_sync_state_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_mirror_sync_state_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_mirror_sync_state_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: true
             referencedRelation: "villa_properties"
             referencedColumns: ["id"]
           },

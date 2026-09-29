@@ -41,3 +41,12 @@ export type BookingActivityAction =
   | 'cancelled'
   | 'completed'
   | 'note';
+
+/**
+ * Block reasons offered on the calendar. The site also accepts
+ * 'offline_booking', but guests taken by phone are recorded as bookings (so
+ * they count in revenue and occupancy), never as blocks.
+ */
+export const OPERATOR_BLOCK_REASONS = ['maintenance', 'owner_hold'] as const;
+
+export type OperatorBlockReason = (typeof OPERATOR_BLOCK_REASONS)[number];

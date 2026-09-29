@@ -6,6 +6,7 @@
     "admin": "Admin",
     "members": "Members",
     "settings": "Villa Settings",
+    "calendar": "Calendar",
     "bookings": "Bookings"
   },
   "roles": {
@@ -14,8 +15,8 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "setupTitle": "Your villa workspace is ready",
-    "setupDescription": "Properties, calendar, bookings, guests and reports are being set up for this workspace. You can invite your villa manager from Members in the meantime.",
+    "setupTitle": "Your villa workspace",
+    "setupDescription": "Bookings, the calendar and villa settings are ready. Guest IDs, payments, invoices and reports are coming next. Invite your villa manager from Members.",
     "inviteManager": "Invite a manager",
     "signedInAs": "You are signed in as"
   },

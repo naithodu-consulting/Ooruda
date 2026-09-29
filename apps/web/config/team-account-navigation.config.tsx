@@ -3,6 +3,7 @@ import {
   Bell,
   Building2,
   CalendarClock,
+  CalendarDays,
   ClipboardList,
   CreditCard,
   FileText,
@@ -134,6 +135,14 @@ const getVillaRoutes = (account: string) => [
     label: 'villa.nav.operations',
     children: [
       {
+        label: 'villa.nav.calendar',
+        path: pathsConfig.app.accountVillaCalendar.replace(
+          '[account]',
+          account,
+        ),
+        Icon: <CalendarDays className={iconClasses} />,
+      },
+      {
         label: 'villa.nav.bookings',
         path: pathsConfig.app.accountVillaBookings.replace(
           '[account]',
@@ -232,6 +241,7 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
   ],
   villa_owner: [
     'villa.nav.dashboard',
+    'villa.nav.calendar',
     'villa.nav.bookings',
     'villa.nav.members',
     'villa.nav.settings',
@@ -239,6 +249,7 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
   // Managers see settings read-only (rates, contacts they need on shift).
   villa_manager: [
     'villa.nav.dashboard',
+    'villa.nav.calendar',
     'villa.nav.bookings',
     'villa.nav.settings',
   ],

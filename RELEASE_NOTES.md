@@ -4,6 +4,31 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 (M3b) - Calendar, Blocked Dates, Dashboard Figures - 2026-09-30
+
+A **Calendar** page and a working villa **Dashboard** for villa owners and managers. No change for association users.
+
+### Calendar
+- Month grid on tablet and desktop, a date-ordered list on phones. Bookings, holds awaiting payment and blocked nights, read live from the booking site; tap a booking to open it.
+- **Block dates** (maintenance or the owner's own use) by first and last night, with a team-only note. Blocks stop the website and booking channels selling those nights at once, and are refused over a guest's stay.
+- **Unblock** some or all nights of a block; nights outside the chosen range stay blocked. Past nights cannot be blocked or unblocked.
+- New booking straight from the calendar; "N of M nights booked" for the month.
+
+### Dashboard
+- **Today** (live from the booking site): arriving, to check out, staying tonight.
+- **This month** (from Ooruda's copy of the bookings): occupancy, revenue before GST, average per booked night, revenue per available night, with "figures updated N min ago". Stays crossing a month end count only their nights in the month.
+- The copy refreshes in the background when it is older than 5 minutes (the page never waits for the booking site); changes made in Ooruda update it at once. A scheduled refresh route (`/api/villa/sync`, `CRON_SECRET`) is ready but not yet scheduled.
+- Villa Settings: on phones the active tab scrolls into view.
+
+### Testing
+- pgTAP `villa-m3b-mirror.test.sql` (12): server-only writes, members read-only, other villas see nothing, cross-account rows refused.
+- Vitest: calendar model (month grid, agenda, occupancy, notes) and dashboard figures (pro rata, ADR, RevPAR, today board).
+- Playwright (full regression, 143 passing): manager blocks three nights, unblocks the middle one, cleans up; dashboard figures at 360 and 1280 px.
+
+| Migration | Change |
+| --- | --- |
+| `20260929190825_villa_m3b_bookings_mirror.sql` | `villa_bookings_mirror` (read-only copy of site bookings, rupees) and `villa_mirror_sync_state` (last refresh, errors, sync lease) |
+
 ## Villa v1.0 (M3a) - Bookings: Take, Find, Check Out, Cancel - 2026-09-30
 
 A **Bookings** page for villa owners and managers, working directly on the villa's guest booking site. No change for association users.

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
@@ -62,6 +62,16 @@ export function VillaSettingsClient(props: {
       ? (props.initialTab as Tab)
       : 'rates',
   );
+
+  // On a phone the tab strip scrolls sideways: keep the active tab in view
+  // (e.g. opening ?tab=policies directly). 'nearest' never scrolls the page.
+  const tabStrip = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    tabStrip.current
+      ?.querySelector(`[data-test="villa-settings-tab-${tab}"]`)
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [tab]);
 
   // Keep the tab (and property) in the URL so a refresh or a shared link
   // lands on it.
@@ -137,7 +147,10 @@ export function VillaSettingsClient(props: {
       ) : null}
 
       <Tabs value={tab} onValueChange={changeTab} className="w-full">
-        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <div
+          ref={tabStrip}
+          className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+        >
           <TabsList className="mb-4 w-max min-w-max">
             {TABS.map((value) => (
               <TabsTrigger

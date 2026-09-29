@@ -538,3 +538,34 @@ export async function searchBookings(
 
   return (data ?? []).map((row) => toBooking(row as BookingRow));
 }
+
+/** Rows per page when copying bookings for the mirror. */
+export const SYNC_PAGE_SIZE = 500;
+
+/**
+ * One page of the property's bookings for the Ooruda mirror, every status,
+ * keyset-paged by id (stable even if bookings arrive mid-sync). Pass the last
+ * id of the previous page as `afterId`. `checkOutFrom` limits it to stays
+ * ending on or after that date: the site has no updated_at trigger yet
+ * (villa-booking TODO 8d), so later syncs re-read a recent window instead of
+ * "changed since".
+ */
+export async function listBookingsForSync(
+  site: VillaSite,
+  options: { checkOutFrom?: string; afterId?: string },
+): Promise<SiteBooking[]> {
+  let query = site.client
+    .from('bookings')
+    .select(BOOKING_COLUMNS)
+    .eq('property_id', site.sitePropertyId);
+
+  if (options.checkOutFrom)
+    query = query.gte('check_out', options.checkOutFrom);
+  if (options.afterId) query = query.gt('id', options.afterId);
+
+  const { data, error } = await query.order('id').limit(SYNC_PAGE_SIZE);
+
+  if (error) throw fromSiteError(error);
+
+  return (data ?? []).map((row) => toBooking(row as BookingRow));
+}
