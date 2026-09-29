@@ -1225,7 +1225,14 @@ export const connectVillaSiteAction = adminActionClient
   .inputSchema(ConnectVillaSiteSchema)
   .action(
     async ({
-      parsedInput: { accountId, name, siteUrl, serviceKey, siteSlug },
+      parsedInput: {
+        accountId,
+        propertyId,
+        name,
+        siteUrl,
+        serviceKey,
+        siteSlug,
+      },
       ctx,
     }) => {
       const adminClient = getSupabaseServerAdminClient();
@@ -1278,7 +1285,7 @@ export const connectVillaSiteAction = adminActionClient
       //    existing link this rotates the key and keeps the owner's name and
       //    status. A site property already linked to ANOTHER villa account is
       //    refused, so a slug typo on a shared site cannot cross-wire villas.
-      const { data: propertyId, error: connectError } = await adminClient.rpc(
+      const { data: connectedId, error: connectError } = await adminClient.rpc(
         'connect_villa_property',
         {
           p_account_id: accountId,
@@ -1290,6 +1297,8 @@ export const connectVillaSiteAction = adminActionClient
             null) as string,
           p_name: name?.trim() || property.name,
           p_service_key: serviceKey,
+          // Nullable in SQL (re-link only); generated arg types cannot say so.
+          p_property_id: (propertyId ?? null) as string,
         },
       );
 
@@ -1306,7 +1315,7 @@ export const connectVillaSiteAction = adminActionClient
         );
       }
 
-      const villaProperty = { id: propertyId as string };
+      const villaProperty = { id: connectedId as string };
 
       void logAdminAudit(
         ctx.user.id,
@@ -1325,22 +1334,32 @@ export const connectVillaSiteAction = adminActionClient
 
 /**
  * @name disconnectVillaSiteAction
- * @description Removes a villa property's link to its booking site. Its key is
- * deleted from Vault by a database trigger. Nothing on the booking site
- * itself is changed.
+ * @description Unlinks a villa property from its booking site and deletes its
+ * stored key. The property and its settings stay in Ooruda; nothing on the
+ * booking site itself changes.
  */
 export const disconnectVillaSiteAction = adminActionClient
   .inputSchema(DisconnectVillaSiteSchema)
   .action(async ({ parsedInput: { accountId, propertyId }, ctx }) => {
     const adminClient = getSupabaseServerAdminClient();
 
-    const { data: deleted, error } = await adminClient
+    // Unlink only: the property, its add-ons, contacts and history stay, so a
+    // later Connect (or a move to another booking site) loses nothing.
+    const { data: property } = await adminClient
       .from('villa_properties')
-      .delete()
+      .select('id, name')
       .eq('id', propertyId)
       .eq('account_id', accountId)
-      .select('id, name')
       .maybeSingle();
+
+    if (!property) {
+      throw new Error('That villa property no longer exists.');
+    }
+
+    const { error } = await adminClient.rpc('disconnect_villa_property', {
+      p_account_id: accountId,
+      p_property_id: propertyId,
+    });
 
     if (error) {
       const logger = await getLogger();
@@ -1351,16 +1370,12 @@ export const disconnectVillaSiteAction = adminActionClient
       throw new Error('Could not disconnect. Please try again.');
     }
 
-    if (!deleted) {
-      throw new Error('That villa property no longer exists.');
-    }
-
     void logAdminAudit(
       ctx.user.id,
       'admin.villa.site_disconnected',
       'villa_property',
       propertyId,
-      `Booking site disconnected: ${deleted.name}`,
+      `Booking site disconnected: ${property.name}`,
     );
 
     const { data: account } = await adminClient

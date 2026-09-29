@@ -2,6 +2,8 @@ import * as z from 'zod';
 
 export const ConnectVillaSiteSchema = z.object({
   accountId: z.string().uuid(),
+  /** Re-link this existing (disconnected) property instead of adding one. */
+  propertyId: z.string().uuid().optional(),
   /** Display name in Ooruda; defaults to the site's property name. */
   name: z.string().trim().max(120).optional(),
   /** Supabase project URL of the villa-booking site, e.g. https://xyz.supabase.co */

@@ -523,7 +523,9 @@ test.describe.serial('villa product (M0)', () => {
 
   // Last: releases the site property so the next run can connect it again
   // (a site property may be linked to only one villa account).
-  test('super-admin disconnects the booking site', async ({ browser }) => {
+  test('super-admin disconnects the booking site; settings are kept', async ({
+    browser,
+  }) => {
     test.skip(!VILLA_SITE.key, 'VILLA_DB_TEST_SERVICE_ROLE_KEY not set');
 
     const context = await browser.newContext({
@@ -538,13 +540,30 @@ test.describe.serial('villa product (M0)', () => {
       .locator('[data-test="admin-disconnect-villa-site-button"]')
       .click();
     await page.click('[data-test="admin-disconnect-villa-site-confirm"]');
-
     await expect(page.getByText('Booking site disconnected')).toBeVisible();
-    await expect(
-      card.locator('[data-test="admin-villa-site-row"]'),
-    ).toHaveCount(0);
-    await expect(card.getByText('Not connected yet')).toBeVisible();
 
+    // Unlinked, not deleted: the property stays, ready to be reconnected.
+    const row = card.locator('[data-test="admin-villa-site-row"]');
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText('Disconnected');
+    await expect(
+      row.locator('[data-test="admin-reconnect-villa-site-button"]'),
+    ).toBeVisible();
     await context.close();
+
+    // The owner's add-ons and contacts survive the disconnect.
+    const owner = await signedInPage(browser, VILLA_OWNER.phone);
+    await owner.goto(`${VILLA_HOME}/villa-settings?tab=addons`);
+    await settle(owner);
+    await expect(
+      owner.locator('[data-test="villa-addon-row"]', { hasText: 'Extra bed' }),
+    ).toBeVisible();
+
+    await owner.goto(`${VILLA_HOME}/villa-settings?tab=rates`);
+    await settle(owner);
+    await expect(
+      owner.locator('[data-test="villa-settings-site-unavailable"]'),
+    ).toBeVisible();
+    await owner.context().close();
   });
 });

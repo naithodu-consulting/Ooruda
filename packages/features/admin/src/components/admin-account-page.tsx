@@ -363,7 +363,7 @@ async function TeamAccountPage(props: {
                           <span
                             className={'text-muted-foreground truncate text-xs'}
                           >
-                            {property.site_project_ref ?? 'No site'}
+                            {property.site_project_ref ?? 'Not connected'}
                           </span>
                         </div>
 
@@ -375,16 +375,31 @@ async function TeamAccountPage(props: {
                           <Badge variant={'outline'}>
                             {property.site_credentials_ref
                               ? 'Key stored'
-                              : 'No key'}
+                              : 'Disconnected'}
                           </Badge>
                           {property.status !== 'active' ? (
                             <Badge variant={'outline'}>Inactive</Badge>
                           ) : null}
-                          <AdminDisconnectVillaSiteButton
-                            accountId={props.account.id}
-                            propertyId={property.id}
-                            propertyName={property.name}
-                          />
+                          {property.site_credentials_ref ? (
+                            <AdminDisconnectVillaSiteButton
+                              accountId={props.account.id}
+                              propertyId={property.id}
+                              propertyName={property.name}
+                            />
+                          ) : (
+                            <AdminConnectVillaSiteDialog
+                              accountId={props.account.id}
+                              propertyId={property.id}
+                            >
+                              <Button
+                                size={'sm'}
+                                variant={'outline'}
+                                data-test={'admin-reconnect-villa-site-button'}
+                              >
+                                Reconnect
+                              </Button>
+                            </AdminConnectVillaSiteDialog>
+                          )}
                         </div>
                       </li>
                     ))}

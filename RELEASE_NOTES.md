@@ -25,6 +25,7 @@ A **Villa Settings** page for villa accounts (owners edit; managers see it read-
 - A villa account with more than one property gets a villa switcher above the tabs.
 
 ### Fixes found in review
+- **Disconnecting a booking site no longer deletes the villa's settings.** It used to delete the property, taking its add-ons and emergency contacts with it. Disconnect now only removes the link and the stored key; the property shows as "Disconnected" with a **Reconnect** button, which re-links it with everything intact.
 - A super-admin editing a villa's settings had one change (the OTA buffer) silently dropped; it now saves.
 - Editing or removing an add-on or contact that no longer exists says so, instead of claiming success.
 - Add-on names are unique regardless of case.
@@ -39,6 +40,7 @@ A **Villa Settings** page for villa accounts (owners edit; managers see it read-
 
 | Migration | Change |
 | --- | --- |
+| `20260929143252_villa_unlink_keeps_settings.sql` | `disconnect_villa_property()` unlinks instead of deleting; `connect_villa_property()` gains `p_property_id` to re-link an existing property (old 7-argument signature dropped, no overload left) |
 | `20260929131714_villa_m2_settings_addons_contacts.sql` | `villa_account_settings`, `villa_addons` (case-insensitive unique name), `villa_emergency_contacts` (members read, owners write); `villa_properties.ota_buffer_nights` (owner) and `retention_days` (default 30, super-admin only); owner update policy on `villa_properties` admits super-admins; `kit.assert_villa_row_scope()` |
 
 ## Villa v1.0 (M1) - Connection to the Villa Booking Site - 2026-09-29

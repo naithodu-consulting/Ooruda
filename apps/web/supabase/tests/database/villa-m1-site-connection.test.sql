@@ -141,8 +141,8 @@ set local role postgres;
 select ok(
   not has_function_privilege('anon', 'public.get_villa_site_credentials(uuid)', 'execute')
   and not has_function_privilege('authenticated', 'public.get_villa_site_credentials(uuid)', 'execute')
-  and not has_function_privilege('anon', 'public.connect_villa_property(uuid,text,text,uuid,text,text,text)', 'execute')
-  and not has_function_privilege('authenticated', 'public.connect_villa_property(uuid,text,text,uuid,text,text,text)', 'execute'),
+  and not has_function_privilege('anon', 'public.connect_villa_property(uuid,text,text,uuid,text,text,text,uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'public.connect_villa_property(uuid,text,text,uuid,text,text,text,uuid)', 'execute'),
   'only the service role can connect or read credentials'
 );
 

@@ -44,6 +44,8 @@ import {
 export function AdminConnectVillaSiteDialog(
   props: React.PropsWithChildren<{
     accountId: string;
+    /** Re-link this disconnected property (keeps its settings). */
+    propertyId?: string;
     defaultSlug?: string;
     defaultUrl?: string;
   }>,
@@ -54,6 +56,7 @@ export function AdminConnectVillaSiteDialog(
     resolver: zodResolver(ConnectVillaSiteSchema),
     defaultValues: {
       accountId: props.accountId,
+      propertyId: props.propertyId,
       name: '',
       siteUrl: props.defaultUrl ?? '',
       serviceKey: '',

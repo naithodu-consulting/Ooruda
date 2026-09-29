@@ -2939,6 +2939,7 @@ export type Database = {
           p_account_id: string
           p_booking_code_prefix: string
           p_name: string
+          p_property_id?: string
           p_service_key: string
           p_site_project_ref: string
           p_site_property_id: string
@@ -3097,6 +3098,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      disconnect_villa_property: {
+        Args: { p_account_id: string; p_property_id: string }
+        Returns: undefined
       }
       find_users_by_phones_or_emails: {
         Args: { p_emails: string[]; p_phones: string[] }
