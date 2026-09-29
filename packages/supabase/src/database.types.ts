@@ -2524,6 +2524,135 @@ export type Database = {
           },
         ]
       }
+      villa_properties: {
+        Row: {
+          account_id: string
+          booking_code_prefix: string | null
+          created_at: string
+          id: string
+          is_test: boolean
+          name: string
+          site_credentials_ref: string | null
+          site_project_ref: string | null
+          site_property_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          booking_code_prefix?: string | null
+          created_at?: string
+          id?: string
+          is_test?: boolean
+          name: string
+          site_credentials_ref?: string | null
+          site_project_ref?: string | null
+          site_property_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          booking_code_prefix?: string | null
+          created_at?: string
+          id?: string
+          is_test?: boolean
+          name?: string
+          site_credentials_ref?: string | null
+          site_project_ref?: string | null
+          site_property_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_properties_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_properties_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_properties_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_sync_log: {
+        Row: {
+          account_id: string
+          actor_user_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          operation: string
+          outcome: string
+          property_id: string | null
+          site_id: string | null
+        }
+        Insert: {
+          account_id: string
+          actor_user_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          operation: string
+          outcome: string
+          property_id?: string | null
+          site_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          actor_user_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          operation?: string
+          outcome?: string
+          property_id?: string | null
+          site_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_sync_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_sync_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_sync_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_sync_log_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       user_account_workspace: {
@@ -2610,6 +2739,18 @@ export type Database = {
       can_action_account_member: {
         Args: { target_team_account_id: string; target_user_id: string }
         Returns: boolean
+      }
+      connect_villa_property: {
+        Args: {
+          p_account_id: string
+          p_booking_code_prefix: string
+          p_name: string
+          p_service_key: string
+          p_site_project_ref: string
+          p_site_property_id: string
+          p_site_url: string
+        }
+        Returns: string
       }
       create_bill_with_items:
         | {
@@ -2853,7 +2994,18 @@ export type Database = {
           unit_no: string
         }[]
       }
+      get_upper_role_for_account: {
+        Args: { p_account_id: string }
+        Returns: string
+      }
       get_upper_system_role: { Args: never; Returns: string }
+      get_villa_site_credentials: {
+        Args: { p_property_id: string }
+        Returns: {
+          service_key: string
+          url: string
+        }[]
+      }
       has_active_subscription: {
         Args: { target_account_id: string }
         Returns: boolean

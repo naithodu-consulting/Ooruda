@@ -16,5 +16,15 @@
     "setupDescription": "Properties, calendar, bookings, guests and reports are being set up for this workspace. You can invite your villa manager from Members in the meantime.",
     "inviteManager": "Invite a manager",
     "signedInAs": "You are signed in as"
+  },
+  "site": {
+    "title": "Booking site",
+    "description": "Bookings, blocked dates and rates are read from and saved to the villa's guest booking site.",
+    "none": "Not connected yet. Ooruda support will connect your booking site.",
+    "connected": "Connected",
+    "notConfigured": "Not connected",
+    "unreachable": "Can't reach the site",
+    "error": "Connection error: contact Ooruda support",
+    "loadError": "Couldn't load the booking site status. Refresh to try again."
   }
 }

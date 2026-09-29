@@ -4,6 +4,35 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 (M1) - Connection to the Villa Booking Site - 2026-09-29
+
+Ooruda Villa can now read and write the villa's guest booking site database (bookings, blocked dates, rates), as that site's integration contract prescribes. No change for association users.
+
+### For the super-admin
+- A villa account's page (**Admin → Accounts → the villa**) has a **Booking site** card with **Connect**: enter the site's database URL, its service key and the property's slug. The connection is checked before anything is saved (a wrong slug or key is reported and nothing is stored). Running Connect again rotates the key.
+- The key is stored encrypted in Supabase Vault and never shown again. Villa owners can rename a property but cannot change which site property it points to. Re-connecting (to rotate a key) keeps the owner's name and on/off setting.
+- A booking-site property can be connected to only one villa account, so a mistyped slug on a shared booking site can never give one villa access to another's bookings.
+- **Disconnect** removes the link and deletes the stored key; nothing on the booking site changes.
+- Villa account pages no longer show association-only settings (role-permission matrix) and say "Villa" / "Delete Villa Account".
+
+### For villa owners and managers
+- The dashboard shows a **Booking site** card: Connected, Not connected, or Can't reach the site. It loads separately, so a slow site never delays the page.
+
+### Under the hood
+- `lib/villa-db`: server-only connector for the booking site with availability checks, blocking and unblocking dates (including splitting a block, done in a fail-safe order), recording phone/WhatsApp bookings through the site's own locking booking function, cancelling, marking a stay completed, reading bookings, base rates, and adding/removing seasonal rates with an overlap check. Every query is scoped to the villa's own property, so villas sharing one booking site cannot touch each other's data. Requests time out after 10 seconds.
+- Every write to the booking site is recorded in a sync log. If the site does not answer a write in time, the operator is told the change *may* have been saved (never "nothing changed"), and a booking that did commit is recognised rather than reported as failed.
+- A property switched off in Ooruda cannot read or write its booking site.
+- Money crosses from rupees to paise only in this connector.
+
+### Testing
+- pgTAP `villa-m1-site-connection.test.sql` (23): column-level protection of the site link, one site property per account, re-connect keeps owner edits, Vault round-trip/rotation/cleanup, no `anon` rights, manager and outsider access.
+- Vitest: 17 unit tests (booking-code parity with codes the site's database generated, dates, error mapping, credential resolution) and 7 integration tests against a real local booking-site database (blocks and splitting, two concurrent partial unblocks, booking create/confirm/cancel, the site's double-booking lock, cross-villa isolation, rate overlaps).
+- Playwright: connect flow (wrong slug rejected, key never rendered), the owner's Connected status, and disconnect, in `villa.spec.ts` (re-runnable: each run cleans up its link).
+
+| Migration | Change |
+| --- | --- |
+| `20260929091855_villa_m1_site_connection.sql` | `villa_properties` (site link writable by service role only; owners may edit name/status; one site property per villa account); `kit.assert_villa_account()`; Vault key deleted with its property; `connect_villa_property()` (link + key in one transaction) and `get_villa_site_credentials()`, service role only; `villa_sync_log`; no `anon` rights |
+
 ## Villa v1.0 (M0) - Villa Product Foundations - 2026-09-27
 
 First step of **Ooruda Villa**, a villa operator workspace that lives beside associations on the same app and database (plan: `OORUDA_VILLA_PLAN.md`). No change for association users.

@@ -33,8 +33,10 @@ import {
   type AssocPermissionRow,
 } from './admin-assoc-permissions';
 import { AdminBanUserDialog } from './admin-ban-user-dialog';
+import { AdminConnectVillaSiteDialog } from './admin-connect-villa-site-dialog';
 import { AdminDeleteAccountDialog } from './admin-delete-account-dialog';
 import { AdminDeleteUserDialog } from './admin-delete-user-dialog';
+import { AdminDisconnectVillaSiteButton } from './admin-disconnect-villa-site-button';
 import { AdminEditUserDialog } from './admin-edit-user-dialog';
 import { AdminFeatureFlags } from './admin-feature-flags';
 import { AdminImpersonateUserDialog } from './admin-impersonate-user-dialog';
@@ -208,6 +210,7 @@ async function TeamAccountPage(props: {
   account: Account & { memberships: Membership[] };
 }) {
   const adminClient = getSupabaseServerAdminClient();
+  const isVilla = props.account.product_type === 'villa';
 
   // associations.id ≠ accounts.id - fetch the real association PK first.
   const { data: assocRow } = await adminClient
@@ -218,16 +221,27 @@ async function TeamAccountPage(props: {
 
   const featureFlagsService = createFeatureFlagsService(adminClient);
 
-  const [members, { data: rawPermissions }, featureFlags] = await Promise.all([
-    getMembers(props.account.slug ?? ''),
-    adminClient
-      .from('assoc_admin_permissions')
-      .select('target_role, can_invite, can_edit, can_delete')
-      .eq('association_id', props.account.id),
-    assocRow?.id
-      ? featureFlagsService.getFlags(assocRow.id)
-      : Promise.resolve({ expense_tracker: false, amc_reminder: false }),
-  ]);
+  const [members, { data: rawPermissions }, featureFlags, villaProperties] =
+    await Promise.all([
+      getMembers(props.account.slug ?? ''),
+      adminClient
+        .from('assoc_admin_permissions')
+        .select('target_role, can_invite, can_edit, can_delete')
+        .eq('association_id', props.account.id),
+      assocRow?.id
+        ? featureFlagsService.getFlags(assocRow.id)
+        : Promise.resolve({ expense_tracker: false, amc_reminder: false }),
+      isVilla
+        ? adminClient
+            .from('villa_properties')
+            .select(
+              'id, name, booking_code_prefix, site_project_ref, site_credentials_ref, status',
+            )
+            .eq('account_id', props.account.id)
+            .order('created_at')
+            .then(({ data }) => data ?? [])
+        : Promise.resolve([]),
+    ]);
 
   const isTestAssociation = assocRow?.is_test ?? false;
 
@@ -275,7 +289,7 @@ async function TeamAccountPage(props: {
             </span>
           </div>
 
-          <Badge variant={'outline'}>Association</Badge>
+          <Badge variant={'outline'}>{isVilla ? 'Villa' : 'Association'}</Badge>
 
           {isTestAssociation && (
             <Badge
@@ -298,15 +312,97 @@ async function TeamAccountPage(props: {
             </div>
           </div>
 
-          <Card>
-            <CardContent className={'pt-6'}>
-              <AdminAssocPermissions
-                key={props.account.id}
-                associationId={props.account.id}
-                initialPermissions={initialPermissions}
-              />
-            </CardContent>
-          </Card>
+          {isVilla ? (
+            <Card data-test={'admin-villa-sites'}>
+              <CardHeader
+                className={
+                  'flex flex-row flex-wrap items-start justify-between gap-4'
+                }
+              >
+                <div className={'flex flex-col gap-1.5'}>
+                  <CardTitle>Booking site</CardTitle>
+                  <CardDescription>
+                    The guest booking site this villa reads and writes bookings,
+                    blocks and rates on.
+                  </CardDescription>
+                </div>
+
+                <AdminConnectVillaSiteDialog accountId={props.account.id}>
+                  <Button
+                    size={'sm'}
+                    data-test={'admin-connect-villa-site-button'}
+                  >
+                    Connect
+                  </Button>
+                </AdminConnectVillaSiteDialog>
+              </CardHeader>
+
+              <CardContent>
+                {villaProperties.length === 0 ? (
+                  <p className={'text-muted-foreground text-sm'}>
+                    Not connected yet. The villa&apos;s calendar and bookings
+                    stay unavailable until a property is connected.
+                  </p>
+                ) : (
+                  <ul className={'divide-y rounded-lg border'}>
+                    {villaProperties.map((property) => (
+                      <li
+                        key={property.id}
+                        data-test={'admin-villa-site-row'}
+                        className={
+                          'flex flex-col gap-1 p-3 sm:flex-row sm:items-center sm:justify-between'
+                        }
+                      >
+                        <div className={'flex min-w-0 flex-col'}>
+                          <span className={'truncate text-sm font-medium'}>
+                            {property.name}
+                            {property.booking_code_prefix
+                              ? ` · ${property.booking_code_prefix}`
+                              : ''}
+                          </span>
+                          <span
+                            className={'text-muted-foreground truncate text-xs'}
+                          >
+                            {property.site_project_ref ?? 'No site'}
+                          </span>
+                        </div>
+
+                        <div
+                          className={
+                            'flex shrink-0 flex-wrap items-center gap-2'
+                          }
+                        >
+                          <Badge variant={'outline'}>
+                            {property.site_credentials_ref
+                              ? 'Key stored'
+                              : 'No key'}
+                          </Badge>
+                          {property.status !== 'active' ? (
+                            <Badge variant={'outline'}>Inactive</Badge>
+                          ) : null}
+                          <AdminDisconnectVillaSiteButton
+                            accountId={props.account.id}
+                            propertyId={property.id}
+                            propertyName={property.name}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className={'pt-6'}>
+                <AdminAssocPermissions
+                  key={props.account.id}
+                  associationId={props.account.id}
+                  initialPermissions={initialPermissions}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {assocRow?.id && (
             <AdminFeatureFlags
@@ -326,12 +422,13 @@ async function TeamAccountPage(props: {
               <div className={'flex flex-col space-y-4'}>
                 <div className={'flex flex-col space-y-1'}>
                   <span className={'text-sm font-medium'}>
-                    Delete Association
+                    {isVilla ? 'Delete Villa Account' : 'Delete Association'}
                   </span>
                   <p className={'text-muted-foreground text-sm'}>
-                    Once you delete this association, all associated data,
-                    settings, and members will be permanently removed. This
-                    action is irreversible.
+                    Once you delete this{' '}
+                    {isVilla ? 'villa account' : 'association'}, all associated
+                    data, settings, and members will be permanently removed.
+                    This action is irreversible.
                   </p>
                 </div>
                 <div>
@@ -342,7 +439,7 @@ async function TeamAccountPage(props: {
                       data-test={'admin-delete-account-button'}
                     >
                       <BadgeX className={'mr-1 h-4'} />
-                      Delete Association
+                      {isVilla ? 'Delete Villa Account' : 'Delete Association'}
                     </Button>
                   </AdminDeleteAccountDialog>
                 </div>
