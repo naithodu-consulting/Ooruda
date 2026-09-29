@@ -5,7 +5,8 @@
     "operations": "Operations",
     "admin": "Admin",
     "members": "Members",
-    "settings": "Villa Settings"
+    "settings": "Villa Settings",
+    "bookings": "Bookings"
   },
   "roles": {
     "villa_owner": "Villa Owner",

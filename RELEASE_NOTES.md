@@ -4,6 +4,34 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 (M3a) - Bookings: Take, Find, Check Out, Cancel - 2026-09-30
+
+A **Bookings** page for villa owners and managers, working directly on the villa's guest booking site. No change for association users.
+
+### Bookings list
+- Upcoming, In house, Past and Cancelled views, each a shareable link.
+- Search by booking code (typed any way: lower case, no hyphens, O for 0), name, phone or email; the search runs on the booking site across every status. A valid code opens that booking directly. Long lists show the first 100 with a hint to search.
+
+### New booking (phone, WhatsApp, walk-in, events)
+- Pick dates and guests to see **live availability and the price** from the booking site: nights, extra guests, GST and total. Taken nights, a seasonal minimum stay or too many guests are explained before you can save.
+- The price is always recalculated on the server when the booking is saved; it matches what the website charges for the same stay (checked against the site's own pricing code). If the price changed between the quote and saving (for example a rate edit in between), nothing is saved and the new total is shown.
+- Payment on a new booking can only be Unpaid or Partly paid; payments and invoices come with M5.
+- Saving blocks the dates on the booking site immediately (through the site's own locking booking function), so the website and channel managers can't sell them. Mark event bookings as events.
+
+### Booking page
+- Stay, guest (tap to call), amount, payment and ID status, and a history of who did what. The history is written only by the server after the change succeeds on the booking site, so it cannot be forged.
+- **Check out** (owner or manager) once the stay has started.
+- **Cancel** a confirmed booking (owner, or managers if the owner allowed it in Policies) with a **required reason** from the agreed list of 19, grouped by guest / payment / villa side / outside events; some reasons require a note. The dates are freed straight away. Refunds come with M5.
+
+### Testing
+- pgTAP `villa-m3a-bookings.test.sql` (12): reasons, activity trail append-only and server-written only, cancellation needs a reason, other villas can't read or write.
+- Vitest: quote engine incl. five parity cases against the booking site's `pricing-engine.ts`, phone format for the site; integration: the site stores Indian mobiles as 10 digits.
+- Playwright (full regression, 141 passing): owner books with a live quote, finds it by a loosely typed code, manager cancels with a reason.
+
+| Migration | Change |
+| --- | --- |
+| `20260929144458_villa_m3a_bookings.sql` | `villa_cancellation_reasons` (19 seeded) and `villa_booking_activity` (append-only trail; a cancellation always has a reason) |
+
 ## Villa v1.0 (M2) - Villa Settings: Rates, Add-ons, Contacts, Policies - 2026-09-29
 
 A **Villa Settings** page for villa accounts (owners edit; managers see it read-only). No change for association users.

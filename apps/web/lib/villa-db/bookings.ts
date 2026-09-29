@@ -1,4 +1,5 @@
 import 'server-only';
+import { OFFLINE_CHANNEL_VALUES } from '~/lib/villa/constants';
 import { toPaise } from '~/lib/villa/money';
 
 import type { VillaSite } from './client';
@@ -27,14 +28,7 @@ import { withSyncLog } from './sync-log';
  */
 
 /** Channels Ooruda may record (the site writes 'online' itself). */
-export const OFFLINE_CHANNELS = [
-  'whatsapp',
-  'phone',
-  'referral',
-  'instagram',
-  'manual',
-  'other',
-] as const;
+export const OFFLINE_CHANNELS = OFFLINE_CHANNEL_VALUES;
 
 export type OfflineChannel = (typeof OFFLINE_CHANNELS)[number];
 
@@ -141,6 +135,17 @@ function toBooking(row: BookingRow): SiteBooking {
   };
 }
 
+/**
+ * The site stores Indian mobiles as 10 digits ([6-9]XXXXXXXXX), which its
+ * checkout validates and staff search by; other numbers stay E.164.
+ */
+export function toSitePhone(phone: string | null | undefined): string {
+  const value = phone?.trim() ?? '';
+  const indian = /^\+91([6-9]\d{9})$/.exec(value);
+
+  return indian ? indian[1]! : value;
+}
+
 function paise(value: number | string, field: string): number {
   try {
     return toPaise(value);
@@ -222,7 +227,7 @@ export async function createOfflineBooking(
         p_property_id: site.sitePropertyId,
         p_guest_name: input.guestName.trim(),
         p_guest_email: input.guestEmail?.trim() ?? '',
-        p_guest_phone: input.guestPhone?.trim() ?? '',
+        p_guest_phone: toSitePhone(input.guestPhone),
         p_num_adults: adults,
         p_num_children: children,
         p_num_infants: infants,
@@ -264,6 +269,10 @@ export async function createOfflineBooking(
       .eq('id', bookingId)
       .eq('property_id', site.sitePropertyId)
       .eq('status', 'pending')
+      // A lapsed hold stays 'pending' until the site's nightly job, and
+      // check_availability already ignores it: someone else may hold the
+      // dates now. Only a LIVE hold may be confirmed.
+      .gt('hold_expires_at', new Date().toISOString())
       .select(BOOKING_COLUMNS)
       .maybeSingle();
 
@@ -292,8 +301,12 @@ export async function createOfflineBooking(
 }
 
 /**
- * Cancels a pending or confirmed booking. The dates are free immediately.
- * Refunds are handled separately (plan §9b) — this only changes status.
+ * Cancels a confirmed booking. The dates are free immediately. Refunds are
+ * handled separately (plan §9b); this only changes status.
+ *
+ * Pending rows are NOT cancellable here: a pending booking is usually a guest
+ * in the middle of online checkout, and cancelling it would strand their
+ * payment. Unpaid holds lapse by themselves after 15 minutes.
  */
 export async function cancelBooking(
   site: VillaSite,
@@ -306,7 +319,7 @@ export async function cancelBooking(
       .update({ status: 'cancelled', updated_at: new Date().toISOString() })
       .eq('id', bookingId)
       .eq('property_id', site.sitePropertyId)
-      .in('status', ['pending', 'confirmed'])
+      .eq('status', 'confirmed')
       .select(BOOKING_COLUMNS)
       .maybeSingle();
 
@@ -429,6 +442,97 @@ export async function listBookings(
     .lt('check_in', to)
     .gt('check_out', from)
     .order('check_in');
+
+  if (error) throw fromSiteError(error);
+
+  return (data ?? []).map((row) => toBooking(row as BookingRow));
+}
+
+export type BookingView = 'upcoming' | 'in_house' | 'past' | 'cancelled';
+
+/**
+ * Bookings for a list view, relative to today in India:
+ *   upcoming   confirmed, check-in after today
+ *   in_house   confirmed, today within [check_in, check_out]
+ *   past       completed, or confirmed with check-out before today
+ *   cancelled  cancelled (expired holds are never shown)
+ */
+export async function listBookingsByView(
+  site: VillaSite,
+  view: BookingView,
+  limit = 100,
+): Promise<SiteBooking[]> {
+  const today = todayIst();
+  let query = site.client
+    .from('bookings')
+    .select(BOOKING_COLUMNS)
+    .eq('property_id', site.sitePropertyId);
+
+  if (view === 'upcoming') {
+    query = query
+      .eq('status', 'confirmed')
+      .gt('check_in', today)
+      .order('check_in');
+  } else if (view === 'in_house') {
+    query = query
+      .eq('status', 'confirmed')
+      .lte('check_in', today)
+      .gte('check_out', today)
+      .order('check_out');
+  } else if (view === 'past') {
+    query = query
+      .or(`status.eq.completed,and(status.eq.confirmed,check_out.lt.${today})`)
+      .order('check_in', { ascending: false });
+  } else {
+    query = query
+      .eq('status', 'cancelled')
+      .order('updated_at', { ascending: false });
+  }
+
+  const { data, error } = await query.limit(limit);
+
+  if (error) throw fromSiteError(error);
+
+  return (data ?? []).map((row) => toBooking(row as BookingRow));
+}
+
+/**
+ * Finds bookings by guest name, email, phone or booking code, across every
+ * status except lapsed holds. Phone searches match the site's 10-digit form
+ * however they are typed ("+91 98765 43210", "098765 43210").
+ */
+export async function searchBookings(
+  site: VillaSite,
+  query: string,
+  limit = 50,
+): Promise<SiteBooking[]> {
+  const text = query
+    .trim()
+    .replace(/[%_,()]/g, ' ')
+    .trim();
+
+  if (!text) return [];
+
+  const digits = text.replace(/\D/g, '');
+  const phone =
+    digits.length >= 6 ? digits.replace(/^(91|0)(?=[6-9]\d{9}$)/, '') : null;
+
+  const terms = [
+    `guest_name.ilike.%${text}%`,
+    `guest_email.ilike.%${text}%`,
+    `booking_code.ilike.%${text}%`,
+  ];
+
+  if (phone) terms.push(`guest_phone.ilike.%${phone}%`);
+
+  const { data, error } = await site.client
+    .from('bookings')
+    .select(BOOKING_COLUMNS)
+    .eq('property_id', site.sitePropertyId)
+    .in('status', ['pending', 'confirmed', 'completed', 'cancelled'])
+    .or(terms.join(','))
+    .order('check_in', { ascending: false })
+    .limit(limit);
 
   if (error) throw fromSiteError(error);
 

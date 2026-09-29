@@ -1,5 +1,6 @@
 import 'server-only';
 import { fromPaise, toPaise } from '~/lib/villa/money';
+import type { PricingProperty, PricingRuleInput } from '~/lib/villa/pricing';
 
 import type { VillaSite } from './client';
 import { nightsIn } from './dates';
@@ -378,4 +379,44 @@ export async function deletePricingRule(
 
     return { result: undefined, siteId: ruleId };
   });
+}
+
+/**
+ * The exact inputs the guest site's pricing engine uses, in paise — for
+ * quoting phone/WhatsApp bookings with lib/villa/pricing (quoteStay).
+ */
+export async function getPricingInputs(
+  site: VillaSite,
+): Promise<{ property: PricingProperty; rules: PricingRuleInput[] }> {
+  const [{ data: property, error }, { data: rules, error: rulesError }] =
+    await Promise.all([
+      site.client
+        .from('properties')
+        .select(
+          'base_nightly_rate, weekend_nightly_rate, base_occupancy, max_occupancy, extra_guest_rate, extra_guest_tier2_rate, extra_guest_tier2_from',
+        )
+        .eq('id', site.sitePropertyId)
+        .maybeSingle(),
+      site.client
+        .from('pricing_rules')
+        .select(
+          'rule_name, start_date, end_date, nightly_rate, min_stay_nights',
+        )
+        .eq('property_id', site.sitePropertyId),
+    ]);
+
+  if (error) throw fromSiteError(error);
+  if (rulesError) throw fromSiteError(rulesError);
+  if (!property) {
+    throw new VillaDbError('NOT_FOUND', `site property ${site.sitePropertyId}`);
+  }
+
+  return {
+    property: {
+      ...property,
+      extra_guest_tier2_rate: property.extra_guest_tier2_rate ?? null,
+      extra_guest_tier2_from: property.extra_guest_tier2_from ?? null,
+    },
+    rules: rules ?? [],
+  };
 }

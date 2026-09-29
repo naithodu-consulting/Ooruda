@@ -131,6 +131,19 @@ const getVillaRoutes = (account: string) => [
     ],
   },
   {
+    label: 'villa.nav.operations',
+    children: [
+      {
+        label: 'villa.nav.bookings',
+        path: pathsConfig.app.accountVillaBookings.replace(
+          '[account]',
+          account,
+        ),
+        Icon: <CalendarClock className={iconClasses} />,
+      },
+    ],
+  },
+  {
     label: 'villa.nav.admin',
     children: [
       {
@@ -219,11 +232,16 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
   ],
   villa_owner: [
     'villa.nav.dashboard',
+    'villa.nav.bookings',
     'villa.nav.members',
     'villa.nav.settings',
   ],
   // Managers see settings read-only (rates, contacts they need on shift).
-  villa_manager: ['villa.nav.dashboard', 'villa.nav.settings'],
+  villa_manager: [
+    'villa.nav.dashboard',
+    'villa.nav.bookings',
+    'villa.nav.settings',
+  ],
 };
 
 type SidebarConfig = ReturnType<typeof getTeamAccountSidebarConfig>;

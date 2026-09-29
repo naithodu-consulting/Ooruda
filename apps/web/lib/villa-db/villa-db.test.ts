@@ -6,6 +6,7 @@ import {
   formatBookingCode,
   normalizeBookingCode,
 } from './booking-code';
+import { toSitePhone } from './bookings';
 import { addDays, isYmd, nightsIn, nightsList } from './dates';
 import { VillaDbError, fromSiteError, fromSiteWriteError } from './errors';
 
@@ -264,5 +265,18 @@ describe('getVillaSite', () => {
       code: 'NOT_CONFIGURED',
     });
     expect(adminRpc).toHaveBeenCalled();
+  });
+});
+
+describe('toSitePhone', () => {
+  it('stores Indian mobiles as the site does (10 digits)', () => {
+    expect(toSitePhone('+919876543210')).toBe('9876543210');
+  });
+
+  it('keeps other numbers in international form', () => {
+    expect(toSitePhone('+447911123456')).toBe('+447911123456');
+    expect(toSitePhone('+911234567890')).toBe('+911234567890'); // not a mobile
+    expect(toSitePhone('')).toBe('');
+    expect(toSitePhone(null)).toBe('');
   });
 });

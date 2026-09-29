@@ -202,7 +202,7 @@ run('villa-db adapter against a local villa-booking database', () => {
       site,
       {
         guestName: 'Integration Test Guest',
-        guestPhone: '9999999999',
+        guestPhone: '+919999999999',
         adults: 2,
         checkIn: d(3),
         checkOut: d(5),
@@ -219,6 +219,8 @@ run('villa-db adapter against a local villa-booking database', () => {
 
     expect(booking.status).toBe('confirmed');
     expect(booking.channel).toBe('phone');
+    // Stored the way the site's own checkout stores Indian mobiles.
+    expect(booking.guestPhone).toBe('9999999999');
     expect(booking.bookingCode).toMatch(
       new RegExp(`^${site.bookingCodePrefix ?? 'HB'}-[0-9A-Z]{3}-[0-9A-Z]{3}$`),
     );

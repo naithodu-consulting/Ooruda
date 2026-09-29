@@ -2641,6 +2641,111 @@ export type Database = {
           },
         ]
       }
+      villa_booking_activity: {
+        Row: {
+          account_id: string
+          action: string
+          actor_user_id: string | null
+          booking_code: string | null
+          created_at: string
+          id: string
+          note: string | null
+          property_id: string
+          reason_code: string | null
+          site_booking_id: string
+        }
+        Insert: {
+          account_id: string
+          action: string
+          actor_user_id?: string | null
+          booking_code?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          property_id: string
+          reason_code?: string | null
+          site_booking_id: string
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          actor_user_id?: string | null
+          booking_code?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          property_id?: string
+          reason_code?: string | null
+          site_booking_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_booking_activity_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_activity_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_activity_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_activity_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_activity_reason_code_fkey"
+            columns: ["reason_code"]
+            isOneToOne: false
+            referencedRelation: "villa_cancellation_reasons"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      villa_cancellation_reasons: {
+        Row: {
+          code: string
+          default_refund: string
+          display_order: number
+          initiated_by: string
+          is_active: boolean
+          label: string
+          note_required: boolean
+        }
+        Insert: {
+          code: string
+          default_refund: string
+          display_order: number
+          initiated_by: string
+          is_active?: boolean
+          label: string
+          note_required?: boolean
+        }
+        Update: {
+          code?: string
+          default_refund?: string
+          display_order?: number
+          initiated_by?: string
+          is_active?: boolean
+          label?: string
+          note_required?: boolean
+        }
+        Relationships: []
+      }
       villa_emergency_contacts: {
         Row: {
           account_id: string

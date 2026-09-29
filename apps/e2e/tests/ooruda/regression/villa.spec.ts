@@ -33,6 +33,16 @@ const VILLA_NAME = `E2E Villa ${STAMP}`;
 const VILLA_SLUG = `e2e-villa-${STAMP}`;
 const VILLA_HOME = `/home/${VILLA_SLUG}`;
 
+// M3a: a random 2-night stay in 2030 (clear of real data and of other runs).
+function ymdPlus(ymd: string, days: number) {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+const STAY_IN = ymdPlus('2030-02-01', Math.floor(Math.random() * 300));
+const STAY_OUT = ymdPlus(STAY_IN, 2);
+let bookingCode = '';
+
 // M1: the local villa-booking stack (only ever a local database). The key is
 // that stack's default service key, supplied by the environment, never
 // committed. Without it the booking-site connection tests are skipped.
@@ -469,6 +479,104 @@ test.describe.serial('villa product (M0)', () => {
 
     await page.click('[data-test="villa-settings-tab-addons"]');
     await expect(page.locator('[data-test="villa-addon-new"]')).toHaveCount(0);
+
+    await page.context().close();
+  });
+
+  test('villa owner records a phone booking with a live quote', async ({
+    browser,
+  }) => {
+    test.skip(!VILLA_SITE.key, 'VILLA_DB_TEST_SERVICE_ROLE_KEY not set');
+
+    const page = await signedInPage(browser, VILLA_OWNER.phone);
+    const issues = watchPage(page);
+
+    await page.goto(VILLA_HOME);
+    await settle(page);
+    await sidebar(page).getByRole('link', { name: 'Bookings' }).click();
+    await page.waitForURL(/\/bookings/);
+    await settle(page);
+
+    await page.click('[data-test="villa-booking-new"]');
+    await pickDate(page, 'villa-booking-checkin', STAY_IN);
+    await pickDate(page, 'villa-booking-checkout', STAY_OUT);
+    await page.fill('[data-test="villa-booking-adults"]', '4');
+
+    // Live availability + price from the booking site.
+    await expect(
+      page.locator('[data-test="villa-booking-quote"]'),
+    ).toContainText('Available');
+    await expect(
+      page.locator('[data-test="villa-booking-total"]'),
+    ).toContainText('₹');
+
+    await page.fill('[data-test="villa-booking-name"]', `E2E Guest ${STAMP}`);
+    await page.fill('[data-test="villa-booking-phone"]', '9876543210');
+    await page.click('[data-test="villa-booking-submit"]');
+
+    // Lands on the new booking, titled with its site-issued code.
+    await page.waitForURL(/\/bookings\/[0-9a-f-]{36}/);
+    await settle(page);
+    await expect(page.locator('[data-test="villa-booking-status"]')).toHaveText(
+      'Confirmed',
+    );
+    bookingCode = (await page.locator('h1').first().innerText()).trim();
+    expect(bookingCode).toMatch(/^[A-Z][A-Z0-9]{1,3}-[0-9A-Z]{3}-[0-9A-Z]{3}$/);
+
+    // Listed under Upcoming.
+    await page.goto(`${VILLA_HOME}/bookings?view=upcoming`);
+    await settle(page);
+    await expect(
+      page.locator(
+        `[data-test="villa-booking-row"][data-booking-code="${bookingCode}"]`,
+      ),
+    ).toBeVisible();
+
+    // Staff can type the code any way: lower case, no hyphens.
+    await page.fill(
+      '[data-test="villa-bookings-search"]',
+      bookingCode.toLowerCase().replace(/-/g, ''),
+    );
+    await page.click('[data-test="villa-bookings-search-submit"]');
+    await page.waitForURL(/\/bookings\/[0-9a-f-]{36}/);
+    await expect(page.locator('[data-test="villa-booking-guest"]')).toHaveText(
+      `E2E Guest ${STAMP}`,
+    );
+
+    expect(issues.serverErrors).toEqual([]);
+    await page.context().close();
+  });
+
+  test('villa manager cancels the booking with a reason', async ({
+    browser,
+  }) => {
+    test.skip(!VILLA_SITE.key || !bookingCode, 'no booking created');
+
+    // The owner allowed managers to cancel in the settings test above.
+    const page = await signedInPage(browser, VILLA_MANAGER.phone);
+
+    await page.goto(`${VILLA_HOME}/bookings?q=${bookingCode}`);
+    await page.waitForURL(/\/bookings\/[0-9a-f-]{36}/);
+    await settle(page);
+
+    await page.click('[data-test="villa-booking-cancel-open"]');
+    await page.click('[data-test="villa-booking-cancel-reason"]');
+    await page.click('[data-test="villa-cancel-reason-guest_change_of_plans"]');
+    await page.fill(
+      '[data-test="villa-booking-cancel-note"]',
+      'Guest called to cancel',
+    );
+    await page.click('[data-test="villa-booking-cancel-confirm"]');
+
+    await expect(page.locator('[data-test="villa-booking-status"]')).toHaveText(
+      'Cancelled',
+    );
+    await expect(
+      page.locator('[data-test="villa-booking-activity"]'),
+    ).toContainText('Reason: Guest changed plans');
+    await expect(
+      page.locator('[data-test="villa-booking-cancel-open"]'),
+    ).toHaveCount(0);
 
     await page.context().close();
   });
