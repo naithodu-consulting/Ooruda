@@ -1,5 +1,6 @@
 import {
   Activity,
+  BarChart3,
   Bell,
   Building2,
   CalendarClock,
@@ -129,6 +130,11 @@ const getVillaRoutes = (account: string) => [
         Icon: <LayoutDashboard className={iconClasses} />,
         highlightMatch: `${pathsConfig.app.home}$`,
       },
+      {
+        label: 'villa.nav.reports',
+        path: pathsConfig.app.accountVillaReports.replace('[account]', account),
+        Icon: <BarChart3 className={iconClasses} />,
+      },
     ],
   },
   {
@@ -249,6 +255,7 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
   ],
   villa_owner: [
     'villa.nav.dashboard',
+    'villa.nav.reports',
     'villa.nav.calendar',
     'villa.nav.bookings',
     'villa.nav.expenses',
@@ -258,6 +265,7 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
   // Managers see settings read-only (rates, contacts they need on shift).
   villa_manager: [
     'villa.nav.dashboard',
+    'villa.nav.reports',
     'villa.nav.calendar',
     'villa.nav.bookings',
     'villa.nav.expenses',

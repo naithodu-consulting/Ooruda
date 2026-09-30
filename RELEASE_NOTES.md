@@ -4,6 +4,24 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 (M6) - Reports - 2026-09-30
+
+A **Reports** page for villa owners and managers. No change for association users.
+
+- **Periods:** this month, last month, this financial year, last financial year, or a custom range (up to 3 years; an invalid one says so).
+- **Overview:** occupancy, revenue before GST, average per booked night, revenue per available night, expenses (with the GST part), revenue less expenses, and GST collected on stays; a month-by-month chart and table of revenue, expenses and net; where the money went, by expense category.
+- **Channels:** revenue, stays and nights by where the booking came from (website, phone, WhatsApp, referral…), with shares.
+- **Guests:** how many guests stayed and how many were returning, and a list of returning guests (stays, nights and revenue to date). Guests are matched by phone number, never by name alone.
+- **Download** the current tab as CSV (opens cleanly in Excel; formula-like cells are neutralised) or **Print / PDF** (the report without the app around it).
+- Counting rules: a stay counts by its nights inside the period and its revenue pro rata (from its dates), only confirmed and checked-out stays count, and month lines add up exactly to the totals. Figures come from Ooruda's copy of the bookings, refreshed in the background; the page says as of when.
+- Large villas: results are read in pages, so a year of bookings is never cut off at the database's 1,000-row limit (not yet exercised by a test at that size).
+
+### Testing
+- Vitest: periods (financial years, custom range checks), overview figures and month split, channels, returning guests, CSV quoting.
+- Playwright (full regression 148 passing): owner opens Reports, switches to the financial year (12 months), downloads the CSV, opens Channels and Guests; no sideways scroll at 360 px.
+
+No migrations.
+
 ## Villa v1.0 (M5a) - Payments, Receipts, Refunds, Expenses - 2026-09-30
 
 A **Payments** section on every villa booking and an **Expenses** page. Tax invoices and credit notes follow in M5b (they wait for the booking site to issue invoices at check-out, villa-booking TODO 8c, and the CA's confirmation of the GST slabs). No change for association users.

@@ -980,6 +980,75 @@ test.describe.serial('villa product (M0)', () => {
     await page.context().close();
   });
 
+  test('villa owner reads the reports and downloads a CSV', async ({
+    browser,
+  }) => {
+    const page = await signedInPage(browser, VILLA_OWNER.phone);
+    const issues = watchPage(page);
+
+    await page.goto(VILLA_HOME);
+    await settle(page);
+    await sidebar(page).getByRole('link', { name: 'Reports' }).click();
+    await page.waitForURL(/\/villa-reports/);
+    await settle(page);
+    await expectNoErrorBoundary(page);
+
+    await expect(
+      page.locator('[data-test="villa-report-occupancy"]'),
+    ).toContainText('%');
+    await expect(
+      page.locator('[data-test="villa-report-months"]'),
+    ).toBeVisible();
+
+    // Financial year: twelve months.
+    await page.click('[data-test="villa-reports-range"]');
+    await page.click('[data-test="villa-reports-range-this_fy"]');
+    await page.waitForURL(/range=this_fy/);
+    await settle(page);
+    await expect(
+      page.locator('[data-test="villa-report-months"] tbody tr'),
+    ).toHaveCount(12);
+
+    const csv = page.waitForEvent('download');
+    await page.click('[data-test="villa-reports-csv"]');
+    const file = await csv;
+    expect(file.suggestedFilename()).toMatch(/-overview\.csv$/);
+
+    for (const tab of ['channels', 'guests'] as const) {
+      await page.click(`[data-test="villa-reports-tab-${tab}"]`);
+      await page.waitForURL(new RegExp(`tab=${tab}`));
+      await settle(page);
+      await expectNoErrorBoundary(page);
+    }
+
+    const overflow = await measureOverflow(page, 360);
+    expect(
+      overflow.docOverflow,
+      overflow.offenders.join(' | '),
+    ).toBeLessThanOrEqual(0);
+    await page.goto(`${VILLA_HOME}/villa-reports?range=this_fy`);
+    await settle(page);
+    const overflowOverview = await measureOverflow(page, 360);
+    expect(
+      overflowOverview.docOverflow,
+      overflowOverview.offenders.join(' | '),
+    ).toBeLessThanOrEqual(0);
+    if (SHOTS)
+      await page.screenshot({
+        path: `${SHOTS}/reports-360.png`,
+        fullPage: true,
+      });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    if (SHOTS)
+      await page.screenshot({
+        path: `${SHOTS}/reports-1280.png`,
+        fullPage: true,
+      });
+
+    expect(issues.serverErrors).toEqual([]);
+    await page.context().close();
+  });
+
   test("villa owner's association membership is unaffected", async ({
     browser,
   }) => {

@@ -30,7 +30,7 @@ import { VillaToday } from './villa-today';
  * Villa workspace home: today's arrivals and departures (live from the
  * booking site), this month's figures (from the bookings mirror), and the
  * workspace/site status. With several villas it shows the first connected
- * one; a villa switcher comes with reports (M6).
+ * one (a villa switcher for multi-villa accounts is still to come).
  */
 export async function VillaDashboard({ account }: { account: string }) {
   const { role, accountId } = await requireRole(account, VILLA_ROLES, 'villa');
