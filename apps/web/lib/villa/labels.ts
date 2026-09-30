@@ -122,6 +122,7 @@ export const ACTIVITY_LABELS: Record<BookingActivityAction, string> = {
   created: 'Booked',
   cancelled: 'Cancelled',
   completed: 'Checked out',
+  reopened: 'Check-out undone',
   note: 'Note',
 };
 

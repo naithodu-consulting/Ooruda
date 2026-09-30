@@ -15,6 +15,7 @@ import {
   cancelBooking,
   createOfflineBooking,
   markStayCompleted,
+  reopenStay,
 } from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
@@ -29,6 +30,7 @@ import type {
   CancelBookingSchema,
   CompleteStaySchema,
   NewBookingSchema,
+  ReopenStaySchema,
   StaySchema,
 } from '../schemas/bookings.schema';
 
@@ -94,7 +96,7 @@ export function createBookingsService(client: Client) {
       accountId: string;
       propertyId: string;
       booking: Pick<SiteBooking, 'id' | 'bookingCode'>;
-      action: 'created' | 'cancelled' | 'completed' | 'note';
+      action: 'created' | 'cancelled' | 'completed' | 'reopened' | 'note';
       reasonCode?: string | null;
       note?: string | null;
     },
@@ -333,6 +335,48 @@ export function createBookingsService(client: Client) {
       );
       await mirrorBooking(site, booking);
       await releaseGuestIds(input.accountId, input.propertyId, booking.id);
+
+      return booking;
+    },
+
+    /**
+     * Undo a check-out (pressed by mistake, or the guest stayed on), within
+     * a day. The thank-you email then waits for the next check-out.
+     */
+    async reopen(input: z.output<typeof ReopenStaySchema>, actor: string) {
+      const { data: last, error } = await client
+        .from('villa_booking_activity')
+        .select('action, created_at')
+        .eq('property_id', input.propertyId)
+        .eq('site_booking_id', input.bookingId)
+        .in('action', ['completed', 'reopened'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw new Error('Could not check the booking history.');
+
+      if (
+        !last ||
+        last.action !== 'completed' ||
+        Date.now() - Date.parse(last.created_at) > 24 * 3_600_000
+      ) {
+        throw new Error('A check-out can be undone only within a day.');
+      }
+
+      const site = await getVillaSite(input.accountId, input.propertyId);
+      const booking = await reopenStay(site, input.bookingId, actor);
+
+      await record(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking,
+          action: 'reopened',
+        },
+        actor,
+      );
+      await mirrorBooking(site, booking);
 
       return booking;
     },

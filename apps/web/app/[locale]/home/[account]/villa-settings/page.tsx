@@ -80,7 +80,7 @@ export default async function VillaSettingsPage({
           .then(rows),
         client
           .from('villa_account_settings')
-          .select('managers_can_cancel')
+          .select('managers_can_cancel, pre_arrival_email, thank_you_email')
           .eq('account_id', accountId)
           .maybeSingle()
           .then(({ data, error }) => {
@@ -120,6 +120,8 @@ export default async function VillaSettingsPage({
         addons={addons}
         contacts={contacts}
         managersCanCancel={settings?.managers_can_cancel ?? false}
+        preArrivalEmail={settings?.pre_arrival_email ?? true}
+        thankYouEmail={settings?.thank_you_email ?? true}
       />
     </PageBody>
   );

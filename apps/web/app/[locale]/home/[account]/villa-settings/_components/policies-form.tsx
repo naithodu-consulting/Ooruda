@@ -38,6 +38,8 @@ export function PoliciesForm(props: {
   propertyId: string;
   canEdit: boolean;
   managersCanCancel: boolean;
+  preArrivalEmail: boolean;
+  thankYouEmail: boolean;
   otaBufferNights: number;
   whatsappNumber: string | null;
   retentionDays: number;
@@ -48,6 +50,8 @@ export function PoliciesForm(props: {
       accountId: props.accountId,
       propertyId: props.propertyId,
       managersCanCancel: props.managersCanCancel,
+      preArrivalEmail: props.preArrivalEmail,
+      thankYouEmail: props.thankYouEmail,
       otaBufferNights: props.otaBufferNights,
       whatsappNumber: props.whatsappNumber ?? '',
     },
@@ -95,6 +99,64 @@ export function PoliciesForm(props: {
                       onCheckedChange={field.onChange}
                       disabled={disabled}
                       data-test={'villa-policies-managers-cancel'}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card">
+          <CardHeader>
+            <CardTitle className="text-base">Guest emails</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <FormField
+              name="preArrivalEmail"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3">
+                  <div className="flex flex-col gap-1">
+                    <FormLabel>Email before arrival</FormLabel>
+                    <FormDescription>
+                      The day before check-in at 10 am: dates, times, ID
+                      reminder and contacts. Only if the stay is still confirmed
+                      then.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      disabled={disabled}
+                      data-test={'villa-policies-pre-arrival-email'}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              name="thankYouEmail"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3">
+                  <div className="flex flex-col gap-1">
+                    <FormLabel>Thank-you email after check-out</FormLabel>
+                    <FormDescription>
+                      3 hours after you check the guest out on the booking (not
+                      on the calendar date), so a late or extended stay is never
+                      thanked early.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      disabled={disabled}
+                      data-test={'villa-policies-thank-you-email'}
                     />
                   </FormControl>
                   <FormMessage />

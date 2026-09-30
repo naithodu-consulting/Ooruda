@@ -148,6 +148,8 @@ export const DeleteContactSchema = z.object({ ...ids, id: z.string().uuid() });
 export const PoliciesSchema = z.object({
   ...ids,
   managersCanCancel: z.boolean(),
+  preArrivalEmail: z.boolean(),
+  thankYouEmail: z.boolean(),
   otaBufferNights: z.coerce.number().int().min(0).max(14),
   // Where guests send their IDs. Optional.
   whatsappNumber: z

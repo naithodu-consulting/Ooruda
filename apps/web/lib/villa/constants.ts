@@ -40,6 +40,7 @@ export type BookingActivityAction =
   | 'created'
   | 'cancelled'
   | 'completed'
+  | 'reopened'
   | 'note';
 
 /**

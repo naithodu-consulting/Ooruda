@@ -36,6 +36,7 @@ import { selectVillaProperty } from '~/lib/villa/properties';
 import { TeamAccountLayoutPageHeader } from '../../_components/team-account-layout-page-header';
 import { CancelBookingDialog } from '../_components/cancel-booking-dialog';
 import { CompleteStayButton } from '../_components/complete-stay-button';
+import { GuestEmailsSection } from '../_components/guest-emails-section';
 import { GuestIdsSection } from '../_components/guest-ids-section';
 import { PaymentsSection } from '../_components/payments-section';
 
@@ -323,6 +324,16 @@ export default async function BookingPage({ params, searchParams }: Props) {
               propertyId={propertyId}
               booking={booking}
               role={role}
+            />
+          </Suspense>
+
+          <Suspense
+            fallback={<Skeleton className="h-32 rounded-xl lg:col-span-2" />}
+          >
+            <GuestEmailsSection
+              accountId={accountId}
+              propertyId={propertyId}
+              booking={booking}
             />
           </Suspense>
 

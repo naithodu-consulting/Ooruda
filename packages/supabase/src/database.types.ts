@@ -2528,21 +2528,30 @@ export type Database = {
         Row: {
           account_id: string
           created_at: string
+          guest_emails_checked_at: string | null
           managers_can_cancel: boolean
+          pre_arrival_email: boolean
+          thank_you_email: boolean
           updated_at: string
           updated_by: string | null
         }
         Insert: {
           account_id: string
           created_at?: string
+          guest_emails_checked_at?: string | null
           managers_can_cancel?: boolean
+          pre_arrival_email?: boolean
+          thank_you_email?: boolean
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
           account_id?: string
           created_at?: string
+          guest_emails_checked_at?: string | null
           managers_can_cancel?: boolean
+          pre_arrival_email?: boolean
+          thank_you_email?: boolean
           updated_at?: string
           updated_by?: string | null
         }
@@ -3383,6 +3392,89 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_message_log: {
+        Row: {
+          account_id: string
+          booking_code: string | null
+          check_in: string | null
+          created_at: string
+          id: string
+          manual: boolean
+          property_id: string
+          provider_id: string | null
+          reason: string | null
+          sent_by: string | null
+          site_booking_id: string
+          status: string
+          template: string
+          to_email: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          booking_code?: string | null
+          check_in?: string | null
+          created_at?: string
+          id?: string
+          manual?: boolean
+          property_id: string
+          provider_id?: string | null
+          reason?: string | null
+          sent_by?: string | null
+          site_booking_id: string
+          status: string
+          template: string
+          to_email?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          booking_code?: string | null
+          check_in?: string | null
+          created_at?: string
+          id?: string
+          manual?: boolean
+          property_id?: string
+          provider_id?: string | null
+          reason?: string | null
+          sent_by?: string | null
+          site_booking_id?: string
+          status?: string
+          template?: string
+          to_email?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_message_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_message_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_message_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_message_log_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
             referencedColumns: ["id"]
           },
         ]

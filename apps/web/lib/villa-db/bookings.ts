@@ -687,3 +687,45 @@ export async function setPaymentStatus(
     },
   );
 }
+
+/**
+ * Undoes a check-out pressed by mistake (or for a guest who stayed on):
+ * completed → confirmed. Refused once the site has issued an invoice for it.
+ */
+export async function reopenStay(
+  site: VillaSite,
+  bookingId: string,
+  actorUserId: string | null,
+): Promise<SiteBooking> {
+  return withSyncLog(site, 'booking.reopen', actorUserId, async () => {
+    const { data, error } = await site.client
+      .from('bookings')
+      .update({ status: 'confirmed', updated_at: new Date().toISOString() })
+      .eq('id', bookingId)
+      .eq('property_id', site.sitePropertyId)
+      .eq('status', 'completed')
+      .is('invoice_number', null)
+      .select(BOOKING_COLUMNS)
+      .maybeSingle();
+
+    if (error) throw fromSiteWriteError(error);
+
+    if (!data) {
+      const existing = await getBooking(site, bookingId);
+
+      if (!existing)
+        throw new VillaDbError('NOT_FOUND', `booking ${bookingId}`);
+
+      throw new VillaDbError(
+        'CONFLICT',
+        `booking ${bookingId} is ${existing.status}, invoice ${existing.invoiceNumber ?? 'none'}`,
+        existing.invoiceNumber
+          ? 'An invoice has been issued for this stay, so the check-out cannot be undone.'
+          : 'Only a checked-out stay can be reopened.',
+      );
+    }
+
+    const booking = toBooking(data as BookingRow);
+    return { result: booking, siteId: booking.bookingCode ?? booking.id };
+  });
+}

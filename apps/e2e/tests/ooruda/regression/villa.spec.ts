@@ -40,8 +40,10 @@ function ymdPlus(ymd: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 const STAY_IN = ymdPlus('2030-02-01', Math.floor(Math.random() * 300));
-const STAY_OUT = ymdPlus(STAY_IN, 2);
+let stayIn = STAY_IN;
 let bookingCode = '';
+// Delivered to the local mail catcher (Inbucket), never a real inbox.
+const GUEST_EMAIL = `e2e-guest-${STAMP}@example.test`;
 
 // M3b: three nights to block, a different year from the stay above.
 const BLOCK_FIRST = ymdPlus('2031-02-01', Math.floor(Math.random() * 300));
@@ -504,20 +506,29 @@ test.describe.serial('villa product (M0)', () => {
     await settle(page);
 
     await page.click('[data-test="villa-booking-new"]');
-    await pickDate(page, 'villa-booking-checkin', STAY_IN);
-    await pickDate(page, 'villa-booking-checkout', STAY_OUT);
     await page.fill('[data-test="villa-booking-adults"]', '4');
 
-    // Live availability + price from the booking site.
-    await expect(
-      page.locator('[data-test="villa-booking-quote"]'),
-    ).toContainText('Available');
+    // Live availability + price from the booking site. A run that stopped
+    // before its clean-up can leave a stay behind: try a few weeks later.
+    const quote = page.locator('[data-test="villa-booking-quote"]');
+    const quoteError = page.locator('[data-test="villa-booking-quote-error"]');
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      stayIn = ymdPlus(STAY_IN, attempt * 7);
+      await pickDate(page, 'villa-booking-checkin', stayIn);
+      await pickDate(page, 'villa-booking-checkout', ymdPlus(stayIn, 2));
+      await expect(quote.or(quoteError)).toBeVisible();
+      if (await quote.isVisible()) break;
+    }
+
+    await expect(quote).toContainText('Available');
     await expect(
       page.locator('[data-test="villa-booking-total"]'),
     ).toContainText('₹');
 
     await page.fill('[data-test="villa-booking-name"]', `E2E Guest ${STAMP}`);
     await page.fill('[data-test="villa-booking-phone"]', '9876543210');
+    await page.fill('[data-test="villa-booking-email"]', GUEST_EMAIL);
     await page.click('[data-test="villa-booking-submit"]');
 
     // Lands on the new booking, titled with its site-issued code.
@@ -694,6 +705,132 @@ test.describe.serial('villa product (M0)', () => {
     if (SHOTS) await panel.screenshot({ path: `${SHOTS}/payments-360.png` });
 
     expect(issues.serverErrors).toEqual([]);
+    await page.context().close();
+  });
+
+  test('villa manager sends the arrival email by hand', async ({ browser }) => {
+    test.skip(!VILLA_SITE.key || !bookingCode, 'no booking created');
+
+    const page = await signedInPage(browser, VILLA_MANAGER.phone);
+    const issues = watchPage(page);
+
+    await page.goto(`${VILLA_HOME}/bookings?q=${bookingCode}`);
+    await page.waitForURL(/\/bookings\/[0-9a-f-]{36}/);
+    await settle(page);
+
+    const card = page.locator('[data-test="villa-guest-emails"]');
+    const pre = card.locator(
+      '[data-test="villa-guest-email-pre_arrival-status"]',
+    );
+    // A far-future stay: scheduled for the day before, if still confirmed.
+    await expect(pre).toContainText('Goes automatically');
+    await expect(
+      card.locator('[data-test="villa-guest-email-thank_you-status"]'),
+    ).toContainText('after you check the guest out');
+    await expect(
+      card.locator('[data-test="villa-guest-email-thank_you-send"]'),
+    ).toHaveCount(0);
+
+    await card
+      .locator('[data-test="villa-guest-email-pre_arrival-send"]')
+      .click();
+    await expect(page.getByText('Email sent')).toBeVisible();
+    await expect(pre).toContainText('Sent by hand once');
+    // A hand-sent email never replaces the automatic one.
+    await expect(pre).toContainText('Goes automatically');
+    await expect(
+      card.locator('[data-test="villa-guest-email-pre_arrival-send"]'),
+    ).toHaveText(/Send again/);
+
+    expect(issues.serverErrors).toEqual([]);
+    await page.context().close();
+  });
+
+  test('the scheduled run sends the arrival email for tomorrow, and not after cancellation', async ({
+    browser,
+  }) => {
+    const secret = process.env.VILLA_E2E_CRON_SECRET;
+    test.skip(!VILLA_SITE.key || !secret, 'VILLA_E2E_CRON_SECRET not set');
+
+    // Tomorrow in India, one night.
+    const nowIst = new Date(Date.now() + 5.5 * 3_600_000);
+    const today = nowIst.toISOString().slice(0, 10);
+    const tomorrow = ymdPlus(today, 1);
+    const hourIst = nowIst.getUTCHours();
+
+    const page = await signedInPage(browser, VILLA_OWNER.phone);
+    await page.goto(`${VILLA_HOME}/bookings`);
+    await settle(page);
+    await page.click('[data-test="villa-booking-new"]');
+    await pickDate(page, 'villa-booking-checkin', tomorrow);
+    await pickDate(page, 'villa-booking-checkout', ymdPlus(tomorrow, 1));
+    await page.fill('[data-test="villa-booking-adults"]', '2');
+    const quote = page.locator('[data-test="villa-booking-quote"]');
+    const quoteError = page.locator('[data-test="villa-booking-quote-error"]');
+    await expect(quote.or(quoteError)).toBeVisible();
+    test.skip(
+      await quoteError.isVisible(),
+      'tomorrow is not free on the local site',
+    );
+
+    await page.fill(
+      '[data-test="villa-booking-name"]',
+      `E2E Tomorrow ${STAMP}`,
+    );
+    await page.fill('[data-test="villa-booking-phone"]', '9876500000');
+    await page.fill(
+      '[data-test="villa-booking-email"]',
+      `e2e-tomorrow-${STAMP}@example.test`,
+    );
+    await page.click('[data-test="villa-booking-submit"]');
+    await page.waitForURL(/\/bookings\/[0-9a-f-]{36}/);
+    await settle(page);
+    const bookingUrl = page.url();
+
+    // Wrong secret: refused.
+    const refused = await page.request.get('/api/villa/sync', {
+      headers: { authorization: 'Bearer wrong' },
+    });
+    expect(refused.status()).toBe(401);
+
+    const run = await page.request.get('/api/villa/sync', {
+      headers: { authorization: `Bearer ${secret}` },
+      timeout: 120_000,
+    });
+    expect(run.status()).toBe(200);
+
+    await page.goto(bookingUrl);
+    await settle(page);
+    const pre = page.locator(
+      '[data-test="villa-guest-email-pre_arrival-status"]',
+    );
+
+    if (hourIst >= 10) {
+      await expect(pre).toContainText('Sent');
+      await expect(pre).not.toContainText('by hand');
+    } else {
+      await expect(pre).toContainText('Goes automatically');
+    }
+
+    // Cancel it: nothing more goes, and the dates are free again.
+    await page.click('[data-test="villa-booking-cancel-open"]');
+    await page.click('[data-test="villa-booking-cancel-reason"]');
+    await page.click('[data-test="villa-cancel-reason-guest_change_of_plans"]');
+    await page.click('[data-test="villa-booking-cancel-confirm"]');
+    await expect(page.locator('[data-test="villa-booking-status"]')).toHaveText(
+      'Cancelled',
+    );
+
+    await page.request.get('/api/villa/sync', {
+      headers: { authorization: `Bearer ${secret}` },
+      timeout: 120_000,
+    });
+    await page.reload();
+    await settle(page);
+    if (hourIst < 10) {
+      await expect(pre).toContainText('Not sent: the stay is cancelled');
+    }
+
     await page.context().close();
   });
 

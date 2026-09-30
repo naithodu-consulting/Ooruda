@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { enhanceRouteHandler } from '@kit/next/routes';
 import { getLogger } from '@kit/shared/logger';
 
+import { runDueGuestEmails } from '~/lib/villa/guest-email-runner';
 import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
 import { syncAllMirrors } from '~/lib/villa/mirror';
 
@@ -25,7 +26,8 @@ function authorised(request: Request): boolean {
 
 /**
  * Scheduled villa housekeeping: deletes guest ID files past their retention
- * date, then refreshes every villa's bookings mirror (OORUDA_VILLA_PLAN.md
+ * date, refreshes every villa's bookings mirror, then sends due guest
+ * emails (OORUDA_VILLA_PLAN.md
  * §3.3). Called by the scheduler with `Authorization: Bearer $CRON_SECRET`
  * (the Vercel Cron convention). Dashboards also refresh a stale mirror on
  * their own, so a missed run only delays reports.
@@ -43,6 +45,9 @@ export const GET = enhanceRouteHandler(
       // fresh figures.
       const ids = await purgeExpiredGuestIds();
       const { synced, failed } = await syncAllMirrors();
+      // After the sync, so candidates come from a fresh copy (each booking is
+      // still re-read live before its email goes).
+      const emails = await runDueGuestEmails();
 
       logger.info(
         { synced: synced.length, failed: failed.length },
@@ -55,6 +60,7 @@ export const GET = enhanceRouteHandler(
         failed: failed.map((f) => f.propertyId),
         idsPurged: ids.purged,
         idsPurgeFailed: ids.failed,
+        emailRunsFailed: emails.failed,
       });
     } catch (error) {
       logger.error(

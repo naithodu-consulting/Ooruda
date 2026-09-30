@@ -99,3 +99,11 @@ export const CompleteStaySchema = z.object({
   ...ids,
   bookingId: z.string().uuid(),
 });
+
+export const ReopenStaySchema = CompleteStaySchema;
+
+export const SendGuestEmailSchema = z.object({
+  ...ids,
+  bookingId: z.string().uuid(),
+  template: z.enum(['pre_arrival', 'thank_you']),
+});

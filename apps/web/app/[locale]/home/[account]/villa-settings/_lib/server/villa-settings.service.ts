@@ -191,6 +191,8 @@ export function createVillaSettingsService(client: Client) {
           {
             account_id: input.accountId,
             managers_can_cancel: input.managersCanCancel,
+            pre_arrival_email: input.preArrivalEmail,
+            thank_you_email: input.thankYouEmail,
             updated_by: actor,
           },
           { onConflict: 'account_id' },

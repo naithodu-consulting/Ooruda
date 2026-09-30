@@ -53,6 +53,8 @@ export function VillaSettingsClient(props: {
   addons: AddonRow[];
   contacts: ContactRow[];
   managersCanCancel: boolean;
+  preArrivalEmail: boolean;
+  thankYouEmail: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -210,6 +212,8 @@ export function VillaSettingsClient(props: {
             {...ids}
             canEdit={props.canEdit}
             managersCanCancel={props.managersCanCancel}
+            preArrivalEmail={props.preArrivalEmail}
+            thankYouEmail={props.thankYouEmail}
             otaBufferNights={props.property.otaBufferNights}
             whatsappNumber={props.property.whatsappNumber}
             retentionDays={props.property.retentionDays}

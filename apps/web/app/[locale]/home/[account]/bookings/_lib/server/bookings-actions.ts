@@ -5,12 +5,17 @@ import { revalidatePath } from 'next/cache';
 import { authActionClient } from '@kit/next/safe-action';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { getBooking } from '~/lib/villa-db/bookings';
+import { getVillaSite } from '~/lib/villa-db/client';
 import { requireVillaRole } from '~/lib/villa/auth';
+import { sendGuestEmailNow } from '~/lib/villa/guest-email-runner';
 
 import {
   CancelBookingSchema,
   CompleteStaySchema,
   NewBookingSchema,
+  ReopenStaySchema,
+  SendGuestEmailSchema,
 } from '../schemas/bookings.schema';
 import { createBookingsService } from './bookings.service';
 
@@ -66,6 +71,50 @@ export const completeStayAction = authActionClient
 
     await createBookingsService(getSupabaseServerClient()).complete(
       parsedInput,
+      ctx.user.id,
+    );
+
+    revalidateBookings();
+  });
+
+export const reopenStayAction = authActionClient
+  .inputSchema(ReopenStaySchema)
+  .action(async ({ parsedInput, ctx }) => {
+    await requireVillaRole(parsedInput.accountId, [
+      'villa_owner',
+      'villa_manager',
+    ]);
+
+    await createBookingsService(getSupabaseServerClient()).reopen(
+      parsedInput,
+      ctx.user.id,
+    );
+
+    revalidateBookings();
+  });
+
+// "Send now" / "Send again" for a guest email.
+export const sendGuestEmailAction = authActionClient
+  .inputSchema(SendGuestEmailSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    await requireVillaRole(parsedInput.accountId, [
+      'villa_owner',
+      'villa_manager',
+    ]);
+
+    const site = await getVillaSite(
+      parsedInput.accountId,
+      parsedInput.propertyId,
+    );
+    const booking = await getBooking(site, parsedInput.bookingId);
+
+    if (!booking) throw new Error('That booking no longer exists.');
+
+    await sendGuestEmailNow(
+      parsedInput.accountId,
+      parsedInput.propertyId,
+      booking,
+      parsedInput.template,
       ctx.user.id,
     );
 

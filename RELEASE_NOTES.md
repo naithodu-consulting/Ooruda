@@ -4,6 +4,35 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 (M7) - Automated Guest Emails - 2026-09-30
+
+Two automatic emails to villa guests, sent from the booking site's address. No change for association users.
+
+### When they go (and when they don't)
+- **Before arrival** (dates and times, booking number, ID reminder, WhatsApp and contacts marked "share with guests"): from **10:00 IST the day before check-in**, up to 3 hours before check-in time. Right before sending, the booking is read **live from the booking site**: a stay cancelled at the last moment gets nothing, and a stay moved to another date gets its email for the new date instead.
+- **Thank you**: **3 hours after staff press Check out** on the booking, never from the calendar date. A guest who stays a few hours longer is not checked out yet, so nothing goes; an extension of days moves the check-out and the email waits for the real one. A check-out pressed by mistake can be **undone** (within a day, before any invoice), and the email then waits for the next check-out.
+- A guest never gets the same automatic email twice, even if two runs overlap. A send that failed, or whose outcome is unknown, is never retried on its own (the email may already have gone): the booking page says so, and staff use **Send now**.
+- The dashboard's Today panel lists **stays past their check-out that nobody checked out**, so the thank-you is not held up by a forgotten button.
+
+### On the booking page
+- A **Guest emails** card: what went and when, what was skipped and why, or when it will go; **Send now / Send again** (never replaces the automatic one); **Undo check-out**.
+
+### Settings
+- Villa Settings > Policies: switch each email off for the villa.
+
+### Set-up needed (see `OORUDA_VILLA_OPEN_ITEMS.md`)
+- `VILLA_EMAIL_FROM` (the booking site's sender) and that domain verified in Ooruda's Resend account.
+- The scheduled job (`/api/villa/sync`), suggested every 15 minutes. Until then emails go only when someone opens a villa dashboard (at most every 5 minutes per villa).
+
+### Testing
+- pgTAP `villa-m7-guest-emails.test.sql`: one automatic email per booking and date (a moved stay may get a new one), manual sends alongside, server-only writes, other villas see nothing, both emails on by default.
+- Vitest: the send windows (10:00 the day before, 3 hours before check-in, one-digit hours), the thank-you delay and 7-day limit, email content and escaping.
+- Playwright (full regression): manual arrival email delivered to the local mail catcher with the site's sender; a booking for tomorrow is picked up by the scheduled run (sent after 10:00 IST, scheduled before) and, once cancelled, not sent; the scheduled route refuses a wrong secret.
+
+| Migration | Change |
+| --- | --- |
+| `20260930032217_villa_m7_guest_emails.sql` | `villa_message_log` (claim-before-send, one automatic email per booking and date), email switches on `villa_account_settings`, `reopened` booking activity |
+
 ## Villa v1.0 (M6) - Reports - 2026-09-30
 
 A **Reports** page for villa owners and managers. No change for association users.

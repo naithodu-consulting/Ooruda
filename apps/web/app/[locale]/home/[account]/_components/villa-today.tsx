@@ -5,7 +5,11 @@ import { CircleAlert, LogIn, LogOut, Moon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 
 import pathsConfig from '~/config/paths.config';
-import { type SiteBooking, listBookings } from '~/lib/villa-db/bookings';
+import {
+  type SiteBooking,
+  listBookings,
+  listBookingsByView,
+} from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { isVillaDbError } from '~/lib/villa-db/errors';
@@ -23,11 +27,19 @@ export async function VillaToday(props: {
 }) {
   const today = todayIst();
   let bookings: SiteBooking[];
+  let overdue: SiteBooking[] = [];
 
   try {
     const site = await getVillaSite(props.accountId, props.propertyId);
     // Yesterday..tomorrow covers today's departures as well as tonight.
-    bookings = await listBookings(site, addDays(today, -1), addDays(today, 1));
+    [bookings, overdue] = await Promise.all([
+      listBookings(site, addDays(today, -1), addDays(today, 1)),
+      // Stays past their check-out that nobody checked out: the thank-you
+      // email waits for that button, so remind the team.
+      listBookingsByView(site, 'past', 50).then((rows) =>
+        rows.filter((b) => b.status === 'confirmed' && b.checkOut < today),
+      ),
+    ]);
   } catch (error) {
     if (!isVillaDbError(error)) throw error;
 
@@ -103,6 +115,33 @@ export async function VillaToday(props: {
             )}
           </section>
         ))}
+        {overdue.length > 0 ? (
+          <section
+            className="border-warning/40 bg-warning/5 rounded-lg border p-3 sm:col-span-3"
+            data-test={'villa-today-overdue'}
+          >
+            <h3 className="mb-1 text-sm font-medium">
+              Not checked out yet ({overdue.length})
+            </h3>
+            <p className="text-muted-foreground mb-2 text-xs">
+              Their check-out date has passed. Check them out on the booking so
+              the thank-you email goes.
+            </p>
+            <ul className="flex flex-wrap gap-x-4 gap-y-1">
+              {overdue.map((b) => (
+                <li key={b.id}>
+                  <Link
+                    href={href(b.id)}
+                    className="text-sm font-medium underline-offset-2 hover:underline"
+                    data-test={'villa-today-overdue-guest'}
+                  >
+                    {b.guestName}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </CardContent>
     </Card>
   );
