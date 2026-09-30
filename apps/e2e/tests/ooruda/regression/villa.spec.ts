@@ -691,6 +691,33 @@ test.describe.serial('villa product (M0)', () => {
     await expect(
       panel.locator('[data-test="villa-payment-refund"]'),
     ).toHaveCount(0);
+
+    // The receipt voucher, ready to print.
+    const receiptNo = (
+      await panel.locator('[data-test="villa-payment-voucher"]').innerText()
+    ).trim();
+    const voucherHref = await panel
+      .locator('[data-test="villa-payment-voucher"]')
+      .getAttribute('href');
+    const voucher = await page.context().newPage();
+    await voucher.goto(voucherHref!);
+    await settle(voucher);
+    await expect(
+      voucher.locator('[data-test="villa-voucher-title"]'),
+    ).toHaveText('Receipt voucher');
+    await expect(
+      voucher.locator('[data-test="villa-voucher-number"]'),
+    ).toHaveText(receiptNo);
+    await expect(
+      voucher.locator('[data-test="villa-voucher-words"]'),
+    ).toHaveText('Rupees Five Thousand Only');
+    if (SHOTS) {
+      await voucher.screenshot({
+        path: `${SHOTS}/voucher.png`,
+        fullPage: true,
+      });
+    }
+    await voucher.close();
     await expect(
       page.locator('[data-test="villa-booking-payment-badge"]'),
     ).toHaveText('Part paid');
@@ -908,6 +935,20 @@ test.describe.serial('villa product (M0)', () => {
     await expect(
       panel.locator('[data-test="villa-payments-refunded"]'),
     ).toContainText('₹2,500');
+
+    const refundHref = await panel
+      .locator('[data-test="villa-refund-voucher"]')
+      .getAttribute('href');
+    const refundPage = await page.context().newPage();
+    await refundPage.goto(refundHref!);
+    await settle(refundPage);
+    await expect(
+      refundPage.locator('[data-test="villa-voucher-title"]'),
+    ).toHaveText('Refund voucher');
+    await expect(
+      refundPage.locator('[data-test="villa-voucher-words"]'),
+    ).toHaveText('Rupees Two Thousand Five Hundred Only');
+    await refundPage.close();
 
     expect(issues.serverErrors).toEqual([]);
     await page.context().close();

@@ -4,6 +4,21 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 - Receipt Vouchers and Villa Switcher - 2026-09-30
+
+- **Receipt and refund vouchers:** every receipt and refund number on a booking's Payments card opens a printable voucher (Print / Save as PDF): business name, address (from the booking site), GSTIN when set, voucher number and date, who paid, booking and stay, mode and reference, the amount in figures and in words (Indian style: lakh, crore), and a note that a receipt is not a tax invoice. A voided receipt shows VOID.
+- **Business details** in Villa Settings > Policies (owner): the name to print on receipts and the GSTIN (checked against the official 15-character format).
+- **Villa switcher** on the Dashboard, Reports, Expenses and Discount codes for accounts with more than one villa (Bookings, Calendar and Villa Settings already had one). The choice is kept in the link.
+
+### Testing
+- Vitest: amounts in words (units to crores, paise, rounding).
+- pgTAP `villa-business-details.test.sql`: owner sets name and GSTIN, invalid GSTIN refused, managers cannot change them.
+- Playwright (full regression 150 passing; the one failure is the known expense-dialog flake): receipt and refund vouchers open with the right number and amount in words.
+
+| Migration | Change |
+| --- | --- |
+| `20260930072244_villa_business_details.sql` | `villa_properties.legal_name`, `villa_properties.gstin` (format check, owner-editable) |
+
 ## Villa v1.0 (M8a) - Discount Codes (Ooruda's half, switched off) - 2026-09-30
 
 Discount codes defined and approved in Ooruda. **Switched off** (`NEXT_PUBLIC_VILLA_DISCOUNTS`) until the booking site can enforce them at checkout (villa-booking TODO 1); publishing codes to the site and reading redemptions back is M8b. No change for association users.

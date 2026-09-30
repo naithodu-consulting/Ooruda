@@ -42,6 +42,8 @@ export function PoliciesForm(props: {
   thankYouEmail: boolean;
   otaBufferNights: number;
   whatsappNumber: string | null;
+  legalName: string | null;
+  gstin: string | null;
   retentionDays: number;
 }) {
   const form = useForm<PoliciesInput>({
@@ -54,6 +56,8 @@ export function PoliciesForm(props: {
       thankYouEmail: props.thankYouEmail,
       otaBufferNights: props.otaBufferNights,
       whatsappNumber: props.whatsappNumber ?? '',
+      legalName: props.legalName ?? '',
+      gstin: props.gstin ?? '',
     },
   });
 
@@ -101,6 +105,60 @@ export function PoliciesForm(props: {
                       data-test={'villa-policies-managers-cancel'}
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card">
+          <CardHeader>
+            <CardTitle className="text-base">Business details</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <FormField
+              name="legalName"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem className="max-w-md">
+                  <FormLabel>Business name on receipts</FormLabel>
+                  <FormControl
+                    render={
+                      <Input
+                        {...field}
+                        disabled={disabled}
+                        data-test={'villa-policies-legal-name'}
+                      />
+                    }
+                  />
+                  <FormDescription>
+                    The name guests see on receipt vouchers. Leave empty to use
+                    the villa name.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              name="gstin"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem className="max-w-md">
+                  <FormLabel>GSTIN (optional)</FormLabel>
+                  <FormControl
+                    render={
+                      <Input
+                        {...field}
+                        disabled={disabled}
+                        className="font-mono uppercase"
+                        data-test={'villa-policies-gstin'}
+                      />
+                    }
+                  />
+                  <FormDescription>
+                    Printed on receipts once your villa is GST-registered.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

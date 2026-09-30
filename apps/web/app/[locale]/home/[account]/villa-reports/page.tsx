@@ -22,6 +22,7 @@ import {
 } from '~/lib/villa/reports';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { VillaSwitcher } from '../_components/villa-switcher';
 import { type ReportTab, ReportsView } from './_components/reports-view';
 
 export const metadata = { title: 'Reports' };
@@ -203,6 +204,13 @@ export default async function VillaReportsPage({
         title={<Trans i18nKey={'villa.nav.reports'} />}
         description={<AppBreadcrumbs />}
       />
+
+      <div className="mb-4 max-w-6xl">
+        <VillaSwitcher
+          properties={properties.map((p) => ({ id: p.id, name: p.name }))}
+          current={property.id}
+        />
+      </div>
 
       <ReportsView
         account={account}

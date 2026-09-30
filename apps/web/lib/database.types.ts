@@ -3718,8 +3718,10 @@ export type Database = {
           account_id: string
           booking_code_prefix: string | null
           created_at: string
+          gstin: string | null
           id: string
           is_test: boolean
+          legal_name: string | null
           name: string
           ota_buffer_nights: number
           retention_days: number
@@ -3734,8 +3736,10 @@ export type Database = {
           account_id: string
           booking_code_prefix?: string | null
           created_at?: string
+          gstin?: string | null
           id?: string
           is_test?: boolean
+          legal_name?: string | null
           name: string
           ota_buffer_nights?: number
           retention_days?: number
@@ -3750,8 +3754,10 @@ export type Database = {
           account_id?: string
           booking_code_prefix?: string | null
           created_at?: string
+          gstin?: string | null
           id?: string
           is_test?: boolean
+          legal_name?: string | null
           name?: string
           ota_buffer_nights?: number
           retention_days?: number

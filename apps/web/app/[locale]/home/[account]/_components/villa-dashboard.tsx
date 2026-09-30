@@ -24,19 +24,30 @@ import { selectVillaProperty } from '~/lib/villa/properties';
 import { TeamAccountLayoutPageHeader } from './team-account-layout-page-header';
 import { VillaMonthKpis } from './villa-month-kpis';
 import { VillaSiteStatus } from './villa-site-status';
+import { VillaSwitcher } from './villa-switcher';
 import { VillaToday } from './villa-today';
 
 /**
  * Villa workspace home: today's arrivals and departures (live from the
  * booking site), this month's figures (from the bookings mirror), and the
  * workspace/site status. With several villas it shows the first connected
- * one (a villa switcher for multi-villa accounts is still to come).
+ * one, or the one picked with the villa switcher (?property=).
  */
-export async function VillaDashboard({ account }: { account: string }) {
+export async function VillaDashboard({
+  account,
+  property: requested,
+}: {
+  account: string;
+  property?: string;
+}) {
   const { role, accountId } = await requireRole(account, VILLA_ROLES, 'villa');
-  const { property } = await selectVillaProperty(accountId, undefined, {
-    requireSite: true,
-  });
+  const { properties, property } = await selectVillaProperty(
+    accountId,
+    requested,
+    {
+      requireSite: true,
+    },
+  );
 
   const membersPath = pathsConfig.app.accountMembers.replace(
     '[account]',
@@ -52,6 +63,14 @@ export async function VillaDashboard({ account }: { account: string }) {
       />
 
       <div className="grid max-w-5xl grid-cols-1 gap-4 lg:grid-cols-2">
+        {property && properties.length > 1 ? (
+          <div className="lg:col-span-2">
+            <VillaSwitcher
+              properties={properties.map((p) => ({ id: p.id, name: p.name }))}
+              current={property.id}
+            />
+          </div>
+        ) : null}
         {property ? (
           <>
             <Suspense

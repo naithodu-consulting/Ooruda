@@ -16,6 +16,7 @@ import { monthRange, parseMonth, shiftMonth } from '~/lib/villa/calendar';
 import { selectVillaProperty } from '~/lib/villa/properties';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { VillaSwitcher } from '../_components/villa-switcher';
 import { ExpensesView } from './_components/expenses-view';
 
 export const metadata = { title: 'Expenses' };
@@ -99,6 +100,10 @@ export default async function VillaExpensesPage({
       />
 
       <div className="flex max-w-5xl flex-col gap-4">
+        <VillaSwitcher
+          properties={properties.map((p) => ({ id: p.id, name: p.name }))}
+          current={property.id}
+        />
         <div className="flex items-center gap-1">
           <Button
             variant="outline"

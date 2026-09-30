@@ -16,6 +16,7 @@ import { villaDiscountsEnabled } from '~/lib/villa/discount-flag';
 import { selectVillaProperty } from '~/lib/villa/properties';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { VillaSwitcher } from '../_components/villa-switcher';
 import { type DiscountRow, DiscountsView } from './_components/discounts-view';
 
 export const metadata = { title: 'Discount codes' };
@@ -34,7 +35,7 @@ export default async function VillaDiscountsPage({
   const [{ account }, sp] = await Promise.all([params, searchParams]);
   const { role, accountId } = await requireRole(account, VILLA_ROLES, 'villa');
   const client = getSupabaseServerClient();
-  const [{ property }, superAdmin] = await Promise.all([
+  const [{ properties, property }, superAdmin] = await Promise.all([
     selectVillaProperty(accountId, sp.property),
     isSuperAdmin(client),
   ]);
@@ -118,6 +119,13 @@ export default async function VillaDiscountsPage({
   return (
     <PageBody>
       {header}
+      <div className="mb-4 max-w-5xl">
+        <VillaSwitcher
+          properties={properties.map((p) => ({ id: p.id, name: p.name }))}
+          current={property.id}
+        />
+      </div>
+
       <DiscountsView
         accountId={accountId}
         propertyId={property.id}

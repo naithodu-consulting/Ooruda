@@ -201,6 +201,8 @@ export function createVillaSettingsService(client: Client) {
           .from('villa_properties')
           .update({
             ota_buffer_nights: input.otaBufferNights,
+            legal_name: input.legalName || null,
+            gstin: input.gstin || null,
             whatsapp_number: input.whatsappNumber
               ? normalizePhoneNumber(input.whatsappNumber)
               : null,

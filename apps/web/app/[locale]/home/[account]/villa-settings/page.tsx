@@ -46,7 +46,7 @@ export default async function VillaSettingsPage({
     await client
       .from('villa_properties')
       .select(
-        'id, name, booking_code_prefix, status, ota_buffer_nights, retention_days, whatsapp_number',
+        'id, name, booking_code_prefix, status, ota_buffer_nights, retention_days, whatsapp_number, legal_name, gstin',
       )
       .eq('account_id', accountId)
       .order('created_at'),
@@ -112,6 +112,8 @@ export default async function VillaSettingsPage({
                 name: selected.name,
                 otaBufferNights: selected.ota_buffer_nights,
                 whatsappNumber: selected.whatsapp_number,
+                legalName: selected.legal_name,
+                gstin: selected.gstin,
                 retentionDays: selected.retention_days,
               }
             : null

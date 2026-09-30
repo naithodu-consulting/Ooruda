@@ -39,6 +39,8 @@ export interface PropertySummary {
   name: string;
   otaBufferNights: number;
   whatsappNumber: string | null;
+  legalName: string | null;
+  gstin: string | null;
   retentionDays: number;
 }
 
@@ -216,6 +218,8 @@ export function VillaSettingsClient(props: {
             thankYouEmail={props.thankYouEmail}
             otaBufferNights={props.property.otaBufferNights}
             whatsappNumber={props.property.whatsappNumber}
+            legalName={props.property.legalName}
+            gstin={props.property.gstin}
             retentionDays={props.property.retentionDays}
           />
         </TabsContent>

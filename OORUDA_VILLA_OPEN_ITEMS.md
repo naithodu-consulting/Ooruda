@@ -17,6 +17,8 @@ Last updated: 2026-09-30 (after M8a).
 - [ ] **Privacy Policy wording** — new section 5 "Villa Guests and Identity Documents" on
       ooruda.com (`app/[locale]/(legal)/privacy-policy/page.tsx`). Drafted by engineering;
       needs a legal read before production.
+- [ ] **Business details** — enter the villa's legal name and GSTIN in Villa Settings >
+      Policies; they print on receipt vouchers (and later on tax invoices).
 - [ ] **CA confirmation of the GST slabs** — SAC 996311; 5% up to ₹7,500 per unit per day,
       18% above (plan §9). Blocks tax invoices (M5b).
 
@@ -81,8 +83,7 @@ Last updated: 2026-09-30 (after M8a).
 ## E. Product decisions still open
 
 - [ ] **Subscription / pricing for villa accounts** (deferred to later, plan §14).
-- [ ] **Multi-villa accounts** — dashboard and reports show the first connected villa; a villa
-      switcher is still to come. Needed before a second villa joins one account.
+- [x] **Multi-villa accounts** — villa switcher on every villa page (2026-09-30).
 - [ ] **Room-level selling** — forward-compatible only (plan §11).
 
 ## F. Known issues (not villa-specific)

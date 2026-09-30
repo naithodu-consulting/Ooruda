@@ -729,3 +729,25 @@ export async function reopenStay(
     return { result: booking, siteId: booking.bookingCode ?? booking.id };
   });
 }
+
+/** The villa's postal address, as the booking site lists it. */
+export async function getPropertyAddress(
+  site: VillaSite,
+): Promise<string | null> {
+  const { data, error } = await site.client
+    .from('properties')
+    .select('address, city, state, pincode')
+    .eq('id', site.sitePropertyId)
+    .maybeSingle();
+
+  if (error) throw fromSiteError(error);
+  if (!data) return null;
+
+  const tail = [data.city, data.state].filter(Boolean).join(', ');
+  return [
+    data.address,
+    tail && data.pincode ? `${tail} ${data.pincode}` : tail || data.pincode,
+  ]
+    .filter(Boolean)
+    .join(', ');
+}

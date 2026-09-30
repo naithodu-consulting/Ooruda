@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ban, IndianRupee, Plus, Undo2, Wallet } from 'lucide-react';
@@ -130,6 +130,9 @@ export function PaymentsPanel(
   },
 ) {
   const router = useRouter();
+  const pathname = usePathname();
+  const voucher = (kind: 'receipt' | 'refund', id: string) =>
+    `${pathname}/voucher/${kind}/${id}?property=${props.propertyId}`;
   const ref: Ref = {
     accountId: props.accountId,
     propertyId: props.propertyId,
@@ -265,7 +268,16 @@ export function PaymentsPanel(
                     >
                       {formatINR(r.amount)}
                     </span>
-                    <span className="font-mono text-xs">{r.receiptNo}</span>
+                    <a
+                      href={voucher('receipt', r.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-xs underline-offset-2 hover:underline"
+                      title="Open the receipt voucher"
+                      data-test={'villa-payment-voucher'}
+                    >
+                      {r.receiptNo}
+                    </a>
                     <span className="text-muted-foreground text-xs">
                       {modeLabel(r.mode)} · {formatDateReadable(r.paidOn)}
                       {r.reference ? ` · ${r.reference}` : ''}
@@ -321,7 +333,16 @@ export function PaymentsPanel(
                       data-test={'villa-payment-refund-row'}
                     >
                       <span>Refunded {formatINR(f.amount)}</span>
-                      <span className="font-mono">{f.refundNo}</span>
+                      <a
+                        href={voucher('refund', f.id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono underline-offset-2 hover:underline"
+                        title="Open the refund voucher"
+                        data-test={'villa-refund-voucher'}
+                      >
+                        {f.refundNo}
+                      </a>
                       <span>
                         {modeLabel(f.mode)} · {formatDateReadable(f.refundedOn)}
                       </span>

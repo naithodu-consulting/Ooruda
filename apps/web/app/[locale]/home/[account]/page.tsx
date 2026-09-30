@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 
 interface TeamAccountHomePageProps {
   params: Promise<{ account: string }>;
-  searchParams: Promise<{ d?: string }>;
+  searchParams: Promise<{ d?: string; property?: string }>;
 }
 
 export const generateMetadata = async () => {
@@ -54,7 +54,10 @@ async function TeamAccountHomePage({
   params,
   searchParams,
 }: TeamAccountHomePageProps) {
-  const [{ account }, { d }] = await Promise.all([params, searchParams]);
+  const [{ account }, { d, property }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const duration = d ?? 'all';
 
   // Both products share /home/[account]. requireRole() sends a product
@@ -64,7 +67,7 @@ async function TeamAccountHomePage({
   const { productType } = await getAccountContext(account);
 
   if (productType === 'villa') {
-    return <VillaDashboard account={account} />;
+    return <VillaDashboard account={account} property={property} />;
   }
 
   const {
