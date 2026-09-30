@@ -1186,6 +1186,87 @@ test.describe.serial('villa product (M0)', () => {
     await page.context().close();
   });
 
+  test('discount codes: dark by default; when on, 25% ceiling needs Ooruda approval', async ({
+    browser,
+  }) => {
+    const on = process.env.VILLA_E2E_DISCOUNTS === 'true';
+    const owner = await signedInPage(browser, VILLA_OWNER.phone);
+
+    if (!on) {
+      // Dark until the booking site enforces codes at checkout.
+      // A streamed page answers 200 with the not-found screen: check that.
+      await owner.goto(`${VILLA_HOME}/villa-discounts`);
+      await settle(owner);
+      await expect(owner.getByText(/Page not found|404/).first()).toBeVisible();
+      await expect(
+        owner.locator('[data-test="villa-discount-new"]'),
+      ).toHaveCount(0);
+      await owner.goto(VILLA_HOME);
+      await settle(owner);
+      await expect(
+        sidebar(owner).getByRole('link', { name: 'Discount codes' }),
+      ).toHaveCount(0);
+      await owner.context().close();
+      return;
+    }
+
+    const issues = watchPage(owner);
+    await owner.goto(VILLA_HOME);
+    await settle(owner);
+    await sidebar(owner).getByRole('link', { name: 'Discount codes' }).click();
+    await owner.waitForURL(/\/villa-discounts/);
+    await settle(owner);
+
+    const make = async (code: string, pct: string, cap: string) => {
+      await owner.click('[data-test="villa-discount-new"]');
+      await owner.fill('[data-test="villa-discount-code"]', code);
+      await owner.fill('[data-test="villa-discount-discountValue"]', pct);
+      await owner.fill('[data-test="villa-discount-maxDiscount"]', cap);
+      await pickDate(owner, 'villa-discount-to', '2031-12-31');
+      await owner.click('[data-test="villa-discount-submit"]');
+    };
+
+    await make(`TEN${STAMP.slice(-4)}`.toUpperCase(), '10', '3000');
+    await expect(owner.getByText('Code saved')).toBeVisible();
+
+    await make(`BIG${STAMP.slice(-4)}`.toUpperCase(), '40', '10000');
+    await expect(owner.getByText(/Ooruda will check it/)).toBeVisible();
+
+    const big = owner.locator('[data-test="villa-discount-row"]', {
+      hasText: `BIG${STAMP.slice(-4)}`.toUpperCase(),
+    });
+    await expect(big.locator('[data-test="villa-discount-status"]')).toHaveText(
+      'Awaiting Ooruda approval',
+    );
+    // The owner cannot switch it on or approve it.
+    await expect(
+      big.locator('[data-test="villa-discount-toggle"]'),
+    ).toHaveCount(0);
+    await expect(
+      big.locator('[data-test="villa-discount-approve"]'),
+    ).toHaveCount(0);
+    expect(issues.serverErrors).toEqual([]);
+    await owner.context().close();
+
+    const context = await browser.newContext({
+      storageState: authFile('superAdmin'),
+    });
+    const admin = await context.newPage();
+    await admin.goto(`${VILLA_HOME}/villa-discounts`);
+    await settle(admin);
+    const row = admin.locator('[data-test="villa-discount-row"]', {
+      hasText: `BIG${STAMP.slice(-4)}`.toUpperCase(),
+    });
+    await row.locator('[data-test="villa-discount-approve"]').click();
+    await expect(row.locator('[data-test="villa-discount-status"]')).toHaveText(
+      'Active',
+    );
+    await expect(
+      row.locator('[data-test="villa-discount-history"]'),
+    ).toContainText('Approved by Ooruda');
+    await context.close();
+  });
+
   test("villa owner's association membership is unaffected", async ({
     browser,
   }) => {

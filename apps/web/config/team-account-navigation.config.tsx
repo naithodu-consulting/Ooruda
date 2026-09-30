@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Receipt,
   ScrollText,
+  TicketPercent,
   Settings,
   Users,
   Wallet,
@@ -21,6 +22,7 @@ import { NavigationConfigSchema } from '@kit/ui/navigation-schema';
 
 import pathsConfig from '~/config/paths.config';
 import { productForRole } from '~/lib/roles';
+import { villaDiscountsEnabled } from '~/lib/villa/discount-flag';
 
 const iconClasses = 'w-4 h-4 shrink-0';
 
@@ -164,6 +166,19 @@ const getVillaRoutes = (account: string) => [
         ),
         Icon: <Receipt className={iconClasses} />,
       },
+      // Dark until the booking site enforces codes (villa-booking TODO 1).
+      ...(villaDiscountsEnabled()
+        ? [
+            {
+              label: 'villa.nav.discounts',
+              path: pathsConfig.app.accountVillaDiscounts.replace(
+                '[account]',
+                account,
+              ),
+              Icon: <TicketPercent className={iconClasses} />,
+            },
+          ]
+        : []),
     ],
   },
   {
@@ -259,6 +274,7 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
     'villa.nav.calendar',
     'villa.nav.bookings',
     'villa.nav.expenses',
+    'villa.nav.discounts',
     'villa.nav.members',
     'villa.nav.settings',
   ],
@@ -269,6 +285,7 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
     'villa.nav.calendar',
     'villa.nav.bookings',
     'villa.nav.expenses',
+    'villa.nav.discounts',
     'villa.nav.settings',
   ],
 };

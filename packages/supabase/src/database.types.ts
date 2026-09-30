@@ -3035,6 +3035,175 @@ export type Database = {
         }
         Relationships: []
       }
+      villa_discount_audit: {
+        Row: {
+          account_id: string
+          action: string
+          actor: string | null
+          code_id: string
+          created_at: string
+          id: string
+          terms: Json
+        }
+        Insert: {
+          account_id: string
+          action: string
+          actor?: string | null
+          code_id: string
+          created_at?: string
+          id?: string
+          terms: Json
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          actor?: string | null
+          code_id?: string
+          created_at?: string
+          id?: string
+          terms?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_discount_audit_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_discount_audit_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_discount_audit_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_discount_audit_code_id_fkey"
+            columns: ["code_id"]
+            isOneToOne: false
+            referencedRelation: "villa_discount_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_discount_codes: {
+        Row: {
+          account_id: string
+          approved_at: string | null
+          approved_by: string | null
+          blackouts: Json
+          channels: string[]
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          max_discount: number | null
+          max_uses: number | null
+          max_uses_per_guest: number
+          min_booking_value: number
+          min_nights: number
+          needs_approval: boolean | null
+          note: string | null
+          property_id: string
+          stackable: boolean
+          status: string
+          updated_at: string
+          valid_from: string
+          valid_to: string
+        }
+        Insert: {
+          account_id: string
+          approved_at?: string | null
+          approved_by?: string | null
+          blackouts?: Json
+          channels?: string[]
+          code: string
+          created_at?: string
+          created_by?: string | null
+          discount_type: string
+          discount_value: number
+          id?: string
+          max_discount?: number | null
+          max_uses?: number | null
+          max_uses_per_guest?: number
+          min_booking_value?: number
+          min_nights?: number
+          needs_approval?: boolean | null
+          note?: string | null
+          property_id: string
+          stackable?: boolean
+          status: string
+          updated_at?: string
+          valid_from: string
+          valid_to: string
+        }
+        Update: {
+          account_id?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          blackouts?: Json
+          channels?: string[]
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          discount_type?: string
+          discount_value?: number
+          id?: string
+          max_discount?: number | null
+          max_uses?: number | null
+          max_uses_per_guest?: number
+          min_booking_value?: number
+          min_nights?: number
+          needs_approval?: boolean | null
+          note?: string | null
+          property_id?: string
+          stackable?: boolean
+          status?: string
+          updated_at?: string
+          valid_from?: string
+          valid_to?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_discount_codes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_discount_codes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_discount_codes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_discount_codes_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       villa_emergency_contacts: {
         Row: {
           account_id: string
@@ -4355,11 +4524,131 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      review_villa_discount: {
+        Args: { p_approve: boolean; p_id: string }
+        Returns: {
+          account_id: string
+          approved_at: string | null
+          approved_by: string | null
+          blackouts: Json
+          channels: string[]
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          max_discount: number | null
+          max_uses: number | null
+          max_uses_per_guest: number
+          min_booking_value: number
+          min_nights: number
+          needs_approval: boolean | null
+          note: string | null
+          property_id: string
+          stackable: boolean
+          status: string
+          updated_at: string
+          valid_from: string
+          valid_to: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_discount_codes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       revoke_nonce: {
         Args: { p_id: string; p_reason?: string }
         Returns: boolean
       }
+      save_villa_discount: {
+        Args: {
+          p_blackouts: Json
+          p_code: string
+          p_discount_type: string
+          p_discount_value: number
+          p_id: string
+          p_max_discount: number
+          p_max_uses: number
+          p_max_uses_per_guest: number
+          p_min_booking_value: number
+          p_min_nights: number
+          p_note: string
+          p_property_id: string
+          p_valid_from: string
+          p_valid_to: string
+        }
+        Returns: {
+          account_id: string
+          approved_at: string | null
+          approved_by: string | null
+          blackouts: Json
+          channels: string[]
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          max_discount: number | null
+          max_uses: number | null
+          max_uses_per_guest: number
+          min_booking_value: number
+          min_nights: number
+          needs_approval: boolean | null
+          note: string | null
+          property_id: string
+          stackable: boolean
+          status: string
+          updated_at: string
+          valid_from: string
+          valid_to: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_discount_codes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       send_amc_reminders: { Args: never; Returns: undefined }
+      set_villa_discount_active: {
+        Args: { p_active: boolean; p_id: string }
+        Returns: {
+          account_id: string
+          approved_at: string | null
+          approved_by: string | null
+          blackouts: Json
+          channels: string[]
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          max_discount: number | null
+          max_uses: number | null
+          max_uses_per_guest: number
+          min_booking_value: number
+          min_nights: number
+          needs_approval: boolean | null
+          note: string | null
+          property_id: string
+          stackable: boolean
+          status: string
+          updated_at: string
+          valid_from: string
+          valid_to: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_discount_codes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       super_admin_delete_all_bills: {

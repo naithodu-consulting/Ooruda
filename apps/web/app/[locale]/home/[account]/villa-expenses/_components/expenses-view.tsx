@@ -101,12 +101,15 @@ export function ExpensesView(props: {
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<Expense | 'new' | null>(null);
+  // Deleted here: hidden at once, whether or not the page refresh lands.
+  const [deleted, setDeleted] = useState<Set<string>>(new Set());
+  const expenses = props.expenses.filter((e) => !deleted.has(e.id));
 
-  const total = sumPaise(props.expenses.map((e) => e.amount));
-  const gst = sumPaise(props.expenses.map((e) => e.gstAmount));
+  const total = sumPaise(expenses.map((e) => e.amount));
+  const gst = sumPaise(expenses.map((e) => e.gstAmount));
 
   const byCategory = Object.entries(
-    props.expenses.reduce<Record<string, number[]>>((acc, e) => {
+    expenses.reduce<Record<string, number[]>>((acc, e) => {
       (acc[e.category] ??= []).push(e.amount);
       return acc;
     }, {}),
@@ -115,7 +118,8 @@ export function ExpensesView(props: {
     .sort((a, b) => b[1] - a[1]);
 
   const del = useAction(deleteVillaExpenseAction, {
-    onSuccess: () => {
+    onSuccess: ({ input }) => {
+      setDeleted((prev) => new Set(prev).add(input.id));
       toast.success('Expense deleted');
       router.refresh();
     },
@@ -170,7 +174,7 @@ export function ExpensesView(props: {
         </ul>
       ) : null}
 
-      {props.expenses.length === 0 ? (
+      {expenses.length === 0 ? (
         <Card className="bg-card">
           <CardContent
             className="text-muted-foreground py-10 text-center text-sm"
@@ -185,7 +189,7 @@ export function ExpensesView(props: {
             className="divide-border divide-y"
             data-test={'villa-expenses-list'}
           >
-            {props.expenses.map((e) => (
+            {expenses.map((e) => (
               <li
                 key={e.id}
                 className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3"

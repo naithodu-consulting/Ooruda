@@ -9,7 +9,8 @@
     "settings": "Villa Settings",
     "calendar": "Calendar",
     "bookings": "Bookings",
-    "expenses": "Expenses"
+    "expenses": "Expenses",
+    "discounts": "Discount codes"
   },
   "roles": {
     "villa_owner": "Villa Owner",

@@ -4,6 +4,23 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 (M8a) - Discount Codes (Ooruda's half, switched off) - 2026-09-30
+
+Discount codes defined and approved in Ooruda. **Switched off** (`NEXT_PUBLIC_VILLA_DISCOUNTS`) until the booking site can enforce them at checkout (villa-booking TODO 1); publishing codes to the site and reading redemptions back is M8b. No change for association users.
+
+- **Owners** create and edit codes: percentage (with the most a booking can save) or a flat amount; bookable-from/until dates; minimum nights; minimum booking value; uses in all and per guest (by phone); blackout nights (e.g. New Year). Website bookings only, never travel-site bookings, never combined. Managers see them read-only.
+- **25% ceiling, enforced by the database**: a percentage over 25%, or a flat amount over 25% of its minimum booking value (or with no minimum), is saved as **awaiting Ooruda approval** and cannot be switched on by the owner. Only an Ooruda super-admin can approve or refuse it. Changing any term of a code voids its approval. Checks fail closed (unusual values, including "not a number", are refused or treated as needing approval).
+- Pause and resume; every create, change, pause, approval and refusal is in the code's history with who did it.
+- Expenses: a deleted expense now disappears from the list at once, even if the page refresh is slow.
+
+### Testing
+- pgTAP `villa-m8-discounts.test.sql` (29): ceiling on percent and flat codes, owner cannot approve their own, super-admin approves and refuses, edits void approval, no direct writes, managers read only, other villas locked out, unique codes, blackout checks, NaN refused, blackouts stored clean.
+- Playwright: switched off, the page is not found and not in the menu; switched on, the owner's 10% code is active, the 40% code waits, and Ooruda approves it (full regression passing in both builds).
+
+| Migration | Change |
+| --- | --- |
+| `20260930052559_villa_m8_discount_codes.sql` | `villa_discount_codes` (terms, `needs_approval`, ceiling constraint), `villa_discount_audit`, `save_villa_discount` / `set_villa_discount_active` / `review_villa_discount` |
+
 ## Villa v1.0 (M7) - Automated Guest Emails - 2026-09-30
 
 Two automatic emails to villa guests, sent from the booking site's address. No change for association users.

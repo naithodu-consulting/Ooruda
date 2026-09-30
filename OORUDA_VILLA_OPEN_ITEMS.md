@@ -4,7 +4,7 @@ Everything waiting on a decision or an action from you, in one place. Tick an it
 add the date. Engineering detail lives in `OORUDA_VILLA_TODO.md` (this repo) and the
 villa-booking repo's `TODO.md`; this file is the checklist.
 
-Last updated: 2026-09-30 (after M7).
+Last updated: 2026-09-30 (after M8a).
 
 ---
 
@@ -55,7 +55,9 @@ Last updated: 2026-09-30 (after M7).
       dashboard is invisible to Ooruda's ledger today).
 - [ ] **6 — GST per-night slab in `pricing-engine.ts`** (site charges a flat 18% today; Ooruda
       matches it until both switch together).
-- [ ] **1 — discount codes (schema + atomic enforcement).** Blocks M8 going live.
+- [ ] **1 — discount codes (schema + atomic enforcement).** Blocks M8b: publishing Ooruda's
+      approved codes to the site, reading redemptions back, and switching the feature on
+      (`NEXT_PUBLIC_VILLA_DISCOUNTS=true`, which needs a rebuild).
 - [ ] **9 — contract document updates** as each item above lands.
 
 ## D. Email (M7) — set-up needed
@@ -92,4 +94,4 @@ Last updated: 2026-09-30 (after M7).
 
 ## Done
 
-- 2026-09-30 — M0–M7 built and committed on `villa-v1.0` (not pushed).
+- 2026-09-30 — M0–M7 and M8a built and committed on `villa-v1.0` (not pushed).
