@@ -150,6 +150,14 @@ const getVillaRoutes = (account: string) => [
         ),
         Icon: <CalendarClock className={iconClasses} />,
       },
+      {
+        label: 'villa.nav.expenses',
+        path: pathsConfig.app.accountVillaExpenses.replace(
+          '[account]',
+          account,
+        ),
+        Icon: <Receipt className={iconClasses} />,
+      },
     ],
   },
   {
@@ -243,6 +251,7 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
     'villa.nav.dashboard',
     'villa.nav.calendar',
     'villa.nav.bookings',
+    'villa.nav.expenses',
     'villa.nav.members',
     'villa.nav.settings',
   ],
@@ -251,6 +260,7 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
     'villa.nav.dashboard',
     'villa.nav.calendar',
     'villa.nav.bookings',
+    'villa.nav.expenses',
     'villa.nav.settings',
   ],
 };

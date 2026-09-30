@@ -4,6 +4,35 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 (M5a) - Payments, Receipts, Refunds, Expenses - 2026-09-30
+
+A **Payments** section on every villa booking and an **Expenses** page. Tax invoices and credit notes follow in M5b (they wait for the booking site to issue invoices at check-out, villa-booking TODO 8c, and the CA's confirmation of the GST slabs). No change for association users.
+
+### Payments (booking page)
+- One view of a stay's money: total, received (website plus offline), refunded, and balance due or paid extra.
+- **Record a payment** (owner or manager) for money taken off the website: cash, UPI, bank transfer, card at the villa. Each gets a **receipt number** from the villa's own gapless series per financial year, e.g. `V19/RCT/2627/0001` (a new series from 1 April). Payments cannot be dated in the future or more than a year back; a warning shows when the amount is more than is due.
+- **Refund** (owner only) against a receipt, with a reason; refunds get their own series (`V19/RFD/2627/0001`) and can never add up to more than the payment, even when two are entered at once.
+- **Void** (owner only) a receipt entered by mistake: it stays in the list, marked void with the reason, so the numbers have no gaps. A receipt with refunds cannot be voided.
+- A double click or a retried submit never issues two receipts.
+- The guest's booking page follows along (Unpaid / Part paid / Refunded). "Paid" is held back on the site until invoices move to check-out, because marking a booking paid there issues a GST invoice today; a booking the site itself marked paid is never downgraded.
+- Website (Razorpay) payments are shown from the booking site. Online refunds are still done in the Razorpay dashboard for now (villa-booking TODO 8f asks the site to record refunded amounts).
+
+### Expenses
+- Month by month: what was spent, the GST part, a split by category (housekeeping, laundry, utilities, repairs, pool, garden, supplies, food, staff, commissions, marketing, taxes and fees, insurance, other), vendor and bill number.
+- Owners and managers add and correct; only owners delete. An expense cannot be moved to another villa or re-attributed.
+
+### Safety
+- Receipts and refunds are written only by database functions that check the role themselves; the ledger is read-only otherwise. The booking on a receipt is checked against Ooruda's copy of the booking (refreshed from the site first), and its booking code comes from there.
+
+### Testing
+- pgTAP `villa-m5-money.test.sql` (39): receipt series and financial years, no gaps, idempotent submits, refunds capped (also concurrently), owner-only refunds and voids, voids keep the number, no direct writes, other villas locked out, same prefix in two villas, expense rules.
+- Vitest: the booking ledger in paise (website + offline, voids, refunds, excess, cancelled stays) and the site status rule.
+- Playwright (full regression 147 passing; villa spec twice more): manager records a payment and gets a receipt; owner's refund above the payment is refused, then a partial refund; manager adds an expense, only the owner deletes it.
+
+| Migration | Change |
+| --- | --- |
+| `20260930003722_villa_m5_payments_expenses.sql` | `villa_sequences`, `villa_booking_payments`, `villa_refunds`, `record_villa_payment` / `void_villa_payment` / `record_villa_refund`, `villa_expenses` |
+
 ## Villa v1.0 (M4) - Guests and ID Documents - 2026-09-30
 
 A **Guests and IDs** section on every villa booking, and a villa section in Ooruda's Privacy Policy. No change for association users.

@@ -2785,6 +2785,98 @@ export type Database = {
           },
         ]
       }
+      villa_booking_payments: {
+        Row: {
+          account_id: string
+          amount: number
+          booking_code: string | null
+          id: string
+          mode: string
+          note: string | null
+          paid_on: string
+          payer_name: string | null
+          property_id: string
+          receipt_no: string
+          recorded_at: string
+          recorded_by: string | null
+          reference: string | null
+          request_id: string
+          site_booking_id: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          booking_code?: string | null
+          id?: string
+          mode: string
+          note?: string | null
+          paid_on: string
+          payer_name?: string | null
+          property_id: string
+          receipt_no: string
+          recorded_at?: string
+          recorded_by?: string | null
+          reference?: string | null
+          request_id: string
+          site_booking_id: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          booking_code?: string | null
+          id?: string
+          mode?: string
+          note?: string | null
+          paid_on?: string
+          payer_name?: string | null
+          property_id?: string
+          receipt_no?: string
+          recorded_at?: string
+          recorded_by?: string | null
+          reference?: string | null
+          request_id?: string
+          site_booking_id?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_booking_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_payments_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       villa_bookings_mirror: {
         Row: {
           account_id: string
@@ -2998,6 +3090,89 @@ export type Database = {
           },
           {
             foreignKeyName: "villa_emergency_contacts_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_expenses: {
+        Row: {
+          account_id: string
+          amount: number
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string
+          gst_amount: number
+          id: string
+          invoice_no: string | null
+          mode: string
+          notes: string | null
+          property_id: string
+          spent_on: string
+          updated_at: string
+          vendor: string | null
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description: string
+          gst_amount?: number
+          id?: string
+          invoice_no?: string | null
+          mode: string
+          notes?: string | null
+          property_id: string
+          spent_on: string
+          updated_at?: string
+          vendor?: string | null
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          gst_amount?: number
+          id?: string
+          invoice_no?: string | null
+          mode?: string
+          notes?: string | null
+          property_id?: string
+          spent_on?: string
+          updated_at?: string
+          vendor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_expenses_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_expenses_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_expenses_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_expenses_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "villa_properties"
@@ -3346,6 +3521,128 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_refunds: {
+        Row: {
+          account_id: string
+          amount: number
+          id: string
+          mode: string
+          payment_id: string
+          property_id: string
+          razorpay_refund_id: string | null
+          reason: string
+          recorded_at: string
+          recorded_by: string | null
+          reference: string | null
+          refund_no: string
+          refunded_on: string
+          request_id: string
+          site_booking_id: string
+          status: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          id?: string
+          mode: string
+          payment_id: string
+          property_id: string
+          razorpay_refund_id?: string | null
+          reason: string
+          recorded_at?: string
+          recorded_by?: string | null
+          reference?: string | null
+          refund_no: string
+          refunded_on: string
+          request_id: string
+          site_booking_id: string
+          status?: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          id?: string
+          mode?: string
+          payment_id?: string
+          property_id?: string
+          razorpay_refund_id?: string | null
+          reason?: string
+          recorded_at?: string
+          recorded_by?: string | null
+          reference?: string | null
+          refund_no?: string
+          refunded_on?: string
+          request_id?: string
+          site_booking_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_refunds_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_refunds_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_refunds_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_refunds_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "villa_booking_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_refunds_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_sequences: {
+        Row: {
+          financial_year: number
+          kind: string
+          last_value: number
+          property_id: string
+        }
+        Insert: {
+          financial_year: number
+          kind: string
+          last_value?: number
+          property_id: string
+        }
+        Update: {
+          financial_year?: number
+          kind?: string
+          last_value?: number
+          property_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_sequences_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
             referencedColumns: ["id"]
           },
         ]
@@ -3892,6 +4189,80 @@ export type Database = {
         Args: { p_razorpay_payment_id: string; p_refund_amount?: number }
         Returns: undefined
       }
+      record_villa_payment: {
+        Args: {
+          p_amount: number
+          p_mode: string
+          p_note: string
+          p_paid_on: string
+          p_payer_name: string
+          p_property_id: string
+          p_reference: string
+          p_request_id: string
+          p_site_booking_id: string
+        }
+        Returns: {
+          account_id: string
+          amount: number
+          booking_code: string | null
+          id: string
+          mode: string
+          note: string | null
+          paid_on: string
+          payer_name: string | null
+          property_id: string
+          receipt_no: string
+          recorded_at: string
+          recorded_by: string | null
+          reference: string | null
+          request_id: string
+          site_booking_id: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_booking_payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_villa_refund: {
+        Args: {
+          p_amount: number
+          p_mode: string
+          p_payment_id: string
+          p_reason: string
+          p_reference: string
+          p_refunded_on: string
+          p_request_id: string
+        }
+        Returns: {
+          account_id: string
+          amount: number
+          id: string
+          mode: string
+          payment_id: string
+          property_id: string
+          razorpay_refund_id: string | null
+          reason: string
+          recorded_at: string
+          recorded_by: string | null
+          reference: string | null
+          refund_no: string
+          refunded_on: string
+          request_id: string
+          site_booking_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_refunds"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       revoke_nonce: {
         Args: { p_id: string; p_reason?: string }
         Returns: boolean
@@ -4025,6 +4396,35 @@ export type Database = {
           p_reason: string
         }
         Returns: number
+      }
+      void_villa_payment: {
+        Args: { p_payment_id: string; p_reason: string }
+        Returns: {
+          account_id: string
+          amount: number
+          booking_code: string | null
+          id: string
+          mode: string
+          note: string | null
+          paid_on: string
+          payer_name: string | null
+          property_id: string
+          receipt_no: string
+          recorded_at: string
+          recorded_by: string | null
+          reference: string | null
+          request_id: string
+          site_booking_id: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_booking_payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {

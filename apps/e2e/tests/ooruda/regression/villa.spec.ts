@@ -641,6 +641,62 @@ test.describe.serial('villa product (M0)', () => {
     await page.context().close();
   });
 
+  test('villa manager records a payment and gets a receipt number', async ({
+    browser,
+  }) => {
+    test.skip(!VILLA_SITE.key || !bookingCode, 'no booking created');
+
+    const page = await signedInPage(browser, VILLA_MANAGER.phone);
+    const issues = watchPage(page);
+
+    await page.goto(`${VILLA_HOME}/bookings?q=${bookingCode}`);
+    await page.waitForURL(/\/bookings\/[0-9a-f-]{36}/);
+    await settle(page);
+
+    const panel = page.locator('[data-test="villa-payments"]');
+    await expect(
+      panel.locator('[data-test="villa-payments-status"]'),
+    ).toHaveText('Unpaid');
+
+    await page.click('[data-test="villa-payment-record"]');
+    await page.fill('[data-test="villa-payment-amount"]', '5000');
+    await page.fill('[data-test="villa-payment-reference"]', 'UTR-E2E');
+    await page.click('[data-test="villa-payment-submit"]');
+    await expect(
+      page.getByText(/^Receipt [A-Z0-9]+\/RCT\/\d{4}\/\d{4}$/),
+    ).toBeVisible();
+
+    const receipt = panel.locator('[data-test="villa-payment-receipt"]');
+    await expect(receipt).toHaveCount(1);
+    await expect(receipt).toContainText('₹5,000');
+    await expect(receipt).toContainText(/\/RCT\/\d{4}\/\d{4}/);
+    await expect(
+      panel.locator('[data-test="villa-payments-received"]'),
+    ).toContainText('₹5,000');
+    await expect(
+      panel.locator('[data-test="villa-payments-status"]'),
+    ).toHaveText('Part paid');
+    // Refunds and voids are the owner's.
+    await expect(
+      panel.locator('[data-test="villa-payment-refund"]'),
+    ).toHaveCount(0);
+    await expect(
+      page.locator('[data-test="villa-booking-payment-badge"]'),
+    ).toHaveText('Part paid');
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    if (SHOTS) await panel.screenshot({ path: `${SHOTS}/payments-1280.png` });
+    const overflow = await measureOverflow(page, 360);
+    expect(
+      overflow.docOverflow,
+      overflow.offenders.join(' | '),
+    ).toBeLessThanOrEqual(0);
+    if (SHOTS) await panel.screenshot({ path: `${SHOTS}/payments-360.png` });
+
+    expect(issues.serverErrors).toEqual([]);
+    await page.context().close();
+  });
+
   test('villa manager cancels the booking with a reason', async ({
     browser,
   }) => {
@@ -673,6 +729,113 @@ test.describe.serial('villa product (M0)', () => {
     ).toHaveCount(0);
 
     await page.context().close();
+  });
+
+  test('villa owner refunds part of a payment after cancellation', async ({
+    browser,
+  }) => {
+    test.skip(!VILLA_SITE.key || !bookingCode, 'no booking created');
+
+    const page = await signedInPage(browser, VILLA_OWNER.phone);
+    const issues = watchPage(page);
+
+    await page.goto(`${VILLA_HOME}/bookings?q=${bookingCode}`);
+    await page.waitForURL(/\/bookings\/[0-9a-f-]{36}/);
+    await settle(page);
+
+    const panel = page.locator('[data-test="villa-payments"]');
+    // A cancelled stay takes refunds, not new payments.
+    await expect(
+      panel.locator('[data-test="villa-payment-record"]'),
+    ).toHaveCount(0);
+
+    await panel.locator('[data-test="villa-payment-refund"]').click();
+    await page.fill('[data-test="villa-refund-amount"]', '6000');
+    await page.fill(
+      '[data-test="villa-refund-reason"]',
+      'Cancelled 20 days out',
+    );
+    await page.click('[data-test="villa-refund-submit"]');
+    // Never more than was paid.
+    await expect(page.getByText(/more than is left to refund/)).toBeVisible();
+
+    await page.fill('[data-test="villa-refund-amount"]', '2500');
+    await page.click('[data-test="villa-refund-submit"]');
+    await expect(
+      page.getByText(/^Refund [A-Z0-9]+\/RFD\/\d{4}\/\d{4}$/),
+    ).toBeVisible();
+
+    await expect(
+      panel.locator('[data-test="villa-payment-refund-row"]'),
+    ).toContainText('₹2,500');
+    await expect(
+      panel.locator('[data-test="villa-payments-refunded"]'),
+    ).toContainText('₹2,500');
+
+    expect(issues.serverErrors).toEqual([]);
+    await page.context().close();
+  });
+
+  test('villa manager adds an expense; only the owner deletes it', async ({
+    browser,
+  }) => {
+    const manager = await signedInPage(browser, VILLA_MANAGER.phone);
+    const issues = watchPage(manager);
+    const title = `E2E chlorine ${STAMP}`;
+
+    await manager.goto(VILLA_HOME);
+    await settle(manager);
+    await sidebar(manager).getByRole('link', { name: 'Expenses' }).click();
+    await manager.waitForURL(/\/villa-expenses/);
+    await settle(manager);
+
+    await manager.click('[data-test="villa-expense-add"]');
+    await manager.fill('[data-test="villa-expense-description"]', title);
+    await manager.fill('[data-test="villa-expense-amount"]', '1180');
+    await manager.fill('[data-test="villa-expense-gst"]', '2000');
+    await manager.click('[data-test="villa-expense-submit"]');
+    await expect(
+      manager.getByText('GST cannot be more than the amount'),
+    ).toBeVisible();
+    await manager.fill('[data-test="villa-expense-gst"]', '180');
+    await manager.click('[data-test="villa-expense-submit"]');
+    await expect(manager.getByText('Expense added')).toBeVisible();
+
+    const row = manager.locator('[data-test="villa-expense-row"]', {
+      hasText: title,
+    });
+    await expect(row).toContainText('₹1,180');
+    await expect(
+      manager.locator('[data-test="villa-expenses-gst"]'),
+    ).toContainText('₹180');
+    await expect(row.locator('[data-test="villa-expense-delete"]')).toHaveCount(
+      0,
+    );
+
+    const overflow = await measureOverflow(manager, 360);
+    expect(
+      overflow.docOverflow,
+      overflow.offenders.join(' | '),
+    ).toBeLessThanOrEqual(0);
+    if (SHOTS)
+      await manager.screenshot({
+        path: `${SHOTS}/expenses-360.png`,
+        fullPage: true,
+      });
+    expect(issues.serverErrors).toEqual([]);
+    await manager.context().close();
+
+    const owner = await signedInPage(browser, VILLA_OWNER.phone);
+    await owner.goto(`${VILLA_HOME}/villa-expenses`);
+    await settle(owner);
+    const ownerRow = owner.locator('[data-test="villa-expense-row"]', {
+      hasText: title,
+    });
+    await ownerRow.locator('[data-test="villa-expense-delete"]').click();
+    await owner.click('[data-test="villa-expense-delete-confirm"]');
+    await expect(owner.getByText('Expense deleted')).toBeVisible();
+    await expect(ownerRow).toHaveCount(0);
+    await owner.context().close();
   });
 
   test('villa manager blocks nights on the calendar and unblocks them', async ({

@@ -7,7 +7,8 @@
     "members": "Members",
     "settings": "Villa Settings",
     "calendar": "Calendar",
-    "bookings": "Bookings"
+    "bookings": "Bookings",
+    "expenses": "Expenses"
   },
   "roles": {
     "villa_owner": "Villa Owner",

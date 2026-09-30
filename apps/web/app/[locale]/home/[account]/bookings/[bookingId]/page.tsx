@@ -37,6 +37,7 @@ import { TeamAccountLayoutPageHeader } from '../../_components/team-account-layo
 import { CancelBookingDialog } from '../_components/cancel-booking-dialog';
 import { CompleteStayButton } from '../_components/complete-stay-button';
 import { GuestIdsSection } from '../_components/guest-ids-section';
+import { PaymentsSection } from '../_components/payments-section';
 
 export const metadata = { title: 'Booking' };
 
@@ -302,6 +303,17 @@ export default async function BookingPage({ params, searchParams }: Props) {
               </dl>
             </CardContent>
           </Card>
+
+          <Suspense
+            fallback={<Skeleton className="h-40 rounded-xl lg:col-span-2" />}
+          >
+            <PaymentsSection
+              accountId={accountId}
+              propertyId={propertyId}
+              booking={booking}
+              role={role}
+            />
+          </Suspense>
 
           <Suspense
             fallback={<Skeleton className="h-40 rounded-xl lg:col-span-2" />}

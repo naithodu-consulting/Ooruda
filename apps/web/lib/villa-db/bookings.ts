@@ -616,3 +616,74 @@ export async function setIdStatus(
     return { result: existing, siteId: existing.bookingCode ?? existing.id };
   });
 }
+
+export interface SitePayment {
+  id: string;
+  amountPaise: number;
+  status: string;
+  razorpayPaymentId: string | null;
+  createdAt: string | null;
+}
+
+/** Website (Razorpay) payments for one booking of this property. */
+export async function listSitePayments(
+  site: VillaSite,
+  bookingId: string,
+): Promise<SitePayment[]> {
+  // Scope through the booking: payments carry no property_id.
+  const booking = await getBooking(site, bookingId);
+
+  if (!booking) return [];
+
+  const { data, error } = await site.client
+    .from('payments')
+    .select('id, amount, status, razorpay_payment_id, created_at')
+    .eq('booking_id', booking.id)
+    .order('created_at');
+
+  if (error) throw fromSiteError(error);
+
+  return (data ?? []).map((p) => ({
+    id: p.id,
+    amountPaise: Number(p.amount),
+    status: p.status ?? 'created',
+    razorpayPaymentId: p.razorpay_payment_id,
+    createdAt: p.created_at,
+  }));
+}
+
+/**
+ * Sets the booking's payment_status on the site (what the guest's booking
+ * page shows). Callers pass sitePaymentStatus(...) from lib/villa/ledger,
+ * which holds back 'paid' until villa-booking TODO 8c.
+ */
+export async function setPaymentStatus(
+  site: VillaSite,
+  bookingId: string,
+  status: 'unpaid' | 'partially_paid' | 'paid' | 'refunded',
+  actorUserId: string | null,
+): Promise<SiteBooking> {
+  return withSyncLog(
+    site,
+    `booking.payment_${status}`,
+    actorUserId,
+    async () => {
+      const { data, error } = await site.client
+        .from('bookings')
+        .update({
+          payment_status: status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', bookingId)
+        .eq('property_id', site.sitePropertyId)
+        .select(BOOKING_COLUMNS)
+        .maybeSingle();
+
+      if (error) throw fromSiteWriteError(error);
+      if (!data) throw new VillaDbError('NOT_FOUND', `booking ${bookingId}`);
+
+      const booking = toBooking(data as BookingRow);
+      return { result: booking, siteId: booking.bookingCode ?? booking.id };
+    },
+  );
+}
