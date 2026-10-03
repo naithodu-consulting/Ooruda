@@ -70,7 +70,7 @@ export async function VillaMonthKpis(props: {
   const { data: stays, error } = await getSupabaseServerClient()
     .from('villa_bookings_mirror')
     .select(
-      'status, check_in, check_out, nights, base_amount, extra_guest_amount',
+      'status, check_in, check_out, nights, base_amount, extra_guest_amount, discount_amount',
     )
     .eq('property_id', props.propertyId)
     .in('status', [...SELLING_STATUSES])

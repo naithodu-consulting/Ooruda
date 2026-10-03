@@ -34,6 +34,18 @@ Reports and the dashboard read Ooruda's copy of the bookings rather than the boo
 
 The copy is now refreshed *before* the figures are read, so one refresh is enough. Page speed is protected three ways: a copy refreshed in the last five minutes is left alone; the very first copy of a villa reads its whole history, so that one still happens in the background and the page shows what it already has; and a routine refresh — which reads only a recent window — is waited for, but never for longer than 2.5 seconds, after which the page renders and the refresh finishes on its own. The Bookings list and Calendar were already live and are unchanged.
 
+### A discount now comes off before GST, and reaches the revenue figures
+
+Two corrections to how a redeemed discount code is accounted for.
+
+**GST follows the discount.** The saving used to be subtracted from the GST-inclusive total, so a guest was charged tax on money they never paid. The discount now comes off the taxable value and GST is charged on what is actually payable — matching the rule Ooruda already applied on its own side. On a ₹10,000 stay with ₹2,000 off, GST is ₹1,440 rather than ₹1,800, and the guest pays ₹9,440 instead of ₹9,800. The Stay Summary shows the discount above the GST line so the arithmetic reads in order, and the booking now records the amount actually payable, which also makes a refund default to the sum collected rather than the list price.
+
+**Discounted stays no longer overstate revenue.** The saving was recorded on the booking site but never reached Ooruda, so Reports and the dashboard counted the full list price of every discounted stay. The discount is now carried across into the bookings copy and taken off revenue, pro-rated with the rest of the money when a stay straddles the end of a month. Stays booked before discount codes went live are unaffected; they carry no discount.
+
+| Migration | Change |
+| --- | --- |
+| `20261003175415_villa_mirror_discount_amount.sql` | `villa_bookings_mirror.discount_amount` (rupees, defaults to 0, metadata-only column add) |
+
 ### Internal
 - Regenerated the booking-site type definitions on both sides, so the discount-code sync is fully type-checked. This removes the temporary `as any` cast in `villa-discounts.service.ts`.
 - The discount-code sync to the booking site now runs through `after()`, so the cross-database write is no longer cut short when the response ends, and its log lines use the structured form the rest of the codebase uses.

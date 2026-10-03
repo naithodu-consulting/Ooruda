@@ -166,7 +166,9 @@ describe.skipIf(!existsSync(SITE_ENGINE))(
       ['2026-10-19', '2026-10-24', 10, 3, []],
       ['2026-10-16', '2026-10-17', 14, 0, []],
       ['2026-12-29', '2027-01-03', 6, 2, [newYear]],
-      ['2027-02-01', '2027-02-15', 11, 0, []],
+      // Longest stay the booking site still quotes for: MAX_STAY_NIGHTS is 10,
+      // above which it refuses and asks the guest to contact the villa.
+      ['2027-02-01', '2027-02-11', 11, 0, []],
     ];
 
     it.each(cases)(

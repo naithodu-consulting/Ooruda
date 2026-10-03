@@ -15,24 +15,23 @@ Last updated: 2026-09-30 (after M8a).
       applied 2026-10-03; villa-booking `00062_discount_codes.sql` pushed to its dev
       project (`hlmqcdzazbrztfovixjk`) the same day, with the old 15-argument
       `create_booking_atomic` overload confirmed dropped.
-- [ ] **A discount never reaches Ooruda's revenue figures.** (Found in review,
-      2026-10-03. Bites the moment a guest redeems a code, so fix before codes are
-      advertised.) The booking site stores the full pre-discount `total_amount`
-      alongside a separate `discount_amount`, but `SiteBooking` carries no discount
-      field, `villa_bookings_mirror` has no discount column, and Reports compute
-      revenue as `base_amount + extra_guest_amount`. Every discounted stay therefore
-      overstates revenue by exactly the discount, permanently and invisibly. Fix:
-      carry `discount_amount` through `listBookingsForSync` → `toRow` → a new mirror
-      column (needs a migration), then subtract it in `buildOverview` and `monthKpis`.
-      Related: `villa-booking/src/app/api/bookings/webhook/route.ts` falls back to
-      `refundPaise: booking.total_amount`, which would refund more than was collected.
-- [ ] **Decide the GST base for discounted stays — needs the CA.** (Found in review,
-      2026-10-03.) The two codebases disagree. Ooruda's `apps/web/lib/villa/gst.ts`
-      documents and implements GST on the amount *after* discount (and has tests for a
-      discount moving a night into a lower slab). The booking site computes GST first
-      and subtracts the discount from the GST-inclusive total, so the guest pays tax on
-      money they never paid, possibly at the wrong slab. Settle this with the CA
-      alongside the slab confirmation below, then make one side match the other.
+- [x] **A discount now reaches Ooruda's revenue figures.** (Found and fixed
+      2026-10-03.) `discount_amount` is carried from the booking site through
+      `SiteBooking` into a new `villa_bookings_mirror.discount_amount` column
+      (migration `20261003175415`), and Reports and the dashboard compute revenue
+      as `base_amount + extra_guest_amount - discount_amount`, pro-rated with the
+      rest of the money across period boundaries. Unit tests cover both.
+- [x] **GST is charged on the discounted value.** (Settled 2026-10-03: the
+      discount applies *before* GST.) The booking site re-prices a discounted stay
+      through `applyDiscount` in `pricing-engine.ts`, so the discount comes off the
+      taxable value and GST follows it; `bookings.total_amount` now records the
+      amount actually payable, which also makes the webhook's refund fallback
+      correct. The checkout shows the reduced GST, and the summary lists the
+      discount above the GST line so the arithmetic reads in order. This matches
+      what `apps/web/lib/villa/gst.ts` already documented on the Ooruda side.
+      Still open: the CA's confirmation of the SAC 996311 slab thresholds below —
+      the booking site charges a flat 18%, so if a discount should ever move a
+      night into the 5% band, that is a further change.
 - [ ] **Privacy Policy wording** — new section 5 "Villa Guests and Identity Documents" on
       ooruda.com (`app/[locale]/(legal)/privacy-policy/page.tsx`). Drafted by engineering;
       needs a legal read before production.

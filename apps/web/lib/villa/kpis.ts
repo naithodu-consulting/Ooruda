@@ -19,6 +19,8 @@ export interface KpiStay {
   nights: number;
   base_amount: number;
   extra_guest_amount: number;
+  /** Taken off before GST, so it comes off revenue too. */
+  discount_amount: number;
 }
 
 export interface MonthKpis {
@@ -62,7 +64,10 @@ export function monthKpis(month: string, stays: KpiStay[]): MonthKpis {
     count++;
     bookedNights += nights;
     revenue +=
-      ((Number(s.base_amount) + Number(s.extra_guest_amount)) * nights) /
+      ((Number(s.base_amount) +
+        Number(s.extra_guest_amount) -
+        Number(s.discount_amount)) *
+        nights) /
       s.nights;
   }
 

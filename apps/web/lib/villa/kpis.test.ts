@@ -9,6 +9,7 @@ const stay = (over: Partial<Parameters<typeof monthKpis>[1][0]> = {}) => ({
   nights: 2,
   base_amount: 20000,
   extra_guest_amount: 2000,
+  discount_amount: 0,
   ...over,
 });
 

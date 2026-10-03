@@ -28,7 +28,7 @@ export const metadata = { title: 'Reports' };
 const TABS: ReportTab[] = ['overview', 'channels', 'guests'];
 
 const STAY_COLUMNS =
-  'status, booking_kind, channel, check_in, check_out, nights, base_amount, extra_guest_amount, tax_amount, guest_name, guest_phone, booking_code';
+  'status, booking_kind, channel, check_in, check_out, nights, base_amount, extra_guest_amount, discount_amount, tax_amount, guest_name, guest_phone, booking_code';
 
 interface Props {
   params: Promise<{ account: string }>;
@@ -75,6 +75,7 @@ async function fetchAll<T>(
 const toStay = (r: Record<string, unknown>): ReportStay => ({
   ...(r as unknown as ReportStay),
   base_amount: Number(r.base_amount),
+  discount_amount: Number(r.discount_amount ?? 0),
   extra_guest_amount: Number(r.extra_guest_amount),
   tax_amount: Number(r.tax_amount),
 });

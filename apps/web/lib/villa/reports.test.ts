@@ -18,6 +18,7 @@ const stay = (over: Partial<ReportStay> = {}): ReportStay => ({
   nights: 2,
   base_amount: 20000,
   extra_guest_amount: 2000,
+  discount_amount: 0,
   tax_amount: 3960,
   guest_name: 'Asha',
   guest_phone: '+919876543210',
@@ -256,5 +257,43 @@ describe('review fixes', () => {
 
   it('neutralises formulas after leading spaces', () => {
     expect(toCsv([['  =cmd']])).toBe("'  =cmd");
+  });
+});
+
+describe('a redeemed discount reduces revenue', () => {
+  const oct = { from: '2026-10-01', to: '2026-10-31' };
+
+  it('takes the discount off revenue, leaving GST as charged', () => {
+    const plain = buildOverview(oct, [stay()], []);
+    const discounted = buildOverview(
+      oct,
+      [stay({ discount_amount: 5000, tax_amount: 3060 })],
+      [],
+    );
+
+    // 20000 + 2000 = 22000 list; 5000 off leaves 17000.
+    expect(plain.revenue).toBe(22000);
+    expect(discounted.revenue).toBe(17000);
+    expect(discounted.gstCollected).toBe(3060);
+  });
+
+  it('pro-rates the discount with the rest of the money across a boundary', () => {
+    // Two nights, only the first inside October.
+    const o = buildOverview(
+      oct,
+      [
+        stay({
+          check_in: '2026-10-31',
+          check_out: '2026-11-02',
+          nights: 2,
+          discount_amount: 2000,
+        }),
+      ],
+      [],
+    );
+
+    expect(o.bookedNights).toBe(1);
+    // (22000 - 2000) / 2 nights = 10000 for the night inside October.
+    expect(o.revenue).toBe(10000);
   });
 });

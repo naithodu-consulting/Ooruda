@@ -119,6 +119,8 @@ export interface ReportStay {
   nights: number;
   base_amount: number;
   extra_guest_amount: number;
+  /** Taken off before GST, so revenue is base + extra MINUS this. */
+  discount_amount: number;
   tax_amount: number;
   guest_name: string;
   guest_phone: string | null;
@@ -152,19 +154,20 @@ function slice(s: ReportStay, from: string, toInclusive: string) {
     return { nights: 0, revenuePaise: 0, gstPaise: 0 };
   }
 
+  // What the guest was actually charged for the stay, before GST: a discount
+  // code comes off the taxable value, so it comes off revenue too.
+  const netPaise =
+    paise(s.base_amount) +
+    paise(s.extra_guest_amount) -
+    paise(s.discount_amount);
+
   if (nights === total) {
-    return {
-      nights,
-      revenuePaise: paise(s.base_amount) + paise(s.extra_guest_amount),
-      gstPaise: paise(s.tax_amount),
-    };
+    return { nights, revenuePaise: netPaise, gstPaise: paise(s.tax_amount) };
   }
 
   return {
     nights,
-    revenuePaise: Math.round(
-      ((paise(s.base_amount) + paise(s.extra_guest_amount)) * nights) / total,
-    ),
+    revenuePaise: Math.round((netPaise * nights) / total),
     gstPaise: Math.round((paise(s.tax_amount) * nights) / total),
   };
 }
