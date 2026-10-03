@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { ChevronLeft, ChevronRight, CircleAlert } from 'lucide-react';
+import { CircleAlert } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
@@ -27,6 +27,7 @@ import {
 } from '~/lib/villa/calendar';
 import { selectVillaProperty } from '~/lib/villa/properties';
 
+import { MonthNav } from '../_components/month-nav';
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import { NewBookingDialog } from '../bookings/_components/new-booking-dialog';
 import { BlockDatesDialog } from './_components/block-dates-dialog';
@@ -38,13 +39,6 @@ interface Props {
   params: Promise<{ account: string }>;
   searchParams: Promise<{ month?: string; property?: string }>;
 }
-
-const monthName = (month: string) =>
-  new Date(`${month}-15T12:00:00Z`).toLocaleDateString('en-IN', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
 
 export default async function CalendarPage({ params, searchParams }: Props) {
   const [{ account }, sp] = await Promise.all([params, searchParams]);
@@ -148,40 +142,15 @@ export default async function CalendarPage({ params, searchParams }: Props) {
             ) : null}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  nativeButton={false}
-                  aria-label="Previous month"
-                  render={
-                    <Link
-                      href={hrefFor(shiftMonth(month, -1))}
-                      scroll={false}
-                    />
-                  }
-                  data-test={'villa-calendar-prev'}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <h2
-                  className="min-w-40 text-center text-base font-semibold"
-                  data-test={'villa-calendar-month'}
-                >
-                  {monthName(month)}
-                </h2>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  nativeButton={false}
-                  aria-label="Next month"
-                  render={
-                    <Link href={hrefFor(shiftMonth(month, 1))} scroll={false} />
-                  }
-                  data-test={'villa-calendar-next'}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+              <div className="flex items-center gap-2">
+                <MonthNav
+                  month={month}
+                  prevHref={hrefFor(shiftMonth(month, -1))}
+                  nextHref={hrefFor(shiftMonth(month, 1))}
+                  data-test-prev="villa-calendar-prev"
+                  data-test-month="villa-calendar-month"
+                  data-test-next="villa-calendar-next"
+                />
                 {month !== today.slice(0, 7) ? (
                   <Button
                     variant="ghost"
@@ -191,8 +160,9 @@ export default async function CalendarPage({ params, searchParams }: Props) {
                       <Link href={hrefFor(today.slice(0, 7))} scroll={false} />
                     }
                     data-test={'villa-calendar-today'}
+                    className="text-muted-foreground hover:text-foreground text-xs"
                   >
-                    Today
+                    Jump to today
                   </Button>
                 ) : null}
               </div>

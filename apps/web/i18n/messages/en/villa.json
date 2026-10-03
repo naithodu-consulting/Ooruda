@@ -19,7 +19,7 @@
   "dashboard": {
     "title": "Dashboard",
     "setupTitle": "Your villa workspace",
-    "setupDescription": "Bookings, the calendar and villa settings are ready. Guest IDs, payments, invoices and reports are coming next. Invite your villa manager from Members.",
+    "setupDescription": "Everything is ready — bookings, calendar, guest IDs, payments, reports and expenses. Invite your villa manager from Members.",
     "inviteManager": "Invite a manager",
     "signedInAs": "You are signed in as"
   },

@@ -7,6 +7,31 @@ export type Json =
   | Json[];
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never;
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json;
+          operationName?: string;
+          query?: string;
+          variables?: Json;
+        };
+        Returns: Json;
+      };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
+  };
   public: {
     Tables: {
       addon_services: {
@@ -139,6 +164,8 @@ export type Database = {
           confirmed_at: string | null;
           created_at: string | null;
           deposit_amount: number | null;
+          discount_amount: number;
+          discount_code: string | null;
           expires_at: string | null;
           extra_guest_amount: number | null;
           guest_company: string | null;
@@ -177,6 +204,8 @@ export type Database = {
           confirmed_at?: string | null;
           created_at?: string | null;
           deposit_amount?: number | null;
+          discount_amount?: number;
+          discount_code?: string | null;
           expires_at?: string | null;
           extra_guest_amount?: number | null;
           guest_company?: string | null;
@@ -215,6 +244,8 @@ export type Database = {
           confirmed_at?: string | null;
           created_at?: string | null;
           deposit_amount?: number | null;
+          discount_amount?: number;
+          discount_code?: string | null;
           expires_at?: string | null;
           extra_guest_amount?: number | null;
           guest_company?: string | null;
@@ -289,6 +320,68 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'channel_sync_log_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      discount_codes: {
+        Row: {
+          blackouts: Json;
+          code: string;
+          created_at: string;
+          discount_type: string;
+          discount_value: number;
+          id: string;
+          is_active: boolean;
+          max_discount: number | null;
+          max_uses: number | null;
+          max_uses_per_guest: number;
+          min_booking_value: number;
+          min_nights: number;
+          property_id: string;
+          valid_from: string;
+          valid_to: string;
+        };
+        Insert: {
+          blackouts?: Json;
+          code: string;
+          created_at?: string;
+          discount_type: string;
+          discount_value: number;
+          id: string;
+          is_active?: boolean;
+          max_discount?: number | null;
+          max_uses?: number | null;
+          max_uses_per_guest?: number;
+          min_booking_value?: number;
+          min_nights?: number;
+          property_id: string;
+          valid_from: string;
+          valid_to: string;
+        };
+        Update: {
+          blackouts?: Json;
+          code?: string;
+          created_at?: string;
+          discount_type?: string;
+          discount_value?: number;
+          id?: string;
+          is_active?: boolean;
+          max_discount?: number | null;
+          max_uses?: number | null;
+          max_uses_per_guest?: number;
+          min_booking_value?: number;
+          min_nights?: number;
+          property_id?: string;
+          valid_from?: string;
+          valid_to?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'discount_codes_property_id_fkey';
             columns: ['property_id'];
             isOneToOne: false;
             referencedRelation: 'properties';
@@ -472,6 +565,7 @@ export type Database = {
           created_at: string;
           display_order: number;
           id: string;
+          is_featured: boolean;
           is_published: boolean;
           property_id: string;
           question: string;
@@ -482,6 +576,7 @@ export type Database = {
           created_at?: string;
           display_order?: number;
           id?: string;
+          is_featured?: boolean;
           is_published?: boolean;
           property_id: string;
           question: string;
@@ -492,6 +587,7 @@ export type Database = {
           created_at?: string;
           display_order?: number;
           id?: string;
+          is_featured?: boolean;
           is_published?: boolean;
           property_id?: string;
           question?: string;
@@ -1062,6 +1158,8 @@ export type Database = {
           caption: string | null;
           category: string | null;
           created_at: string | null;
+          credit: string | null;
+          credit_url: string | null;
           display_order: number | null;
           height: number | null;
           id: string;
@@ -1076,6 +1174,8 @@ export type Database = {
           caption?: string | null;
           category?: string | null;
           created_at?: string | null;
+          credit?: string | null;
+          credit_url?: string | null;
           display_order?: number | null;
           height?: number | null;
           id?: string;
@@ -1090,6 +1190,8 @@ export type Database = {
           caption?: string | null;
           category?: string | null;
           created_at?: string | null;
+          credit?: string | null;
+          credit_url?: string | null;
           display_order?: number | null;
           height?: number | null;
           id?: string;
@@ -1300,6 +1402,8 @@ export type Database = {
           p_base_amount: number;
           p_check_in: string;
           p_check_out: string;
+          p_discount_amount?: number;
+          p_discount_code?: string;
           p_extra_guest_amount: number;
           p_guest_email: string;
           p_guest_name: string;
@@ -1456,6 +1560,9 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

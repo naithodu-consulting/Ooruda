@@ -10,7 +10,7 @@ import { monthRange } from '~/lib/villa/calendar';
 import { runDueGuestEmails } from '~/lib/villa/guest-email-runner';
 import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
 import { SELLING_STATUSES, monthKpis } from '~/lib/villa/kpis';
-import { MIRROR_STALE_MS, syncPropertyMirror } from '~/lib/villa/mirror';
+import { refreshMirrorForRead } from '~/lib/villa/mirror';
 
 function ago(iso: string, now: number): string {
   const minutes = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
@@ -22,22 +22,12 @@ function ago(iso: string, now: number): string {
   return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`;
 }
 
-async function loadState(propertyId: string) {
-  const { data, error } = await getSupabaseServerClient()
-    .from('villa_mirror_sync_state')
-    .select('last_synced_at, last_error_at')
-    .eq('property_id', propertyId)
-    .maybeSingle();
-
-  if (error) throw new Error(`mirror state load failed: ${error.message}`);
-
-  return data;
-}
-
 /**
- * This month's numbers from the bookings mirror. The page never waits on the
- * booking site: a missing or stale mirror is refreshed after the response,
- * and a site that failed recently is not retried on every load.
+ * This month's numbers from the bookings mirror. A stale mirror is refreshed
+ * before the figures are read, so they are current on this load; the wait is
+ * bounded and the first copy of a villa is made in the background, so the
+ * page is never held open by the booking site. A site that failed recently is
+ * not retried on every load.
  */
 export async function VillaMonthKpis(props: {
   accountId: string;
@@ -46,13 +36,6 @@ export async function VillaMonthKpis(props: {
   const now = Date.now();
   const month = todayIst().slice(0, 7);
   const { from, to } = monthRange(month);
-
-  const state = await loadState(props.propertyId);
-  const lastSync = state?.last_synced_at ? Date.parse(state.last_synced_at) : 0;
-  const lastError = state?.last_error_at ? Date.parse(state.last_error_at) : 0;
-  const failing = lastError > lastSync;
-  const stale = now - lastSync > MIRROR_STALE_MS;
-  const backingOff = failing && now - lastError < MIRROR_STALE_MS;
 
   // Guest ID retention and due guest emails also run on dashboard visits,
   // so neither depends on the scheduler alone. Cheap when nothing is due.
@@ -76,20 +59,13 @@ export async function VillaMonthKpis(props: {
     }
   });
 
-  if (stale && !backingOff) {
-    const { accountId, propertyId } = props;
-    after(async () => {
-      try {
-        // Takes a lease: concurrent loads never run two syncs.
-        await syncPropertyMirror(accountId, propertyId);
-      } catch (error) {
-        (await getLogger()).warn(
-          { propertyId, error: String(error) },
-          'villa dashboard background sync failed',
-        );
-      }
-    });
-  }
+  // Refresh before reading, so this month's figures are current on this load
+  // rather than the next one. Takes a lease, so concurrent loads never run two
+  // syncs; see refreshMirrorForRead for how the wait is bounded.
+  const { syncedAt, failing } = await refreshMirrorForRead(
+    props.accountId,
+    props.propertyId,
+  );
 
   const { data: stays, error } = await getSupabaseServerClient()
     .from('villa_bookings_mirror')
@@ -162,12 +138,12 @@ export async function VillaMonthKpis(props: {
         className="text-muted-foreground text-xs"
         data-test={'villa-kpis-synced'}
       >
-        {state?.last_synced_at
-          ? `Figures updated ${ago(state.last_synced_at, now)}.`
+        {syncedAt
+          ? `Figures updated ${ago(syncedAt, now)}.`
           : failing
             ? 'Figures could not be loaded from the booking site yet.'
             : 'Loading figures from the booking site. Refresh in a moment.'}
-        {failing && state?.last_synced_at
+        {failing && syncedAt
           ? ' The latest refresh from the booking site failed; showing the last good figures.'
           : ''}
       </p>

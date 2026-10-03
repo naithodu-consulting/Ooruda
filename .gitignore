@@ -56,3 +56,4 @@ node-compile-cache/
 
 # internal knowledge base (session learnings - not for git)
 OORUDA_KNOWLEDGE.md
+villa-dev-link-setup.sql

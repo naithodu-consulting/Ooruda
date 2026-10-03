@@ -1,11 +1,8 @@
-import Link from 'next/link';
-
-import { ChevronLeft, ChevronRight, CircleAlert } from 'lucide-react';
+import { CircleAlert } from 'lucide-react';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
-import { Button } from '@kit/ui/button';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
@@ -15,6 +12,7 @@ import { todayIst } from '~/lib/villa-db/dates';
 import { monthRange, parseMonth, shiftMonth } from '~/lib/villa/calendar';
 import { selectVillaProperty } from '~/lib/villa/properties';
 
+import { MonthNav } from '../_components/month-nav';
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import { VillaSwitcher } from '../_components/villa-switcher';
 import { ExpensesView } from './_components/expenses-view';
@@ -25,13 +23,6 @@ interface Props {
   params: Promise<{ account: string }>;
   searchParams: Promise<{ month?: string; property?: string }>;
 }
-
-const monthName = (month: string) =>
-  new Date(`${month}-15T12:00:00Z`).toLocaleDateString('en-IN', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
 
 export default async function VillaExpensesPage({
   params,
@@ -104,38 +95,14 @@ export default async function VillaExpensesPage({
           properties={properties.map((p) => ({ id: p.id, name: p.name }))}
           current={property.id}
         />
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon"
-            nativeButton={false}
-            aria-label="Previous month"
-            render={
-              <Link href={hrefFor(shiftMonth(month, -1))} scroll={false} />
-            }
-            data-test={'villa-expenses-prev'}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <h2
-            className="min-w-40 text-center text-base font-semibold"
-            data-test={'villa-expenses-month'}
-          >
-            {monthName(month)}
-          </h2>
-          <Button
-            variant="outline"
-            size="icon"
-            nativeButton={false}
-            aria-label="Next month"
-            render={
-              <Link href={hrefFor(shiftMonth(month, 1))} scroll={false} />
-            }
-            data-test={'villa-expenses-next'}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+        <MonthNav
+          month={month}
+          prevHref={hrefFor(shiftMonth(month, -1))}
+          nextHref={hrefFor(shiftMonth(month, 1))}
+          data-test-prev="villa-expenses-prev"
+          data-test-month="villa-expenses-month"
+          data-test-next="villa-expenses-next"
+        />
 
         <ExpensesView
           accountId={accountId}

@@ -141,11 +141,9 @@ export default async function BookingPage({ params, searchParams }: Props) {
     <PageBody>
       <TeamAccountLayoutPageHeader
         account={account}
-        title={booking.bookingCode ?? 'Booking'}
+        title={booking.guestName}
         description={
-          <AppBreadcrumbs
-            values={{ [bookingId]: booking.bookingCode ?? 'Booking' }}
-          />
+          <AppBreadcrumbs values={{ [bookingId]: booking.guestName }} />
         }
       />
 

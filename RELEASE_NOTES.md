@@ -4,6 +4,52 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 (M8b) - Discount Codes at Checkout + Reports Revamp - 2026-10-03
+
+### Discount codes at checkout (M8b)
+
+Completes the discount codes feature started in M8a: codes defined in Ooruda now go live on the villa booking site. No change for association users.
+
+- **Guest discount code input**: a discount code field on the checkout page lets guests enter a code before paying. The code is validated live (active, in-date, minimum nights/value, no blackout overlap, within global and per-guest use limits). On success the discount row appears in the Stay Summary and the Pay button amount updates immediately. Errors are inline. Guests can clear the code and try another.
+- **Server-side re-validation**: the promo code is re-validated in the `create-order` API route (all the same rules) and inside `create_booking_atomic` (atomic, inside the advisory property lock — no race on `max_uses`). A tampered discount amount cannot be injected by the client; the server computes it from the code's terms.
+- **Discount amount**: applied to the pre-tax base (base stay + extra guests). The discount reduces what the guest pays. `bookings.total_amount` records the pre-discount total; `bookings.discount_amount` records the saving. The Razorpay order is created for `total_amount − discount_amount`.
+- **Sync from Ooruda**: when an owner saves, pauses, resumes, or an Ooruda super-admin approves/rejects a code, `syncDiscountCode` pushes the current state to the villa-booking `discount_codes` mirror table (fire-and-forget; Ooruda is the source of truth and a sync failure is logged but not surfaced to the user).
+- **Manager cancel booking**: managers can now cancel bookings when the villa owner enables "Let managers cancel bookings" in Villa Settings > Policies.
+- **Guest-facing wording**: the checkout calls it a "Discount code" throughout (field, applied-code badge, Stay Summary row). The code entry field now uses the site's own typeface instead of a monospace font, so it matches every other field on the form.
+- **Errors the guest sees vs. errors we log**: internal error codes no longer reach the guest. A date conflict used to surface the raw database message (`DATE_UNAVAILABLE: …`); the guest now reads "These dates are no longer available. Please go back and select different dates." and the original message, code and all, goes to the server log for diagnosis. The same split applies to blocked dates and to every discount-code rejection.
+
+### Reports revamp (Ooruda villa reports)
+
+A significantly more useful reports screen replacing the previous dense-text layout.
+
+- **Overview tab**: three hero KPIs (Revenue, Occupancy %, Net Income) + four secondary metrics (ADR, RevPAR, Expenses, GST collected) at the top. Revenue bar chart with an occupancy line overlay (2+ months). Monthly breakdown table with a totals footer row and colour-coded Net column.
+- **Channels tab**: donut chart (2+ channels), channel icon cards, detail table.
+- **Guests tab**: unique/new/returning tiles; guest rows with avatar initials and ×N repeat-stay badge; human-readable date format.
+- **Controls bar**: period selector (left) + single Export dropdown with CSV and Print options (right). Period shown as pill badges. Page no longer has a redundant H1.
+- **Expense percentages now total 100%**: "Where the money went" rounded each category on its own, so a financial-year view across eleven categories displayed percentages adding up to 98%. The shares are now apportioned so the rounded figures always sum to exactly 100, with the remainder going to the categories that lost the most to rounding. Amounts were always correct; only the percentages were affected.
+
+### Figures are now current on the first page load
+
+Reports and the dashboard read Ooruda's copy of the bookings rather than the booking site, so long date ranges stay fast. That copy used to be refreshed *after* the page had rendered, which meant a change made on the booking site showed up only on the load after the one where you went looking for it.
+
+The copy is now refreshed *before* the figures are read, so one refresh is enough. Page speed is protected three ways: a copy refreshed in the last five minutes is left alone; the very first copy of a villa reads its whole history, so that one still happens in the background and the page shows what it already has; and a routine refresh — which reads only a recent window — is waited for, but never for longer than 2.5 seconds, after which the page renders and the refresh finishes on its own. The Bookings list and Calendar were already live and are unchanged.
+
+### Internal
+- Regenerated the booking-site type definitions on both sides, so the discount-code sync is fully type-checked. This removes the temporary `as any` cast in `villa-discounts.service.ts`.
+- The discount-code sync to the booking site now runs through `after()`, so the cross-database write is no longer cut short when the response ends, and its log lines use the structured form the rest of the codebase uses.
+- A discount rejection raised without the expected `CODE: message` shape no longer passes a mangled internal code to the guest, and every rejection is now logged server-side.
+- Guest-facing: an applied discount code is dropped if the dates or guest count change afterwards, instead of showing a saving the booking may no longer qualify for. The code entry, Apply and Remove controls gained `data-test` hooks.
+
+### Testing
+- Typecheck: 28/28 packages pass (Ooruda); `tsc --noEmit` clean (villa-booking).
+- Browser-verified: all three report tabs, discount code validation (valid and invalid), discount reflected in price summary and Pay button, and expense percentages totalling 100%.
+
+| Migration | Change |
+| --- | --- |
+| `00062_discount_codes.sql` (villa-booking) | `discount_codes` mirror table (service-role only, RLS on), `bookings.discount_code` + `bookings.discount_amount`, `create_booking_atomic` updated with discount validation params (backward-compatible defaults) |
+
+---
+
 ## Villa v1.0 - Receipt Vouchers and Villa Switcher - 2026-09-30
 
 - **Receipt and refund vouchers:** every receipt and refund number on a booking's Payments card opens a printable voucher (Print / Save as PDF): business name, address (from the booking site), GSTIN when set, voucher number and date, who paid, booking and stay, mode and reference, the amount in figures and in words (Indian style: lakh, crore), and a note that a receipt is not a tax invoice. A voided receipt shows VOID.

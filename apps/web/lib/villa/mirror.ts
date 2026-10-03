@@ -1,4 +1,6 @@
 import 'server-only';
+import { after } from 'next/server';
+
 import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 
@@ -107,6 +109,8 @@ export interface MirrorSyncResult {
   propertyId: string;
   rows: number;
   full: boolean;
+  /** When this run finished, for callers that display a "synced at" time. */
+  syncedAt?: string;
   /** Another sync of this property was already running; nothing was done. */
   skipped?: boolean;
 }
@@ -276,7 +280,7 @@ export async function syncPropertyMirror(
       throw new Error(`mirror state save failed: ${saveError.message}`);
     }
 
-    return { propertyId, rows, full };
+    return { propertyId, rows, full, syncedAt: startedAt };
   } catch (error) {
     const message = isVillaDbError(error)
       ? `${error.code}: ${error.detail ?? error.message}`
@@ -363,4 +367,94 @@ export async function syncAllMirrors(): Promise<{
   }
 
   return { synced, failed };
+}
+
+/** How long a page will wait for a routine refresh before rendering anyway. */
+const INLINE_SYNC_BUDGET_MS = 2_500;
+
+/** The sync-state columns `refreshMirrorForRead` needs to make its decision. */
+export interface MirrorReadState {
+  /** When the figures the caller is about to read were last refreshed. */
+  syncedAt: string | null;
+  /** The last refresh failed; the caller is reading the last good figures. */
+  failing: boolean;
+}
+
+/**
+ * Brings the mirror up to date *before* the caller reads it, so a page shows
+ * current figures on the first load rather than the load after.
+ *
+ * Waiting is bounded three ways, so this never costs a page its speed:
+ *   - a mirror synced within MIRROR_STALE_MS is left alone;
+ *   - the first copy of a villa walks its whole history, so that one runs
+ *     behind the response and the page renders what it already has. A villa
+ *     re-linked to another site property copies everything again too, which
+ *     `syncPropertyMirror` decides for itself; that one is rare and does wait.
+ *   - a routine refresh reads a bounded recent window, which is quick, but a
+ *     slow booking site still only delays the page by INLINE_SYNC_BUDGET_MS —
+ *     past that the sync finishes on its own.
+ *
+ * The caller must have authorised the property first (see villa-db/client).
+ */
+export async function refreshMirrorForRead(
+  accountId: string,
+  propertyId: string,
+): Promise<MirrorReadState> {
+  const { data: state, error } = await getSupabaseServerAdminClient()
+    .from('villa_mirror_sync_state')
+    .select('last_synced_at, last_full_at, last_error_at')
+    .eq('property_id', propertyId)
+    .maybeSingle();
+
+  if (error) {
+    // Reading the state is not worth failing a page over, but a silent miss
+    // here would quietly disable the refresh below, so it is logged.
+    (await getLogger()).warn(
+      { propertyId, error: error.message },
+      'villa mirror state read failed',
+    );
+    return { syncedAt: null, failing: false };
+  }
+
+  const now = Date.now();
+  const syncedAt = state?.last_synced_at ?? null;
+  const lastSync = syncedAt ? Date.parse(syncedAt) : 0;
+  const lastError = state?.last_error_at ? Date.parse(state.last_error_at) : 0;
+  const failing = lastError > lastSync;
+
+  if (now - lastSync <= MIRROR_STALE_MS) return { syncedAt, failing };
+
+  // A site that just failed is not retried on every load.
+  if (failing && now - lastError < MIRROR_STALE_MS) {
+    return { syncedAt, failing };
+  }
+
+  const run = syncPropertyMirror(accountId, propertyId).catch(async (err) => {
+    // syncPropertyMirror stamps last_error_at itself, which drives the
+    // back-off above; this line is so the failure is also visible in the log.
+    (await getLogger()).warn(
+      { propertyId, error: String(err) },
+      'villa mirror read-refresh failed',
+    );
+    return undefined;
+  });
+
+  // Hand the promise to the runtime so it still finishes if we stop waiting.
+  after(() => run);
+
+  if (!state?.last_full_at) return { syncedAt, failing };
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const done = await Promise.race([
+    run,
+    new Promise<undefined>((resolve) => {
+      timer = setTimeout(() => resolve(undefined), INLINE_SYNC_BUDGET_MS);
+    }),
+  ]).finally(() => {
+    // Without this the timer holds the invocation open after the response.
+    if (timer) clearTimeout(timer);
+  });
+
+  return { syncedAt: done?.syncedAt ?? syncedAt, failing: !done && failing };
 }

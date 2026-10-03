@@ -1,5 +1,3 @@
-import { after } from 'next/server';
-
 import { CircleAlert } from 'lucide-react';
 
 import { getLogger } from '@kit/shared/logger';
@@ -11,7 +9,7 @@ import { Trans } from '@kit/ui/trans';
 
 import { VILLA_ROLES, requireRole } from '~/lib/rbac';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
-import { MIRROR_STALE_MS, syncPropertyMirror } from '~/lib/villa/mirror';
+import { refreshMirrorForRead } from '~/lib/villa/mirror';
 import { selectVillaProperty } from '~/lib/villa/properties';
 import {
   type ReportStay,
@@ -123,54 +121,49 @@ export default async function VillaReportsPage({
   const client = getSupabaseServerClient();
   const end = addDays(range.to, 1);
 
-  const [staysResult, expensesResult, historyResult, stateResult] =
-    await Promise.all([
-      fetchAll((a, b) =>
-        client
-          .from('villa_bookings_mirror')
-          .select(STAY_COLUMNS)
-          .eq('property_id', property.id)
-          .in('status', ['confirmed', 'completed'])
-          .lt('check_in', end)
-          .gt('check_out', range.from)
-          .order('site_booking_id')
-          .range(a, b),
-      ),
-      fetchAll((a, b) =>
-        client
-          .from('villa_expenses')
-          .select('spent_on, category, amount, gst_amount')
-          .eq('property_id', property.id)
-          .gte('spent_on', range.from)
-          .lte('spent_on', range.to)
-          .order('id')
-          .range(a, b),
-      ),
-      // Returning guests need every past stay, only on that tab.
-      tab === 'guests'
-        ? fetchAll((a, b) =>
-            client
-              .from('villa_bookings_mirror')
-              .select(STAY_COLUMNS)
-              .eq('property_id', property.id)
-              .in('status', ['confirmed', 'completed'])
-              .lt('check_in', end)
-              .order('site_booking_id')
-              .range(a, b),
-          )
-        : Promise.resolve({ data: [], error: null }),
+  // Refresh the copy of the bookings BEFORE reading it, so the figures below
+  // are current on this load. Bounded: see refreshMirrorForRead.
+  const { syncedAt } = await refreshMirrorForRead(accountId, property.id);
+
+  const [staysResult, expensesResult, historyResult] = await Promise.all([
+    fetchAll((a, b) =>
       client
-        .from('villa_mirror_sync_state')
-        .select('last_synced_at')
+        .from('villa_bookings_mirror')
+        .select(STAY_COLUMNS)
         .eq('property_id', property.id)
-        .maybeSingle(),
-    ]);
+        .in('status', ['confirmed', 'completed'])
+        .lt('check_in', end)
+        .gt('check_out', range.from)
+        .order('site_booking_id')
+        .range(a, b),
+    ),
+    fetchAll((a, b) =>
+      client
+        .from('villa_expenses')
+        .select('spent_on, category, amount, gst_amount')
+        .eq('property_id', property.id)
+        .gte('spent_on', range.from)
+        .lte('spent_on', range.to)
+        .order('id')
+        .range(a, b),
+    ),
+    // Returning guests need every past stay, only on that tab.
+    tab === 'guests'
+      ? fetchAll((a, b) =>
+          client
+            .from('villa_bookings_mirror')
+            .select(STAY_COLUMNS)
+            .eq('property_id', property.id)
+            .in('status', ['confirmed', 'completed'])
+            .lt('check_in', end)
+            .order('site_booking_id')
+            .range(a, b),
+        )
+      : Promise.resolve({ data: [], error: null }),
+  ]);
 
   const error =
-    staysResult.error ??
-    expensesResult.error ??
-    historyResult.error ??
-    stateResult.error;
+    staysResult.error ?? expensesResult.error ?? historyResult.error;
 
   if (error) {
     (await getLogger()).error(
@@ -178,15 +171,6 @@ export default async function VillaReportsPage({
       'villa reports load failed',
     );
     throw new Error('Could not load the report. Refresh to try again.');
-  }
-
-  // Keep the copy of the bookings fresh for next time, without waiting.
-  const syncedAt = stateResult.data?.last_synced_at ?? null;
-
-  if (!syncedAt || Date.now() - Date.parse(syncedAt) > MIRROR_STALE_MS) {
-    after(() =>
-      syncPropertyMirror(accountId, property.id).catch(() => undefined),
-    );
   }
 
   const stays = (staysResult.data ?? []).map(toStay);

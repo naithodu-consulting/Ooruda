@@ -10,10 +10,29 @@ Last updated: 2026-09-30 (after M8a).
 
 ## A. Before anything reaches production
 
-- [ ] **Push the villa migrations to the dev database** (Ooruda Development,
-      `bcdosjrbkkemsqowhigj`). Applied locally only so far. You said "not yet" earlier.
-      Pending: M0–M6 villa migrations (`20260927110925` … `20260930003722`).
-      Command: `cd apps/web && supabase migration list --linked`, then `./scripts/db-push.sh`.
+- [x] **Push the villa migrations to the dev database** (Ooruda Development,
+      `bcdosjrbkkemsqowhigj`). All 11 villa migrations (M0–M8 + business details)
+      applied 2026-10-03; villa-booking `00062_discount_codes.sql` pushed to its dev
+      project (`hlmqcdzazbrztfovixjk`) the same day, with the old 15-argument
+      `create_booking_atomic` overload confirmed dropped.
+- [ ] **A discount never reaches Ooruda's revenue figures.** (Found in review,
+      2026-10-03. Bites the moment a guest redeems a code, so fix before codes are
+      advertised.) The booking site stores the full pre-discount `total_amount`
+      alongside a separate `discount_amount`, but `SiteBooking` carries no discount
+      field, `villa_bookings_mirror` has no discount column, and Reports compute
+      revenue as `base_amount + extra_guest_amount`. Every discounted stay therefore
+      overstates revenue by exactly the discount, permanently and invisibly. Fix:
+      carry `discount_amount` through `listBookingsForSync` → `toRow` → a new mirror
+      column (needs a migration), then subtract it in `buildOverview` and `monthKpis`.
+      Related: `villa-booking/src/app/api/bookings/webhook/route.ts` falls back to
+      `refundPaise: booking.total_amount`, which would refund more than was collected.
+- [ ] **Decide the GST base for discounted stays — needs the CA.** (Found in review,
+      2026-10-03.) The two codebases disagree. Ooruda's `apps/web/lib/villa/gst.ts`
+      documents and implements GST on the amount *after* discount (and has tests for a
+      discount moving a night into a lower slab). The booking site computes GST first
+      and subtracts the discount from the GST-inclusive total, so the guest pays tax on
+      money they never paid, possibly at the wrong slab. Settle this with the CA
+      alongside the slab confirmation below, then make one side match the other.
 - [ ] **Privacy Policy wording** — new section 5 "Villa Guests and Identity Documents" on
       ooruda.com (`app/[locale]/(legal)/privacy-policy/page.tsx`). Drafted by engineering;
       needs a legal read before production.
@@ -28,7 +47,18 @@ Last updated: 2026-09-30 (after M8a).
       **only after** the booking site's Privacy page states ID storage and the 30-day
       retention (villa-booking TODO 7). Until then staff record IDs "seen in person" (last 4
       digits only).
-- [ ] **Scheduled job** — `GET /api/villa/sync` with `Authorization: Bearer $CRON_SECRET`
+- [ ] **Scheduled job — two of its three jobs genuinely need a scheduler, not a page
+      visit.** Agreed 2026-10-03 to do this *after* the current work lands.
+      (a) **Guest ID photo purge is a compliance obligation**, not a convenience: the
+      privacy policy states a retention period, and if nobody opens a villa dashboard
+      for longer than that, guest ID documents sit past their retention date. A page
+      view cannot discharge that. (b) **Guest emails** are time-triggered (arrival at
+      10:00 IST, thank-you 3 hours after check-out) and go late or not at all without
+      it. (c) The **mirror refresh** can live on page visits — Reports and the
+      dashboard now refresh it before they read, and the Bookings list and Calendar
+      read the booking site live — but it is coupled to (b), since the route syncs
+      first so emails are chosen from fresh data.
+      `GET /api/villa/sync` with `Authorization: Bearer $CRON_SECRET`
       (secret ≥ 32 characters). It deletes guest ID photos past their retention date, refreshes
       the bookings copy used by dashboards and reports, and (M7) sends due guest emails.
       Decide how to run it: Vercel Cron (every 15 min needs a paid plan) or Supabase pg_cron +

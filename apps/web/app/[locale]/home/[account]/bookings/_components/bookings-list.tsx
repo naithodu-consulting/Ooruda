@@ -95,6 +95,10 @@ export function BookingsList(props: {
                       <Badge
                         variant="outline"
                         data-test={'villa-booking-status'}
+                        className={cn(
+                          b.status === 'cancelled' &&
+                            'border-destructive/40 text-destructive',
+                        )}
                       >
                         {bookingStatusLabel(b.status)}
                       </Badge>
