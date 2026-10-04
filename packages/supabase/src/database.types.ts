@@ -2898,6 +2898,7 @@ export type Database = {
           check_out: string
           children: number
           discount_amount: number
+          discount_code: string | null
           extra_guest_amount: number
           guest_email: string | null
           guest_name: string
@@ -2928,6 +2929,7 @@ export type Database = {
           check_out: string
           children: number
           discount_amount?: number
+          discount_code?: string | null
           extra_guest_amount: number
           guest_email?: string | null
           guest_name: string
@@ -2958,6 +2960,7 @@ export type Database = {
           check_out?: string
           children?: number
           discount_amount?: number
+          discount_code?: string | null
           extra_guest_amount?: number
           guest_email?: string | null
           guest_name?: string

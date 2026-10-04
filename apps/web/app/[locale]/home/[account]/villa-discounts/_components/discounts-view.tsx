@@ -80,6 +80,12 @@ export interface DiscountRow {
   status: 'pending_approval' | 'active' | 'paused' | 'rejected';
   expired: boolean;
   history: { action: string; at: string }[];
+  usage: {
+    timesUsed: number;
+    totalDiscount: number;
+    lastUsedAt: string | null;
+    lastGuestName: string | null;
+  } | null;
 }
 
 const STATUS: Record<DiscountRow['status'], string> = {
@@ -148,7 +154,7 @@ export function DiscountsView(props: {
       <Alert data-test={'villa-discounts-info'}>
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Codes work only for bookings on your website, never for travel-site
+          Codes work only for bookings on the website, never for travel-site
           bookings, and never together. A code over {DISCOUNT_CEILING_PCT}% (or
           a flat amount over {DISCOUNT_CEILING_PCT}% of its minimum booking
           value) is checked by Ooruda before it can be used.
@@ -301,6 +307,14 @@ export function DiscountsView(props: {
                       .join(' · ')}
                   </p>
                 ) : null}
+                <p
+                  className="text-muted-foreground text-xs"
+                  data-test={'villa-discount-usage'}
+                >
+                  {c.usage
+                    ? `Used ${c.usage.timesUsed} time${c.usage.timesUsed === 1 ? '' : 's'} · ${formatINR(c.usage.totalDiscount)} total discount · last used ${formatDateReadable(c.usage.lastUsedAt!)} by ${c.usage.lastGuestName}`
+                    : 'Not used yet'}
+                </p>
               </li>
             ))}
           </ul>

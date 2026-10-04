@@ -63,6 +63,7 @@ function toRow(site: VillaSite, b: SiteBooking): MirrorInsert {
     tax_amount: fromPaise(b.taxAmountPaise),
     total_amount: fromPaise(b.totalAmountPaise),
     discount_amount: fromPaise(b.discountAmountPaise),
+    discount_code: b.discountCode,
     id_status: b.idStatus,
     invoice_number: b.invoiceNumber,
     guest_name: b.guestName,

@@ -61,7 +61,7 @@ export default async function VillaDiscountsPage({
     );
   }
 
-  const [codesResult, auditResult] = await Promise.all([
+  const [codesResult, auditResult, usageResult] = await Promise.all([
     client
       .from('villa_discount_codes')
       .select(
@@ -75,9 +75,15 @@ export default async function VillaDiscountsPage({
       .eq('account_id', accountId)
       .order('created_at', { ascending: false })
       .limit(500),
+    client
+      .from('villa_bookings_mirror')
+      .select('discount_code, discount_amount, guest_name, check_in')
+      .eq('property_id', property.id)
+      .not('discount_code', 'is', null)
+      .in('status', ['confirmed', 'completed']),
   ]);
 
-  const error = codesResult.error ?? auditResult.error;
+  const error = codesResult.error ?? auditResult.error ?? usageResult.error;
 
   if (error) {
     (await getLogger()).error(
@@ -88,6 +94,22 @@ export default async function VillaDiscountsPage({
   }
 
   const today = todayIst();
+
+  // Build a per-code usage map from mirror rows that have a discount_code.
+  type UsageStat = { timesUsed: number; totalDiscount: number; lastUsedAt: string | null; lastGuestName: string | null };
+  const usageByCode = new Map<string, UsageStat>();
+  for (const row of usageResult.data ?? []) {
+    const code = row.discount_code!;
+    const prev = usageByCode.get(code) ?? { timesUsed: 0, totalDiscount: 0, lastUsedAt: null, lastGuestName: null };
+    const checkIn = row.check_in;
+    usageByCode.set(code, {
+      timesUsed: prev.timesUsed + 1,
+      totalDiscount: prev.totalDiscount + Number(row.discount_amount ?? 0),
+      lastUsedAt: !prev.lastUsedAt || checkIn > prev.lastUsedAt ? checkIn : prev.lastUsedAt,
+      lastGuestName: !prev.lastUsedAt || checkIn > prev.lastUsedAt ? row.guest_name : prev.lastGuestName,
+    });
+  }
+
   const codes: DiscountRow[] = (codesResult.data ?? []).map((c) => ({
     id: c.id,
     code: c.code,
@@ -114,6 +136,7 @@ export default async function VillaDiscountsPage({
       .filter((a) => a.code_id === c.id)
       .slice(0, 5)
       .map((a) => ({ action: a.action, at: a.created_at })),
+    usage: usageByCode.get(c.code) ?? null,
   }));
 
   return (

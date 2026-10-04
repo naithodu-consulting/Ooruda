@@ -4,6 +4,21 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 - Discount code redemption tracking - 2026-10-04
+
+### Discount code usage stats
+
+Each discount code on the Discount Codes screen now shows how many times it has been redeemed, the total discount given, and who last used it and when. Codes that have never been used say "Not used yet". The data comes from the bookings mirror so no additional queries hit the booking site.
+
+- **`discount_code` mirrored**: the coupon code used at checkout is now carried into `villa_bookings_mirror` alongside the existing `discount_amount`. Every incremental sync (runs before the page renders) will pick up new redemptions automatically.
+- **Per-code stats**: the Discount Codes page aggregates mirror rows for each property, matching by code string, and computes times used, total discount, and most recent use.
+
+| Migration | Change |
+| --- | --- |
+| `20261004080000_villa_mirror_discount_code.sql` | `villa_bookings_mirror.discount_code` (nullable text, mirrors the booking site coupon code) |
+
+---
+
 ## Villa v1.0 (M8b) - Discount Codes at Checkout + Reports Revamp - 2026-10-03
 
 ### Discount codes at checkout (M8b)

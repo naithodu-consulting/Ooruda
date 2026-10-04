@@ -77,13 +77,15 @@ export interface SiteBooking {
   totalAmountPaise: number;
   /** Paise taken off before GST; 0 when no code was used. */
   discountAmountPaise: number;
+  /** Coupon code applied at checkout, or null. */
+  discountCode: string | null;
   idStatus: string;
   invoiceNumber: string | null;
   updatedAt: string | null;
 }
 
 const BOOKING_COLUMNS =
-  'id, booking_code, reference_number, status, payment_status, booking_channel, guest_name, guest_email, guest_phone, check_in, check_out, num_nights, num_adults, num_children, num_infants, base_amount, extra_guest_amount, tax_amount, total_amount, discount_amount, id_status, invoice_number, updated_at';
+  'id, booking_code, reference_number, status, payment_status, booking_channel, guest_name, guest_email, guest_phone, check_in, check_out, num_nights, num_adults, num_children, num_infants, base_amount, extra_guest_amount, tax_amount, total_amount, discount_amount, discount_code, id_status, invoice_number, updated_at';
 
 type BookingRow = {
   id: string;
@@ -106,6 +108,7 @@ type BookingRow = {
   tax_amount: number;
   total_amount: number;
   discount_amount: number | null;
+  discount_code: string | null;
   id_status: string | null;
   invoice_number: string | null;
   updated_at: string | null;
@@ -133,6 +136,7 @@ function toBooking(row: BookingRow): SiteBooking {
     taxAmountPaise: row.tax_amount,
     totalAmountPaise: row.total_amount,
     discountAmountPaise: row.discount_amount ?? 0,
+    discountCode: row.discount_code ?? null,
     idStatus: row.id_status ?? 'pending',
     invoiceNumber: row.invoice_number,
     updatedAt: row.updated_at,
