@@ -308,11 +308,11 @@ export function RatesForm(props: {
           <div className="flex justify-end">
             <Button
               type="submit"
-              disabled={isPending || !form.formState.isDirty}
+              disabled={disabled || !form.formState.isDirty}
               className="w-full sm:w-auto"
               data-test={'villa-rates-save'}
             >
-              {isPending ? 'Saving…' : 'Save rates'}
+              {isPending ? 'Saving…' : 'Save'}
             </Button>
           </div>
         ) : null}

@@ -71,7 +71,7 @@ export default async function VillaDiscountsPage({
       .order('created_at', { ascending: false }),
     client
       .from('villa_discount_audit')
-      .select('code_id, action, created_at')
+      .select('code_id, action, created_at, actor')
       .eq('account_id', accountId)
       .order('created_at', { ascending: false })
       .limit(500),
@@ -91,6 +91,23 @@ export default async function VillaDiscountsPage({
       'villa discounts load failed',
     );
     throw new Error('Could not load the discount codes.');
+  }
+
+  // Resolve actor names for the audit trail.
+  const actorIds = [
+    ...new Set(
+      (auditResult.data ?? []).map((a) => a.actor).filter(Boolean) as string[],
+    ),
+  ];
+  const actorNames = new Map<string, string>();
+  if (actorIds.length) {
+    const { data: profiles } = await client
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', actorIds);
+    for (const p of profiles ?? []) {
+      if (p.full_name) actorNames.set(p.id, p.full_name);
+    }
   }
 
   const today = todayIst();
@@ -132,10 +149,20 @@ export default async function VillaDiscountsPage({
     needsApproval: Boolean(c.needs_approval),
     status: c.status as DiscountRow['status'],
     expired: c.valid_to < today,
-    history: (auditResult.data ?? [])
-      .filter((a) => a.code_id === c.id)
-      .slice(0, 5)
-      .map((a) => ({ action: a.action, at: a.created_at })),
+    history: (() => {
+      const all = (auditResult.data ?? [])
+        .filter((a) => a.code_id === c.id)
+        .map((a) => ({
+          action: a.action,
+          at: a.created_at,
+          actorName: a.actor ? (actorNames.get(a.actor) ?? null) : null,
+        }));
+      const created = all.findLast((a) => a.action === 'created');
+      const latest = all[0];
+      if (!latest) return [];
+      if (!created || latest.action === 'created') return [latest];
+      return [latest, created];
+    })(),
     usage: usageByCode.get(c.code) ?? null,
   }));
 

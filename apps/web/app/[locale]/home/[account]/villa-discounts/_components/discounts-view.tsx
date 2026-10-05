@@ -79,7 +79,7 @@ export interface DiscountRow {
   needsApproval: boolean;
   status: 'pending_approval' | 'active' | 'paused' | 'rejected';
   expired: boolean;
-  history: { action: string; at: string }[];
+  history: { action: string; at: string; actorName: string | null }[];
   usage: {
     timesUsed: number;
     totalDiscount: number;
@@ -300,10 +300,10 @@ export function DiscountsView(props: {
                     data-test={'villa-discount-history'}
                   >
                     {c.history
-                      .map(
-                        (h) =>
-                          `${ACTION[h.action] ?? h.action} ${formatDateReadable(h.at.slice(0, 10))}`,
-                      )
+                      .map((h) => {
+                        const label = `${ACTION[h.action] ?? h.action} ${formatDateReadable(h.at.slice(0, 10))}`;
+                        return h.actorName ? `${label} by ${h.actorName}` : label;
+                      })
                       .join(' · ')}
                   </p>
                 ) : null}

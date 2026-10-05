@@ -182,7 +182,7 @@ export default async function BookingPage({ params, searchParams }: Props) {
                 className="text-muted-foreground self-center text-xs"
                 data-test={'villa-booking-cancel-owner-only'}
               >
-                Only the owner can cancel this booking.
+                Manager cancellations are off — enable in Villa Settings.
               </p>
             ) : null}
           </div>
@@ -285,6 +285,17 @@ export default async function BookingPage({ params, searchParams }: Props) {
                     <dt className="text-muted-foreground">Extra guests</dt>
                     <dd className="text-right tabular-nums">
                       {formatINR(fromPaise(booking.extraGuestAmountPaise))}
+                    </dd>
+                  </>
+                ) : null}
+                {booking.discountAmountPaise ? (
+                  <>
+                    <dt className="text-muted-foreground">
+                      Discount
+                      {booking.discountCode ? ` (${booking.discountCode})` : ''}
+                    </dt>
+                    <dd className="text-primary text-right tabular-nums">
+                      −{formatINR(fromPaise(booking.discountAmountPaise))}
                     </dd>
                   </>
                 ) : null}
