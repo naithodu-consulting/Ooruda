@@ -236,7 +236,7 @@ export async function deliverGuestEmail(
       {
         bookingId: b.id,
         template,
-        error: error instanceof Error ? error.name : 'unknown',
+        error: error instanceof Error ? error.message : String(error),
       },
       'villa guest email failed',
     );
