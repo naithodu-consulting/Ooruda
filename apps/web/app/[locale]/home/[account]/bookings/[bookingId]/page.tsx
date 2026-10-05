@@ -177,13 +177,6 @@ export default async function BookingPage({ params, searchParams }: Props) {
                 bookingCode={booking.bookingCode}
                 reasons={reasons ?? []}
               />
-            ) : active && role === 'villa_manager' ? (
-              <p
-                className="text-muted-foreground self-center text-xs"
-                data-test={'villa-booking-cancel-owner-only'}
-              >
-                Manager cancellations are off — enable in Villa Settings.
-              </p>
             ) : null}
           </div>
         </div>

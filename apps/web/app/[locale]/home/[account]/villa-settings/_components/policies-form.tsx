@@ -79,38 +79,40 @@ export function PoliciesForm(props: {
         className="flex flex-col gap-4"
         onSubmit={form.handleSubmit((values) => execute(values))}
       >
-        <Card className="bg-card">
-          <CardHeader>
-            <CardTitle className="text-base">Cancellations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FormField
-              name="managersCanCancel"
-              control={form.control}
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3">
-                  <div className="flex flex-col gap-1">
-                    <FormLabel>Let managers cancel bookings</FormLabel>
-                    <FormDescription>
-                      Managers can then cancel and refund by the cancellation
-                      policy. Changing a refund amount always stays with the
-                      owner.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      disabled={disabled}
-                      data-test={'villa-policies-managers-cancel'}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
+        {props.canEdit ? (
+          <Card className="bg-card">
+            <CardHeader>
+              <CardTitle className="text-base">Cancellations</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FormField
+                name="managersCanCancel"
+                control={form.control}
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3">
+                    <div className="flex flex-col gap-1">
+                      <FormLabel>Let managers cancel bookings</FormLabel>
+                      <FormDescription>
+                        Managers can then cancel and refund by the cancellation
+                        policy. Changing a refund amount always stays with the
+                        owner.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={isPending}
+                        data-test={'villa-policies-managers-cancel'}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card className="bg-card">
           <CardHeader>
