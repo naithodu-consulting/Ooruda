@@ -92,8 +92,8 @@ export function ContactsSection(props: {
         <div className="flex flex-col gap-1.5">
           <CardTitle className="text-base">Emergency contacts</CardTitle>
           <CardDescription>
-            Who to call at the villa. Contacts marked “Share with guests” go in
-            the welcome email before arrival.
+            Key contacts for property operations and emergencies. Contacts
+            marked "Share with guests" are included in pre-arrival guest emails.
           </CardDescription>
         </div>
         {props.canEdit ? (
@@ -103,7 +103,7 @@ export function ContactsSection(props: {
             data-test={'villa-contact-new'}
           >
             <Plus className="mr-1 h-4 w-4" />
-            Add
+            Add contact
           </Button>
         ) : null}
       </CardHeader>

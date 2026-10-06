@@ -19,8 +19,13 @@
   "dashboard": {
     "title": "Dashboard",
     "setupTitle": "Your villa workspace",
-    "setupDescription": "Everything is ready — bookings, calendar, guest IDs, payments, reports and expenses. Invite your villa manager from Members.",
+    "setupDescriptionOwner": "Everything is ready for your property: bookings, calendar, guest IDs, payments, reports and expenses.",
+    "setupDescriptionManager": "Everything is ready for your shift. Track today's arrivals and departures, manage guest IDs, record bookings, and log expenses.",
     "inviteManager": "Invite a manager",
+    "quickActions": "Quick actions",
+    "newBooking": "New booking",
+    "calendar": "Calendar & blocks",
+    "addExpense": "Add expense",
     "signedInAs": "You are signed in as"
   },
   "site": {

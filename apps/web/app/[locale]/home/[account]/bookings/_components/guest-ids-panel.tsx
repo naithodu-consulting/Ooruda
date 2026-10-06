@@ -201,10 +201,17 @@ export function GuestIdsPanel(props: {
         )}
 
         {purgeDate ? (
-          <p className="text-muted-foreground text-xs">
-            Stored ID photos for this stay are deleted on{' '}
-            {formatDateReadable(purgeDate)}.
-          </p>
+          <div className="bg-muted/40 text-muted-foreground flex items-center gap-2 rounded-md px-3 py-2 text-xs">
+            <ShieldCheck className="text-primary h-4 w-4 shrink-0" />
+            <span>
+              DPDP Retention: Stored ID documents for this stay will be
+              automatically purged on{' '}
+              <strong className="text-foreground">
+                {formatDateReadable(purgeDate)}
+              </strong>
+              .
+            </span>
+          </div>
         ) : null}
       </CardContent>
     </Card>

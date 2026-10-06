@@ -91,11 +91,10 @@ export function PoliciesForm(props: {
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3">
                     <div className="flex flex-col gap-1">
-                      <FormLabel>Let managers cancel bookings</FormLabel>
+                      <FormLabel>Allow managers to cancel bookings</FormLabel>
                       <FormDescription>
-                        Managers can then cancel and refund by the cancellation
-                        policy. Changing a refund amount always stays with the
-                        owner.
+                        Managers can cancel bookings and issue policy-standard
+                        refunds. Custom refund amounts remain owner-only.
                       </FormDescription>
                     </div>
                     <FormControl>
@@ -135,8 +134,8 @@ export function PoliciesForm(props: {
                     }
                   />
                   <FormDescription>
-                    The name guests see on receipt vouchers. Leave empty to use
-                    the villa name.
+                    The legal entity name printed on payment receipts. Leave
+                    empty to use the villa name.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -159,7 +158,7 @@ export function PoliciesForm(props: {
                     }
                   />
                   <FormDescription>
-                    Printed on receipts once your villa is GST-registered.
+                    Printed on receipts and tax invoices once registered.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -179,11 +178,10 @@ export function PoliciesForm(props: {
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3">
                   <div className="flex flex-col gap-1">
-                    <FormLabel>Email before arrival</FormLabel>
+                    <FormLabel>Pre-arrival welcome email</FormLabel>
                     <FormDescription>
-                      The day before check-in at 10 am: dates, times, ID
-                      reminder and contacts. Only if the stay is still confirmed
-                      then.
+                      Sends at 10:00 AM the day before check-in with directions,
+                      check-in time, ID requirements, and staff contact numbers.
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -204,11 +202,10 @@ export function PoliciesForm(props: {
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3">
                   <div className="flex flex-col gap-1">
-                    <FormLabel>Thank-you email after check-out</FormLabel>
+                    <FormLabel>Post-checkout thank-you email</FormLabel>
                     <FormDescription>
-                      3 hours after you check the guest out on the booking (not
-                      on the calendar date), so a late or extended stay is never
-                      thanked early.
+                      Sends 3 hours after staff mark the stay completed at
+                      check-out.
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -228,10 +225,10 @@ export function PoliciesForm(props: {
 
         <Card className="bg-card">
           <CardHeader>
-            <CardTitle className="text-base">Online travel sites</CardTitle>
+            <CardTitle className="text-base">Online travel channels</CardTitle>
             <CardDescription>
-              When you block dates or take a phone booking, booking sites like
-              MakeMyTrip can take a few minutes to catch up.
+              External booking platforms sync periodically. Buffer nights help
+              prevent overlapping reservations during sync windows.
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -4,6 +4,42 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 - UI Polish: Dashboard Quick Actions, Today Alerts, Copy + Calendar Chips - 2026-10-06
+
+### Dashboard quick actions
+
+The villa dashboard welcome card now shows three quick-action buttons — **New booking**, **Calendar & blocks**, and **Add expense** — so staff can navigate to the most common tasks without hunting the sidebar. The welcome description is now role-aware: owners see the invite-manager prompt; managers see a shift-focused message. The Invite Manager button stays for owners, moved into a secondary row.
+
+### Today panel: arrival alerts
+
+Each arrival row now shows a compact inline badge when something needs attention before the guest walks in:
+
+- **ID** (amber) — guest ID documents not yet received
+- **Due** (rose/destructive) — payment not fully settled
+
+Both badges appear only on arrivals, not departures or in-house stays.
+
+### Today panel: overdue check-out redesign
+
+The "not checked out" banner was tightened: each overdue guest is now a pill-shaped link with a "→ Check out" arrow so staff can jump directly to that booking in one click. The guest count badge and helper text are clearer.
+
+### Calendar: multi-night chip border radius
+
+Booking chips in the calendar grid now visually connect across nights — the left chip has a rounded left edge only, mid-span chips have no rounding, and the right chip has a rounded right edge — giving each booking a continuous pill appearance.
+
+### Copy and labelling improvements
+
+- **Villa Settings → Policies**: all toggle labels and descriptions rewritten for clarity ("Pre-arrival welcome email", "Post-checkout thank-you email", "Allow managers to cancel bookings", "Online travel channels"). Business-details descriptions clarified.
+- **Villa Settings → Contacts**: description updated; "Add" button renamed "Add contact".
+- **Guest IDs panel**: purge-date notice upgraded to a styled DPDP retention info box with a ShieldCheck icon.
+- **Discount Codes**: info alert copy tightened; "Refuse" renamed "Decline".
+- **Reports**: bars now cap at 48 px wide so they don't balloon on sparse monthly data; expense column shows "₹0" instead of "—" for months with no expenses.
+- **Booking detail**: guest email rendered as a clickable `mailto:` link.
+
+No schema migrations.
+
+---
+
 ## Villa v1.0 - Discount code redemption tracking - 2026-10-04
 
 ### Discount code usage stats

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { CircleAlert, LogIn, LogOut, Moon } from 'lucide-react';
+import { ArrowRight, CircleAlert, LogIn, LogOut, Moon } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import { cn } from '@kit/ui/utils';
@@ -142,34 +142,58 @@ export async function VillaToday(props: {
                   {label}
                 </p>
 
-                {/* Guest list */}
-                {rows.length === 0 ? (
-                  <p className="text-muted-foreground text-xs">{empty}</p>
-                ) : (
-                  <ul className="flex flex-col gap-1.5">
-                    {rows.map((b) => (
-                      <li
-                        key={b.id}
-                        className="flex min-w-0 items-center gap-2"
-                      >
-                        <span
-                          className={cn(
-                            'mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full',
-                            dotColor,
-                          )}
-                          aria-hidden
-                        />
-                        <Link
-                          href={href(b.id)}
-                          className="hover:text-primary truncate text-sm font-medium underline-offset-2 hover:underline"
-                          data-test={'villa-today-guest'}
+                {/* Guest list / empty state */}
+                <div className="flex min-h-8 flex-col justify-center">
+                  {rows.length === 0 ? (
+                    <p className="text-muted-foreground text-xs">{empty}</p>
+                  ) : (
+                    <ul className="flex flex-col gap-1.5">
+                      {rows.map((b) => (
+                        <li
+                          key={b.id}
+                          className="flex min-w-0 items-center gap-1.5"
                         >
-                          {b.guestName}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                          <span
+                            className={cn(
+                              'h-1.5 w-1.5 shrink-0 rounded-full',
+                              dotColor,
+                            )}
+                            aria-hidden
+                          />
+                          <Link
+                            href={href(b.id)}
+                            className="hover:text-primary truncate text-sm font-medium underline-offset-2 hover:underline"
+                            data-test={'villa-today-guest'}
+                          >
+                            {b.guestName}
+                          </Link>
+                          {key === 'arrivals' &&
+                          (b.idStatus === 'pending' ||
+                            b.paymentStatus !== 'paid') ? (
+                            <span className="inline-flex shrink-0 items-center gap-1">
+                              {b.idStatus === 'pending' ? (
+                                <span
+                                  className="bg-warning/15 text-warning rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                                  title="ID document pending"
+                                >
+                                  ID
+                                </span>
+                              ) : null}
+                              {b.paymentStatus !== 'paid' ? (
+                                <span
+                                  className="bg-destructive/15 text-destructive rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                                  title="Payment due"
+                                >
+                                  Due
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             ),
           )}
@@ -177,33 +201,41 @@ export async function VillaToday(props: {
 
         {overdue.length > 0 ? (
           <div
-            className="border-warning/40 bg-warning/5 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-start sm:gap-4"
+            className="border-warning/30 bg-warning/5 flex flex-col gap-3 rounded-xl border p-3.5 sm:flex-row sm:items-center sm:justify-between"
             data-test={'villa-today-overdue'}
           >
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="bg-warning/20 text-warning flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="bg-warning/20 text-warning flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold">
                 {overdue.length}
               </span>
-              <p className="text-sm font-medium">Not checked out yet</p>
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <p className="text-foreground text-sm font-semibold">
+                  {overdue.length === 1
+                    ? 'Stay overdue for check-out'
+                    : 'Stays overdue for check-out'}
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  Check them out on the booking page to complete the stay and
+                  send the thank-you email.
+                </p>
+              </div>
             </div>
-            <div className="flex flex-col gap-1">
-              <p className="text-muted-foreground text-xs">
-                Check-out date has passed — check them out so the thank-you
-                email sends.
-              </p>
-              <ul className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5">
-                {overdue.map((b) => (
-                  <li key={b.id}>
-                    <Link
-                      href={href(b.id)}
-                      className="text-warning text-sm font-medium underline-offset-2 hover:underline"
-                      data-test={'villa-today-overdue-guest'}
-                    >
-                      {b.guestName}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+
+            <div className="flex shrink-0 flex-wrap items-center gap-2 pl-10 sm:pl-0">
+              {overdue.map((b) => (
+                <Link
+                  key={b.id}
+                  href={href(b.id)}
+                  className="border-warning/40 bg-background text-warning hover:bg-warning/10 inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors"
+                  data-test={'villa-today-overdue-guest'}
+                >
+                  <span>{b.guestName}</span>
+                  <span className="text-muted-foreground inline-flex items-center gap-0.5 text-[10px]">
+                    <ArrowRight className="h-3 w-3" />
+                    Check out
+                  </span>
+                </Link>
+              ))}
             </div>
           </div>
         ) : null}

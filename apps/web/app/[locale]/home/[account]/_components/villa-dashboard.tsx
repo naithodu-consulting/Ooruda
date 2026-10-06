@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 
 import Link from 'next/link';
 
-import { Home, UserPlus } from 'lucide-react';
+import { Calendar, Home, Plus, Receipt, UserPlus } from 'lucide-react';
 
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { Button } from '@kit/ui/button';
@@ -50,6 +50,18 @@ export async function VillaDashboard({
   );
 
   const membersPath = pathsConfig.app.accountMembers.replace(
+    '[account]',
+    account,
+  );
+  const bookingsPath = pathsConfig.app.accountVillaBookings.replace(
+    '[account]',
+    account,
+  );
+  const calendarPath = pathsConfig.app.accountVillaCalendar.replace(
+    '[account]',
+    account,
+  );
+  const expensesPath = pathsConfig.app.accountVillaExpenses.replace(
     '[account]',
     account,
   );
@@ -101,32 +113,74 @@ export async function VillaDashboard({
             </CardTitle>
 
             <CardDescription>
-              <Trans i18nKey={'villa.dashboard.setupDescription'} />
+              <Trans
+                i18nKey={
+                  role === 'villa_owner'
+                    ? 'villa.dashboard.setupDescriptionOwner'
+                    : 'villa.dashboard.setupDescriptionManager'
+                }
+              />
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-muted-foreground text-sm">
-              <Trans i18nKey={'villa.dashboard.signedInAs'} />{' '}
-              <span
-                className="text-foreground font-medium"
-                data-test={'villa-dashboard-role'}
-              >
-                <Trans i18nKey={`common.roles.${role}.label`} />
-              </span>
-            </p>
-
-            {role === 'villa_owner' ? (
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
-                className="w-full sm:w-auto"
-                data-test={'villa-dashboard-invite-manager'}
+                variant="outline"
+                size="sm"
                 nativeButton={false}
-                render={<Link href={membersPath} />}
+                render={<Link href={bookingsPath} />}
+                data-test={'villa-dashboard-quick-booking'}
               >
-                <UserPlus className="mr-2 h-4 w-4" />
-                <Trans i18nKey={'villa.dashboard.inviteManager'} />
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                <Trans i18nKey={'villa.dashboard.newBooking'} />
               </Button>
-            ) : null}
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={<Link href={calendarPath} />}
+                data-test={'villa-dashboard-quick-calendar'}
+              >
+                <Calendar className="mr-1.5 h-3.5 w-3.5" />
+                <Trans i18nKey={'villa.dashboard.calendar'} />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={<Link href={expensesPath} />}
+                data-test={'villa-dashboard-quick-expense'}
+              >
+                <Receipt className="mr-1.5 h-3.5 w-3.5" />
+                <Trans i18nKey={'villa.dashboard.addExpense'} />
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-3 border-t pt-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-muted-foreground text-sm">
+                <Trans i18nKey={'villa.dashboard.signedInAs'} />{' '}
+                <span
+                  className="text-foreground font-medium"
+                  data-test={'villa-dashboard-role'}
+                >
+                  <Trans i18nKey={`common.roles.${role}.label`} />
+                </span>
+              </p>
+
+              {role === 'villa_owner' ? (
+                <Button
+                  className="w-full sm:w-auto"
+                  size="sm"
+                  data-test={'villa-dashboard-invite-manager'}
+                  nativeButton={false}
+                  render={<Link href={membersPath} />}
+                >
+                  <UserPlus className="mr-1.5 h-4 w-4" />
+                  <Trans i18nKey={'villa.dashboard.inviteManager'} />
+                </Button>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
 

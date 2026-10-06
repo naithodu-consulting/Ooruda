@@ -175,9 +175,16 @@ function NightChip(props: {
   onBlock: (id: string) => void;
 }) {
   const { item } = props;
+  const shape = cn(
+    item.starts && !item.ends && 'rounded-l-md rounded-r-none border-r-0',
+    !item.starts && item.ends && 'rounded-l-none rounded-r-md border-l-0',
+    !item.starts && !item.ends && 'rounded-none border-x-0',
+    item.starts && item.ends && 'rounded-md',
+  );
   const className = cn(
-    'block truncate rounded-sm border px-1.5 py-0.5 text-left text-xs',
+    'block truncate border px-1.5 py-0.5 text-left text-xs transition-colors',
     'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
+    shape,
     props.dim && 'opacity-60',
   );
 

@@ -635,6 +635,7 @@ function OverviewTab({ o }: { o: Overview }) {
                     name="revenue"
                     fill="var(--chart-2)"
                     radius={[4, 4, 0, 0]}
+                    maxBarSize={48}
                   />
                   <Bar
                     isAnimationActive={false}
@@ -642,6 +643,7 @@ function OverviewTab({ o }: { o: Overview }) {
                     name="expenses"
                     fill="var(--chart-4)"
                     radius={[4, 4, 0, 0]}
+                    maxBarSize={48}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -737,7 +739,7 @@ function OverviewTab({ o }: { o: Overview }) {
                       {formatINR(m.revenue)}
                     </td>
                     <td className="py-2 pr-4 text-right">
-                      {m.expenses > 0 ? formatINR(m.expenses) : '—'}
+                      {m.expenses > 0 ? formatINR(m.expenses) : '₹0'}
                     </td>
                     <td
                       className={cn(
@@ -767,7 +769,7 @@ function OverviewTab({ o }: { o: Overview }) {
                       {formatINR(o.revenue)}
                     </td>
                     <td className="py-2 pr-4 text-right text-xs font-semibold">
-                      {o.expenses > 0 ? formatINR(o.expenses) : '—'}
+                      {o.expenses > 0 ? formatINR(o.expenses) : '₹0'}
                     </td>
                     <td
                       className={cn(

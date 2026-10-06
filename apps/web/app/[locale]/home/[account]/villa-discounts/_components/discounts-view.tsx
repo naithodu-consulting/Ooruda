@@ -154,10 +154,9 @@ export function DiscountsView(props: {
       <Alert data-test={'villa-discounts-info'}>
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Codes work only for bookings on the website, never for travel-site
-          bookings, and never together. A code over {DISCOUNT_CEILING_PCT}% (or
-          a flat amount over {DISCOUNT_CEILING_PCT}% of its minimum booking
-          value) is checked by Ooruda before it can be used.
+          Discount codes apply only to direct website bookings and cannot be
+          combined. Discounts above {DISCOUNT_CEILING_PCT}% require review
+          before activation.
         </AlertDescription>
       </Alert>
 
@@ -251,7 +250,7 @@ export function DiscountsView(props: {
                           }
                           data-test={'villa-discount-reject'}
                         >
-                          Refuse
+                          Decline
                         </Button>
                       </>
                     ) : null}
@@ -302,7 +301,9 @@ export function DiscountsView(props: {
                     {c.history
                       .map((h) => {
                         const label = `${ACTION[h.action] ?? h.action} ${formatDateReadable(h.at.slice(0, 10))}`;
-                        return h.actorName ? `${label} by ${h.actorName}` : label;
+                        return h.actorName
+                          ? `${label} by ${h.actorName}`
+                          : label;
                       })
                       .join(' · ')}
                   </p>

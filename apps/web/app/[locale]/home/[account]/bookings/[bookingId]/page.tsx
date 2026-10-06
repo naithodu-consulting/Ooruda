@@ -258,7 +258,18 @@ export default async function BookingPage({ params, searchParams }: Props) {
                   )}
                 </dd>
                 <dt className="text-muted-foreground">Email</dt>
-                <dd className="break-all">{booking.guestEmail || '-'}</dd>
+                <dd className="break-all">
+                  {booking.guestEmail ? (
+                    <a
+                      href={`mailto:${booking.guestEmail}`}
+                      className="text-primary hover:underline"
+                    >
+                      {booking.guestEmail}
+                    </a>
+                  ) : (
+                    '-'
+                  )}
+                </dd>
               </dl>
             </CardContent>
           </Card>
