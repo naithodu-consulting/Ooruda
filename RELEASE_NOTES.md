@@ -4,6 +4,35 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 - Rate changes reach the guest site immediately - 2026-10-08
+
+### The bug
+
+Changing the nightly rate in **Villa Settings** updated the per-night prices in the booking site's calendar but **not** the "Total nights" figure in the booking widget, which kept quoting the old rate. The two numbers came from different places: the calendar read the database on every request, while the widget priced the stay from values baked into the page when it was last rendered. The guest site's homepage was statically generated, so those values never changed until the next deployment.
+
+### Cache invalidation (the missing link)
+
+The booking site already exposed a secret-guarded `POST /api/revalidate` for Ooruda to purge its cache after an edit, but **nothing ever called it**. Saving base rates, seasonal rates or policies now calls it, so changes appear on the guest site within seconds instead of waiting for a deploy. This also fixes staleness for policies and other site content edited from Ooruda.
+
+Note that this purges the rendered pages, not the calendar endpoint's own CDN entry, so per-night prices in the date picker still carry up to their 60-second cache window. The purge is what makes page content and the widget's own rates current; it is not by itself the fix for the reported bug.
+
+The call is best-effort: if the guest site is unreachable, the settings save still succeeds and the failure is logged. Configure with `VILLA_SITE_URL` and `VILLA_SITE_REVALIDATE_SECRET` (the latter must match `CONTENT_REVALIDATE_SECRET` on the booking-site deployment). Left unset, revalidation is skipped — which is the correct local-development behaviour.
+
+### Guest-site changes (villa-booking repository)
+
+- **Homepage** now revalidates every 60 s instead of being generated once at build time; the **checkout page** is fully dynamic, since the price shown there is the price charged.
+- **The booking widget prices stays from the calendar endpoint**, the same source as the per-night prices shown in the date picker, so the total and the calendar can no longer disagree. It falls back to the page's own rates for any month not yet loaded.
+- **Whichever source is newer wins.** The calendar endpoint is CDN-cached for up to two minutes, so its rates are not automatically the fresher ones — on the per-request checkout page they are usually older. The endpoint now reports when it read the database, and the page reports when it read its own rates; live rates are preferred only when they are genuinely newer. Without this, a just-changed price would show briefly and then be corrected upward at the payment step, which is the wrong direction for a money figure.
+- **The calendar refreshes when a guest returns to the tab** (at most once a minute). A tab left open overnight previously priced stays at yesterday's rates and showed nights as free that had since been booked. The refresh is issued in six-month slices, because the endpoint refuses spans over 186 nights and a single oversized request would have failed silently, leaving the stale rates in place. Responses superseded by a refresh are discarded so a slow reply cannot reinstate old rates.
+- **Non-numeric `?children=` in a checkout link** produced a `₹NaN` total instead of being rejected.
+- **Price-change guard at payment**: checkout sends the total it displayed, and `create-order` refuses with `409 PRICE_CHANGED` if its own authoritative total differs, showing the guest the new price to confirm rather than silently charging a different amount. No booking or date hold is created when it refuses. Amounts were already computed server-side, so this closes a consent gap, not a security one.
+- **"Starting from" price** now only considers seasonal rules within the next six months — the window the calendar loads. Previously any future rule counted, so a cheap off-season rate a year out could set the headline price for a date nobody could book.
+- **Date bug**: "today" was computed in UTC in `getPricingRules` and in `create-order`'s promo-code validity check, so between 00:00 and 05:30 IST a code could be honoured a day early or rejected on its last valid day. Both now use the property timezone.
+
+No schema migrations.
+
+---
+
 ## Villa v1.0 - UI Polish: Dashboard Quick Actions, Today Alerts, Copy + Calendar Chips - 2026-10-06
 
 ### Dashboard quick actions

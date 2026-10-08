@@ -6,6 +6,7 @@ import { authActionClient } from '@kit/next/safe-action';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { requireVillaRole } from '~/lib/villa/auth';
+import { revalidateBookingSite } from '~/lib/villa/revalidate-site';
 
 import {
   AddonSchema,
@@ -31,12 +32,22 @@ function revalidateSettings() {
   revalidatePath('/[locale]/home/[account]/villa-settings', 'page');
 }
 
+/**
+ * Refreshes this page AND the guest booking site, for the settings the site
+ * renders: rates, seasonal rates and policies. Add-ons and emergency contacts
+ * are Ooruda-only, so they revalidate locally alone.
+ */
+async function revalidateSettingsAndSite(reason: string) {
+  revalidateSettings();
+  await revalidateBookingSite(reason);
+}
+
 export const saveBaseRatesAction = authActionClient
   .inputSchema(BaseRatesSchema)
   .action(async ({ parsedInput, ctx }) => {
     const service = await ownerService(parsedInput.accountId);
     const rates = await service.saveBaseRates(parsedInput, ctx.user.id);
-    revalidateSettings();
+    await revalidateSettingsAndSite('base-rates');
     return rates;
   });
 
@@ -45,7 +56,7 @@ export const addSeasonalRateAction = authActionClient
   .action(async ({ parsedInput, ctx }) => {
     const service = await ownerService(parsedInput.accountId);
     const rule = await service.addSeasonalRate(parsedInput, ctx.user.id);
-    revalidateSettings();
+    await revalidateSettingsAndSite('seasonal-rate-added');
     return rule;
   });
 
@@ -54,7 +65,7 @@ export const deleteSeasonalRateAction = authActionClient
   .action(async ({ parsedInput, ctx }) => {
     const service = await ownerService(parsedInput.accountId);
     await service.removeSeasonalRate(parsedInput, ctx.user.id);
-    revalidateSettings();
+    await revalidateSettingsAndSite('seasonal-rate-removed');
   });
 
 export const saveAddonAction = authActionClient
@@ -94,5 +105,5 @@ export const savePoliciesAction = authActionClient
   .action(async ({ parsedInput, ctx }) => {
     const service = await ownerService(parsedInput.accountId);
     await service.savePolicies(parsedInput, ctx.user.id);
-    revalidateSettings();
+    await revalidateSettingsAndSite('policies');
   });
