@@ -132,6 +132,7 @@ export default async function BookingPage({ params, searchParams }: Props) {
   const active = booking.status === 'confirmed';
   const canCancel =
     active &&
+    today <= booking.checkIn &&
     (role === 'villa_admin' || Boolean(settings?.managers_can_cancel));
   const canCheckOut =
     booking.status === 'confirmed' && booking.checkIn <= today;

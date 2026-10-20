@@ -86,7 +86,6 @@ export function GuestIdsPanel(props: {
   const adultsWithId = props.guests.filter(
     (g) => g.isAdult && withId.has(g.id),
   ).length;
-  const purgeDate = props.docs.find((d) => d.hasFile)?.purgeAfter;
 
   return (
     <Card className="bg-card lg:col-span-2" data-test={'villa-guest-ids'}>
@@ -156,19 +155,6 @@ export function GuestIdsPanel(props: {
           </ul>
         )}
 
-        {purgeDate ? (
-          <div className="bg-muted/40 text-muted-foreground flex items-center gap-2 rounded-md px-3 py-2 text-xs">
-            <ShieldCheck className="text-primary h-4 w-4 shrink-0" />
-            <span>
-              DPDP Retention: Stored ID documents for this stay will be
-              automatically purged on{' '}
-              <strong className="text-foreground">
-                {formatDateReadable(purgeDate)}
-              </strong>
-              .
-            </span>
-          </div>
-        ) : null}
       </CardContent>
     </Card>
   );

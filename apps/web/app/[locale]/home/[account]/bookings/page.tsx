@@ -7,6 +7,8 @@ import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
+
 import pathsConfig from '~/config/paths.config';
 import { VILLA_ROLES, requireRole } from '~/lib/rbac';
 import { normalizeBookingCode } from '~/lib/villa-db/booking-code';
@@ -55,6 +57,15 @@ export default async function BookingsPage({ params, searchParams }: Props) {
     account,
   );
 
+  // Load the booking cutoff date (if any) for the date picker.
+  const supabase = getSupabaseServerClient();
+  const { data: settingsRow } = await supabase
+    .from('villa_account_settings')
+    .select('booking_cutoff_date')
+    .eq('account_id', accountId)
+    .maybeSingle();
+  const bookingCutoffDate = settingsRow?.booking_cutoff_date ?? null;
+
   let bookings: SiteBooking[] = [];
   let siteError: string | null = null;
   let jumpTo: string | null = null;
@@ -100,6 +111,7 @@ export default async function BookingsPage({ params, searchParams }: Props) {
             accountId={accountId}
             propertyId={property.id}
             account={account}
+            bookingCutoffDate={bookingCutoffDate}
           />
         ) : null}
       </TeamAccountLayoutPageHeader>

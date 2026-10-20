@@ -4,6 +4,26 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 - Booking cutoff date, cancel/ID cleanup - 2026-10-20
+
+### Booking cutoff date
+
+New `booking_cutoff_date` setting in `villa_account_settings`. When set, the new-booking dialog greys out dates beyond the cutoff, and the server rejects any booking with check-in past it. Admins can change or clear the date from Villa Settings (shown above the tabs). Managers see it read-only. Set to 15 Dec 2026 in production.
+
+| Migration | Description |
+|-----------|-------------|
+| `20261020210000_villa_booking_cutoff_date.sql` | Adds nullable `booking_cutoff_date` column |
+
+### Cancel booking: hide after check-in
+
+Cancel button now hidden once the stay has started (day after check-in). Still visible on check-in day itself.
+
+### Guest IDs: removed false DPDP retention text
+
+Removed the "automatically purged on {date}" notice — no scheduler exists to back the claim. The purge logic runs opportunistically on page visits but is not cron-scheduled.
+
+---
+
 ## Villa v1.0 - Villa Admin role rename, dashboard restructuring, discount updates, manager restrictions - 2026-10-20
 
 ### `villa_owner` renamed to `villa_admin`

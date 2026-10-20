@@ -11,6 +11,7 @@ import { revalidateBookingSite } from '~/lib/villa/revalidate-site';
 import {
   AddonSchema,
   BaseRatesSchema,
+  BookingCutoffSchema,
   ContactSchema,
   DeleteAddonSchema,
   DeleteContactSchema,
@@ -106,4 +107,21 @@ export const savePoliciesAction = authActionClient
     const service = await ownerService(parsedInput.accountId);
     await service.savePolicies(parsedInput, ctx.user.id);
     await revalidateSettingsAndSite('policies');
+  });
+
+export const saveBookingCutoffAction = authActionClient
+  .inputSchema(BookingCutoffSchema)
+  .action(async ({ parsedInput }) => {
+    await requireVillaRole(parsedInput.accountId, ['villa_admin']);
+    const client = getSupabaseServerClient();
+    const { error } = await client
+      .from('villa_account_settings')
+      .update({ booking_cutoff_date: parsedInput.cutoffDate })
+      .eq('account_id', parsedInput.accountId);
+
+    if (error) throw new Error(`Could not save cutoff: ${error.message}`);
+
+    revalidateSettings();
+    // Also revalidate the bookings page so the date picker picks up the change.
+    revalidatePath('/[locale]/home/[account]/bookings', 'page');
   });

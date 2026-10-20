@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@kit/ui/tabs';
 
 import type { SiteState } from '../_lib/types';
 import { AddonsSection, type AddonRow } from './addons-section';
+import { BookingCutoffCard } from './booking-cutoff-card';
 import { ContactsSection, type ContactRow } from './contacts-section';
 import { RatesForm } from './rates-form';
 import { SeasonalRates } from './seasonal-rates';
@@ -55,6 +56,7 @@ export function VillaSettingsClient(props: {
   managersCanCancel: boolean;
   preArrivalEmail: boolean;
   thankYouEmail: boolean;
+  bookingCutoffDate: string | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -148,6 +150,12 @@ export function VillaSettingsClient(props: {
           </Select>
         </div>
       ) : null}
+
+      <BookingCutoffCard
+        accountId={props.accountId}
+        bookingCutoffDate={props.bookingCutoffDate}
+        canEdit={props.canEdit}
+      />
 
       <Tabs value={tab} onValueChange={changeTab} className="w-full">
         <div

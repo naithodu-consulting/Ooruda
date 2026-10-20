@@ -71,6 +71,7 @@ export function NewBookingDialog(props: {
   account: string;
   accountId: string;
   propertyId: string;
+  bookingCutoffDate?: string | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -92,6 +93,7 @@ function NewBookingForm(props: {
   account: string;
   accountId: string;
   propertyId: string;
+  bookingCutoffDate?: string | null;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -242,6 +244,7 @@ function NewBookingForm(props: {
                         }}
                         onBlur={field.onBlur}
                         min={today}
+                        max={props.bookingCutoffDate ?? undefined}
                         data-test={'villa-booking-checkin'}
                       />
                     </FormControl>
@@ -262,6 +265,11 @@ function NewBookingForm(props: {
                         onChange={field.onChange}
                         onBlur={field.onBlur}
                         min={checkIn ? addDays(checkIn, 1) : addDays(today, 1)}
+                        max={
+                          props.bookingCutoffDate
+                            ? addDays(props.bookingCutoffDate, 1)
+                            : undefined
+                        }
                         data-test={'villa-booking-checkout'}
                       />
                     </FormControl>
@@ -269,6 +277,13 @@ function NewBookingForm(props: {
                   </FormItem>
                 )}
               />
+
+              {props.bookingCutoffDate ? (
+                <p className="text-muted-foreground text-xs sm:col-span-2">
+                  Bookings are available up to{' '}
+                  {formatDateReadable(props.bookingCutoffDate)}.
+                </p>
+              ) : null}
 
               <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-3 sm:col-span-2">
                 {(

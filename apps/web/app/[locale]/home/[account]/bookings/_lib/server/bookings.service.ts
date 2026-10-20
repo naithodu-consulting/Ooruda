@@ -71,6 +71,19 @@ const TAKEN: Record<'DATE_UNAVAILABLE' | 'DATE_BLOCKED', string> = {
  * the server — never taken from the browser.
  */
 export function createBookingsService(client: Client) {
+  /** Load the booking cutoff date for a villa account (null = no limit). */
+  async function getBookingCutoffDate(
+    accountId: string,
+  ): Promise<string | null> {
+    const { data } = await client
+      .from('villa_account_settings')
+      .select('booking_cutoff_date')
+      .eq('account_id', accountId)
+      .maybeSingle();
+
+    return data?.booking_cutoff_date ?? null;
+  }
+
   async function priceStay(input: z.output<typeof StaySchema>) {
     const site = await getVillaSite(input.accountId, input.propertyId);
     const [availability, pricing] = await Promise.all([
@@ -163,7 +176,19 @@ export function createBookingsService(client: Client) {
   }
 
   return {
+    getBookingCutoffDate,
+
     async quote(input: z.output<typeof StaySchema>): Promise<QuoteView> {
+      const cutoff = await getBookingCutoffDate(input.accountId);
+
+      if (cutoff && input.checkIn > cutoff) {
+        return {
+          ok: false,
+          reason: 'DATE_BLOCKED',
+          message: `Bookings are not available beyond ${cutoff}.`,
+        };
+      }
+
       const { availability, result } = await priceStay(input);
 
       if (availability !== 'AVAILABLE') {
@@ -209,6 +234,16 @@ export function createBookingsService(client: Client) {
     },
 
     async create(input: z.output<typeof NewBookingSchema>, actor: string) {
+      const cutoff = await getBookingCutoffDate(input.accountId);
+
+      if (cutoff && input.checkIn > cutoff) {
+        throw new VillaDbError(
+          'DATE_BLOCKED',
+          `check-in ${input.checkIn} is beyond cutoff ${cutoff}`,
+          `Bookings are not available beyond ${cutoff}.`,
+        );
+      }
+
       const { site, availability, result } = await priceStay(input);
 
       if (availability !== 'AVAILABLE') {

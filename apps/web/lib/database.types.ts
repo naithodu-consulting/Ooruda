@@ -2527,6 +2527,7 @@ export type Database = {
       villa_account_settings: {
         Row: {
           account_id: string
+          booking_cutoff_date: string | null
           created_at: string
           guest_emails_checked_at: string | null
           managers_can_cancel: boolean
@@ -2537,6 +2538,7 @@ export type Database = {
         }
         Insert: {
           account_id: string
+          booking_cutoff_date?: string | null
           created_at?: string
           guest_emails_checked_at?: string | null
           managers_can_cancel?: boolean
@@ -2547,6 +2549,7 @@ export type Database = {
         }
         Update: {
           account_id?: string
+          booking_cutoff_date?: string | null
           created_at?: string
           guest_emails_checked_at?: string | null
           managers_can_cancel?: boolean
