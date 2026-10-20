@@ -21,7 +21,7 @@ export async function GuestIdsSection(props: {
   const client = getSupabaseServerClient();
   const { booking } = props;
 
-  const [linksResult, docsResult, propertyResult] = await Promise.all([
+  const [linksResult, docsResult] = await Promise.all([
     client
       .from('villa_booking_guests')
       .select('guest_id, is_primary, is_adult, villa_guests(full_name, phone)')
@@ -36,14 +36,9 @@ export async function GuestIdsSection(props: {
       .eq('property_id', props.propertyId)
       .eq('site_booking_id', booking.id)
       .order('captured_at'),
-    client
-      .from('villa_properties')
-      .select('whatsapp_number')
-      .eq('id', props.propertyId)
-      .single(),
   ]);
 
-  const error = linksResult.error ?? docsResult.error ?? propertyResult.error;
+  const error = linksResult.error ?? docsResult.error;
 
   if (error) throw new Error(`guest ids: load failed: ${error.message}`);
 
@@ -79,7 +74,6 @@ export async function GuestIdsSection(props: {
       accountId={props.accountId}
       propertyId={props.propertyId}
       bookingId={booking.id}
-      bookingCode={booking.bookingCode}
       bookingGuestName={booking.guestName}
       bookingGuestPhone={
         booking.guestPhone ? normalizePhoneNumber(booking.guestPhone) : null
@@ -89,7 +83,6 @@ export async function GuestIdsSection(props: {
       editable={['confirmed', 'completed'].includes(booking.status)}
       isOwner={props.role === 'villa_admin'}
       uploadsEnabled={guestIdUploadsEnabled()}
-      businessWhatsApp={propertyResult.data?.whatsapp_number ?? null}
       guests={guests}
       docs={docs}
     />

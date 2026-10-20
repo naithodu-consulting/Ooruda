@@ -592,9 +592,6 @@ test.describe.serial('villa product (M0)', () => {
 
     const panel = page.locator('[data-test="villa-guest-ids"]');
     await expect(panel).toContainText('0 of 4 adults');
-    await expect(
-      panel.locator('[data-test="villa-guest-ids-request"]'),
-    ).toHaveAttribute('href', /^https:\/\/wa\.me\/919876543210\?text=/);
 
     // The first ID defaults to the lead guest who booked.
     await page.click('[data-test="villa-guest-ids-add"]');
@@ -618,6 +615,11 @@ test.describe.serial('villa product (M0)', () => {
           0xd9,
         ]),
       });
+    } else {
+      await page.locator('[data-test="villa-add-id-stage"]').click();
+      await page
+        .locator('[data-test="villa-add-id-stage-seen_in_person"]')
+        .click();
     }
 
     await page.click('[data-test="villa-add-id-submit"]');

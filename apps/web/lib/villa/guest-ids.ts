@@ -87,39 +87,6 @@ export function idPurgeDate(checkOut: string, retentionDays: number): string {
   return addDays(checkOut, Math.max(0, Math.floor(retentionDays)));
 }
 
-/**
- * The guest's "share your ID" link, in the exact wording the booking site
- * uses (integration contract §5.7): no names, dates or phone numbers.
- */
-export function idShareLink(
-  businessWhatsApp: string,
-  bookingCode: string,
-  adults: number,
-): string {
-  const text = `Hi, sharing ID documents for booking ${bookingCode} (${adults} ${adults === 1 ? 'adult' : 'adults'}). Attaching one photo per adult guest: Aadhaar, passport or driving licence.`;
-
-  return `https://wa.me/${businessWhatsApp.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
-}
-
-/**
- * Opens WhatsApp to the GUEST with a short request. With the villa's
- * WhatsApp number it carries the share link above; without it, the guest is
- * asked to reply in the same chat. Only the booking code travels.
- */
-export function idRequestLink(
-  guestPhone: string,
-  businessWhatsApp: string | null,
-  bookingCode: string,
-  adults: number,
-): string {
-  const greeting = `Hello! We're looking forward to hosting you (Booking: ${bookingCode}). To help us prepare for a smooth check-in, could you please share a photo ID (Aadhaar, passport or driving licence) for each adult guest?`;
-  const text = businessWhatsApp
-    ? `${greeting} You can send them using this link: ${idShareLink(businessWhatsApp, bookingCode, adults)}`
-    : `${greeting} You can simply reply to this chat with the photos. Thank you!`;
-
-  return `https://wa.me/${guestPhone.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
-}
-
 /** Magic bytes of the accepted file types; the browser's claim is not trusted. */
 export function sniffIdFileType(
   head: Uint8Array,

@@ -7,7 +7,7 @@ import 'server-only';
  * no file. Server-side only: the browser never decides this.
  */
 export function guestIdUploadsEnabled(): boolean {
-  return process.env.VILLA_GUEST_ID_UPLOADS === 'true';
+  return process.env.VILLA_GUEST_ID_UPLOADS !== 'false';
 }
 
 /**

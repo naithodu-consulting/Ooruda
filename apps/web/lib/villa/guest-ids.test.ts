@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  idPurgeDate,
-  idRequestLink,
-  idShareLink,
-  maskIdNumber,
-  sniffIdFileType,
-} from './guest-ids';
+import { idPurgeDate, maskIdNumber, sniffIdFileType } from './guest-ids';
 
 describe('maskIdNumber', () => {
   it('masks a full Aadhaar number to its last 4', () => {
@@ -64,34 +58,6 @@ describe('maskIdNumber', () => {
 describe('retention and links', () => {
   it('purges retention days after check-out', () => {
     expect(idPurgeDate('2026-10-12', 30)).toBe('2026-11-11');
-  });
-
-  it('builds the site share link in the contract wording', () => {
-    const link = idShareLink('+91 98450 00000', 'V19-7KQ-M4X', 6);
-    expect(link.startsWith('https://wa.me/919845000000?text=')).toBe(true);
-    expect(decodeURIComponent(link.split('text=')[1]!)).toBe(
-      'Hi, sharing ID documents for booking V19-7KQ-M4X (6 adults). Attaching one photo per adult guest: Aadhaar, passport or driving licence.',
-    );
-  });
-
-  it('sends the request to the guest with only the booking code', () => {
-    const link = idRequestLink(
-      '+919876543210',
-      '919845000000',
-      'V19-7KQ-M4X',
-      1,
-    );
-    expect(link.startsWith('https://wa.me/919876543210?text=')).toBe(true);
-    const text = decodeURIComponent(link.split('?text=')[1]!);
-    expect(text).toContain('V19-7KQ-M4X');
-    expect(text).not.toContain('9876543210');
-  });
-
-  it('asks for a reply when the villa has no WhatsApp number', () => {
-    const link = idRequestLink('+919876543210', null, 'V19-7KQ-M4X', 2);
-    const text = decodeURIComponent(link.split('?text=')[1]!);
-    expect(text).toContain('reply to this chat');
-    expect(text).not.toContain('wa.me');
   });
 });
 

@@ -32,7 +32,8 @@ The villa top role is now **Villa Admin** everywhere: database role rows, member
 
 ### Other
 
-- ID-request WhatsApp message wording updated.
+- Guest ID document photo uploads are now enabled by default (supports JPEG, PNG, WebP, PDF up to 10 MB with automatic post-checkout retention purge).
+- Removed "Ask for IDs on WhatsApp" and "IDs received on WhatsApp" buttons and WhatsApp request helpers from the guest IDs panel.
 - Local dev: test OTPs for the villa users (`919900000001/2` = `123456`) and `[auth.sms.twilio] enabled = true` in `config.toml` so phone login works locally.
 - New idempotent, localhost-only seed script `apps/web/supabase/seeds/seed_villa_test_users.sh` to recreate the villa test users, account and data after a local DB reset.
 

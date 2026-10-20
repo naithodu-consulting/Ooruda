@@ -2,14 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 
-import {
-  BadgeCheck,
-  Eye,
-  FileCheck2,
-  MessageCircle,
-  ShieldCheck,
-  Trash2,
-} from 'lucide-react';
+import { BadgeCheck, Eye, ShieldCheck, Trash2 } from 'lucide-react';
 import { useAction } from 'next-safe-action/hooks';
 
 import {
@@ -27,7 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import { toast } from '@kit/ui/sonner';
 
 import { formatDateReadable } from '~/lib/format-date';
-import { idDocTypeLabel, idRequestLink } from '~/lib/villa/guest-ids';
+import { idDocTypeLabel } from '~/lib/villa/guest-ids';
 import { idStatusLabel } from '~/lib/villa/labels';
 
 import {
@@ -62,7 +55,6 @@ export function GuestIdsPanel(props: {
   accountId: string;
   propertyId: string;
   bookingId: string;
-  bookingCode: string | null;
   bookingGuestName: string;
   bookingGuestPhone: string | null;
   adults: number;
@@ -70,7 +62,6 @@ export function GuestIdsPanel(props: {
   editable: boolean;
   isOwner: boolean;
   uploadsEnabled: boolean;
-  businessWhatsApp: string | null;
   guests: GuestRow[];
   docs: GuestDoc[];
 }) {
@@ -128,39 +119,7 @@ export function GuestIdsPanel(props: {
               uploadsEnabled={props.uploadsEnabled}
               onSaved={() => router.refresh()}
             />
-            {props.bookingGuestPhone && props.bookingCode ? (
-              <Button
-                variant="outline"
-                nativeButton={false}
-                render={
-                  <a
-                    href={idRequestLink(
-                      props.bookingGuestPhone,
-                      props.businessWhatsApp,
-                      props.bookingCode,
-                      props.adults,
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  />
-                }
-                data-test={'villa-guest-ids-request'}
-              >
-                <MessageCircle className="mr-1.5 h-4 w-4" />
-                Ask for IDs on WhatsApp
-              </Button>
-            ) : null}
-            {props.idStatus === 'pending' ? (
-              <Button
-                variant="outline"
-                disabled={status.isPending}
-                onClick={() => status.execute({ ...ref, status: 'received' })}
-                data-test={'villa-guest-ids-mark-received'}
-              >
-                <FileCheck2 className="mr-1.5 h-4 w-4" />
-                IDs received on WhatsApp
-              </Button>
-            ) : null}
+
             {props.idStatus !== 'verified' ? (
               <Button
                 variant="outline"
