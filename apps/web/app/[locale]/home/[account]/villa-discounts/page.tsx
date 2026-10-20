@@ -13,6 +13,7 @@ import { Trans } from '@kit/ui/trans';
 import { VILLA_ROLES, requireRole } from '~/lib/rbac';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { villaDiscountsEnabled } from '~/lib/villa/discount-flag';
+import { refreshMirrorForRead } from '~/lib/villa/mirror';
 import { selectVillaProperty } from '~/lib/villa/properties';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
@@ -60,6 +61,12 @@ export default async function VillaDiscountsPage({
       </PageBody>
     );
   }
+
+  // The redemption figures below come from the mirrored bookings, so refresh
+  // the copy BEFORE reading it: otherwise a code used minutes ago still shows
+  // "Not used yet" until the dashboard, reports or the cron sync runs.
+  // Bounded: see refreshMirrorForRead.
+  await refreshMirrorForRead(accountId, property.id);
 
   const [codesResult, auditResult, usageResult] = await Promise.all([
     client
