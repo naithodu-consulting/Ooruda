@@ -4,7 +4,6 @@ import { useState } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { IdCard } from 'lucide-react';
-import { useAction } from 'next-safe-action/hooks';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
@@ -46,15 +45,9 @@ import {
   type RecordIdInput,
   RecordIdSchema,
 } from '../_lib/schemas/guests.schema';
-import { recordIdSeenAction } from '../_lib/server/guests-actions';
 import type { GuestRow } from './guest-ids-panel';
 
 const NEW_GUEST = '__new__';
-
-const STAGE_LABELS = {
-  soft_copy: 'Store a photo of the ID',
-  seen_in_person: 'Seen in person (no photo kept)',
-} as const;
 
 export function AddIdDialog(props: {
   accountId: string;
@@ -106,27 +99,18 @@ function AddIdForm(
       isAdult: true,
       docType: 'aadhaar',
       idNumber: '',
-      stage: props.uploadsEnabled ? 'soft_copy' : 'seen_in_person',
+      stage: 'soft_copy',
     },
   });
 
-  const [guestId, stage] = useWatch({
+  const guestId = useWatch({
     control: form.control,
-    name: ['guestId', 'stage'],
+    name: 'guestId',
   });
 
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-
-  const seen = useAction(recordIdSeenAction, {
-    onSuccess: () => {
-      toast.success('ID recorded');
-      props.onSaved();
-    },
-    onError: ({ error }) =>
-      toast.error(error.serverError ?? 'Could not record the ID.'),
-  });
 
   async function upload(values: RecordIdInput) {
     if (!file) {
@@ -164,7 +148,7 @@ function AddIdForm(
     }
   }
 
-  const busy = seen.isPending || uploading;
+  const busy = uploading;
 
   return (
     <Dialog open onOpenChange={(o) => (!o ? props.onClose() : undefined)}>
@@ -183,11 +167,7 @@ function AddIdForm(
         <Form {...form}>
           <form
             className="flex flex-col gap-4"
-            onSubmit={form.handleSubmit((values) =>
-              values.stage === 'soft_copy'
-                ? upload(values)
-                : seen.execute(values),
-            )}
+            onSubmit={form.handleSubmit((values) => upload(values))}
           >
             <FormField
               name="guestId"
@@ -363,80 +343,39 @@ function AddIdForm(
               />
             </div>
 
-            {props.uploadsEnabled ? (
-              <FormField
-                name="stage"
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>How it was checked</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger
-                          className="w-full"
-                          data-test={'villa-add-id-stage'}
-                        >
-                          <SelectValue>
-                            {(v: string) =>
-                              STAGE_LABELS[v as keyof typeof STAGE_LABELS]
-                            }
-                          </SelectValue>
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {(['soft_copy', 'seen_in_person'] as const).map((s) => (
-                          <SelectItem
-                            key={s}
-                            value={s}
-                            data-test={`villa-add-id-stage-${s}`}
-                          >
-                            {STAGE_LABELS[s]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="villa-id-file" className="text-sm font-medium">
+                ID photo
+              </label>
+              <Input
+                id="villa-id-file"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                capture="environment"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  setFileError(
+                    f && f.size > ID_FILE_MAX_BYTES
+                      ? 'The file is larger than 10 MB.'
+                      : null,
+                  );
+                  setFile(f && f.size <= ID_FILE_MAX_BYTES ? f : null);
+                }}
+                data-test={'villa-add-id-file'}
               />
-            ) : null}
-
-            {stage === 'soft_copy' ? (
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="villa-id-file" className="text-sm font-medium">
-                  ID photo
-                </label>
-                <Input
-                  id="villa-id-file"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
-                  capture="environment"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] ?? null;
-                    setFileError(
-                      f && f.size > ID_FILE_MAX_BYTES
-                        ? 'The file is larger than 10 MB.'
-                        : null,
-                    );
-                    setFile(f && f.size <= ID_FILE_MAX_BYTES ? f : null);
-                  }}
-                  data-test={'villa-add-id-file'}
-                />
-                <p className="text-muted-foreground text-xs">
-                  JPEG, PNG, WebP or PDF, up to 10 MB. Deleted automatically 30
-                  days after check-out.
+              <p className="text-muted-foreground text-xs">
+                JPEG, PNG, WebP or PDF, up to 10 MB.
+              </p>
+              {fileError ? (
+                <p
+                  className="text-destructive text-sm"
+                  role="alert"
+                  data-test={'villa-add-id-file-error'}
+                >
+                  {fileError}
                 </p>
-                {fileError ? (
-                  <p
-                    className="text-destructive text-sm"
-                    role="alert"
-                    data-test={'villa-add-id-file-error'}
-                  >
-                    {fileError}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
+              ) : null}
+            </div>
 
             {/* Not DialogFooter: its bg-muted band clashes with the dialog. */}
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

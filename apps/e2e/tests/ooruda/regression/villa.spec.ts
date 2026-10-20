@@ -233,13 +233,6 @@ test.describe.serial('villa product (M0)', () => {
       await expect(nav.getByRole('link', { name: hidden })).toHaveCount(0);
     }
 
-    // M1: not linked to a booking site yet (booking site card is on Settings).
-    await page.goto(`${VILLA_HOME}/villa-settings`);
-    await settle(page);
-    await expect(
-      page.locator('[data-test="villa-site-status-none"]'),
-    ).toBeVisible();
-
     // Association pages bounce back to the villa home (no loop, no crash).
     for (const path of ['billing', 'units', 'payments', 'electricity']) {
       await page.goto(`${VILLA_HOME}/${path}`);
@@ -291,22 +284,6 @@ test.describe.serial('villa product (M0)', () => {
 
     expect(issues.serverErrors).toEqual([]);
     await context.close();
-  });
-
-  test('villa owner sees the booking site connected', async ({ browser }) => {
-    test.skip(!VILLA_SITE.key, 'VILLA_DB_TEST_SERVICE_ROLE_KEY not set');
-
-    const page = await signedInPage(browser, VILLA_OWNER.phone);
-
-    await page.goto(`${VILLA_HOME}/villa-settings`);
-    await settle(page);
-
-    const status = page.locator('[data-test="villa-site-status-row"]');
-    await expect(status).toHaveCount(1);
-    await expect(status).toHaveAttribute('data-status', 'connected');
-    await expect(status).toContainText('Connected');
-
-    await page.context().close();
   });
 
   test('villa owner manages villa settings', async ({ browser }) => {
@@ -373,15 +350,6 @@ test.describe.serial('villa product (M0)', () => {
     await expect(
       contact.locator('[data-test="villa-contact-call"]'),
     ).toHaveAttribute('href', 'tel:+919876543210');
-
-    // Policies: managers may cancel.
-    await page.click('[data-test="villa-settings-tab-policies"]');
-    await expect(
-      page.locator('[data-test="villa-policies-retention"]'),
-    ).toContainText('30 days');
-    await page.click('[data-test="villa-policies-managers-cancel"]');
-    await page.click('[data-test="villa-policies-save"]');
-    await expect(page.getByText('Settings saved')).toBeVisible();
 
     // Phone width: no horizontal overflow.
     const overflow = await measureOverflow(page, 360);
@@ -600,32 +568,23 @@ test.describe.serial('villa product (M0)', () => {
     );
     await page.fill('[data-test="villa-add-id-number"]', '2345 6789 0123');
 
-    if (uploads) {
-      // A minimal real JPEG header: the server checks the bytes, not the name.
-      await page.setInputFiles('[data-test="villa-add-id-file"]', {
-        name: 'aadhaar.jpg',
-        mimeType: 'image/jpeg',
-        buffer: Buffer.from([
-          0xff,
-          0xd8,
-          0xff,
-          0xe0,
-          ...Array(64).fill(0),
-          0xff,
-          0xd9,
-        ]),
-      });
-    } else {
-      await page.locator('[data-test="villa-add-id-stage"]').click();
-      await page
-        .locator('[data-test="villa-add-id-stage-seen_in_person"]')
-        .click();
-    }
+    // A minimal real JPEG header: the server checks the bytes, not the name.
+    await page.setInputFiles('[data-test="villa-add-id-file"]', {
+      name: 'aadhaar.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from([
+        0xff,
+        0xd8,
+        0xff,
+        0xe0,
+        ...Array(64).fill(0),
+        0xff,
+        0xd9,
+      ]),
+    });
 
     await page.click('[data-test="villa-add-id-submit"]');
-    await expect(
-      page.getByText(uploads ? 'ID saved' : 'ID recorded'),
-    ).toBeVisible();
+    await expect(page.getByText('ID saved')).toBeVisible();
 
     const doc = panel.locator('[data-test="villa-guest-doc"]');
     await expect(doc).toContainText('XXXX XXXX 0123');

@@ -19,11 +19,13 @@ The villa top role is now **Villa Admin** everywhere: database role rows, member
 
 "Send now / Send again" guest-email buttons are disabled for all roles, and the server action refuses to send. Automatic emails are unaffected. Re-enable with `VILLA_MANUAL_GUEST_EMAILS=true` (documented in `OORUDA_VILLA_OPEN_ITEMS.md`).
 
-### Dashboard layout updates
+### UI and Layout Updates
 
-- **Villa workspace section**: moved from the home dashboard into the **Bookings** page (`VillaWorkspaceCard`), keeping the role-aware greeting, quick links and manager invitation action in the bookings workspace.
-- **Booking site connection**: moved from the home dashboard into the **Villa Settings** page (`VillaSiteStatus`).
-- Main dashboard now focuses strictly on today's arrivals/departures and the month's KPI summaries.
+- **Removed unused sections**:
+  - Removed "Your villa workspace" card.
+  - Removed "Booking site" connection status card.
+  - Removed "Policies" tab in Villa Settings.
+- Main dashboard focuses strictly on today's arrivals/departures and the month's KPI summaries.
 
 ### Villa discounts: optional fields & 999 uses per guest
 
@@ -33,6 +35,7 @@ The villa top role is now **Villa Admin** everywhere: database role rows, member
 ### Other
 
 - Guest ID document photo uploads are now enabled by default (supports JPEG, PNG, WebP, PDF up to 10 MB with automatic post-checkout retention purge).
+- Streamlined "Add a guest ID" dialog: ID document photo upload is now always required when adding an ID, and the "How it was checked" dropdown section has been removed.
 - Removed "Ask for IDs on WhatsApp" and "IDs received on WhatsApp" buttons and WhatsApp request helpers from the guest IDs panel.
 - Local dev: test OTPs for the villa users (`919900000001/2` = `123456`) and `[auth.sms.twilio] enabled = true` in `config.toml` so phone login works locally.
 - New idempotent, localhost-only seed script `apps/web/supabase/seeds/seed_villa_test_users.sh` to recreate the villa test users, account and data after a local DB reset.
@@ -4522,4 +4525,4 @@ Separated the single Supabase project into three distinct environments - local D
 | `20260804093956_reconcile_schema_drift.sql` | Drop orphaned functions, fix `account_image` storage policy, revoke anon grants |
 | `20260805000002_missing_fk_indexes.sql` | 8 missing FK indexes (CONCURRENTLY), GIN trigram indexes on `profiles.full_name` and `audit_logs.action`, new `get_unit_ledger_balances()` RPC for DB-side aggregation |
 
-_Last updated: 2026-08-05_  <!-- Performance audit Phase 1-9 -->
+_Last updated: 2026-10-20_

@@ -1,18 +1,14 @@
-import { Suspense } from 'react';
-
 import { redirect } from 'next/navigation';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { PageBody } from '@kit/ui/page';
-import { Skeleton } from '@kit/ui/skeleton';
 import { Trans } from '@kit/ui/trans';
 
 import pathsConfig from '~/config/paths.config';
 import { VILLA_ROLES, requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
-import { VillaSiteStatus } from '../_components/villa-site-status';
 import { VillaSettingsClient } from './_components/villa-settings-client';
 import { loadSiteSettings } from './_lib/server/villa-settings.loader';
 import type { SiteState } from './_lib/types';
@@ -102,12 +98,6 @@ export default async function VillaSettingsPage({
         title={<Trans i18nKey={'villa.nav.settings'} />}
         description={<AppBreadcrumbs />}
       />
-
-      <div className="mb-4 max-w-5xl">
-        <Suspense fallback={<Skeleton className="h-40 rounded-xl" />}>
-          <VillaSiteStatus accountId={accountId} />
-        </Suspense>
-      </div>
 
       <VillaSettingsClient
         account={account}

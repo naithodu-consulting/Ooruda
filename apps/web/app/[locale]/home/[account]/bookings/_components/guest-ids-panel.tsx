@@ -103,10 +103,7 @@ export function GuestIdsPanel(props: {
       <CardContent className="flex flex-col gap-4">
         <p className="text-muted-foreground text-sm">
           {adultsWithId} of {props.adults} adult
-          {props.adults === 1 ? '' : 's'} have an ID recorded.{' '}
-          {props.uploadsEnabled
-            ? 'ID photos are deleted automatically 30 days after check-out.'
-            : 'Storing ID photos is not switched on yet: record IDs you have seen, with the last 4 digits only.'}
+          {props.adults === 1 ? '' : 's'} have an ID recorded.
         </p>
 
         {props.editable ? (

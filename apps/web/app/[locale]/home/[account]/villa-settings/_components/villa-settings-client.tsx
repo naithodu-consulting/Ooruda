@@ -19,11 +19,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@kit/ui/tabs';
 import type { SiteState } from '../_lib/types';
 import { AddonsSection, type AddonRow } from './addons-section';
 import { ContactsSection, type ContactRow } from './contacts-section';
-import { PoliciesForm } from './policies-form';
 import { RatesForm } from './rates-form';
 import { SeasonalRates } from './seasonal-rates';
 
-const TABS = ['rates', 'seasonal', 'addons', 'contacts', 'policies'] as const;
+const TABS = ['rates', 'seasonal', 'addons', 'contacts'] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
@@ -31,7 +30,6 @@ const TAB_LABELS: Record<Tab, string> = {
   seasonal: 'Seasonal rates',
   addons: 'Add-ons',
   contacts: 'Emergency contacts',
-  policies: 'Policies',
 };
 
 export interface PropertySummary {
@@ -206,21 +204,6 @@ export function VillaSettingsClient(props: {
             {...ids}
             canEdit={props.canEdit}
             contacts={props.contacts}
-          />
-        </TabsContent>
-
-        <TabsContent value="policies" className="mt-0">
-          <PoliciesForm
-            {...ids}
-            canEdit={props.canEdit}
-            managersCanCancel={props.managersCanCancel}
-            preArrivalEmail={props.preArrivalEmail}
-            thankYouEmail={props.thankYouEmail}
-            otaBufferNights={props.property.otaBufferNights}
-            whatsappNumber={props.property.whatsappNumber}
-            legalName={props.property.legalName}
-            gstin={props.property.gstin}
-            retentionDays={props.property.retentionDays}
           />
         </TabsContent>
       </Tabs>
