@@ -26,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@kit/ui/dialog';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -69,7 +70,7 @@ function formatCurrency(n: number) {
 }
 
 function formatDueDate(date: string) {
-  if (!date) return '—';
+  if (!date) return '-';
   return new Date(date).toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'short',
@@ -87,7 +88,7 @@ function formatBillType(t: string) {
 }
 
 // Every email claims a PDF is attached, so a row without one cannot be sent.
-// Receipts mode requires an actual receipt PDF — never the bill PDF.
+// Receipts mode requires an actual receipt PDF - never the bill PDF.
 function hasPdf(row: DispatchBillRow, mode: 'bills' | 'receipts') {
   return Boolean(mode === 'bills' ? row.pdfUrl : row.receiptPdfUrl);
 }
@@ -99,14 +100,14 @@ function resolvedEmail(row: DispatchBillRow, target: EmailTarget) {
 }
 
 // Why a row can't be sent, or null when it is sendable.
-// Note: missing PDFs are no longer a block — dispatch auto-generates them.
+// Note: missing PDFs are no longer a block - dispatch auto-generates them.
 function blockReason(
   row: DispatchBillRow,
   mode: 'bills' | 'receipts',
   emailTarget: EmailTarget,
 ): 'no-email' | 'advance-credit' | null {
   if (!resolvedEmail(row, emailTarget)) return 'no-email';
-  // Bills paid via advance credit have no payments row — receipt dispatch not yet supported.
+  // Bills paid via advance credit have no payments row - receipt dispatch not yet supported.
   if (mode === 'receipts' && !row.paymentId) return 'advance-credit';
   return null;
 }
@@ -324,7 +325,7 @@ export function BillDispatchClient({ associations }: Props) {
               className={`px-5 py-2 transition-colors ${
                 mode === m
                   ? 'bg-[#1a1a1a] text-white'
-                  : 'bg-white text-[#555] hover:bg-gray-50'
+                  : 'text-muted-foreground bg-white hover:bg-gray-50'
               }`}
             >
               {m === 'bills' ? 'Send Bills' : 'Send Receipts'}
@@ -333,7 +334,7 @@ export function BillDispatchClient({ associations }: Props) {
         </div>
 
         {mode === 'receipts' && (
-          <p className="flex items-center gap-1.5 text-xs text-amber-700">
+          <p className="text-warning flex items-center gap-1.5 text-xs">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
             Only bills with <strong>Paid</strong> status appear in Receipt mode.
           </p>
@@ -341,58 +342,38 @@ export function BillDispatchClient({ associations }: Props) {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Association — widest */}
+          {/* Association - widest */}
           <div className="min-w-[220px] flex-[2]">
-            <Select
+            <SearchableSelect
+              items={associations.map((a) => ({ value: a.id, label: a.name }))}
               value={associationId}
-              onValueChange={(v) => {
+              onChange={(v) => {
                 if (v) {
                   setAssociationId(v);
                   setRows([]);
                   setHasSearched(false);
                 }
               }}
-            >
-              <SelectTrigger className="w-full bg-white">
-                <span className="truncate text-sm">
-                  {associationId ? (
-                    (associations.find((a) => a.id === associationId)?.name ??
-                    associationId)
-                  ) : (
-                    <span className="text-muted-foreground">
-                      Select association…
-                    </span>
-                  )}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {associations.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Select an association"
+              searchPlaceholder="Search associations…"
+              emptyMessage="No associations found"
+              className="w-full"
+              data-test="bill-dispatch-association"
+            />
           </div>
 
           {/* Period */}
           <div className="min-w-[160px] flex-1">
-            <Select value={period} onValueChange={(v) => v && setPeriod(v)}>
-              <SelectTrigger className="w-full bg-white">
-                <span className="text-sm">
-                  {periodLabel || (
-                    <span className="text-muted-foreground">Period</span>
-                  )}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {periodOptions.map((p) => (
-                  <SelectItem key={p.value} value={p.value}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              items={periodOptions}
+              value={period}
+              onChange={(v) => v && setPeriod(v)}
+              placeholder="Period"
+              searchPlaceholder="Search periods…"
+              emptyMessage="No periods found"
+              className="w-full"
+              data-test="bill-dispatch-period"
+            />
           </div>
 
           {/* Bill type */}
@@ -434,7 +415,7 @@ export function BillDispatchClient({ associations }: Props) {
             Select an association and period, then click{' '}
             <strong>Load {mode === 'bills' ? 'Bills' : 'Receipts'}</strong>
           </p>
-          <p className="mt-1 text-xs" style={{ color: '#aaa' }}>
+          <p className="text-muted-foreground mt-1 text-xs">
             Up to 50 records shown. Check individual rows to choose who to send
             to.
           </p>
@@ -474,8 +455,8 @@ export function BillDispatchClient({ associations }: Props) {
                     >
                       <AlertTriangle className="h-3.5 w-3.5" />
                       {missingEmailRows.length} unit
-                      {missingEmailRows.length !== 1 ? 's' : ''} have no email —
-                      will be skipped
+                      {missingEmailRows.length !== 1 ? 's' : ''} have no email
+                      and will be skipped
                     </span>
                   )}
                   {missingReceiptRows.length > 0 && (
@@ -486,7 +467,7 @@ export function BillDispatchClient({ associations }: Props) {
                       <Info className="h-3.5 w-3.5" />
                       {missingReceiptRows.length} unit
                       {missingReceiptRows.length !== 1 ? 's' : ''} paid via
-                      advance credit — skipped
+                      advance credit (skipped)
                     </span>
                   )}
                   {noPdfRows.length > 0 && (
@@ -619,7 +600,7 @@ export function BillDispatchClient({ associations }: Props) {
                           </td>
                           <td className="px-4 py-3" style={{ color: '#444' }}>
                             {row.tenantName ?? (
-                              <span style={{ color: '#bbb' }}>—</span>
+                              <span style={{ color: '#bbb' }}>-</span>
                             )}
                           </td>
                           <td
@@ -637,7 +618,7 @@ export function BillDispatchClient({ associations }: Props) {
                                 <div className="space-y-1.5">
                                   {showToggle && (
                                     <div
-                                      className="inline-flex w-[116px] overflow-hidden rounded text-[10px] font-semibold"
+                                      className="inline-flex w-[116px] overflow-hidden rounded text-xs font-semibold"
                                       style={{ border: '1px solid #e5e7eb' }}
                                     >
                                       {(
@@ -668,8 +649,8 @@ export function BillDispatchClient({ associations }: Props) {
                                               isActive
                                                 ? 'bg-[#1a1a1a] text-white'
                                                 : hasEmail
-                                                  ? 'bg-white text-[#888] hover:bg-gray-50'
-                                                  : 'cursor-not-allowed bg-white text-[#ccc]'
+                                                  ? 'text-muted-foreground bg-white hover:bg-gray-50'
+                                                  : 'text-muted-foreground/40 cursor-not-allowed bg-white'
                                             }`}
                                           >
                                             {t === 'owner' ? 'Owner' : 'Tenant'}
@@ -716,7 +697,7 @@ export function BillDispatchClient({ associations }: Props) {
                             </span>
                             {!hasPdf(row, mode) && !blocked && (
                               <span
-                                className="mt-0.5 flex items-center gap-1 font-sans text-[10px]"
+                                className="mt-0.5 flex items-center gap-1 font-sans text-xs"
                                 style={{ color: '#9ca3af' }}
                                 title="PDF will be auto-generated when sending"
                               >
@@ -728,7 +709,7 @@ export function BillDispatchClient({ associations }: Props) {
                               <span
                                 className="mt-1 flex items-center gap-1 font-sans text-xs"
                                 style={{ color: '#9ca3af' }}
-                                title="Paid via advance credit — receipt dispatch not yet supported"
+                                title="Paid via advance credit. Receipt dispatch not yet supported"
                               >
                                 <Info className="h-2.5 w-2.5" />
                                 Advance credit
@@ -766,8 +747,8 @@ export function BillDispatchClient({ associations }: Props) {
         <div className="space-y-2">
           {dispatchResult.sent > 0 && (
             <Alert className="border-green-200 bg-green-50">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
+              <CheckCircle2 className="text-success h-4 w-4" />
+              <AlertDescription className="text-success">
                 {dispatchResult.sent} email
                 {dispatchResult.sent !== 1 ? 's' : ''} sent successfully.
               </AlertDescription>
@@ -775,8 +756,8 @@ export function BillDispatchClient({ associations }: Props) {
           )}
           {dispatchResult.failed.length > 0 && (
             <Alert className="border-red-200 bg-red-50">
-              <XCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-800">
+              <XCircle className="text-destructive h-4 w-4" />
+              <AlertDescription className="text-destructive">
                 <p className="mb-1 font-semibold">
                   {dispatchResult.failed.length} failed:
                 </p>
@@ -799,7 +780,7 @@ export function BillDispatchClient({ associations }: Props) {
           <DialogHeader>
             <DialogTitle>Confirm Email Dispatch</DialogTitle>
             <DialogDescription>
-              Review before sending — emails cannot be recalled once sent.
+              Review before sending. Emails cannot be recalled once sent.
             </DialogDescription>
           </DialogHeader>
 
@@ -869,7 +850,7 @@ export function BillDispatchClient({ associations }: Props) {
                         {name}
                         {target === 'tenant' && (
                           <span
-                            className="ml-1 text-[10px]"
+                            className="ml-1 text-xs"
                             style={{ color: '#1d4ed8' }}
                           >
                             (tenant)

@@ -1,11 +1,11 @@
 export const BILL_TYPE_LABELS: Record<string, string> = {
-  // Uppercase short codes — used in bill_sequences and allocate_bill_no output
+  // Uppercase short codes - used in bill_sequences and allocate_bill_no output
   MNT: 'Maintenance',
   ELT: 'Electricity',
   OTH: 'Other Charges',
   SNK: 'Sinking Fund',
   DGU: 'DG Usage',
-  // Lowercase full names — used in bills.bill_type and cash_ledger.bill_type
+  // Lowercase full names - used in bills.bill_type and cash_ledger.bill_type
   maintenance: 'Maintenance',
   electricity: 'Electricity',
   water: 'Water',

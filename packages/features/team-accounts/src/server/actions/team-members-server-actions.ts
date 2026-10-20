@@ -56,7 +56,7 @@ export const removeMemberFromAccountAction = authActionClient
                 actorId: user.id,
                 targetRole: membership.account_role,
               },
-              'removeMemberFromAccount: permission denied — can_delete not set for role',
+              'removeMemberFromAccount: permission denied - can_delete not set for role',
             );
             throw new Error(
               'You do not have permission to remove members with this role',
@@ -108,7 +108,7 @@ export const updateMemberRoleAction = authActionClient
               actorId: user.id,
               targetRole: data.role,
             },
-            'updateMemberRole: permission denied — can_edit not set for role',
+            'updateMemberRole: permission denied - can_edit not set for role',
           );
           throw new Error(
             'You do not have permission to assign this role to members',

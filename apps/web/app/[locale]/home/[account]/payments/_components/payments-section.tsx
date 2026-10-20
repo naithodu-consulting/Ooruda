@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { ChevronLeft, ChevronRight, Download, Loader2 } from 'lucide-react';
 
-import { billTypeLabel } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import {
@@ -104,7 +104,7 @@ export function PaymentsSection(props: {
   const [statusFilter, setStatusFilter] = useState<string[]>(() => {
     const s = props.initialStatus;
     if (!s || s === 'all') return [];
-    // Backward compat: old URL values are lowercase — capitalise first letter.
+    // Backward compat: old URL values are lowercase - capitalise first letter.
     return [s.charAt(0).toUpperCase() + s.slice(1)];
   });
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
@@ -118,7 +118,7 @@ export function PaymentsSection(props: {
   );
   const [page, setPage] = useState(1);
 
-  // Distinct units — for pill tabs (owner/tenant) and MultiSelect (admin)
+  // Distinct units - for pill tabs (owner/tenant) and MultiSelect (admin)
   const unitList = useMemo(() => {
     const seen = new Set<string>();
     const units: string[] = [];
@@ -154,7 +154,7 @@ export function PaymentsSection(props: {
     setPage(1);
   }
 
-  // Derived: filtered rows (instant — no network)
+  // Derived: filtered rows (instant - no network)
   const filtered = useMemo(() => {
     let rows = props.bills;
 
@@ -168,7 +168,7 @@ export function PaymentsSection(props: {
       rows = rows.filter((b) => unitFilter.includes(b.unit_no));
     }
 
-    // Status multi-select — filter on displayBillStatus (handles Overdue promotion)
+    // Status multi-select - filter on displayBillStatus (handles Overdue promotion)
     if (statusFilter.length > 0) {
       rows = rows.filter((b) => statusFilter.includes(displayBillStatus(b)));
     }
@@ -178,7 +178,7 @@ export function PaymentsSection(props: {
       rows = rows.filter((b) => typeFilter.includes(b.bill_type));
     }
 
-    // Duration single-select (date range concept — multi doesn't apply)
+    // Duration single-select (date range concept - multi doesn't apply)
     if (durationVal !== 'all') {
       const periods = getPeriodsForDuration(durationVal);
       if (periods) {
@@ -241,7 +241,7 @@ export function PaymentsSection(props: {
     router.replace(`?${params.toString()}`, { scroll: false });
   };
 
-  // Pending bills for "Pay All" — scoped to selected unit only (never cross-unit)
+  // Pending bills for "Pay All" - scoped to selected unit only (never cross-unit)
   const allPendingBills = useMemo(() => {
     if (unitTab === ALL_UNITS) return [];
     return props.bills
@@ -255,7 +255,7 @@ export function PaymentsSection(props: {
       .map((b) => ({
         id: b.id,
         billNo: b.bill_no,
-        // Must subtract advance_applied too — otherwise "Pay All" re-charges the
+        // Must subtract advance_applied too - otherwise "Pay All" re-charges the
         // portion already covered by an applied advance.
         outstanding: Math.max(
           0,
@@ -267,7 +267,7 @@ export function PaymentsSection(props: {
 
   const [zipLoading, setZipLoading] = useState(false);
 
-  // Cash payment IDs and advance voucher nos — separate because they hit different PDF routes
+  // Cash payment IDs and advance voucher nos - separate because they hit different PDF routes
   const { zipPaymentIds, zipAdvanceVoucherNos } = useMemo(() => {
     const paymentIds: string[] = [];
     const advanceVoucherNos: string[] = [];
@@ -319,7 +319,7 @@ export function PaymentsSection(props: {
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
       toast.dismiss(toastId);
-      toast.error('Download failed — please try again.');
+      toast.error('Download failed. Please try again.');
     } finally {
       setZipLoading(false);
     }
@@ -363,7 +363,7 @@ export function PaymentsSection(props: {
           </div>
         </div>
 
-        {/* Unit tab pills — only for owner/tenant with multiple units */}
+        {/* Unit tab pills - only for owner/tenant with multiple units */}
         {props.canPay && unitList.length > 1 && (
           <div className="flex flex-wrap gap-2 pt-1">
             <button
@@ -422,7 +422,7 @@ export function PaymentsSection(props: {
             maxShownLabels={1}
             data-test="payments-type-filter"
           />
-          {/* Unit multi-select only for admin — owner/tenant use pill tabs */}
+          {/* Unit multi-select only for admin - owner/tenant use pill tabs */}
           {!props.canPay && unitOptions.length > 1 && (
             <MultiSelect
               options={unitOptions}
@@ -444,7 +444,7 @@ export function PaymentsSection(props: {
           >
             <SelectTrigger
               className={cn(
-                'bg-background h-9 w-[160px] text-xs font-normal [&_svg]:size-3.5',
+                'bg-background h-9 w-[160px] text-sm font-normal [&_svg]:size-3.5',
                 durationVal === 'all' && 'text-muted-foreground',
               )}
               data-test="payments-duration-filter"
@@ -517,7 +517,7 @@ export function PaymentsSection(props: {
                   >
                     {value}
                   </span>
-                  <span className="text-muted-foreground text-[11px] font-medium">
+                  <span className="text-muted-foreground text-xs font-medium">
                     {label}
                   </span>
                 </div>
@@ -591,7 +591,7 @@ export function PaymentsSection(props: {
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {outstanding > 0 ? (
-                          <span className="font-medium text-red-600 dark:text-red-400">
+                          <span className="text-destructive font-medium">
                             {formatINR(outstanding)}
                           </span>
                         ) : (
@@ -603,7 +603,7 @@ export function PaymentsSection(props: {
                           variant="outline"
                           className={cn(
                             billStatusBadgeClassName(status),
-                            'border-0 bg-transparent px-0 font-bold shadow-none',
+                            'border-0 bg-transparent px-0 font-medium shadow-none',
                           )}
                         >
                           <span

@@ -167,7 +167,7 @@ function useGetColumns(
         cell: ({ row }) => {
           const member = row.original;
           const displayName =
-            member.name ?? member.email?.split('@')[0] ?? member.phone ?? '—';
+            member.name ?? member.email?.split('@')[0] ?? member.phone ?? '-';
           const isSelf = member.user_id === params.currentUserId;
 
           return (

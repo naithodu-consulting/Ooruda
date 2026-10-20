@@ -55,15 +55,15 @@ function NotifIcon({ type, title }: { type: string; title: string }) {
   if (type === 'error')
     return <CircleAlert className="text-destructive mt-0.5 h-4 w-4 shrink-0" />;
   if (type === 'warning')
-    return <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />;
+    return <AlertTriangle className="text-warning mt-0.5 h-4 w-4 shrink-0" />;
   if (title.startsWith('Payment'))
     return (
-      <CircleDollarSign className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+      <CircleDollarSign className="text-success mt-0.5 h-4 w-4 shrink-0" />
     );
   if (title.startsWith('Bill Generated') || title.startsWith('Bill'))
-    return <FileText className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />;
+    return <FileText className="text-info mt-0.5 h-4 w-4 shrink-0" />;
   if (title.startsWith('Reminder'))
-    return <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />;
+    return <Clock className="text-warning mt-0.5 h-4 w-4 shrink-0" />;
   if (title.startsWith('Overdue'))
     return (
       <AlertTriangle className="text-destructive mt-0.5 h-4 w-4 shrink-0" />
@@ -77,7 +77,7 @@ function NotifBadge({ count }: { count: number }) {
   return (
     <span
       className={cn(
-        'fade-in animate-in zoom-in absolute top-0.5 right-0.5 flex min-h-[1.1rem] min-w-[1.1rem] items-center justify-center rounded-full bg-red-500 px-0.5 text-[9px] leading-none font-semibold text-white',
+        'fade-in animate-in zoom-in bg-destructive absolute top-0.5 right-0.5 flex min-h-[1.1rem] min-w-[1.1rem] items-center justify-center rounded-full px-0.5 text-xs leading-none font-semibold text-white',
       )}
     >
       {label}
@@ -197,7 +197,7 @@ export function NotificationsPopover(params: {
               {t('common.notifications')}
             </span>
             {count > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-100 px-1.5 text-[10px] font-semibold text-red-600">
+              <span className="text-destructive flex h-5 min-w-5 items-center justify-center rounded-full bg-red-100 px-1.5 text-xs font-semibold">
                 {count > 99 ? '99+' : count}
               </span>
             )}
@@ -269,7 +269,7 @@ export function NotificationsPopover(params: {
                           {text}
                         </p>
                       )}
-                      <p className="text-muted-foreground/70 mt-1 text-xs">
+                      <p className="text-muted-foreground mt-1 text-xs">
                         {timeAgo(notification.created_at)}
                       </p>
                     </div>

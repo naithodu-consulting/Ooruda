@@ -10,10 +10,19 @@ import { requireUserInServerComponent } from '~/lib/server/require-user-in-serve
 
 import { LoginSecurityCard } from './_components/login-security-card';
 
-// Email/phone updates are owned by the LoginSecurityCard below (phone-OTP app),
-// so the MakerKit email-link option is disabled to avoid duplicate editors.
+// Email/phone changes are owned by the LoginSecurityCard below (code-verified,
+// keeps profiles in sync), so MakerKit's own editors are hidden:
+// - email update: a second email editor using a different (link) flow.
+// - linked accounts: identity linking is off and there are no OAuth
+//   providers, so it could only unlink the phone/email sign-in methods.
+// - MFA: sign-in is already a one-time code; authenticator-app MFA has no
+//   recovery path for owners/tenants yet. Hidden, not removed - revisit with
+//   an admin reset flow.
 const features = {
   showLinkEmailOption: false,
+  showEmailUpdate: false,
+  showLinkedAccounts: false,
+  showMultiFactorAuth: false,
   enablePasswordUpdate: authConfig.providers.password,
   enableAccountDeletion: featureFlagsConfig.enableAccountDeletion,
   enableAccountLinking: authConfig.enableIdentityLinking,

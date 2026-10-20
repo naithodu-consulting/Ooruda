@@ -10,25 +10,25 @@ The source for this page is available at `docs/installation/v3-migration.mdoc`. 
 
 v3 is a major upgrade that modernizes the entire stack:
 
-- **Zod v4** — faster validation, smaller bundle, cleaner API
-- **Base UI** — headless primitives from the MUI team, replacing Radix
-- **next-intl** — first-class Next.js i18n with locale-prefixed routes
-- **next-safe-action** — type-safe server actions with built-in validation
-- **Teams-only mode** — ship team-based apps without personal accounts
-- **Async dialogs** — dialogs that won't close while operations are pending
-- **Oxc** — blazing-fast linting and formatting, replacing ESLint + Prettier
-- **PNPM catalogs** — one place to manage all dependency versions
+- **Zod v4** - faster validation, smaller bundle, cleaner API
+- **Base UI** - headless primitives from the MUI team, replacing Radix
+- **next-intl** - first-class Next.js i18n with locale-prefixed routes
+- **next-safe-action** - type-safe server actions with built-in validation
+- **Teams-only mode** - ship team-based apps without personal accounts
+- **Async dialogs** - dialogs that won't close while operations are pending
+- **Oxc** - blazing-fast linting and formatting, replacing ESLint + Prettier
+- **PNPM catalogs** - one place to manage all dependency versions
 
 This guide covers every breaking change and what you need to update if
 you customized the codebase.
 
 ## How long will it take?
 
-If you haven't customized much, the entire upgrade can be done in **under an hour** — most steps are just `git pull` + `pnpm install` with no conflicts.
+If you haven't customized much, the entire upgrade can be done in **under an hour** - most steps are just `git pull` + `pnpm install` with no conflicts.
 
-If you've heavily customized the codebase (custom UI components with Radix primitives, custom server actions, modified layouts), expect **3-6 hours** depending on how many areas you've touched. The AI-assisted prompts do most of the heavy lifting — you're mainly reviewing and approving.
+If you've heavily customized the codebase (custom UI components with Radix primitives, custom server actions, modified layouts), expect **3-6 hours** depending on how many areas you've touched. The AI-assisted prompts do most of the heavy lifting - you're mainly reviewing and approving.
 
-The migration is split into 10 steps for a reason — each step is self-contained and your app should build after each one. You don't have to do it all at once. Merge one step, verify it works, ship it to production if you want, then come back to the next step tomorrow or next week. There is no rush.
+The migration is split into 10 steps for a reason - each step is self-contained and your app should build after each one. You don't have to do it all at once. Merge one step, verify it works, ship it to production if you want, then come back to the next step tomorrow or next week. There is no rush.
 
 ## Should I just start from scratch?
 
@@ -60,14 +60,14 @@ We recommend upgrading to v3 when you can - but you should not feel under any ru
 ## How the Upgrade Works
 
 v3 is delivered as **10 incremental PRs**, each merged in order. Every PR is
-a self-contained step — your app should build and run after each one.
+a self-contained step - your app should build and run after each one.
 
 This means you can upgrade gradually: merge one PR, resolve any conflicts in
 your custom code, verify everything works, then move to the next. You don't
 have to do it all at once.
 
 If you haven't customized a particular area, `git pull` handles it
-automatically — only read the sections relevant to your changes.
+automatically - only read the sections relevant to your changes.
 
 ### Merge Order
 
@@ -122,9 +122,9 @@ an easy escape hatch if anything goes wrong.
 
 You have two options:
 
-**Option A: One branch per step** — Create a branch for each step (e.g. `v3/zodv4`, `v3/baseui`), merge it into `main` after verifying, then start the next step from `main`. This lets you deploy each step independently and keeps your commits clean.
+**Option A: One branch per step** - Create a branch for each step (e.g. `v3/zodv4`, `v3/baseui`), merge it into `main` after verifying, then start the next step from `main`. This lets you deploy each step independently and keeps your commits clean.
 
-**Option B: Single migration branch** — Create one `v3-migration` branch, merge all 10 steps into it, then merge the whole thing into `main` at the end.
+**Option B: Single migration branch** - Create one `v3-migration` branch, merge all 10 steps into it, then merge the whole thing into `main` at the end.
 
 Either way works. Option A is safer for production apps since you can deploy
 and verify each step in isolation before moving on.
@@ -141,7 +141,7 @@ git pull upstream <TAG>
 pnpm install
 ```
 
-Always run `pnpm install` after each `git pull` — every step changes dependencies.
+Always run `pnpm install` after each `git pull` - every step changes dependencies.
 
 **2. Resolve conflicts and install packages:**
 
@@ -151,9 +151,9 @@ If easy enough, perform an initial conflict resolution manually.
 
 Each step below includes a tailored prompt. Copy the prompt for the step you're on and paste it into your AI agent.
 
-**4. Validate** — check the "Validate Before Continuing" checklist for that step.
+**4. Validate** - check the "Validate Before Continuing" checklist for that step.
 
-**5. Commit and optionally merge** — commit your changes to your migration branch. If using one branch per step, merge into `main` and deploy before starting the next step.
+**5. Commit and optionally merge** - commit your changes to your migration branch. If using one branch per step, merge into `main` and deploy before starting the next step.
 
 In general, always run `pnpm typecheck`. Make sure this
 command returns no errors prior to starting the migration.
@@ -364,7 +364,7 @@ Two major library swaps in one step.
 ### UI: Radix → Base UI
 
 The underlying primitives changed from Radix UI to Base UI (`@base-ui/react`).
-The `@kit/ui/*` component APIs mostly remain the same — **this only affects you if you
+The `@kit/ui/*` component APIs mostly remain the same - **this only affects you if you
 built custom components using Radix primitives directly.**
 
 If you did:
@@ -493,14 +493,14 @@ This applies to **every custom translation string** that uses variables.
 
 The entire `react-i18next` / `i18next` API surface is removed in v3. This includes:
 
-- **`withI18n` HOC** — no longer needed. If you wrapped Server Component page exports with it, remove the wrapper:
+- **`withI18n` HOC** - no longer needed. If you wrapped Server Component page exports with it, remove the wrapper:
 
 ```diff
 - export default withI18n(MyPage);
 + export default MyPage;
 ```
 
-- **`useTranslation` hook** — replace with `useTranslations` from `next-intl`:
+- **`useTranslation` hook** - replace with `useTranslations` from `next-intl`:
 
 ```diff
 - import { useTranslation } from 'react-i18next';
@@ -509,15 +509,15 @@ The entire `react-i18next` / `i18next` API surface is removed in v3. This includ
 + const t = useTranslations('namespace');
 ```
 
-- **`createI18nServerInstance` / `getTranslation`** — replace with `getTranslations` from `next-intl/server` (see above).
+- **`createI18nServerInstance` / `getTranslation`** - replace with `getTranslations` from `next-intl/server` (see above).
 
-- **`Trans` component** — now imported from `@kit/ui/trans` (backed by `next-intl`), not from `react-i18next`. The API is the same but key syntax uses dots instead of colons.
+- **`Trans` component** - now imported from `@kit/ui/trans` (backed by `next-intl`), not from `react-i18next`. The API is the same but key syntax uses dots instead of colons.
 
-- **`i18next.init` / custom i18n configuration** — replaced by the `next-intl` config in `apps/web/i18n/request.ts`. Remove any custom i18next initialization code.
+- **`i18next.init` / custom i18n configuration** - replaced by the `next-intl` config in `apps/web/i18n/request.ts`. Remove any custom i18next initialization code.
 
-- **Custom namespaces** — if you added custom translation namespaces, register them in `apps/web/i18n/request.ts` so `next-intl` can load them.
+- **Custom namespaces** - if you added custom translation namespaces, register them in `apps/web/i18n/request.ts` so `next-intl` can load them.
 
-- **Custom locales** — if you added custom locales, register them in `packages/i18n/src/locales.tsx`.
+- **Custom locales** - if you added custom locales, register them in `packages/i18n/src/locales.tsx`.
 
 ### next.config.mjs
 
@@ -589,7 +589,7 @@ These components were removed. If you used them, replace as noted:
 |---------|-------------|
 | `MultiStepForm` | Build with `Form` + conditional step rendering |
 | `MobileNavigationMenu` | Use `Sheet` from `@kit/ui/sheet` |
-| `AuthenticityToken` | Removed — not needed with Server Actions |
+| `AuthenticityToken` | Removed - not needed with Server Actions |
 
 ### What to Do
 
@@ -645,7 +645,7 @@ Then run the AI-assisted review with this prompt:
 I'm upgrading Makerkit from v2 to v3. I just merged `v3-step/next-safe-action`.
 
 This step migrates the built-in server actions to `next-safe-action`.
-My custom actions using `enhanceAction` still work — no immediate
+My custom actions using `enhanceAction` still work - no immediate
 migration needed. Just resolve any merge conflicts in files that
 upstream changed.
 
@@ -681,7 +681,7 @@ Migrate my custom server actions from `enhanceAction` to `next-safe-action`.
    with `import { useAction } from 'next-safe-action/hooks'` and
    `const { execute, isPending } = useAction(myAction, { onSuccess, onError })`
 6. Replace `<form action={myAction}>` with `<form onSubmit={...}>` using `execute()`
-7. Remove hidden input fields — pass objects to `execute()` directly
+7. Remove hidden input fields - pass objects to `execute()` directly
 8. Replace `pending` from `useTransition` with `isPending` from `useAction`
 
 Search my custom files for `enhanceAction`, `useFormStatus`, and
@@ -811,9 +811,9 @@ This step moves all routes under `app/[locale]/`. In my custom code:
    to `apps/web/app/[locale]/layout.tsx`. The root layout is now minimal
    (just `return children` with a CSS import).
 3. If I customized `apps/web/proxy.ts` (middleware), the i18n middleware
-   is now integrated. Check for conflicts — `handleI18nRouting` runs first,
+   is now integrated. Check for conflicts - `handleI18nRouting` runs first,
    then secure headers and other middleware run on its response.
-4. Verify `tsconfig.json` paths — `~/*` should resolve to
+4. Verify `tsconfig.json` paths - `~/*` should resolve to
    `["./app/[locale]/*", "./app/*"]`.
 5. If I have any API routes, they should stay under `apps/web/app/api/`
    (NOT inside `[locale]`).
@@ -841,7 +841,7 @@ All routes now live under a `[locale]` dynamic segment.
 ### Root Layout Simplified
 
 ```typescript
-// apps/web/app/layout.tsx — now just:
+// apps/web/app/layout.tsx - now just:
 import '../styles/globals.css';
 
 export default function RootLayout({ children }: React.PropsWithChildren) {
@@ -986,10 +986,10 @@ page layouts (billing, members, settings) to move `PageBody` wrapping.
    `ProfileAccountDropdownContainer` is removed. The new
    `WorkspaceDropdown` is in the `SidebarHeader` instead.
 2. If I customized page layouts for billing, members, or settings,
-   check that `PageBody` is now in the right place — it moved from
+   check that `PageBody` is now in the right place - it moved from
    inside the page to the layout in some cases. `PageHeader` should be moved as a child of `PageBody`, rather than as a sibling, across the whole repository. Find all instances of `PageHeader` and ensure it appears within `PageBody`
 3. If I customized `personal-account-dropdown-container.tsx`, review
-   changes — it now accepts an `accountSlug` prop.
+   changes - it now accepts an `accountSlug` prop.
 4. If I added custom content to the sidebar footer, move it elsewhere
    since the footer section was removed.
 
@@ -1039,7 +1039,7 @@ Then run the AI-assisted review with this prompt:
 I'm upgrading Makerkit from v2 to v3. I just merged `v3-step/async-dialogs`.
 
 This step adds `useAsyncDialog` to all built-in dialogs. My custom
-dialogs don't need to change — only resolve merge conflicts if I
+dialogs don't need to change - only resolve merge conflicts if I
 modified any of the built-in dialogs (admin dialogs, team dialogs,
 invitation dialogs, MFA setup).
 
@@ -1087,7 +1087,7 @@ function MyDialog({ open, onOpenChange }) {
 ### What to Do
 
 If you built custom dialogs with forms, adopt `useAsyncDialog` to prevent
-accidental closure during submissions. Existing dialogs still work without it —
+accidental closure during submissions. Existing dialogs still work without it -
 this is an improvement, not a requirement.
 
 ### Validate Before Continuing
@@ -1193,13 +1193,13 @@ I'm upgrading Makerkit from v2 to v3. I just merged `v3-step/remove-edge-csrf`.
 This step removes `@edge-csrf/nextjs` and the `useCsrfToken` hook.
 Server Actions handle CSRF protection natively in Next.js.
 
-1. Search my custom files for `useCsrfToken` — remove those imports
+1. Search my custom files for `useCsrfToken` - remove those imports
    and any CSRF token passing logic.
 2. If I customized `proxy.ts` (middleware), the CSRF middleware
    (`createCsrfProtect`, `CsrfError`) is removed. Resolve any
    conflicts in my middleware customizations.
 3. If I added custom Route Handlers (not Server Actions) that relied
-   on CSRF tokens, those no longer have CSRF protection — consider
+   on CSRF tokens, those no longer have CSRF protection - consider
    migrating them to Server Actions.
 
 Run `pnpm install && pnpm typecheck` to verify.
@@ -1212,7 +1212,7 @@ Next.js + Server Actions handle CSRF protection natively.
 
 ```diff
 - import { useCsrfToken } from '@kit/shared/hooks/use-csrf-token';
-  // Removed — no replacement needed
+  // Removed - no replacement needed
 ```
 
 CSRF middleware removed from `proxy.ts`. Server Actions are inherently
@@ -1221,7 +1221,7 @@ protected by Next.js.
 ### What to Do
 
 If you used `useCsrfToken()` in custom components, remove those calls.
-No replacement is needed — Server Actions handle CSRF automatically.
+No replacement is needed - Server Actions handle CSRF automatically.
 
 ### Validate Before Continuing
 
@@ -1258,7 +1258,7 @@ using PNPM catalogs.
    to `"catalog:"` in my package.json.
 2. If I added a new package to the monorepo, make sure its shared deps
    (react, next, zod, typescript, etc.) use `"catalog:"` references.
-3. Resolve any merge conflicts in `pnpm-workspace.yaml` — keep the
+3. Resolve any merge conflicts in `pnpm-workspace.yaml` - keep the
    upstream catalog entries and add my custom ones alongside.
 
 Run `pnpm install && pnpm typecheck` to verify all catalog

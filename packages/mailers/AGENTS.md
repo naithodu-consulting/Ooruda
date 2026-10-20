@@ -1,11 +1,11 @@
-# @kit/mailers — Email Service
+# @kit/mailers - Email Service
 
 ## Non-Negotiables
 
-1. ALWAYS use `getMailer()` factory from `@kit/mailers` — never instantiate mailer directly
-2. ALWAYS use `@kit/email-templates` renderers for HTML — never write inline HTML
+1. ALWAYS use `getMailer()` factory from `@kit/mailers` - never instantiate mailer directly
+2. ALWAYS use `@kit/email-templates` renderers for HTML - never write inline HTML
 3. ALWAYS render template first (`renderXxxEmail()`), then pass `{ html, subject }` to `sendEmail()`
-4. NEVER hardcode sender/recipient addresses — use environment config
+4. NEVER hardcode sender/recipient addresses - use environment config
 
 ## Workflow
 

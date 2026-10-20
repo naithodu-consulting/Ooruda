@@ -56,7 +56,7 @@ This hook captures the error once when the component mounts. It's ideal for erro
 
 ### Capturing from `global-error.tsx`
 
-`global-error.tsx` replaces the root layout, which means the `MonitoringProvider` context isn't available there. Use `captureClientException` from `@kit/monitoring/instrumentation-client` instead — it talks to the same lazily-loaded provider without needing the React tree:
+`global-error.tsx` replaces the root layout, which means the `MonitoringProvider` context isn't available there. Use `captureClientException` from `@kit/monitoring/instrumentation-client` instead - it talks to the same lazily-loaded provider without needing the React tree:
 
 ```tsx {% title="apps/web/app/global-error.tsx" %}
 'use client';

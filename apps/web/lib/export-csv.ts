@@ -1,6 +1,6 @@
 /**
  * Client-side CSV export utilities. All filtering is done in the browser,
- * so we serialize the already-filtered rows directly — no server round-trip.
+ * so we serialize the already-filtered rows directly - no server round-trip.
  */
 
 import type { BillRow } from '~/home/[account]/billing/_lib/billing-queries';
@@ -60,7 +60,7 @@ export function exportBillsCsv(
       b.bill_type,
       b.total_amount,
       b.paid_amount,
-      // Advance credit applied to a bill is real settlement — omitting it here
+      // Advance credit applied to a bill is real settlement - omitting it here
       // reported bills as owing money they had already been settled for.
       billOutstanding(b),
       b.gst_amount ?? '',
@@ -73,7 +73,7 @@ export function exportBillsCsv(
 }
 
 /**
- * Exports payment rows as a CSV file — one row per individual payment
+ * Exports payment rows as a CSV file - one row per individual payment
  * (not per bill), so amounts can be reconciled as ledger entries.
  */
 export function exportPaymentsCsv(

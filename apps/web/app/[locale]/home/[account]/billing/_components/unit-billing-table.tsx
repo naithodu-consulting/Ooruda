@@ -43,7 +43,7 @@ import { UnitRow } from './unit-row';
 interface Props {
   units: UnitSummaryInput[];
   bills: UnitBill[];
-  /** Same bills, flattened with `unit_no` — used only for CSV/PDF export. */
+  /** Same bills, flattened with `unit_no` - used only for CSV/PDF export. */
   billRows: BillRow[];
   drafts: UnitDraftItem[];
   initialFilter?: string;
@@ -81,7 +81,7 @@ function matchesFilter(node: UnitNode, filter: StatusFilter): boolean {
 /**
  * Level 1 of the billing drill-down: one row per unit.
  *
- * The row count always equals the unit count — an association with 30 units
+ * The row count always equals the unit count - an association with 30 units
  * shows 30 rows, every time, regardless of how many bills exist. Opening a unit
  * navigates to its own page rather than expanding in place, so this list never
  * needs per-bill detail.
@@ -148,7 +148,7 @@ export function UnitBillingTable({
 
   const tree = useMemo(() => {
     const full = buildUnitTree(units, scopedBills, drafts);
-    // Unfiltered, every unit gets a row even with no bills — that is the point
+    // Unfiltered, every unit gets a row even with no bills - that is the point
     // of a unit-centric list. But once a charge type or period is chosen,
     // "Electricity" showing 25 units reading "No bills yet" is noise, so units
     // outside the chosen slice drop out.
@@ -208,7 +208,7 @@ export function UnitBillingTable({
       if (filter === 'overdue') return b.status === 'Overdue';
       if (filter === 'all_paid')
         return b.status === 'Paid' || b.status === 'Reversed';
-      // Default "all": exclude voided bills — they carry no active obligation
+      // Default "all": exclude voided bills - they carry no active obligation
       // and would confuse export recipients.
       return b.status !== 'Void';
     });
@@ -235,14 +235,14 @@ export function UnitBillingTable({
     }
   }, [someOnPageSelected, allOnPageSelected]);
 
-  // Any change to what's being shown sends you back to the first page —
+  // Any change to what's being shown sends you back to the first page -
   // staying on page 3 of a 1-page result set reads as an empty table.
   useEffect(() => {
     setPage(1);
   }, [search, filter, typeFilter, duration]);
 
   // Keep the view shareable without a Next.js navigation (which would refetch
-  // and lose scroll). Only these three keys are touched — any other param on
+  // and lose scroll). Only these three keys are touched - any other param on
   // the URL is left exactly as it was.
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -365,7 +365,7 @@ export function UnitBillingTable({
           </div>
 
           {/* `items` is what lets Base UI's SelectValue render the label rather
-              than the raw value — these filters have value ≠ label. */}
+              than the raw value - these filters have value ≠ label. */}
           <Select
             items={BILL_TYPE_FILTER_ITEMS}
             value={typeFilter}
@@ -422,7 +422,9 @@ export function UnitBillingTable({
                 )}
               >
                 {f.label}
-                <span className="ml-1 opacity-60">({counts[f.key]})</span>
+                <span className="text-muted-foreground ml-1">
+                  ({counts[f.key]})
+                </span>
               </button>
             ))}
           </div>
@@ -454,7 +456,7 @@ export function UnitBillingTable({
                 >
                   {value}
                 </span>
-                <span className="text-muted-foreground text-[13px] font-medium">
+                <span className="text-muted-foreground text-sm font-medium">
                   {label}
                 </span>
               </div>
@@ -483,7 +485,7 @@ export function UnitBillingTable({
 
       {/* ── Column headers + rows wrapped for horizontal scroll on mobile ─ */}
       <div className="overflow-x-auto">
-        <div className="text-muted-foreground grid min-w-[640px] grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px] items-center gap-2 border-b px-3 py-2 text-[13px] font-bold tracking-wider uppercase sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px] sm:px-4">
+        <div className="text-muted-foreground grid min-w-[640px] grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_110px_100px_100px] items-center gap-2 border-b px-3 py-2 text-xs font-semibold tracking-wider uppercase sm:grid-cols-[20px_24px_minmax(90px,1fr)_minmax(0,1.2fr)_130px_110px_110px] sm:px-4">
           <div className="flex items-center justify-center">
             <input
               ref={selectAllRef}

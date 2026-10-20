@@ -2,7 +2,7 @@
  * Shared Supabase select shapes for the billing routes.
  *
  * Every billing surface used to declare its own select string. That is how a
- * `bill_line_items` join drifted into the query feeding the unit tree — whose
+ * `bill_line_items` join drifted into the query feeding the unit tree - whose
  * own type comment says line items are deliberately excluded to keep the
  * payload small. Keeping the shapes here makes the cost of each query visible
  * in one place.
@@ -17,7 +17,7 @@
  *
  * `advance_applied` is not optional: `billSettledAmount` counts advance credit
  * as real settlement, so omitting it makes an advance-settled bill read as
- * unpaid — and, past its due date, as overdue.
+ * unpaid - and, past its due date, as overdue.
  */
 export const BILL_AMOUNTS_SELECT =
   'total_amount, paid_amount, advance_applied, status, due_date, period, bill_type';

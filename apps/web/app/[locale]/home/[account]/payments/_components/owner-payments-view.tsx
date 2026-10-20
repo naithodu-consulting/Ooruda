@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 
 import { AlertCircle, ArrowRight } from 'lucide-react';
 
-import { billTypeLabel } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 import {
   Card,
   CardContent,
@@ -76,6 +76,16 @@ type DuePaymentHistoryRow = {
   receipt_no: string | null;
 };
 
+export type AdvanceHistoryRow = {
+  id: string;
+  unit_id: string;
+  unit_no?: string;
+  bill_type: string;
+  amount: number;
+  entry_date: string;
+  razorpay_payment_id: string | null;
+};
+
 type PayableBill = { id: string; billNo: string; outstanding: number };
 
 interface Props {
@@ -83,10 +93,17 @@ interface Props {
   bills: BillPaymentRow[];
   dues: CashLedgerDueRow[];
   duePaymentHistory?: DuePaymentHistoryRow[];
+  advanceHistory?: AdvanceHistoryRow[];
+  units?: { id: string; unit_no: string }[];
   canPay: boolean;
   paidByRole: 'Owner' | 'Tenant';
   account: string;
   showUnitColumn: boolean;
+  /**
+   * Limit what's owed to one unit (e.g. from a unit card's "Pay now"). Payment
+   * history still shows every unit.
+   */
+  focusUnitNo?: string | null;
 }
 
 function periodLabel(period: string): string {
@@ -106,10 +123,13 @@ export function OwnerPaymentsView({
   bills,
   dues,
   duePaymentHistory = [],
+  advanceHistory = [],
+  units: _units = [],
   canPay,
   paidByRole,
   account,
   showUnitColumn,
+  focusUnitNo = null,
 }: Props) {
   const router = useRouter();
 
@@ -126,8 +146,10 @@ export function OwnerPaymentsView({
     hasCashDues,
   } = useMemo(() => {
     const items: OutstandingItem[] = [];
+    const inFocus = (unitNo?: string) => !focusUnitNo || unitNo === focusUnitNo;
 
     for (const b of bills) {
+      if (!inFocus(b.unit_no)) continue;
       const owed = b.total_amount - b.paid_amount - (b.advance_applied ?? 0);
       if (owed <= 0.009) continue;
       const status = displayBillStatus(b);
@@ -154,6 +176,7 @@ export function OwnerPaymentsView({
     }
 
     for (const d of dues) {
+      if (!inFocus(d.unit_no)) continue;
       items.push({
         kind: 'due',
         unitId: d.unit_id,
@@ -191,8 +214,11 @@ export function OwnerPaymentsView({
       .map((b) => ({ id: b.id, billNo: b.billNo, outstanding: b.outstanding }));
 
     // Merge bill payments and cash ledger due payments, newest first, limit 5
-    const flat: (FlatPayment | (DuePaymentHistoryRow & { source: 'due' }))[] =
-      [];
+    const flat: (
+      | FlatPayment
+      | (DuePaymentHistoryRow & { source: 'due' })
+      | (AdvanceHistoryRow & { source: 'advance' })
+    )[] = [];
 
     for (const b of bills) {
       for (const p of b.payments) {
@@ -211,9 +237,15 @@ export function OwnerPaymentsView({
       flat.push({ ...dp, source: 'due' as const });
     }
 
+    for (const a of advanceHistory) {
+      flat.push({ ...a, source: 'advance' as const });
+    }
+
     flat.sort((a, b) => {
-      const aDate = 'paid_at' in a ? a.paid_at : '';
-      const bDate = 'paid_at' in b ? b.paid_at : '';
+      const aDate =
+        'paid_at' in a ? a.paid_at : 'entry_date' in a ? a.entry_date : '';
+      const bDate =
+        'paid_at' in b ? b.paid_at : 'entry_date' in b ? b.entry_date : '';
       return bDate.localeCompare(aDate);
     });
 
@@ -234,48 +266,66 @@ export function OwnerPaymentsView({
       recentPayments,
       hasCashDues,
     };
-  }, [bills, dues, duePaymentHistory]);
+  }, [bills, dues, duePaymentHistory, advanceHistory, focusUnitNo]);
 
   const heroBg = hasOverdue
     ? 'bg-red-50/60 dark:bg-red-950/30'
     : totalOwed > 0
-      ? 'bg-amber-50/60 dark:bg-amber-950/30'
-      : 'bg-green-50/50 dark:bg-green-950/20';
+      ? 'bg-warning/5'
+      : 'bg-success/5';
 
   const heroLeftBorder = hasOverdue
     ? 'border-l-red-500 dark:border-l-red-400'
     : totalOwed > 0
-      ? 'border-l-amber-400 dark:border-l-amber-500'
-      : 'border-l-green-500 dark:border-l-green-400';
+      ? 'border-l-warning'
+      : 'border-l-success';
 
   const heroIconBg = hasOverdue
     ? 'bg-red-100 dark:bg-red-950/60'
     : totalOwed > 0
-      ? 'bg-amber-100 dark:bg-amber-950/60'
-      : 'bg-green-100 dark:bg-green-950/60';
+      ? 'bg-warning/10'
+      : 'bg-success/10';
 
   const heroIconColor = hasOverdue
-    ? 'text-red-500 dark:text-red-400'
+    ? 'text-destructive'
     : totalOwed > 0
-      ? 'text-amber-500 dark:text-amber-400'
-      : 'text-green-500 dark:text-green-400';
+      ? 'text-warning'
+      : 'text-success';
 
   const heroAmtColor = hasOverdue
-    ? 'text-red-600 dark:text-red-400'
+    ? 'text-destructive'
     : totalOwed > 0
-      ? 'text-amber-600 dark:text-amber-500'
-      : 'text-green-600 dark:text-green-400';
+      ? 'text-warning'
+      : 'text-success';
 
   const heroSubLabel =
     totalOwed === 0
-      ? "Nothing due — you're all paid up."
+      ? "Nothing due. You're all paid up."
       : hasOverdue
         ? `${overdueCount} overdue · ${mostOverdueDays} day${mostOverdueDays !== 1 ? 's' : ''} late`
         : `${outstanding.length} item${outstanding.length !== 1 ? 's' : ''} pending`;
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Hero — total outstanding */}
+      {focusUnitNo && (
+        <div
+          className="bg-muted/40 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-2.5 text-sm"
+          data-test="payments-unit-focus"
+        >
+          <span>
+            Showing what's due for <strong>Unit {focusUnitNo}</strong>
+          </span>
+          <Link
+            href={`/home/${account}/payments`}
+            className="text-brand-ink font-medium underline-offset-2 hover:underline"
+            data-test="payments-show-all-units"
+          >
+            Show all units
+          </Link>
+        </div>
+      )}
+
+      {/* Hero - total outstanding */}
       <Card className={`border-l-4 ${heroLeftBorder} ${heroBg}`}>
         <CardContent className="px-5 py-4">
           <div className="flex items-start gap-4">
@@ -289,7 +339,7 @@ export function OwnerPaymentsView({
                 Total outstanding
               </p>
               <p
-                className={`mt-0.5 text-3xl font-black tabular-nums ${heroAmtColor}`}
+                className={`mt-0.5 text-3xl font-bold tracking-tight tabular-nums ${heroAmtColor}`}
               >
                 {totalOwed === 0 ? 'All clear' : formatINR(totalOwed)}
               </p>
@@ -299,7 +349,7 @@ export function OwnerPaymentsView({
               {totalOwed > 0 && hasCashDues && payableBills.length > 0 && (
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <div className="bg-background/70 border-border rounded-lg border p-2.5">
-                    <p className="text-muted-foreground text-[10px] font-semibold tracking-wide uppercase">
+                    <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                       Bills
                     </p>
                     <p
@@ -321,7 +371,7 @@ export function OwnerPaymentsView({
                     )}
                   </div>
                   <div className="bg-background/70 border-border rounded-lg border p-2.5">
-                    <p className="text-muted-foreground text-[10px] font-semibold tracking-wide uppercase">
+                    <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                       Dues
                     </p>
                     <p className="text-foreground mt-0.5 text-base font-bold tabular-nums">
@@ -347,7 +397,7 @@ export function OwnerPaymentsView({
                         );
                       }
                       return (
-                        <p className="text-muted-foreground mt-2 text-[11px]">
+                        <p className="text-muted-foreground mt-2 text-xs">
                           Pay below ↓
                         </p>
                       );
@@ -380,13 +430,13 @@ export function OwnerPaymentsView({
         <Card>
           <CardHeader className="pb-0">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-base">What you owe</CardTitle>
+              <CardTitle className="text-base">Your Dues</CardTitle>
               <span className="bg-muted text-muted-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold">
                 {outstanding.length}
               </span>
             </div>
             <CardDescription>
-              All outstanding charges — sorted by urgency.
+              All outstanding charges, sorted by urgency.
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-3 p-0">
@@ -425,17 +475,17 @@ export function OwnerPaymentsView({
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             {item.kind === 'bill' && item.isOverdue && (
-                              <span className="inline-flex items-center rounded bg-red-50 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                              <span className="text-destructive inline-flex items-center rounded bg-red-50 px-1.5 py-0.5 text-xs leading-none font-medium dark:bg-red-500/10">
                                 Overdue
                               </span>
                             )}
                             {item.kind === 'bill' && !item.isOverdue && (
-                              <span className="inline-flex items-center rounded bg-amber-50 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                              <span className="bg-warning/10 text-warning inline-flex items-center rounded px-1.5 py-0.5 text-xs leading-none font-medium">
                                 Due
                               </span>
                             )}
                             {item.kind === 'due' && (
-                              <span className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
+                              <span className="text-info inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs leading-none font-medium dark:bg-blue-500/10">
                                 Due
                               </span>
                             )}
@@ -450,7 +500,7 @@ export function OwnerPaymentsView({
                             </span>
                           </div>
                           {item.kind === 'bill' && item.billNo && (
-                            <p className="text-muted-foreground/60 mt-0.5 text-[11px]">
+                            <p className="text-muted-foreground mt-0.5 text-xs">
                               {item.billNo}
                             </p>
                           )}
@@ -460,7 +510,7 @@ export function OwnerPaymentsView({
                             <span
                               className={
                                 item.isOverdue
-                                  ? 'text-red-600 dark:text-red-400'
+                                  ? 'text-destructive'
                                   : 'text-muted-foreground'
                               }
                             >
@@ -475,12 +525,12 @@ export function OwnerPaymentsView({
                               {item.isOverdue && ` · ${item.daysOverdue}d late`}
                             </span>
                           ) : (
-                            <span className="text-muted-foreground/60 text-xs">
-                              —
+                            <span className="text-muted-foreground text-xs">
+                              -
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="py-3 pr-4 text-right text-sm font-bold text-red-600 tabular-nums dark:text-red-400">
+                        <TableCell className="text-destructive py-3 pr-4 text-right text-sm font-bold tabular-nums">
                           {formatINR(item.outstanding)}
                         </TableCell>
                         {canPay && (
@@ -580,7 +630,7 @@ export function OwnerPaymentsView({
                                 · {periodLabel(fp.period)}
                               </span>
                             </p>
-                            <p className="text-muted-foreground/60 mt-0.5 text-[11px]">
+                            <p className="text-muted-foreground mt-0.5 text-xs">
                               {fp.billNo}
                               {fp.mode ? ` · via ${fp.mode}` : ''}
                               {fp.receipt_no ? ` · ${fp.receipt_no}` : ''}
@@ -593,7 +643,7 @@ export function OwnerPaymentsView({
                               year: 'numeric',
                             })}
                           </TableCell>
-                          <TableCell className="py-3 pr-2 text-right text-sm font-semibold text-green-600 tabular-nums dark:text-green-400">
+                          <TableCell className="text-success py-3 pr-2 text-right text-sm font-semibold tabular-nums">
                             {formatINR(fp.amount)}
                           </TableCell>
                           <TableCell className="py-3 pr-3">
@@ -601,6 +651,57 @@ export function OwnerPaymentsView({
                               href={`/api/billing/receipts/${fp.id}/pdf`}
                               label="Download receipt PDF"
                               dataTest={`download-receipt-${fp.id}`}
+                              variant="ghost"
+                              iconSize="icon-xs"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+
+                    if (p.source === 'advance') {
+                      const adv = p as AdvanceHistoryRow & {
+                        source: 'advance';
+                      };
+                      return (
+                        <TableRow key={`adv-${adv.id}`}>
+                          {showUnitColumn && (
+                            <TableCell className="py-3 pl-4 text-sm font-medium">
+                              {adv.unit_no ?? ''}
+                            </TableCell>
+                          )}
+                          <TableCell
+                            className={`py-3 ${showUnitColumn ? '' : 'pl-4'}`}
+                          >
+                            <p className="text-sm font-medium">
+                              {billTypeLabel(adv.bill_type)}{' '}
+                              <span className="text-muted-foreground font-normal">
+                                · Advance Deposit
+                              </span>
+                            </p>
+                            <p className="text-muted-foreground mt-0.5 text-xs">
+                              {adv.razorpay_payment_id
+                                ? `via Razorpay · ${adv.razorpay_payment_id}`
+                                : 'Cash / Manual'}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground hidden py-3 text-sm sm:table-cell">
+                            {new Date(
+                              adv.entry_date + 'T00:00:00',
+                            ).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </TableCell>
+                          <TableCell className="text-success py-3 pr-2 text-right text-sm font-semibold tabular-nums">
+                            {formatINR(adv.amount)}
+                          </TableCell>
+                          <TableCell className="py-3 pr-3">
+                            <DownloadPdfButton
+                              href={`/api/billing/advance-payments/${adv.id}/pdf`}
+                              label="Download receipt PDF"
+                              dataTest={`download-advance-receipt-${adv.id}`}
                               variant="ghost"
                               iconSize="icon-xs"
                             />
@@ -628,7 +729,7 @@ export function OwnerPaymentsView({
                               · Due
                             </span>
                           </p>
-                          <p className="text-muted-foreground/60 mt-0.5 text-[11px]">
+                          <p className="text-muted-foreground mt-0.5 text-xs">
                             {dp.mode ? `via ${dp.mode}` : ''}
                             {receiptNo ? ` · ${receiptNo}` : ''}
                           </p>
@@ -640,7 +741,7 @@ export function OwnerPaymentsView({
                             year: 'numeric',
                           })}
                         </TableCell>
-                        <TableCell className="py-3 pr-2 text-right text-sm font-semibold text-green-600 tabular-nums dark:text-green-400">
+                        <TableCell className="text-success py-3 pr-2 text-right text-sm font-semibold tabular-nums">
                           {formatINR(dp.amount)}
                         </TableCell>
                         <TableCell className="py-3 pr-3">

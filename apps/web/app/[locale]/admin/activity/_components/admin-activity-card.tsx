@@ -4,15 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  Filter,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Filter } from 'lucide-react';
 
 import { Button } from '@kit/ui/button';
+import { DatePicker } from '@kit/ui/date-picker';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Table,
   TableBody,
@@ -63,6 +59,9 @@ export interface AssocOption {
   id: string;
   name: string;
 }
+
+/** Select has no empty-string value, so the "all" option needs a sentinel. */
+const ALL_ASSOCIATIONS = '__all__';
 
 export function AdminActivityCard(props: {
   rows: AdminActivityRow[];
@@ -209,28 +208,24 @@ export function AdminActivityCard(props: {
         {/* Date range */}
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">
-            <label className="text-muted-foreground text-xs font-medium">
+            <label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
               From
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={localFrom}
+              onChange={setLocalFrom}
               max={localTo}
-              onChange={(e) => setLocalFrom(e.target.value)}
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm focus:outline-none focus:ring-2"
               data-test="activity-date-from"
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-muted-foreground text-xs font-medium">
+            <label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
               To
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={localTo}
+              onChange={setLocalTo}
               min={localFrom}
-              onChange={(e) => setLocalTo(e.target.value)}
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm focus:outline-none focus:ring-2"
               data-test="activity-date-to"
             />
           </div>
@@ -247,25 +242,24 @@ export function AdminActivityCard(props: {
 
         {/* Association filter */}
         <div className="flex flex-col gap-1">
-          <label className="text-muted-foreground text-xs font-medium">
+          <label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
             Association
           </label>
-          <div className="relative">
-            <select
-              value={assocId}
-              onChange={(e) => onAssocChange(e.target.value)}
-              className="border-input bg-background h-9 w-full appearance-none rounded-md border px-2 pr-7 text-sm focus:outline-none focus:ring-2"
-              data-test="activity-assoc-filter"
-            >
-              <option value="">All associations</option>
-              {associations.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="text-muted-foreground pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
-          </div>
+          <SearchableSelect
+            items={[
+              { value: ALL_ASSOCIATIONS, label: 'All associations' },
+              ...associations.map((a) => ({ value: a.id, label: a.name })),
+            ]}
+            value={assocId === '' ? ALL_ASSOCIATIONS : assocId}
+            onChange={(value) =>
+              onAssocChange(!value || value === ALL_ASSOCIATIONS ? '' : value)
+            }
+            placeholder="All associations"
+            searchPlaceholder="Search associations…"
+            emptyMessage="No associations found"
+            className="h-9"
+            data-test="activity-assoc-filter"
+          />
         </div>
 
         {/* CSV export */}
@@ -300,22 +294,22 @@ export function AdminActivityCard(props: {
               <Table className="min-w-[800px]">
                 <TableHeader>
                   <TableRow className="border-b">
-                    <TableHead className="text-muted-foreground w-48 text-xs font-semibold uppercase tracking-wider">
+                    <TableHead className="text-muted-foreground w-48 text-xs font-semibold tracking-wider uppercase">
                       Event
                     </TableHead>
-                    <TableHead className="text-muted-foreground w-32 text-xs font-semibold uppercase tracking-wider">
+                    <TableHead className="text-muted-foreground w-32 text-xs font-semibold tracking-wider uppercase">
                       User
                     </TableHead>
-                    <TableHead className="text-muted-foreground w-40 text-xs font-semibold uppercase tracking-wider">
+                    <TableHead className="text-muted-foreground w-40 text-xs font-semibold tracking-wider uppercase">
                       Association
                     </TableHead>
-                    <TableHead className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+                    <TableHead className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                       Details
                     </TableHead>
-                    <TableHead className="text-muted-foreground w-24 text-xs font-semibold uppercase tracking-wider">
+                    <TableHead className="text-muted-foreground w-24 text-xs font-semibold tracking-wider uppercase">
                       Type
                     </TableHead>
-                    <TableHead className="text-muted-foreground w-40 text-right text-xs font-semibold uppercase tracking-wider">
+                    <TableHead className="text-muted-foreground w-40 text-right text-xs font-semibold tracking-wider uppercase">
                       Date
                     </TableHead>
                   </TableRow>
@@ -331,7 +325,7 @@ export function AdminActivityCard(props: {
                               {actionLabel(row.action)}
                             </span>
                             {row.path && (
-                              <div className="text-muted-foreground mt-0.5 max-w-[176px] truncate font-mono text-[10px]">
+                              <div className="text-muted-foreground mt-0.5 max-w-[176px] truncate font-mono text-xs">
                                 {row.path}
                               </div>
                             )}
@@ -344,10 +338,10 @@ export function AdminActivityCard(props: {
                       <TableCell className="text-muted-foreground py-3.5 text-sm">
                         {row.association}
                       </TableCell>
-                      <TableCell className="text-muted-foreground py-3.5 text-sm">
+                      <TableCell className="text-muted-foreground min-w-56 py-3.5 text-sm break-words whitespace-normal">
                         {truncateSummary(row.summary)}
                         {row.errorCode && (
-                          <div className="text-destructive mt-0.5 font-mono text-[10px]">
+                          <div className="text-destructive mt-0.5 font-mono text-xs">
                             {row.errorCode}
                           </div>
                         )}

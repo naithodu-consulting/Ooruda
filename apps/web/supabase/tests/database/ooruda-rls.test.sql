@@ -1,5 +1,5 @@
 -- =============================================================
--- Ooruda RLS — tenant isolation and the write-policy matrix
+-- Ooruda RLS - tenant isolation and the write-policy matrix
 -- -------------------------------------------------------------
 -- Validates the row-level security from 20260612000000_ooruda_domain.sql
 -- (member_read) and 20260614000003_assoc_setup.sql (write policies):
@@ -10,7 +10,7 @@
 --     write; prop_owner / tenant may not
 --   * charge_types: only assoc_admin may INSERT custom types
 --   * units / bills / payments have NO write policy yet (features still
---     stubbed) — so even assoc_admin is denied writes; this test pins that
+--     stubbed) - so even assoc_admin is denied writes; this test pins that
 --     current state so a future write-enabling migration updates it knowingly
 --
 -- Run: pnpm --filter web supabase:test   (requires local Supabase)
@@ -186,7 +186,7 @@ select throws_ok(
      where account_id = makerkit.get_account_id_by_slug('assoc-a') $$,
   '42501'::text,
   null::text,
-  'units has no write policy yet — even assoc_admin INSERT is denied'
+  'units has no write policy yet - even assoc_admin INSERT is denied'
 );
 
 select * from finish();

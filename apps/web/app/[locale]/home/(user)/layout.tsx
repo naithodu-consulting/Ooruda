@@ -17,6 +17,7 @@ import pathsConfig from '~/config/paths.config';
 import { personalAccountNavigationConfig } from '~/config/personal-account-navigation.config';
 
 // home imports
+import { ConsentGate } from '../_components/consent-gate';
 import { HomeMenuNavigation } from './_components/home-menu-navigation';
 import { HomeMobileNavigation } from './_components/home-mobile-navigation';
 import { HomeSidebar } from './_components/home-sidebar';
@@ -35,17 +36,30 @@ function UserHomeLayout({ children }: React.PropsWithChildren) {
 export default UserHomeLayout;
 
 async function SidebarLayout({ children }: React.PropsWithChildren) {
-  const [workspace, state] = await Promise.all([
+  // The super-admin check runs alongside the workspace load: this layout is
+  // the post-login landing, and usually only redirects onward.
+  const [workspace, state, superAdmin] = await Promise.all([
     loadUserWorkspace().catch(() => null),
     getLayoutState(),
+    isSuperAdmin(getSupabaseServerClient()),
   ]);
 
   if (!workspace) {
     redirect('/');
   }
 
-  await redirectIfSuperAdmin();
+  if (superAdmin) {
+    redirect(pathsConfig.app.admin);
+  }
+
   await redirectIfTeamsOnly(workspace);
+
+  const client = getSupabaseServerClient();
+  const { data: consentProfile } = await client
+    .from('profiles')
+    .select('consent_accepted_at')
+    .eq('id', workspace.user.id)
+    .single();
 
   return (
     <UserWorkspaceContextProvider value={workspace}>
@@ -62,14 +76,22 @@ async function SidebarLayout({ children }: React.PropsWithChildren) {
           {children}
         </Page>
       </SidebarProvider>
+
+      <ConsentGate consentRequired={!consentProfile?.consent_accepted_at} />
     </UserWorkspaceContextProvider>
   );
 }
 
 async function HeaderLayout({ children }: React.PropsWithChildren) {
-  const workspace = await loadUserWorkspace();
+  const [workspace, superAdmin] = await Promise.all([
+    loadUserWorkspace(),
+    isSuperAdmin(getSupabaseServerClient()),
+  ]);
 
-  await redirectIfSuperAdmin();
+  if (superAdmin) {
+    redirect(pathsConfig.app.admin);
+  }
+
   await redirectIfTeamsOnly(workspace);
 
   return (
@@ -103,14 +125,6 @@ function MobileNavigation({
       <HomeMobileNavigation workspace={workspace} />
     </>
   );
-}
-
-async function redirectIfSuperAdmin() {
-  const client = getSupabaseServerClient();
-
-  if (await isSuperAdmin(client)) {
-    redirect(pathsConfig.app.admin);
-  }
 }
 
 async function redirectIfTeamsOnly(

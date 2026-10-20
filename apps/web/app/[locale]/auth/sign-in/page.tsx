@@ -11,7 +11,7 @@ export default function SignInPage() {
   return (
     <div className="flex flex-col gap-y-6">
       <div className="flex flex-col gap-y-1">
-        <h2 className="text-[20px] font-black tracking-tight text-[#1a1a1a]">
+        <h2 className="text-foreground text-xl font-semibold tracking-tight">
           Sign in
         </h2>
       </div>

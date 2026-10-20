@@ -28,13 +28,7 @@ import {
 import { useAsyncDialog } from '@kit/ui/hooks/use-async-dialog';
 import { If } from '@kit/ui/if';
 import { Input } from '@kit/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@kit/ui/select';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import { toast } from '@kit/ui/sonner';
 
 import { createAssociationAction } from '../lib/server/admin-server-actions';
@@ -134,26 +128,22 @@ export function AdminCreateAssociationDialog(
                 <FormItem>
                   <FormLabel>Association Admin (owner)</FormLabel>
 
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a user">
-                          {(value: string) =>
-                            props.users.find((u) => u.id === value)?.name ??
-                            'Select a user'
-                          }
-                        </SelectValue>
-                      </SelectTrigger>
-                    </FormControl>
-
-                    <SelectContent>
-                      {props.users.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <SearchableSelect
+                      className="w-full"
+                      data-test={'admin-association-owner-select'}
+                      items={props.users.map((user) => ({
+                        value: user.id,
+                        label: user.name,
+                      }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      placeholder="Select a user"
+                      searchPlaceholder="Search users…"
+                      emptyMessage="No users found"
+                    />
+                  </FormControl>
 
                   <FormDescription>
                     This user becomes the Association Admin.

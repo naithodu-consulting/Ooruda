@@ -1,5 +1,6 @@
 import { Building2, DoorOpen } from 'lucide-react';
 
+import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Card, CardContent } from '@kit/ui/card';
 
@@ -61,11 +62,14 @@ function computeBillMetrics(
     (sum, b) => sum + b.paid_amount + Number(b.advance_applied ?? 0),
     0,
   );
-  // outstanding must subtract advance_applied — same formula as per-bill outstanding
+  // outstanding must subtract advance_applied - same formula as per-bill outstanding
   const outstanding = bills.reduce(
     (sum, b) =>
       sum +
-      Math.max(0, b.total_amount - b.paid_amount - Number(b.advance_applied ?? 0)),
+      Math.max(
+        0,
+        b.total_amount - b.paid_amount - Number(b.advance_applied ?? 0),
+      ),
     0,
   );
 
@@ -73,7 +77,11 @@ function computeBillMetrics(
   const overdueCount = overdueBills.length;
   const overdueAmount = overdueBills.reduce(
     (sum, b) =>
-      sum + Math.max(0, b.total_amount - b.paid_amount - Number(b.advance_applied ?? 0)),
+      sum +
+      Math.max(
+        0,
+        b.total_amount - b.paid_amount - Number(b.advance_applied ?? 0),
+      ),
     0,
   );
 
@@ -110,13 +118,15 @@ async function loadAdminOverview(associationId: string) {
 
   const allDurations = Object.keys(getDurationItems());
 
-  // Fetch static data + bills for every duration in one parallel batch.
+  // Fetch static data + every non-void bill in one parallel batch. Each
+  // duration is a subset of "all", so the per-duration metrics are computed
+  // in memory from this one result instead of one bills query per duration.
   const [
     { count: totalUnits },
     { count: occupiedUnits },
     { data: mescomBill },
     { data: recentActivity },
-    ...billResults
+    { data: allBills },
   ] = await Promise.all([
     client
       .from('units')
@@ -144,17 +154,13 @@ async function loadAdminOverview(associationId: string) {
       .not('summary', 'ilike', 'Failed%')
       .order('created_at', { ascending: false })
       .limit(5),
-    // One bills query per duration (7 queries, all in parallel).
-    ...allDurations.map((dur) => {
-      let q = client
-        .from('bills')
-        .select('total_amount, paid_amount, advance_applied, status, due_date')
-        .eq('association_id', associationId)
-        .neq('status', 'Void');
-      const periods = getPeriodsForDuration(dur);
-      if (periods) q = q.in('period', periods);
-      return q;
-    }),
+    client
+      .from('bills')
+      .select(
+        'period, total_amount, paid_amount, advance_applied, status, due_date',
+      )
+      .eq('association_id', associationId)
+      .neq('status', 'Void'),
   ]);
 
   const staticData: StaticOverviewData = {
@@ -167,15 +173,22 @@ async function loadAdminOverview(associationId: string) {
   };
 
   const metricsByDuration: Record<string, OverviewMetrics> = {};
-  allDurations.forEach((dur, i) => {
-    const bills = (billResults[i]?.data ?? []) as {
-      total_amount: number;
-      paid_amount: number;
-      advance_applied: number;
-      status: string;
-      due_date: string;
-    }[];
-    metricsByDuration[dur] = computeBillMetrics(dur, bills, today);
+  const bills = (allBills ?? []) as {
+    period: string;
+    total_amount: number;
+    paid_amount: number;
+    advance_applied: number;
+    status: string;
+    due_date: string;
+  }[];
+  allDurations.forEach((dur) => {
+    const periods = getPeriodsForDuration(dur);
+    const inDuration = periods ? new Set<string>(periods) : null;
+    metricsByDuration[dur] = computeBillMetrics(
+      dur,
+      inDuration ? bills.filter((b) => inDuration.has(b.period)) : bills,
+      today,
+    );
   });
 
   return { staticData, metricsByDuration };
@@ -215,6 +228,15 @@ interface DuePaymentRow {
   receipt_no: string | null;
 }
 
+interface AdvancePaymentRow {
+  id: string;
+  unit_id: string;
+  bill_type: string;
+  amount: number;
+  entry_date: string;
+  razorpay_payment_id: string | null;
+}
+
 async function loadMyBillSummary(
   accountId: string,
   associationId: string,
@@ -226,7 +248,7 @@ async function loadMyBillSummary(
   // Resolve owned vs rented separately (rather than via getAccessibleUnits'
   // collapsed list) because the two need different bill scoping: owned
   // units show every bill ever generated, but rented units must only show
-  // bills attributed to THIS tenancy — otherwise a new tenant on a unit
+  // bills attributed to THIS tenancy - otherwise a new tenant on a unit
   // would see every past tenant's bill/payment history on that unit.
   const [{ data: ownedUnits }, { data: tenancies }] = await Promise.all([
     client
@@ -281,6 +303,16 @@ async function loadMyBillSummary(
       bill_line_items (
         amount,
         description
+      ),
+      payments (
+        id,
+        amount,
+        mode,
+        paid_at,
+        bill_id,
+        receipts (
+          receipt_no
+        )
       )
     `)
     .in('unit_id', unitIds)
@@ -296,58 +328,75 @@ async function loadMyBillSummary(
         : billsQuery.is('tenancy_id', null);
   }
 
-  // Void bills are cancelled — owners and tenants should never see them
+  // Void bills are cancelled - owners and tenants should never see them
   // as active items in their dashboard.
   billsQuery = billsQuery.neq('status', 'Void');
 
-  const { data: allBills } = await billsQuery;
-
-  const bills = (allBills as unknown as BillWithLineItems[]) ?? [];
-
-  // Fetch payments for these bills
-  const billIds = bills.map((b) => b.id);
-  let payments: PaymentWithBillAndReceipt[] = [];
-  if (billIds.length > 0) {
-    const { data: paymentsData } = await client
-      .from('payments')
-      .select(`
-        id,
-        amount,
-        mode,
-        paid_at,
-        bill_id,
-        bills (
-          period,
-          bill_no
-        ),
-        receipts (
-          receipt_no
-        )
-      `)
-      .in('bill_id', billIds)
-      .order('paid_at', { ascending: false });
-    payments = (paymentsData as unknown as PaymentWithBillAndReceipt[]) ?? [];
-  }
-
+  // Bills (with their payments embedded) and the cash-ledger data depend only
+  // on the unit list, so they load in one parallel stage.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [ledgerBalances, duePaymentsResult] = await Promise.all([
+  const uc = (c: unknown) => c as any;
+  const [
+    { data: allBills },
+    ledgerBalances,
+    duePaymentsResult,
+    advancePaymentsResult,
+  ] = await Promise.all([
+    billsQuery,
     loadUnitLedgerBalances(associationId, units),
-    (client as any)
+    uc(client)
       .from('cash_ledger_payments')
       .select('id, unit_id, bill_type, amount, mode, paid_at, receipt_no')
       .in('unit_id', unitIds)
       .eq('association_id', associationId)
       .order('paid_at', { ascending: false }),
+    uc(client)
+      .from('cash_ledger')
+      .select('id, unit_id, bill_type, amount, entry_date, razorpay_payment_id')
+      .in('unit_id', unitIds)
+      .eq('association_id', associationId)
+      .eq('entry_type', 'advance_payment')
+      .order('entry_date', { ascending: false }),
   ]);
+
+  type BillRowWithPayments = BillWithLineItems & {
+    payments:
+      | (Omit<PaymentWithBillAndReceipt, 'bills' | 'receipts'> & {
+          receipts: { receipt_no: string } | { receipt_no: string }[] | null;
+        })[]
+      | null;
+  };
+
+  const billRows = (allBills as unknown as BillRowWithPayments[]) ?? [];
+
+  const bills: BillWithLineItems[] = billRows.map(
+    ({ payments: _payments, ...bill }) => bill,
+  );
+
+  // Flatten the embedded payments, newest first (same shape as before).
+  const payments: PaymentWithBillAndReceipt[] = billRows
+    .flatMap((bill) =>
+      (bill.payments ?? []).map((p) => ({
+        ...p,
+        bills: { period: bill.period, bill_no: bill.bill_no },
+        receipts: Array.isArray(p.receipts)
+          ? (p.receipts[0] ?? null)
+          : p.receipts,
+      })),
+    )
+    .sort((a, b) => b.paid_at.localeCompare(a.paid_at));
 
   const duePayments: DuePaymentRow[] =
     (duePaymentsResult.data as DuePaymentRow[] | null) ?? [];
+  const advancePayments: AdvancePaymentRow[] =
+    (advancePaymentsResult.data as AdvancePaymentRow[] | null) ?? [];
 
   return {
     units,
     bills,
     payments,
     duePayments,
+    advancePayments,
     assocName,
     ledgerBalances,
   };
@@ -375,12 +424,15 @@ export async function AssociationDashboard({
   const isPersonal = role === 'prop_owner' || role === 'tenant';
 
   if (isPersonal) {
-    const summary = await loadMyBillSummary(
-      accountId,
-      associationId,
-      assocName,
-      userId,
-    );
+    const admin = getSupabaseServerAdminClient();
+    const [summary, { data: gateway }] = await Promise.all([
+      loadMyBillSummary(accountId, associationId, assocName, userId),
+      admin
+        .from('association_payment_gateways')
+        .select('is_active')
+        .eq('association_id', associationId)
+        .maybeSingle(),
+    ]);
 
     if (!summary) {
       return (
@@ -396,17 +448,27 @@ export async function AssociationDashboard({
       );
     }
 
-    const { units, bills, payments, duePayments, ledgerBalances } = summary;
+    const {
+      units,
+      bills,
+      payments,
+      duePayments,
+      advancePayments,
+      ledgerBalances,
+    } = summary;
 
     return (
       <OwnerUnitsView
         account={account}
         role={role as 'prop_owner' | 'tenant'}
         assocName={assocName}
+        associationId={associationId}
+        canPay={gateway?.is_active ?? false}
         units={units}
         bills={bills as Parameters<typeof OwnerUnitsView>[0]['bills']}
         payments={payments as Parameters<typeof OwnerUnitsView>[0]['payments']}
         duePayments={duePayments}
+        advancePayments={advancePayments}
         ledgerBalances={ledgerBalances}
       />
     );

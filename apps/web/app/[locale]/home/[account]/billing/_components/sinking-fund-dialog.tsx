@@ -11,6 +11,7 @@ import { z } from 'zod';
 
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
+import { DatePicker } from '@kit/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -245,25 +247,20 @@ function AddChargeForm(props: {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Period</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className="h-9 text-base">
-                      <SelectValue>
-                        {(value: string) =>
-                          periodOptions.find((opt) => opt.value === value)
-                            ?.label ?? 'Select period'
-                        }
-                      </SelectValue>
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {periodOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <SearchableSelect
+                    items={periodOptions}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    placeholder="Select period"
+                    searchPlaceholder="Search periods…"
+                    emptyMessage="No periods found"
+                    className="h-9 text-base"
+                    data-test="sinking-fund-period"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -276,28 +273,23 @@ function AddChargeForm(props: {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Unit</FormLabel>
-                <Select
-                  value={field.value ?? ''}
-                  onValueChange={(v) => v && field.onChange(v)}
-                >
-                  <FormControl>
-                    <SelectTrigger className="h-9 text-base">
-                      <SelectValue placeholder="Select a unit">
-                        {(value: string) =>
-                          props.units.find((u) => u.id === value)?.unit_no ??
-                          'Select a unit'
-                        }
-                      </SelectValue>
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {props.units.map((u) => (
-                      <SelectItem key={u.id} value={u.id} label={u.unit_no}>
-                        {u.unit_no}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <SearchableSelect
+                    items={props.units.map((u) => ({
+                      value: u.id,
+                      label: u.unit_no,
+                    }))}
+                    value={field.value ?? ''}
+                    onChange={(v) => v && field.onChange(v)}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    placeholder="Select a unit"
+                    searchPlaceholder="Search units…"
+                    emptyMessage="No units found"
+                    className="h-9 text-base"
+                    data-test="sinking-fund-unit"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -390,15 +382,16 @@ function AddChargeForm(props: {
               <FormLabel>
                 Due Date{' '}
                 <span className="text-muted-foreground font-normal">
-                  (optional — overrides default)
+                  (optional; overrides default)
                 </span>
               </FormLabel>
               <FormControl>
-                <Input
-                  type="date"
+                <DatePicker
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  name={field.name}
                   className="h-9 text-base"
-                  {...field}
-                  value={field.value ?? ''}
                 />
               </FormControl>
               <FormMessage />

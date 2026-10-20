@@ -16,7 +16,12 @@ import {
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 
-import { downloadCsvAction, downloadPdfAction } from '../_lib/reports-actions';
+import {
+  downloadCsvAction,
+  downloadLedgerStatementCsvAction,
+  downloadLedgerStatementPdfAction,
+  downloadPdfAction,
+} from '../_lib/reports-actions';
 import type { ReportsFilters, TabKey } from '../_lib/reports-types';
 
 interface Props {
@@ -25,6 +30,11 @@ interface Props {
   to: string;
   activeTab: TabKey;
   filters: ReportsFilters;
+  /**
+   * Ledger statement is scoped by its own unit picker rather than the shared
+   * filters, so its exports take the unit id instead of from/to + filters.
+   */
+  ledgerUnitId?: string;
 }
 
 export function ExportButton({
@@ -33,7 +43,9 @@ export function ExportButton({
   to,
   activeTab,
   filters,
+  ledgerUnitId,
 }: Props) {
+  const isLedger = activeTab === 'ledger_statement';
   const [isPending, startTransition] = useTransition();
   const [exportType, setExportType] = useState<'csv' | 'pdf' | null>(null);
 
@@ -46,13 +58,12 @@ export function ExportButton({
   const handleCsv = () => {
     setExportType('csv');
     startTransition(async () => {
-      const result = await downloadCsvAction(
-        associationId,
-        from,
-        to,
-        activeTab,
-        filters,
-      );
+      const result = isLedger
+        ? await downloadLedgerStatementCsvAction(
+            associationId,
+            ledgerUnitId ?? '',
+          )
+        : await downloadCsvAction(associationId, from, to, activeTab, filters);
       setExportType(null);
       if (!result.success) {
         toast.error(result.error ?? 'Could not generate CSV.');
@@ -71,13 +82,12 @@ export function ExportButton({
   const handlePdf = () => {
     setExportType('pdf');
     startTransition(async () => {
-      const result = await downloadPdfAction(
-        associationId,
-        from,
-        to,
-        activeTab,
-        filters,
-      );
+      const result = isLedger
+        ? await downloadLedgerStatementPdfAction(
+            associationId,
+            ledgerUnitId ?? '',
+          )
+        : await downloadPdfAction(associationId, from, to, activeTab, filters);
       setExportType(null);
       if (!result.success) {
         toast.error(result.error ?? 'Could not generate PDF.');
@@ -125,7 +135,7 @@ export function ExportButton({
           <DropdownMenuLabel className="text-muted-foreground text-xs font-medium">
             Download report
             {hasFilters && (
-              <span className="text-primary ml-1 font-semibold">
+              <span className="text-brand-ink ml-1 font-semibold">
                 · filtered
               </span>
             )}
@@ -137,7 +147,7 @@ export function ExportButton({
             disabled={isPending}
             className="flex items-start gap-3 py-2.5"
           >
-            <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <FileSpreadsheet className="text-success mt-0.5 h-4 w-4 shrink-0" />
             <div className="flex flex-col">
               <span className="font-medium">Download CSV</span>
               <span className="text-muted-foreground text-xs">
@@ -152,7 +162,7 @@ export function ExportButton({
             disabled={isPending}
             className="flex items-start gap-3 py-2.5"
           >
-            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+            <FileText className="text-info mt-0.5 h-4 w-4 shrink-0" />
             <div className="flex flex-col">
               <span className="font-medium">Download PDF</span>
               <span className="text-muted-foreground text-xs">

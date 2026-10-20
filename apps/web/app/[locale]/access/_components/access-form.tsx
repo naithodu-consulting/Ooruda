@@ -21,10 +21,7 @@ export function AccessForm({ next }: Props) {
       <input type="hidden" name="next" value={next} />
 
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="pin"
-          className="text-[13px] font-medium text-[#1a1a1a]"
-        >
+        <label htmlFor="pin" className="text-[13px] font-medium text-[#1a1a1a]">
           Access code
         </label>
         <input
@@ -34,7 +31,7 @@ export function AccessForm({ next }: Props) {
           autoComplete="off"
           autoFocus
           placeholder="Enter your access code"
-          className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-[#FCD469]"
+          className="w-full rounded-xl border px-4 py-3 text-sm transition-all outline-none focus:ring-2 focus:ring-[#FCD469]"
           style={{ borderColor: '#EAE3D2', background: '#FAFAF8' }}
         />
         {state?.error ? (

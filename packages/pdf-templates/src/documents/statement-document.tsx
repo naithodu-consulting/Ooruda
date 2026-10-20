@@ -68,8 +68,8 @@ const s = StyleSheet.create({
     paddingHorizontal: 4,
   },
   openingText: { fontWeight: 'bold', color: '#374151' },
-  redText: { color: '#dc2626' },
-  greenText: { color: '#16a34a' },
+  redText: { color: '#b91c1c' },
+  greenText: { color: '#146f35' },
   footer: {
     marginTop: 12,
     borderTopWidth: 1,
@@ -202,7 +202,7 @@ export function StatementDocument({
             <View style={s.colDesc}>
               <Text>{e.description}</Text>
               {e.subtext ? (
-                <Text style={{ fontSize: 7, color: '#888', marginTop: 1 }}>
+                <Text style={{ fontSize: 7, color: '#666', marginTop: 1 }}>
                   {e.subtext}
                 </Text>
               ) : null}

@@ -14,8 +14,10 @@
     "notifications": "Notifications",
     "admin": "Admin",
     "members": "Members",
-    "settings": "Billing settings",
-    "audit": "Audit Log"
+    "settings": "Billing Settings",
+    "audit": "Audit Log",
+    "expenses": "Expense Tracker",
+    "amc": "AMC Reminder"
   },
   "label": "Association",
   "labelPlural": "Associations",

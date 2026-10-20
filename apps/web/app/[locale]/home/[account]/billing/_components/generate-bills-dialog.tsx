@@ -26,6 +26,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@kit/ui/form';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -222,22 +223,17 @@ function GenerateBillsForm(props: {
             <FormItem>
               <FormLabel>Period</FormLabel>
               <FormControl>
-                <Select
+                <SearchableSelect
                   items={periodOptions}
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Period" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {periodOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  placeholder="Select Period"
+                  searchPlaceholder="Search periods…"
+                  emptyMessage="No periods found"
+                  data-test="generate-bills-period"
+                />
               </FormControl>
               <FormDescription>
                 Units that already have a bill for this period are skipped.

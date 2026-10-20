@@ -1,4 +1,4 @@
-# Week 2 — Deferred (non-additive) DB changes
+# Week 2 - Deferred (non-additive) DB changes
 
 **Why this file exists.** Week 2 is developed on the `week-2` branch but shares a
 single Supabase project with production (`main`). To avoid breaking production we

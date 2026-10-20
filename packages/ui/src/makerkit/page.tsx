@@ -146,7 +146,7 @@ export function PageTitle(props: React.PropsWithChildren) {
   return (
     <h1
       className={
-        'font-heading text-base leading-none font-bold tracking-tight dark:text-white'
+        'font-heading text-xl leading-tight font-semibold tracking-tight'
       }
     >
       {props.children}
@@ -194,7 +194,9 @@ export function PageHeader({
         </div>
 
         <If condition={title}>
-          <div className={cn(displaySidebarTrigger && 'pl-7')}>
+          {/* Indent past the sidebar trigger only where it is shown (lg+);
+              below that the trigger is hidden and the indent was a gap. */}
+          <div className={cn(displaySidebarTrigger && 'lg:pl-7')}>
             <PageTitle>{title}</PageTitle>
           </div>
         </If>

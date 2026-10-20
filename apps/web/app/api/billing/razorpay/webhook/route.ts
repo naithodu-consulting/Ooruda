@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 
+import { preRenderPaymentDocumentsAfterResponse } from '~/home/[account]/billing/_lib/server/pdf-generation';
 import { logAuditEvent } from '~/lib/audit-log';
 
 import crypto from 'crypto';
@@ -15,6 +16,7 @@ interface PaymentEntity {
     association_id?: string;
     paid_by_role?: string;
     is_due?: string;
+    type?: string;
     unit_id?: string;
     bill_type?: string;
   };
@@ -42,8 +44,8 @@ interface RazorpayWebhookPayload {
  * network drop, etc.). Razorpay retries on non-2xx responses.
  *
  * Handled events:
- *   payment.captured — record the payment against the bill / cash-ledger due
- *   refund.processed — mark the payment as reversed; bill reverts to unpaid
+ *   payment.captured - record the payment against the bill / cash-ledger due
+ *   refund.processed - mark the payment as reversed; bill reverts to unpaid
  *
  * All other events are acknowledged (200) and ignored.
  *
@@ -112,7 +114,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!associationId) {
-      // Payment not from Ooruda — ignore silently.
+      // Payment not from Ooruda - ignore silently.
       return new Response('OK', { status: 200 });
     }
 
@@ -134,7 +136,7 @@ export async function POST(req: NextRequest) {
       .update(rawBody)
       .digest('hex');
 
-    // Return 200 on bad signature — same as the "not found" path — so
+    // Return 200 on bad signature - same as the "not found" path - so
     // unauthenticated callers cannot distinguish a valid payment_id from an
     // unknown one (information oracle eliminated).
     // Use timingSafeEqual to prevent HMAC timing attacks.
@@ -203,10 +205,11 @@ export async function POST(req: NextRequest) {
     ? rawPaidByRole
     : 'Owner';
   const isDue = notes.is_due === 'true';
+  const isAdvance = notes.type === 'advance';
   const dueUnitId = notes.unit_id;
   const dueBillType = notes.bill_type;
 
-  if (!associationId || (billIds.length === 0 && !isDue)) {
+  if (!associationId || (billIds.length === 0 && !isDue && !isAdvance)) {
     return new Response('OK', { status: 200 });
   }
 
@@ -254,7 +257,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate unit_id from notes belongs to the association — the HMAC only
+    // Validate unit_id from notes belongs to the association - the HMAC only
     // authenticates the association, not which unit was embedded in the notes.
     const { data: unitCheck } = await admin
       .from('units')
@@ -307,15 +310,78 @@ export async function POST(req: NextRequest) {
     return new Response('OK', { status: 200 });
   }
 
+  if (isAdvance) {
+    if (!dueUnitId || !dueBillType) {
+      return NextResponse.json(
+        { error: 'Missing unit_id or bill_type in advance payment notes' },
+        { status: 400 },
+      );
+    }
+
+    const { data: unitCheck } = await admin
+      .from('units')
+      .select('id')
+      .eq('id', dueUnitId)
+      .eq('association_id', associationId)
+      .maybeSingle();
+
+    if (!unitCheck) {
+      return NextResponse.json(
+        { error: 'Unit not found in association' },
+        { status: 400 },
+      );
+    }
+
+    const amountRupees = paymentEntity.amount / 100;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin as any).rpc('record_advance_payment', {
+      p_association_id: associationId,
+      p_unit_id: dueUnitId,
+      p_bill_type: dueBillType,
+      p_amount: amountRupees,
+      p_paid_by_name: null,
+      p_paid_by_role: paidByRole,
+      p_tenancy_id: null,
+      p_razorpay_order_id: razorpayOrderId,
+      p_razorpay_payment_id: razorpayPaymentId,
+    });
+
+    if (error) {
+      if (error.code === '23505') return new Response('OK', { status: 200 });
+      void logAuditEvent({
+        associationId,
+        action: 'razorpay.advance_payment.failed',
+        entityType: 'payment',
+        eventType: 'error',
+        summary: `Razorpay advance-payment webhook failed: ${error.message}`,
+        metadata: { razorpayPaymentId, dueUnitId, dueBillType },
+        useAdminClient: true,
+      });
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    void logAuditEvent({
+      associationId,
+      action: 'razorpay.advance_payment.captured',
+      entityType: 'payment',
+      summary: `Razorpay advance-payment captured via webhook`,
+      metadata: { razorpayPaymentId, dueUnitId, dueBillType },
+      useAdminClient: true,
+    });
+
+    return new Response('OK', { status: 200 });
+  }
+
   const { data: bills } = await admin
     .from('bills')
-    .select('id, total_amount, paid_amount')
+    .select('id, total_amount, paid_amount, advance_applied')
     .in('id', billIds)
     .eq('association_id', associationId)
     .neq('status', 'Void');
 
   if (!bills || bills.length === 0) {
-    // Bills are missing or all voided. Return 200 so Razorpay stops retrying —
+    // Bills are missing or all voided. Return 200 so Razorpay stops retrying -
     // a non-2xx response would cause up to 15 retries over 24 hours while the
     // money sits unconciled. Log so the admin can issue a manual refund.
     void logAuditEvent({
@@ -323,7 +389,7 @@ export async function POST(req: NextRequest) {
       action: 'razorpay.payment.void_bill',
       entityType: 'payment',
       eventType: 'error',
-      summary: `Razorpay webhook payment arrived for voided or missing bill(s) — not recorded. Manual refund may be required.`,
+      summary: `Razorpay webhook payment arrived for voided or missing bill(s), not recorded. Manual refund may be required.`,
       metadata: { razorpayPaymentId, razorpayOrderId, billIds },
       useAdminClient: true,
     });
@@ -331,12 +397,18 @@ export async function POST(req: NextRequest) {
   }
 
   const paymentBatchId = billIds.length > 1 ? crypto.randomUUID() : null;
+  const recorded: { paymentId: string; billId: string }[] = [];
 
   for (const bill of bills) {
-    const outstanding = Number(bill.total_amount) - Number(bill.paid_amount);
+    // Must match record_payment's own check, or the RPC rejects the amount
+    // after Razorpay has already captured it.
+    const outstanding =
+      Number(bill.total_amount) -
+      Number(bill.paid_amount) -
+      Number(bill.advance_applied ?? 0);
     if (outstanding <= 0) continue;
 
-    const { error } = await admin.rpc('record_payment', {
+    const { data: paymentId, error } = await admin.rpc('record_payment', {
       p_bill_id: bill.id,
       p_association_id: associationId,
       p_amount: outstanding,
@@ -360,7 +432,15 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    if (paymentId) {
+      recorded.push({ paymentId: paymentId as string, billId: bill.id });
+    }
   }
+
+  // Render + cache the receipts and the (now invalidated) bill PDFs after the
+  // response, so the payer's first download is instant.
+  preRenderPaymentDocumentsAfterResponse(recorded);
 
   void logAuditEvent({
     associationId,

@@ -44,13 +44,13 @@ export function RazorpayCheckoutButton({
 
   const totalOutstanding = bills.reduce((s, b) => s + b.outstanding, 0);
 
-  // Stable key representing the current bill set — changes when props change.
+  // Stable key representing the current bill set - changes when props change.
   const billKey = bills.map((b) => b.id).join(',');
 
   useEffect(() => {
     if (totalOutstanding <= 0) return;
 
-    // Inject Razorpay script once — skip if already present.
+    // Inject Razorpay script once - skip if already present.
     if (
       !document.querySelector(
         'script[src="https://checkout.razorpay.com/v1/checkout.js"]',
@@ -158,11 +158,11 @@ export function RazorpayCheckoutButton({
           },
         },
         handler: (response) => {
-          // 1. Free the button immediately — user can navigate away.
+          // 1. Free the button immediately - user can navigate away.
           prefetchedOrder.current = null;
           setStep('idle');
 
-          // 2. Non-blocking confirming toast — visible while verify runs in background.
+          // 2. Non-blocking confirming toast - visible while verify runs in background.
           const toastId = toast.loading('Confirming payment…', {
             description: `₹${totalOutstanding.toLocaleString('en-IN')} received by Razorpay`,
           });
@@ -177,7 +177,7 @@ export function RazorpayCheckoutButton({
             onSuccess?.();
           }, 6000);
 
-          // 4. Verify in the background — updates DB; resolves the toast in place.
+          // 4. Verify in the background - updates DB; resolves the toast in place.
           fetch('/api/billing/razorpay/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -202,7 +202,7 @@ export function RazorpayCheckoutButton({
                       : 'Your receipt will be generated shortly.',
                 });
               } else {
-                toast.warning('Payment received — confirmation delayed', {
+                toast.warning('Payment received, confirmation delayed', {
                   id: toastId,
                   description:
                     "Contact the association if it doesn't reflect within 24h.",
@@ -213,7 +213,7 @@ export function RazorpayCheckoutButton({
             })
             .catch(() => {
               clearTimeout(fallbackTimer);
-              toast.warning('Payment received — confirmation delayed', {
+              toast.warning('Payment received, confirmation delayed', {
                 id: toastId,
                 description:
                   "Contact the association if it doesn't reflect within 24h.",

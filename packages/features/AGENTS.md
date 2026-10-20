@@ -2,21 +2,21 @@
 
 ## Packages
 
-- `accounts/` — Personal account management
-- `admin/` — Super admin functionality
-- `auth/` — Authentication features
-- `notifications/` — Notification system
-- `team-accounts/` — Team account management
+- `accounts/` - Personal account management
+- `admin/` - Super admin functionality
+- `auth/` - Authentication features
+- `notifications/` - Notification system
+- `team-accounts/` - Team account management
 
 ## Non-Negotiables
 
-1. ALWAYS use `createAccountsApi(client)` / `createTeamAccountsApi(client)` factories — NEVER query tables directly if methods exist
+1. ALWAYS use `createAccountsApi(client)` / `createTeamAccountsApi(client)` factories - NEVER query tables directly if methods exist
 2. NEVER import `useUserWorkspace` outside `app/home/(user)` routes
 3. NEVER import `useTeamAccountWorkspace` outside `app/home/[account]` routes
 4. NEVER call admin operations without `isSuperAdmin()` check first
 5. ALWAYS wrap admin pages with `AdminGuard`
-6. ALWAYS use `getLogger()` from `@kit/shared/logger` for structured logging — NEVER `console.log` in production code
-7. NEVER bypass permission checks when permissions exist — use `api.hasPermission({ accountId, userId, permission })`
+6. ALWAYS use `getLogger()` from `@kit/shared/logger` for structured logging - NEVER `console.log` in production code
+7. NEVER bypass permission checks when permissions exist - use `api.hasPermission({ accountId, userId, permission })`
 
 ## Key Imports
 

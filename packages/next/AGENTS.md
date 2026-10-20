@@ -1,4 +1,4 @@
-# @kit/next — Next.js Utilities
+# @kit/next - Next.js Utilities
 
 ## Non-Negotiables
 
@@ -6,14 +6,14 @@
 2. ALWAYS use `authActionClient` for authenticated actions, `publicActionClient` for public
 3. ALWAYS use `useAction` hook from `next-safe-action/hooks` on the client side
 4. ALWAYS use `revalidatePath` after mutations
-5. NEVER use server actions for data fetching — mutations only
-6. NEVER put business logic in actions — extract to service files
+5. NEVER use server actions for data fetching - mutations only
+6. NEVER put business logic in actions - extract to service files
 7. NEVER use `router.refresh()` or `router.push()` after server actions
-8. NEVER use `adminActionClient` outside admin features — use `authActionClient`
+8. NEVER use `adminActionClient` outside admin features - use `authActionClient`
 
 ## Skills
 
-- `/server-action-builder` — Complete server action workflow
+- `/server-action-builder` - Complete server action workflow
 
 ## Quick Reference
 

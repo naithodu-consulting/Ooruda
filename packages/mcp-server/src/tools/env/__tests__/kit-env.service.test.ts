@@ -235,7 +235,7 @@ describe('KitEnvService.update', () => {
 // Path traversal prevention
 // ---------------------------------------------------------------------------
 
-describe('KitEnvService — path traversal prevention', () => {
+describe('KitEnvService - path traversal prevention', () => {
   it('rejects file paths that traverse outside web directory', async () => {
     const service = createKitEnvService(createDeps());
 
@@ -326,12 +326,12 @@ describe('KitEnvService.rawWrite', () => {
 });
 
 // ---------------------------------------------------------------------------
-// read — mode-based file precedence
+// read - mode-based file precedence
 // ---------------------------------------------------------------------------
 
-describe('KitEnvService.read — file precedence', () => {
+describe('KitEnvService.read - file precedence', () => {
   it('returns variables with mode information when pointing to real workspace', async () => {
-    // Use the actual monorepo root — will scan real .env files
+    // Use the actual monorepo root - will scan real .env files
     const service = createKitEnvService(
       createDeps(
         {},
@@ -347,10 +347,10 @@ describe('KitEnvService.read — file precedence', () => {
 });
 
 // ---------------------------------------------------------------------------
-// getAppState / getVariable — injected fs
+// getAppState / getVariable - injected fs
 // ---------------------------------------------------------------------------
 
-describe('KitEnvService — injected fs', () => {
+describe('KitEnvService - injected fs', () => {
   it('getAppState reads from injected fs', async () => {
     const deps = createDeps(
       {
@@ -402,10 +402,10 @@ describe('KitEnvService — injected fs', () => {
 });
 
 // ---------------------------------------------------------------------------
-// processEnvDefinitions — override chains
+// processEnvDefinitions - override chains
 // ---------------------------------------------------------------------------
 
-describe('processEnvDefinitions — override chains', () => {
+describe('processEnvDefinitions - override chains', () => {
   it('resolves override with development precedence (.env < .env.development < .env.local)', () => {
     const envInfo = {
       appName: 'web',
@@ -498,10 +498,10 @@ describe('processEnvDefinitions — override chains', () => {
 });
 
 // ---------------------------------------------------------------------------
-// processEnvDefinitions — conditional requirements (Stripe keys)
+// processEnvDefinitions - conditional requirements (Stripe keys)
 // ---------------------------------------------------------------------------
 
-describe('processEnvDefinitions — conditional requirements', () => {
+describe('processEnvDefinitions - conditional requirements', () => {
   it('flags STRIPE_SECRET_KEY as invalid when billing provider is stripe and key is missing', () => {
     const envInfo = {
       appName: 'web',
@@ -639,10 +639,10 @@ describe('processEnvDefinitions — conditional requirements', () => {
 });
 
 // ---------------------------------------------------------------------------
-// processEnvDefinitions — cross-variable validations
+// processEnvDefinitions - cross-variable validations
 // ---------------------------------------------------------------------------
 
-describe('processEnvDefinitions — cross-variable validations', () => {
+describe('processEnvDefinitions - cross-variable validations', () => {
   it('flags SUPABASE_SERVICE_ROLE_KEY when same as ANON_KEY', () => {
     const envInfo = {
       appName: 'web',
@@ -709,10 +709,10 @@ describe('processEnvDefinitions — cross-variable validations', () => {
 });
 
 // ---------------------------------------------------------------------------
-// processEnvDefinitions — mode-aware URL validation
+// processEnvDefinitions - mode-aware URL validation
 // ---------------------------------------------------------------------------
 
-describe('processEnvDefinitions — mode-aware validations', () => {
+describe('processEnvDefinitions - mode-aware validations', () => {
   it('accepts http:// SITE_URL in development mode', () => {
     const envInfo = {
       appName: 'web',
@@ -777,10 +777,10 @@ describe('processEnvDefinitions — mode-aware validations', () => {
 });
 
 // ---------------------------------------------------------------------------
-// processEnvDefinitions — missing required variables
+// processEnvDefinitions - missing required variables
 // ---------------------------------------------------------------------------
 
-describe('processEnvDefinitions — missing required variables', () => {
+describe('processEnvDefinitions - missing required variables', () => {
   it('injects missing required variables with MISSING source', () => {
     const envInfo = {
       appName: 'web',
@@ -805,10 +805,10 @@ describe('processEnvDefinitions — missing required variables', () => {
 });
 
 // ---------------------------------------------------------------------------
-// processEnvDefinitions — CAPTCHA conditional dependency
+// processEnvDefinitions - CAPTCHA conditional dependency
 // ---------------------------------------------------------------------------
 
-describe('processEnvDefinitions — CAPTCHA conditional dependency', () => {
+describe('processEnvDefinitions - CAPTCHA conditional dependency', () => {
   it('flags CAPTCHA_SECRET_TOKEN as required when CAPTCHA_SITE_KEY is set', () => {
     const envInfo = {
       appName: 'web',

@@ -49,6 +49,7 @@ import {
 } from '../_lib/reports-types';
 import { TOOLTIP_STYLE } from './chart-tooltip-style';
 import { KpiTile } from './kpi-tile';
+import { TablePagination, usePagedRows } from './table-pagination';
 
 interface Props {
   bills: OutstandingBill[];
@@ -81,12 +82,9 @@ function daysOverdue(dueDate: string): number {
   return Math.max(0, Math.floor((today.getTime() - due.getTime()) / 86400000));
 }
 
-const PAGE_SIZE = 25;
-
 export function OutstandingTab({ bills, statusFilter }: Props) {
   const [showTable, setShowTable] = useState(false);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -109,7 +107,7 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
   const enriched = useMemo(() => {
     if (statusFilter === 'overdue')
       return enrichedAll.filter((b) => b.days > 0);
-    // "Partial" / "Unpaid" are about how much has been settled — advance credit
+    // "Partial" / "Unpaid" are about how much has been settled - advance credit
     // counts as settlement just like a payment does.
     if (statusFilter === 'partial')
       return enrichedAll.filter((b) => b.settled > 0);
@@ -163,8 +161,8 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
       ),
     [enriched, search],
   );
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const { page, setPage, paged, totalPages, total, fromIndex, toIndex } =
+    usePagedRows(filtered, `${statusFilter}|${search}`);
 
   const inrK = (val: number) => {
     if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
@@ -201,7 +199,7 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
         />
         <KpiTile
           label="Oldest Unpaid"
-          value={oldestDue ? formatDateReadable(oldestDue) : '—'}
+          value={oldestDue ? formatDateReadable(oldestDue) : '-'}
           highlight={oldestDue ? 'red' : undefined}
           sub="Earliest unpaid due date"
         />
@@ -321,7 +319,7 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
       <Card>
         <CardHeader className="pb-2">
           <button
-            className="flex w-full items-center justify-between text-left"
+            className="hover:bg-muted/40 -mx-2 flex w-full items-center justify-between rounded-md px-2 py-1 text-left transition-colors"
             onClick={() => setShowTable((v) => !v)}
           >
             <div>
@@ -389,11 +387,11 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
                       <TableCell>{formatDateDMY(b.due_date)}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {b.days > 0 ? (
-                          <span className="font-medium text-red-600 dark:text-red-400">
+                          <span className="text-destructive font-medium">
                             {b.days}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -403,29 +401,16 @@ export function OutstandingTab({ bills, statusFilter }: Props) {
             </div>
 
             {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  Page {page} of {totalPages}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    disabled={page === 1}
-                    onClick={() => setPage((p) => p - 1)}
-                    className="disabled:text-muted-foreground hover:bg-muted rounded px-2 py-1 text-sm disabled:pointer-events-none"
-                  >
-                    ← Prev
-                  </button>
-                  <button
-                    disabled={page === totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                    className="disabled:text-muted-foreground hover:bg-muted rounded px-2 py-1 text-sm disabled:pointer-events-none"
-                  >
-                    Next →
-                  </button>
-                </div>
-              </div>
-            )}
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              fromIndex={fromIndex}
+              toIndex={toIndex}
+              onPageChange={setPage}
+              label="bills"
+              testPrefix="outstanding"
+            />
           </CardContent>
         )}
       </Card>

@@ -1,6 +1,6 @@
 export const runtime = 'nodejs';
 
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 
 import { zip } from 'fflate';
 import * as z from 'zod';
@@ -10,9 +10,13 @@ import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
-import { preprocessLogoForPdf } from '~/home/[account]/billing/_lib/server/pdf-generation';
+import {
+  preprocessLogoForPdf,
+  recordCachedBillPdf,
+} from '~/home/[account]/billing/_lib/server/pdf-generation';
 import { billTypeLabel } from '~/home/[account]/billing/_lib/unit-billing-types';
 import { requireRole } from '~/lib/rbac';
+import { loadPdfRenderer } from '~/lib/server/pdf-renderer';
 
 import {
   fetchBulkBillData,
@@ -47,6 +51,50 @@ async function withConcurrency<T>(
   await Promise.all(workers);
 }
 
+/**
+ * Uploads freshly rendered bill PDFs to the Storage cache and records their
+ * paths, after the response has been sent.
+ */
+function cacheRenderedBills(
+  rendered: { bill: BulkBillRecord; bytes: Buffer }[],
+) {
+  if (rendered.length === 0) return;
+
+  after(async () => {
+    const admin = getSupabaseServerAdminClient();
+    const cached: string[] = [];
+
+    await withConcurrency(
+      rendered,
+      DOWNLOAD_CONCURRENCY,
+      async ({ bill, bytes }) => {
+        const storagePath = `bills/${bill.association_id}/${bill.id}.pdf`;
+        const { error } = await admin.storage
+          .from(BUCKET)
+          .upload(storagePath, bytes, {
+            contentType: 'application/pdf',
+            upsert: true,
+          });
+
+        if (!error) {
+          const { error: updateError } = await recordCachedBillPdf(
+            bill,
+            storagePath,
+          );
+
+          if (!updateError) cached.push(bill.id);
+        }
+      },
+    );
+
+    const logger = await getLogger();
+    logger.debug(
+      { cached: cached.length, rendered: rendered.length },
+      'zip: cached freshly rendered bill PDFs',
+    );
+  });
+}
+
 function buildPath(bill: BulkBillRecord): string {
   const unitNo = bill.units?.unit_no ?? 'unknown';
   const typeLabel = billTypeLabel(bill.bill_type ?? 'maintenance').replace(
@@ -67,10 +115,14 @@ export const POST = enhanceRouteHandler(
 
     // ── Auth ─────────────────────────────────────────────────────────────────
     const tAuth0 = performance.now();
-    const { accountId } = await requireRole(accountSlug, [
+    const { accountId, associationId } = await requireRole(accountSlug, [
       'assoc_admin',
       'billing_operator',
     ]);
+
+    // Start loading/warming the renderer in case any bill isn't cached yet.
+    const rendererPromise = loadPdfRenderer();
+    rendererPromise.catch(() => undefined);
     logger.debug(
       { ms: Math.round(performance.now() - tAuth0) },
       'zip/timing: requireRole',
@@ -80,28 +132,32 @@ export const POST = enhanceRouteHandler(
     const admin = getSupabaseServerAdminClient();
 
     // ── Fetch association (for logo URL and association ID) ───────────────────
-    const tAssoc0 = performance.now();
-    const { data: association } = await client
-      .from('associations')
-      .select('id, accounts(picture_url)')
-      .eq('account_id', accountId)
-      .single();
-    logger.debug(
-      { ms: Math.round(performance.now() - tAssoc0) },
-      'zip/timing: fetch association',
-    );
-
-    if (!association) {
+    if (!associationId) {
       return NextResponse.json(
         { error: 'Association not found.' },
         { status: 404 },
       );
     }
 
-    // ── Start logo preprocessing in parallel with bulk data fetch ─────────────
+    // The branding (for the logo) and the bill data are independent - one
+    // parallel stage.
+    const tFetch0 = performance.now();
+    const [{ data: association }, { bills, lookups }] = await Promise.all([
+      client
+        .from('associations')
+        .select('id, accounts(picture_url)')
+        .eq('account_id', accountId)
+        .single(),
+      fetchBulkBillData(billIds, associationId, admin),
+    ]);
+    logger.debug(
+      { ms: Math.round(performance.now() - tFetch0), count: bills.length },
+      'zip/timing: association + fetchBulkBillData',
+    );
+
     const tLogo0 = performance.now();
     const logoPromise = preprocessLogoForPdf(
-      (association.accounts as { picture_url: string | null } | null)
+      (association?.accounts as { picture_url: string | null } | null)
         ?.picture_url,
     ).then((r) => {
       logger.debug(
@@ -110,18 +166,6 @@ export const POST = enhanceRouteHandler(
       );
       return r;
     });
-
-    // ── Batch fetch ALL bill data in ~6 queries (replaces N×6 per-bill queries) ─
-    const tFetch0 = performance.now();
-    const { bills, lookups } = await fetchBulkBillData(
-      billIds,
-      association.id,
-      admin,
-    );
-    logger.debug(
-      { ms: Math.round(performance.now() - tFetch0), count: bills.length },
-      'zip/timing: fetchBulkBillData (all 6 queries)',
-    );
 
     if (bills.length === 0) {
       return NextResponse.json(
@@ -168,8 +212,12 @@ export const POST = enhanceRouteHandler(
           cacheFallbacks.push(bill);
           return;
         }
-        const res = await fetch(url);
-        if (!res.ok) {
+        // Bounded, so one slow object can't stall the whole export - it is
+        // rendered instead.
+        const res = await fetch(url, {
+          signal: AbortSignal.timeout(10_000),
+        }).catch(() => null);
+        if (!res?.ok) {
           cacheFallbacks.push(bill);
           return;
         }
@@ -191,6 +239,7 @@ export const POST = enhanceRouteHandler(
     if (needsGeneration.length > 0) {
       const logoDataUri = await logoPromise;
       const renderTimes: number[] = [];
+      const rendered: { bill: BulkBillRecord; bytes: Buffer }[] = [];
       const tRender0 = performance.now();
 
       await withConcurrency(
@@ -198,7 +247,12 @@ export const POST = enhanceRouteHandler(
         RENDER_CONCURRENCY,
         async (bill) => {
           const tBill0 = performance.now();
-          const buf = await renderBillFromPrefetch(bill, logoDataUri, lookups);
+          const buf = await renderBillFromPrefetch(
+            bill,
+            logoDataUri,
+            lookups,
+            await rendererPromise,
+          );
           const billMs = Math.round(performance.now() - tBill0);
           renderTimes.push(billMs);
           logger.debug(
@@ -210,9 +264,16 @@ export const POST = enhanceRouteHandler(
             },
             'zip/timing: render single bill',
           );
-          if (buf) files[buildPath(bill)] = new Uint8Array(buf);
+          if (buf) {
+            files[buildPath(bill)] = new Uint8Array(buf);
+            rendered.push({ bill, bytes: buf });
+          }
         },
       );
+
+      // Cache what was just rendered so the next export (and single
+      // downloads) are signed-URL hits - after the response is sent.
+      cacheRenderedBills(rendered);
 
       const totalRenderMs = Math.round(performance.now() - tRender0);
       const avgMs = renderTimes.length
@@ -236,7 +297,9 @@ export const POST = enhanceRouteHandler(
 
     const tZip0 = performance.now();
     const zipped = await new Promise<Uint8Array>((resolve, reject) => {
-      zip(files, (err, data) => {
+      // PDFs are already compressed; storing them (level 0) is several times
+      // faster than deflating them again and barely changes the size.
+      zip(files, { level: 0 }, (err, data) => {
         if (err) reject(err);
         else resolve(data);
       });

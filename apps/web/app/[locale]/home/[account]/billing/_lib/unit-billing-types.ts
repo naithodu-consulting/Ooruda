@@ -1,4 +1,4 @@
-import { billTypeLabel } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 
 import { billOutstanding, displayBillStatus } from '~/lib/bill-status';
 
@@ -7,7 +7,7 @@ export { billTypeLabel };
 /**
  * A single generated bill, without line items or payments.
  *
- * The server sends every bill for the association in this lightweight shape —
+ * The server sends every bill for the association in this lightweight shape -
  * dropping the `bill_line_items` join keeps the initial payload small enough
  * that the whole unit → period → type tree can be built client-side with zero
  * additional fetches. Line items and payment history are loaded on demand when
@@ -36,7 +36,7 @@ export interface UnitDraftItem {
   label: string;
   amount: number;
   due_date: string | null;
-  /** Which draft source this came from — drives the icon and label. */
+  /** Which draft source this came from - drives the icon and label. */
   kind: 'other_charges' | 'sinking_fund';
 }
 
@@ -66,7 +66,7 @@ export type UnitStatus = 'no_bills' | 'all_paid' | 'partial' | 'overdue';
 
 export interface BillTypeNode {
   bill: UnitBill;
-  /** 'Paid' | 'Partial' | 'Unpaid' | 'Overdue' | 'Void' — amount-derived. */
+  /** 'Paid' | 'Partial' | 'Unpaid' | 'Overdue' | 'Void' - amount-derived. */
   displayStatus: string;
   outstanding: number;
   daysOverdue: number;
@@ -107,7 +107,7 @@ export interface UnitNode {
 /**
  * Values stored in `bills.status` that mean the bill is no longer live.
  *
- * These are database values, NOT display text — the UI labels them "Void"
+ * These are database values, NOT display text - the UI labels them "Void"
  * via `displayStatus` below. Renaming what the user sees must never touch this
  * set: matching on the label instead of the stored value silently reclassifies
  * every voided bill as live, inflating billed, collected and outstanding.
@@ -138,7 +138,7 @@ function rollUpStatus(nodes: BillTypeNode[]): UnitStatus {
 /**
  * Builds the full unit → period → bill-type tree from the flat server payload.
  *
- * Every unit gets a node even when it has no bills at all — the whole point of
+ * Every unit gets a node even when it has no bills at all - the whole point of
  * the unit-centric view is that the row count equals the unit count, so an
  * association with 30 units always shows 30 rows.
  */
@@ -173,7 +173,7 @@ export function buildUnitTree(
     }
 
     const periods: PeriodNode[] = Array.from(byPeriod.entries())
-      // Newest period first — admins care about the current cycle.
+      // Newest period first - admins care about the current cycle.
       .sort((a, b) => b[0].localeCompare(a[0]))
       .map(([period, periodBills]) => {
         const nodes: BillTypeNode[] = periodBills
@@ -254,7 +254,7 @@ export const UNIT_STATUS_LABEL: Record<UnitStatus, string> = {
 };
 
 /**
- * A colored dot next to the unit number is the primary at-a-glance signal —
+ * A colored dot next to the unit number is the primary at-a-glance signal -
  * the badge text is the accessible fallback, not the other way round.
  */
 export const UNIT_STATUS_DOT: Record<UnitStatus, string> = {

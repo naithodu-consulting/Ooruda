@@ -29,6 +29,7 @@ import { useAsyncDialog } from '@kit/ui/hooks/use-async-dialog';
 import { If } from '@kit/ui/if';
 import { Input } from '@kit/ui/input';
 import { PhoneInput } from '@kit/ui/phone-input';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -190,26 +191,22 @@ export function AdminCreateUserDialog(
                 <FormItem>
                   <FormLabel>Association</FormLabel>
 
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select an association">
-                          {(value: string) =>
-                            props.associations.find((a) => a.id === value)
-                              ?.name ?? 'Select an association'
-                          }
-                        </SelectValue>
-                      </SelectTrigger>
-                    </FormControl>
-
-                    <SelectContent>
-                      {props.associations.map((association) => (
-                        <SelectItem key={association.id} value={association.id}>
-                          {association.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <SearchableSelect
+                      className="w-full"
+                      data-test={'admin-user-association-select'}
+                      items={props.associations.map((association) => ({
+                        value: association.id,
+                        label: association.name,
+                      }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      placeholder="Select an association"
+                      searchPlaceholder="Search associations…"
+                      emptyMessage="No associations found"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

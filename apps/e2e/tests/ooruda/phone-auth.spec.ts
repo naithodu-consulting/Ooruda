@@ -24,7 +24,7 @@ test.describe('phone-otp sign in', () => {
     // 5xxxxxxxxx fails the /^[6-9]\d{9}$/ rule enforced by the form.
     await auth.requestOtp('5123456789');
 
-    // Still on the phone step — the OTP input never appears.
+    // Still on the phone step - the OTP input never appears.
     await expect(page.locator('[data-test="otp-input"]')).toHaveCount(0);
     await expect(page.locator('[data-test="phone-input"]')).toBeVisible();
   });

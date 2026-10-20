@@ -16,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@kit/ui/card';
+import { DatePicker } from '@kit/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -34,13 +35,7 @@ import {
   FormMessage,
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@kit/ui/select';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import {
@@ -157,15 +152,15 @@ export function BillsSection(props: {
                       <TableCell className="text-right font-medium tabular-nums">
                         {unitsFmt.format(metered)}
                       </TableCell>
-                      <TableCell className="text-right font-medium text-blue-600 tabular-nums">
+                      <TableCell className="text-info text-right font-medium tabular-nums">
                         {blockRate != null
                           ? `₹${blockRate.toFixed(2)}/unit`
-                          : '—'}
+                          : '-'}
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
                         {metered > 0
                           ? `₹${(bill.invoice_amount / metered).toFixed(2)}/unit`
-                          : '—'}
+                          : '-'}
                       </TableCell>
                       {props.canManage ? (
                         <TableCell>
@@ -274,7 +269,7 @@ function AddBillForm(props: { associationId: string; onSuccess: () => void }) {
   const [isPending, startTransition] = useTransition();
 
   const now = new Date();
-  // Default to the current month — the operator uploads the MESCOM bill in the
+  // Default to the current month - the operator uploads the MESCOM bill in the
   // same month they are collecting payment (billing month = current month).
   const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
@@ -326,7 +321,7 @@ function AddBillForm(props: { associationId: string; onSuccess: () => void }) {
         return;
       }
 
-      toast.success(`Bill for ${values.period} added.`);
+      toast.success(`Bill for ${formatPeriod(values.period)} added.`);
       form.reset();
       props.onSuccess();
       router.refresh();
@@ -341,24 +336,19 @@ function AddBillForm(props: { associationId: string; onSuccess: () => void }) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Billing Month</FormLabel>
-              <Select
-                items={periodOptions}
-                onValueChange={field.onChange}
-                defaultValue={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a month" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {periodOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FormControl>
+                <SearchableSelect
+                  items={periodOptions}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  placeholder="Select a month"
+                  searchPlaceholder="Search months…"
+                  emptyMessage="No months found"
+                  data-test="electricity-bill-period"
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -400,7 +390,12 @@ function AddBillForm(props: { associationId: string; onSuccess: () => void }) {
               <FormItem>
                 <FormLabel>Reading Start Date</FormLabel>
                 <FormControl>
-                  <Input type="date" {...field} />
+                  <DatePicker
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -412,7 +407,12 @@ function AddBillForm(props: { associationId: string; onSuccess: () => void }) {
               <FormItem>
                 <FormLabel>Reading End Date</FormLabel>
                 <FormControl>
-                  <Input type="date" {...field} />
+                  <DatePicker
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -454,7 +454,9 @@ function DeleteElectricityBillButton(props: {
         return;
       }
 
-      toast.success(`Electricity bill for ${props.period} deleted.`);
+      toast.success(
+        `Electricity bill for ${formatPeriod(props.period)} deleted.`,
+      );
       router.refresh();
     });
   };

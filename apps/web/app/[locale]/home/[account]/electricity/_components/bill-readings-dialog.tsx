@@ -71,7 +71,7 @@ export function BillReadingsDialog(props: {
         }
       />
 
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
             Meter readings · {formatPeriod(props.period)}
@@ -154,23 +154,60 @@ function ReadingsForm(props: {
   // the user types.
   const watched = useWatch({ control: form.control, name: 'readings' });
 
-  const totalConsumption = (watched ?? []).reduce((sum, row) => {
-    const prev = Number(row?.previousReading) || 0;
-    const curr = Number(row?.currentReading) || 0;
+  // Readings are decimals, so every total is rounded to 2dp at source and that
+  // one value drives the comparison, the running total and the overage alike.
+  // Comparing the raw float while displaying a rounded one produced a banner
+  // reading "250 / 250 units - exceeds by 0 units" on pure float drift.
+  const roundUnits = (n: number) => Math.round(n * 100) / 100;
 
-    return sum + Math.max(0, curr - prev);
-  }, 0);
+  const totalConsumption = roundUnits(
+    (watched ?? []).reduce((sum, row) => {
+      const prev = Number(row?.previousReading) || 0;
+      const curr = Number(row?.currentReading) || 0;
 
-  const totalMinCharge = (watched ?? []).reduce((sum, row) => {
-    return sum + (Number(row?.minimumCharge) || 0);
-  }, 0);
+      return sum + Math.max(0, curr - prev);
+    }, 0),
+  );
+
+  const totalMinCharge = roundUnits(
+    (watched ?? []).reduce((sum, row) => {
+      return sum + (Number(row?.minimumCharge) || 0);
+    }, 0),
+  );
 
   // Sub-meters can never exceed the main Electricity block meter. If they do, the
   // readings are wrong and any bill split would overcharge residents.
   const exceedsBlock = totalConsumption > props.blockConsumptionUnits;
-  const overageUnits = totalConsumption - props.blockConsumptionUnits;
+  const overageUnits = roundUnits(
+    totalConsumption - props.blockConsumptionUnits,
+  );
+
+  // Per-row guard: a current reading below the previous one is never valid (it
+  // means a mis-keyed value or a replaced meter). Saving would drop the meter
+  // out of the split, so the whole form is blocked until every row is sane -
+  // the row-level counterpart to the block-total check above.
+  const invalidRowLabels = (watched ?? []).flatMap((row, index) => {
+    const prev = Number(row?.previousReading) || 0;
+    const curr = Number(row?.currentReading) || 0;
+
+    // Rounded, so a row the UI renders as 0 consumption is never flagged.
+    return roundUnits(curr - prev) < 0
+      ? [props.activeSubMeters[index]?.meter_label ?? `Row ${index + 1}`]
+      : [];
+  });
+
+  const hasInvalidRows = invalidRowLabels.length > 0;
 
   const onSubmit = form.handleSubmit((values) => {
+    if (hasInvalidRows) {
+      toast.error(
+        `${invalidRowLabels.length} meter${invalidRowLabels.length === 1 ? ' has' : 's have'} a current reading below the previous reading: ${invalidRowLabels.join(', ')}. Correct them before saving.`,
+        { duration: 6000 },
+      );
+
+      return;
+    }
+
     if (exceedsBlock) {
       // Surface as a form-level error so the user can't accidentally save bad data.
       toast.error(
@@ -203,7 +240,7 @@ function ReadingsForm(props: {
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <div className="overflow-hidden rounded-xl border">
           {/* Column headers */}
-          <div className="bg-muted/50 text-muted-foreground hidden grid-cols-[minmax(0,1fr)_5rem_1rem_5rem_5.5rem_5.5rem] items-center gap-x-2 border-b px-3 py-2 text-xs font-medium sm:grid">
+          <div className="bg-muted/50 text-muted-foreground hidden grid-cols-[minmax(0,1fr)_6.75rem_1rem_6.75rem_5.5rem_6.5rem] items-center gap-x-2 border-b px-3 py-2 text-xs font-medium sm:grid">
             <span>Meter</span>
             <span className="text-center">Previous</span>
             <span />
@@ -217,7 +254,7 @@ function ReadingsForm(props: {
               const meter = props.activeSubMeters[index];
               const prev = Number(watched?.[index]?.previousReading) || 0;
               const curr = Number(watched?.[index]?.currentReading) || 0;
-              const consumption = curr - prev;
+              const consumption = roundUnits(curr - prev);
 
               const rowErrors = form.formState.errors.readings?.[index];
               const errorMessage =
@@ -226,7 +263,7 @@ function ReadingsForm(props: {
 
               return (
                 <div key={field.id} className="px-3 py-2.5">
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_5rem_1rem_5rem_5.5rem_5.5rem] sm:items-center sm:gap-x-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_6.75rem_1rem_6.75rem_5.5rem_6.5rem] sm:items-center sm:gap-x-2">
                     <div className="col-span-2 min-w-0 sm:col-span-1">
                       <p className="truncate text-sm font-medium">
                         {meter?.meter_label}
@@ -246,7 +283,13 @@ function ReadingsForm(props: {
                     <FormField
                       name={`readings.${index}.previousReading`}
                       render={({ field: f }) => (
-                        <FormItem>
+                        <FormItem className="gap-y-1">
+                          {/* On mobile the two inputs sit side by side with no
+                              arrow between them, so label them. Hidden from
+                              sm: up, where the column headers do this job. */}
+                          <span className="text-muted-foreground text-xs sm:hidden">
+                            Previous
+                          </span>
                           <FormControl>
                             <Input
                               type="number"
@@ -255,7 +298,7 @@ function ReadingsForm(props: {
                               min="0"
                               placeholder="0"
                               aria-label={`${meter?.meter_label} previous reading`}
-                              className="bg-muted/40 h-9 text-center tabular-nums"
+                              className="bg-muted/40 h-9 [appearance:textfield] px-1.5 text-center tabular-nums [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                               onFocus={(e) => e.currentTarget.select()}
                               {...f}
                             />
@@ -269,7 +312,10 @@ function ReadingsForm(props: {
                     <FormField
                       name={`readings.${index}.currentReading`}
                       render={({ field: f }) => (
-                        <FormItem>
+                        <FormItem className="gap-y-1">
+                          <span className="text-foreground text-xs font-medium sm:hidden">
+                            Current
+                          </span>
                           <FormControl>
                             <Input
                               type="number"
@@ -278,7 +324,7 @@ function ReadingsForm(props: {
                               min="0"
                               placeholder="0"
                               aria-label={`${meter?.meter_label} current reading`}
-                              className="h-9 text-center font-medium tabular-nums"
+                              className="h-9 [appearance:textfield] px-1.5 text-center font-medium tabular-nums [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                               onFocus={(e) => e.currentTarget.select()}
                               {...f}
                             />
@@ -321,7 +367,7 @@ function ReadingsForm(props: {
                                 min="0"
                                 placeholder="0"
                                 aria-label={`${meter?.meter_label} minimum charge`}
-                                className="h-9 w-24 text-right tabular-nums sm:w-full"
+                                className="h-9 w-28 [appearance:textfield] px-1.5 text-right tabular-nums sm:w-full [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                 onFocus={(e) => e.currentTarget.select()}
                                 {...f}
                               />
@@ -364,7 +410,23 @@ function ReadingsForm(props: {
           </div>
         </div>
 
-        {/* Inline error banner — shown live as the user types */}
+        {/* Inline error banner - shown live as the user types */}
+        {hasInvalidRows ? (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>
+                {invalidRowLabels.length} meter
+                {invalidRowLabels.length === 1 ? '' : 's'}
+              </strong>{' '}
+              {invalidRowLabels.length === 1 ? 'has a' : 'have a'} current
+              reading below the previous reading:{' '}
+              <strong>{invalidRowLabels.join(', ')}</strong>. Readings cannot be
+              saved until every meter is corrected.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {exceedsBlock ? (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
@@ -384,7 +446,7 @@ function ReadingsForm(props: {
 
         <Button
           type="submit"
-          disabled={isPending || exceedsBlock}
+          disabled={isPending || exceedsBlock || hasInvalidRows}
           className="w-full"
           data-test="save-readings-button"
         >

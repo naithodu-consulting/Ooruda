@@ -21,13 +21,42 @@ export default async function AssociationSettingsPage({ params }: Props) {
   const { account } = await params;
 
   // Association configuration (status, GST, branding, billing defaults) is an
-  // admin-only task — the underlying RLS write policies require assoc_admin.
-  const { accountId } = await requireRole(account, ['assoc_admin']);
+  // admin-only task - the underlying RLS write policies require assoc_admin.
+  const { accountId, associationId, isSuperAdmin } = await requireRole(
+    account,
+    ['assoc_admin'],
+  );
 
   const client = getSupabaseServerClient();
 
-  // Fire accounts and associations queries in parallel — both only need accountId.
-  const [{ data: accountRow }, { data: associationRow }] = await Promise.all([
+  // Safety net: auto-create the associations row if the trigger didn't fire.
+  let resolvedAssociationId = associationId;
+  if (!resolvedAssociationId) {
+    const { data } = await client
+      .from('associations')
+      .insert({ account_id: accountId })
+      .select('id')
+      .single();
+    resolvedAssociationId = data?.id ?? null;
+  }
+
+  if (!resolvedAssociationId) {
+    throw new Error(
+      'Unable to load the association record. Please try again or contact support.',
+    );
+  }
+
+  const admin = getSupabaseServerAdminClient();
+
+  // The association id is already known, so every query fires in one
+  // parallel batch.
+  const [
+    { data: accountRow },
+    { data: association },
+    { data: billingSettings },
+    { data: chargeTypes },
+    { data: gatewayRow },
+  ] = await Promise.all([
     client
       .from('accounts')
       .select('name, slug, picture_url, primary_owner_user_id')
@@ -36,23 +65,31 @@ export default async function AssociationSettingsPage({ params }: Props) {
     client
       .from('associations')
       .select('*')
-      .eq('account_id', accountId)
+      .eq('id', resolvedAssociationId)
       .single(),
+    client
+      .from('billing_settings')
+      .select('electricity_due_day, maintenance_due_day, other_charges_due_day')
+      .eq('association_id', resolvedAssociationId)
+      .single(),
+    client
+      .from('charge_types')
+      .select(
+        'id, key, name, is_builtin, calc_method, frequency, default_payer, is_active, rate_or_amount, gst_applicable',
+      )
+      .eq('association_id', resolvedAssociationId)
+      .order('is_builtin', { ascending: false })
+      .order('name'),
+    // Admin client required - association_payment_gateways has no authenticated policies.
+    admin
+      .from('association_payment_gateways')
+      .select('key_id, is_active, key_secret, webhook_secret, created_at')
+      .eq('association_id', resolvedAssociationId)
+      .maybeSingle(),
   ]);
 
   if (!accountRow) {
     throw new Error('Unable to load the association account record.');
-  }
-
-  // Safety net: auto-create the associations row if the trigger didn't fire.
-  let association = associationRow;
-  if (!association) {
-    const { data } = await client
-      .from('associations')
-      .insert({ account_id: accountId })
-      .select()
-      .single();
-    association = data;
   }
 
   if (!association) {
@@ -60,37 +97,6 @@ export default async function AssociationSettingsPage({ params }: Props) {
       'Unable to load the association record. Please try again or contact support.',
     );
   }
-
-  const admin = getSupabaseServerAdminClient();
-
-  // Fire all remaining independent queries in parallel.
-  const [
-    { data: isSuperAdmin },
-    { data: billingSettings },
-    { data: chargeTypes },
-    { data: gatewayRow },
-  ] = await Promise.all([
-    client.rpc('is_super_admin'),
-    client
-      .from('billing_settings')
-      .select('electricity_due_day, maintenance_due_day, other_charges_due_day')
-      .eq('association_id', association.id)
-      .single(),
-    client
-      .from('charge_types')
-      .select(
-        'id, key, name, is_builtin, calc_method, frequency, default_payer, is_active, rate_or_amount, gst_applicable',
-      )
-      .eq('association_id', association.id)
-      .order('is_builtin', { ascending: false })
-      .order('name'),
-    // Admin client required — association_payment_gateways has no authenticated policies.
-    admin
-      .from('association_payment_gateways')
-      .select('key_id, is_active, key_secret, webhook_secret, created_at')
-      .eq('association_id', association.id)
-      .maybeSingle(),
-  ]);
 
   const gatewayConfig = gatewayRow
     ? {
@@ -114,7 +120,7 @@ export default async function AssociationSettingsPage({ params }: Props) {
           name: accountRow.name,
           slug: accountRow.slug as string,
         }}
-        // Pass the UNRESOLVED template (with the `[account]` placeholder) — the
+        // Pass the UNRESOLVED template (with the `[account]` placeholder) - the
         // update action does `path.replace('[account]', newSlug)` to redirect
         // after a slug change. Resolving it here would break that redirect.
         path={pathsConfig.app.accountAssociationSettings}

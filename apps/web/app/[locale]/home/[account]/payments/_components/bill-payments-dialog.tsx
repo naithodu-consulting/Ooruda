@@ -119,7 +119,7 @@ export function BillPaymentsDialog(props: {
                   <TableCell>
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono text-xs">
-                        {payment.receipt_no ?? '—'}
+                        {payment.receipt_no ?? '-'}
                       </span>
                       {payment.receipt_no ? (
                         <DownloadPdfButton

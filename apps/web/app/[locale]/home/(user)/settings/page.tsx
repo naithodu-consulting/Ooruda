@@ -22,6 +22,10 @@ const features = {
   enablePasswordUpdate: authConfig.providers.password,
   enableAccountDeletion: featureFlagsConfig.enableAccountDeletion,
   enableAccountLinking: authConfig.enableIdentityLinking,
+  // Same reasoning as the team profile settings page: no OAuth providers to
+  // link (only risky unlinks), and no MFA recovery path yet.
+  showLinkedAccounts: false,
+  showMultiFactorAuth: false,
 };
 
 const providers = authConfig.providers.oAuth;

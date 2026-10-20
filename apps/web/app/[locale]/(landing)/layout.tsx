@@ -2,9 +2,7 @@ import { DM_Sans } from 'next/font/google';
 
 const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-dm-sans' });
 
-export default function LandingLayout({
-  children,
-}: React.PropsWithChildren) {
+export default function LandingLayout({ children }: React.PropsWithChildren) {
   return (
     <>
       <style>{`html, body { background-color: #ffffff !important; }`}</style>

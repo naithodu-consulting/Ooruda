@@ -3,7 +3,7 @@
   "previewText": "You've been invited to join {teamName} on Ooruda",
   "heading": "You're invited to {teamName}",
   "hello": "Hi {invitedUserEmail},",
-  "mainText": "<strong>{inviter}</strong> has invited you to manage <strong>{teamName}</strong> on <strong>Ooruda</strong> — your property management platform.",
+  "mainText": "<strong>{inviter}</strong> has invited you to manage <strong>{teamName}</strong> on <strong>Ooruda</strong>, your property management platform.",
   "joinTeam": "Accept Invitation",
   "copyPasteLink": "Or copy and paste this link into your browser:",
   "invitationIntendedFor": "This invitation was sent to {invitedUserEmail}. If you weren't expecting this, you can safely ignore it."

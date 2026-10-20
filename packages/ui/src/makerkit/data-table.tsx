@@ -338,7 +338,7 @@ export function DataTable<RecordData extends DataItem>({
                 return (
                   <TableHead
                     className={cn(
-                      'text-muted-foreground bg-background/80 border-transparent font-sans font-medium',
+                      'text-muted-foreground bg-background/80 border-transparent font-semibold',
                       {
                         ['border-r-background border-r']: isPinned === 'left',
                         ['border-l-background border-l']: isPinned === 'right',

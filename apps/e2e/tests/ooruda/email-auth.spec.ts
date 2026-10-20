@@ -24,7 +24,7 @@ test.describe('email-otp sign in', () => {
 
     await auth.requestOtp('not-an-email');
 
-    // Still on the email step — the OTP input never appears.
+    // Still on the email step - the OTP input never appears.
     await expect(page.locator('[data-test="otp-input"]')).toHaveCount(0);
     await expect(page.locator('[data-test="email-input"]')).toBeVisible();
   });

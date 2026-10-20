@@ -13,10 +13,10 @@ interface KpiTileProps {
 }
 
 const highlightClass: Record<string, string> = {
-  green: 'text-[var(--color-success)]',
-  amber: 'text-[var(--color-warning)]',
-  red: 'text-[var(--color-danger)]',
-  blue: 'text-[var(--color-info)]',
+  green: 'text-success',
+  amber: 'text-warning',
+  red: 'text-danger',
+  blue: 'text-info',
 };
 
 export function KpiTile({ label, value, sub, icon, highlight }: KpiTileProps) {

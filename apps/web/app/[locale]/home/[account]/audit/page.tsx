@@ -19,7 +19,9 @@ export const metadata = { title: 'Audit Log' };
 export default async function AuditPage({ params, searchParams }: Props) {
   const { account } = await params;
   const { page: pageParam, search, eventType } = await searchParams;
-  const { accountId } = await requireRole(account, ['assoc_admin']);
+  const { accountId, associationId } = await requireRole(account, [
+    'assoc_admin',
+  ]);
 
   const page = Math.max(1, parseInt(pageParam ?? '1', 10) || 1);
   const from = (page - 1) * PAGE_SIZE;
@@ -28,11 +30,7 @@ export default async function AuditPage({ params, searchParams }: Props) {
   const client = getSupabaseServerClient();
   const adminClient = getSupabaseServerAdminClient();
 
-  const { data: association } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const association = associationId ? { id: associationId } : null;
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');

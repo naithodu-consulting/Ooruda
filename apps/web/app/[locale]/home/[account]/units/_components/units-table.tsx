@@ -124,7 +124,7 @@ export function UnitsTable({
             className={cn(
               'rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors',
               filter === f.id
-                ? 'border-primary/40 bg-primary/10 text-primary'
+                ? 'border-primary/40 bg-primary/10 text-brand-ink'
                 : 'border-border text-muted-foreground hover:border-primary/30 hover:bg-primary/5',
             )}
           >
@@ -171,16 +171,16 @@ export function UnitsTable({
                   <TableCell className="font-medium">
                     <Link
                       href={`/home/${accountSlug}/units/${unit.id}`}
-                      className="hover:text-primary transition-colors"
+                      className="hover:text-brand-ink transition-colors"
                     >
                       {unit.unit_no}
                     </Link>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {unit.door_no ?? '—'}
+                    {unit.door_no ?? '-'}
                   </TableCell>
                   <TableCell>{unit.type}</TableCell>
-                  <TableCell>{unit.floor ?? '—'}</TableCell>
+                  <TableCell>{unit.floor ?? '-'}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {areaFmt.format(unit.area_sqft)}
                   </TableCell>
@@ -203,7 +203,7 @@ export function UnitsTable({
                   </TableCell>
                   <TableCell>
                     {tenantLabel ?? (
-                      <span className="text-muted-foreground">—</span>
+                      <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
                   {canManage ? (

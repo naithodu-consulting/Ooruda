@@ -14,7 +14,7 @@ Supabase instance, which in turn needs a container runtime.
 
 ## 1. Vitest (no infrastructure)
 
-Pure, database-free logic — the RBAC helpers (`lib/rbac.ts`) and the
+Pure, database-free logic - the RBAC helpers (`lib/rbac.ts`) and the
 association settings server action's authorization + Zod validation.
 
 ```bash
@@ -55,7 +55,7 @@ RBAC role/permission seed, and RLS (tenant isolation + the write-policy
 matrix).
 
 ```bash
-pnpm supabase:web:start          # (requires Docker — see section 2)
+pnpm supabase:web:start          # (requires Docker - see section 2)
 pnpm --filter web supabase:test  # runs supabase/tests/database/*.test.sql
 ```
 
@@ -122,10 +122,10 @@ The sign-in UI shows the mock-OTP hint and skips real SMS when
 `NEXT_PUBLIC_MOCK_OTP=true`:
 
 ```bash
-# Terminal 1 — app + local Supabase running
+# Terminal 1 - app + local Supabase running
 NEXT_PUBLIC_MOCK_OTP=true pnpm --filter web dev
 
-# Terminal 2 — run the E2E suite (expects the app on http://localhost:3000)
+# Terminal 2 - run the E2E suite (expects the app on http://localhost:3000)
 pnpm --filter web-e2e test
 
 # …or just the Ooruda specs:

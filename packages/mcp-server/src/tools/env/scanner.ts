@@ -410,7 +410,7 @@ export function processEnvDefinitions(
         },
       };
     } else if (model.required) {
-      // Required but no contextual validation — generic required error
+      // Required but no contextual validation - generic required error
       variableMap[model.name] = {
         key: model.name,
         effectiveValue: '',

@@ -15,7 +15,7 @@ const ErrorPage = ({
 }) => {
   // Next.js attaches `digest` only to errors that originated server-side
   // (RSC, Server Action, Route Handler). Those already fired `onRequestError`
-  // and were captured by the provider — skip the client report to dedup.
+  // and were captured by the provider - skip the client report to dedup.
   useCaptureException(error.digest ? null : error);
 
   const user = useUser();

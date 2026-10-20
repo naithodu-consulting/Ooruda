@@ -4,6 +4,8 @@ import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { preRenderPaymentDocumentsAfterResponse } from '~/home/[account]/billing/_lib/server/pdf-generation';
+
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
@@ -74,7 +76,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Parallel: membership + unit/tenancy scoping.
-  // The scope query uses the body-supplied paidByRole for routing — this is
+  // The scope query uses the body-supplied paidByRole for routing - this is
   // safe because we cross-check it against the verified membership role below.
   const [{ data: membership }, { data: scopeRows }] = await Promise.all([
     client
@@ -104,7 +106,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  // Derive canonical label from verified membership — reject if body was tampered.
+  // Derive canonical label from verified membership - reject if body was tampered.
   // This prevents a prop_owner from sending paidByRole:'Tenant' to mislabel the payment.
   const canonicalPaidByRole = role === 'prop_owner' ? 'Owner' : 'Tenant';
   if (paidByRole !== canonicalPaidByRole) {
@@ -131,11 +133,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Fetch bills scoped to the caller's units. Exclude voided bills — a
+  // Fetch bills scoped to the caller's units. Exclude voided bills - a
   // payment should never be recorded against a cancelled bill.
   const { data: bills } = await client
     .from('bills')
-    .select('id, total_amount, paid_amount')
+    .select('id, total_amount, paid_amount, advance_applied')
     .in('id', billIds)
     .in('unit_id', allowedUnitIds)
     .eq('association_id', associationId)
@@ -143,17 +145,17 @@ export async function POST(req: NextRequest) {
 
   if (!bills || bills.length === 0) {
     // Race window: bill was voided after the Razorpay order was created but
-    // before payment was completed. Log for admin visibility — Razorpay has
+    // before payment was completed. Log for admin visibility - Razorpay has
     // captured the money and a manual refund from the dashboard may be needed.
     const logger = await getLogger();
     logger.warn(
       { razorpayOrderId, razorpayPaymentId, billIds, associationId },
-      'Razorpay verify: bills not found or all voided after payment captured — manual refund may be required',
+      'Razorpay verify: bills not found or all voided after payment captured; manual refund may be required',
     );
     return NextResponse.json(
       {
         error:
-          'One or more bills have been cancelled. Please contact your association admin — your payment will be reviewed.',
+          'One or more bills have been cancelled. Please contact your association admin; your payment will be reviewed.',
       },
       { status: 422 },
     );
@@ -162,31 +164,50 @@ export async function POST(req: NextRequest) {
   const paymentBatchId = billIds.length > 1 ? crypto.randomUUID() : null;
 
   // Record payments in parallel.
+  const payableBills = bills.filter(
+    (b) =>
+      Number(b.total_amount) -
+        Number(b.paid_amount) -
+        Number(b.advance_applied ?? 0) >
+      0,
+  );
   const results = await Promise.all(
-    bills
-      .filter((b) => Number(b.total_amount) - Number(b.paid_amount) > 0)
-      .map((bill) =>
-        client.rpc('record_payment', {
-          p_bill_id: bill.id,
-          p_association_id: associationId,
-          p_amount: Number(bill.total_amount) - Number(bill.paid_amount),
-          p_mode: 'Razorpay',
-          p_paid_by_role: canonicalPaidByRole,
-          p_razorpay_payment_id: razorpayPaymentId,
-          p_razorpay_order_id: razorpayOrderId,
-          p_payment_batch_id: paymentBatchId,
-        }),
-      ),
+    payableBills.map((bill) =>
+      client.rpc('record_payment', {
+        p_bill_id: bill.id,
+        p_association_id: associationId,
+        p_amount:
+          Number(bill.total_amount) -
+          Number(bill.paid_amount) -
+          Number(bill.advance_applied ?? 0),
+        p_mode: 'Razorpay',
+        p_paid_by_role: canonicalPaidByRole,
+        p_razorpay_payment_id: razorpayPaymentId,
+        p_razorpay_order_id: razorpayOrderId,
+        p_payment_batch_id: paymentBatchId ?? undefined,
+      }),
+    ),
   );
 
   const paymentIds: string[] = [];
-  for (const { data: paymentId, error } of results) {
+  const recorded: { paymentId: string; billId: string }[] = [];
+  for (const [index, { data: paymentId, error }] of results.entries()) {
     if (error) {
-      if (error.code === '23505') continue; // duplicate — skip
+      if (error.code === '23505') continue; // duplicate - skip
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    if (paymentId) paymentIds.push(paymentId as string);
+    if (paymentId) {
+      paymentIds.push(paymentId as string);
+      recorded.push({
+        paymentId: paymentId as string,
+        billId: payableBills[index]!.id,
+      });
+    }
   }
+
+  // Render + cache the receipts and the (now invalidated) bill PDFs after the
+  // response, so the payer's first download is instant.
+  preRenderPaymentDocumentsAfterResponse(recorded);
 
   return NextResponse.json({ paymentIds });
 }

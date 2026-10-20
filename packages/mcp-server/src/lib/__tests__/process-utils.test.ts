@@ -42,7 +42,7 @@ function sleep(ms: number) {
 }
 
 // ---------------------------------------------------------------------------
-// pnpm — the command that triggered this whole cross-platform fix.
+// pnpm - the command that triggered this whole cross-platform fix.
 // The MCP tools call pnpm for migrations, seeding, checks, and dev server.
 // On Windows pnpm is a .cmd file that requires shell: true.
 // ---------------------------------------------------------------------------
@@ -77,7 +77,7 @@ describe('pnpm commands', () => {
 });
 
 // ---------------------------------------------------------------------------
-// git — used by kit_status for branch, modified files, merge checks.
+// git - used by kit_status for branch, modified files, merge checks.
 // ---------------------------------------------------------------------------
 
 describe('git commands', () => {
@@ -98,7 +98,7 @@ describe('git commands', () => {
 
   it('git status --porcelain (used by kit_status)', async () => {
     const result = await execFileAsync('git', ['status', '--porcelain']);
-    // Can be empty (clean) or have entries — just shouldn't throw
+    // Can be empty (clean) or have entries - just shouldn't throw
     expect(result.stderr).toBe('');
   });
 
@@ -109,7 +109,7 @@ describe('git commands', () => {
 });
 
 // ---------------------------------------------------------------------------
-// node — used by kit_prerequisites.
+// node - used by kit_prerequisites.
 // ---------------------------------------------------------------------------
 
 describe('node commands', () => {
@@ -126,7 +126,7 @@ describe('node commands', () => {
 });
 
 // ---------------------------------------------------------------------------
-// docker — used by kit_dev_start/stop for database and mailbox containers.
+// docker - used by kit_dev_start/stop for database and mailbox containers.
 // Skipped if docker is not installed.
 // ---------------------------------------------------------------------------
 
@@ -151,7 +151,7 @@ describe('docker commands', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Port operations — TCP socket check + getPortProcess.
+// Port operations - TCP socket check + getPortProcess.
 // Used by kit_dev_status, kit_db_status, mailbox status to detect running
 // services on specific ports (3000, 54333, 8025).
 // ---------------------------------------------------------------------------
@@ -185,7 +185,7 @@ describe('port operations', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Process lifecycle — spawnDetached + findProcessesByName + killProcess.
+// Process lifecycle - spawnDetached + findProcessesByName + killProcess.
 // The dev tools spawn pnpm and stripe as detached processes, find them by
 // pattern (e.g. "stripe.*listen"), and kill them via PID/group.
 // ---------------------------------------------------------------------------
@@ -258,13 +258,13 @@ describe('process lifecycle', () => {
     pidsToCleanup.push(child.pid!);
     await sleep(300);
 
-    // Process already exited — killProcess should not throw
+    // Process already exited - killProcess should not throw
     await expect(killProcess(child.pid!)).resolves.toBeUndefined();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Error handling — unknown commands should reject cleanly.
+// Error handling - unknown commands should reject cleanly.
 // ---------------------------------------------------------------------------
 
 describe('error handling', () => {

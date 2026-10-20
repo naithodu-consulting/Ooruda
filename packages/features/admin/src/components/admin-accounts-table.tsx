@@ -4,8 +4,8 @@ import { useRef, useState, useMemo } from 'react';
 
 import Link from 'next/link';
 
-import { ColumnDef } from '@tanstack/react-table';
-import { EllipsisVertical, Search } from 'lucide-react';
+import { ColumnDef, SortingState } from '@tanstack/react-table';
+import { CheckCircle2, Clock, EllipsisVertical, Search } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
 import { formatPhoneNumber } from '@kit/shared/utils';
@@ -24,6 +24,12 @@ import { DataTable } from '@kit/ui/enhanced-data-table';
 import { Form, FormControl, FormField, FormItem } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@kit/ui/tabs';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@kit/ui/tooltip';
 
 import { ROLE_LABELS } from '../lib/server/schema/create-user.schema';
 import { AdminCreateAssociationDialog } from './admin-create-association-dialog';
@@ -44,11 +50,29 @@ function roleLabel(role: string): string {
   return ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role;
 }
 
+function formatConsentDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const d = date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  });
+  const t = date.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Kolkata',
+  });
+  return `${d.replace(/\//g, '-')}, ${t}`;
+}
+
 export function AdminAccountsTable(props: {
   associations: Account[];
   users: Account[];
   membershipsByAccountId: Record<string, UserMembership[]>;
   phoneByAccountId: Record<string, string>;
+  consentByAccountId: Record<string, string | null>;
   superAdminIds: Set<string>;
   testAccountIds: Set<string>;
   initialTab?: 'team' | 'personal';
@@ -60,6 +84,7 @@ export function AdminAccountsTable(props: {
   );
   const [query, setQuery] = useState('');
   const [pageIndex, setPageIndex] = useState(0);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const form = useForm({ defaultValues: { query: '' } });
@@ -84,9 +109,29 @@ export function AdminAccountsTable(props: {
     );
   }, [rawData, query]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Pre-sort the full filtered list before pagination so sort spans all pages.
+  const sorted = useMemo(() => {
+    const [first] = sorting;
+    if (!first) return filtered;
+    const { id, desc } = first;
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      if (id === 'consent') {
+        const ta = props.consentByAccountId[a.id] ? 0 : 1;
+        const tb = props.consentByAccountId[b.id] ? 0 : 1;
+        cmp = ta - tb;
+      } else if (id === 'name') {
+        cmp = (a.name ?? '').localeCompare(b.name ?? '');
+      } else if (id === 'created_at') {
+        cmp = (a.created_at ?? '').localeCompare(b.created_at ?? '');
+      }
+      return desc ? -cmp : cmp;
+    });
+  }, [filtered, sorting, props.consentByAccountId]);
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const safePageIndex = Math.min(pageIndex, pageCount - 1);
-  const paginated = filtered.slice(
+  const paginated = sorted.slice(
     safePageIndex * PAGE_SIZE,
     (safePageIndex + 1) * PAGE_SIZE,
   );
@@ -104,6 +149,7 @@ export function AdminAccountsTable(props: {
     activeTab,
     props.membershipsByAccountId,
     props.phoneByAccountId,
+    props.consentByAccountId,
     associationOptions,
     props.superAdminIds,
     props.testAccountIds,
@@ -209,8 +255,13 @@ export function AdminAccountsTable(props: {
               pageIndex={safePageIndex}
               pageCount={pageCount}
               data={paginated}
-              manualSorting={false}
+              manualSorting={true}
+              sorting={sorting}
               columns={columns}
+              onSortingChange={(next) => {
+                setSorting(next);
+                setPageIndex(0);
+              }}
               onPaginationChange={(pagination) => {
                 setPageIndex(pagination.pageIndex);
               }}
@@ -247,6 +298,7 @@ function getColumns(
   type: 'team' | 'personal',
   membershipsByAccountId: Record<string, UserMembership[]>,
   phoneByAccountId: Record<string, string>,
+  consentByAccountId: Record<string, string | null>,
   associations: AssociationOption[],
   superAdminIds: Set<string>,
   testAccountIds: Set<string>,
@@ -263,7 +315,7 @@ function getColumns(
         <div className="flex min-w-0 items-center gap-1.5">
           {isTest && (
             <Badge
-              className="shrink-0 border-amber-400 bg-amber-50 px-1.5 py-0 text-[10px] whitespace-nowrap text-amber-700"
+              className="border-warning/40 bg-warning/10 text-warning shrink-0 px-1.5 py-0 text-xs whitespace-nowrap"
               variant="outline"
             >
               Test
@@ -276,13 +328,13 @@ function getColumns(
             title={row.original.name?.trim() || undefined}
             href={`/admin/accounts/${row.original.id}`}
           >
-            {row.original.name?.trim() || '—'}
+            {row.original.name?.trim() || '-'}
           </Link>
 
           {isSA && (
             <Badge
               variant="outline"
-              className="shrink-0 px-1.5 py-0 text-[10px] whitespace-nowrap"
+              className="shrink-0 px-1.5 py-0 text-xs whitespace-nowrap"
             >
               Super Admin
             </Badge>
@@ -346,7 +398,7 @@ function getColumns(
         cell: ({ row }) => {
           const phone = formatPhoneNumber(phoneByAccountId[row.original.id]);
           return (
-            phone || <span className="text-muted-foreground text-xs">—</span>
+            phone || <span className="text-muted-foreground text-xs">-</span>
           );
         },
       },
@@ -363,7 +415,7 @@ function getColumns(
               {email}
             </span>
           ) : (
-            <span className="text-muted-foreground text-xs">—</span>
+            <span className="text-muted-foreground text-xs">-</span>
           );
         },
       },
@@ -373,7 +425,7 @@ function getColumns(
         cell: ({ row }) => {
           const memberships = membershipsByAccountId[row.original.id] ?? [];
           if (memberships.length === 0)
-            return <span className="text-muted-foreground text-xs">—</span>;
+            return <span className="text-muted-foreground text-xs">-</span>;
           return (
             <div className="flex flex-wrap gap-1">
               {memberships.map((m, i) => (
@@ -385,6 +437,49 @@ function getColumns(
                 </span>
               ))}
             </div>
+          );
+        },
+      },
+      {
+        id: 'consent',
+        header: 'Consent',
+        enableSorting: true,
+        accessorFn: (row) => (consentByAccountId[row.id] ? 0 : 1),
+        cell: ({ row }) => {
+          const ts = consentByAccountId[row.original.id];
+          if (ts) {
+            return (
+              <TooltipProvider delay={200}>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Badge
+                        variant="outline"
+                        className="border-success/40 bg-success/10 text-success cursor-default gap-1 px-2 py-0.5 text-xs whitespace-nowrap"
+                      >
+                        <CheckCircle2 className="h-3 w-3 shrink-0" />
+                        Accepted
+                      </Badge>
+                    }
+                  />
+                  <TooltipContent side="top">
+                    <span className="font-medium">Consent accepted</span>
+                    <span className="opacity-75 before:mx-1.5 before:content-['·']">
+                      {formatConsentDate(ts)}
+                    </span>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            );
+          }
+          return (
+            <Badge
+              variant="outline"
+              className="border-warning/40 bg-warning/10 text-warning cursor-default gap-1 px-2 py-0.5 text-xs whitespace-nowrap"
+            >
+              <Clock className="h-3 w-3 shrink-0" />
+              Pending
+            </Badge>
           );
         },
       },

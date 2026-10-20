@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { BillingEntityData } from '@kit/pdf-templates';
-import { renderReceiptPdf } from '@kit/pdf-templates';
 import { getLogger } from '@kit/shared/logger';
 
 import type { Database } from '~/lib/database.types';
@@ -14,6 +13,9 @@ export interface BulkPaymentRecord {
   paid_at: string;
   paid_by_role: string | null;
   receipt_no: string | null;
+  /** The receipt row, and its cached PDF path when one has been rendered. */
+  receipt_id: string | null;
+  receipt_pdf_url: string | null;
   // Bill fields
   bill_no: string;
   bill_period: string;
@@ -71,12 +73,12 @@ export async function fetchBulkReceiptData(
   association: BulkReceiptAssociation;
   associationLogoUrl: string | null;
 }> {
-  // Fetch payments with all required joins — payments table allows admin client
+  // Fetch payments with all required joins - payments table allows admin client
   const { data: rawPayments, error: paymentsError } = await admin
     .from('payments')
     .select(
       `id, amount, mode, reference_no, paid_at, paid_by_role,
-       receipts(receipt_no),
+       receipts(id, receipt_no, pdf_url),
        bills(bill_no, period, unit_id, tenancy_id,
          units(unit_no, door_no, floor, bill_to, owner_id, owner_is_company,
                owner_company_name, owner_company_address, owner_company_gstin),
@@ -170,14 +172,18 @@ export async function fetchBulkReceiptData(
     .map((p) => {
       const bill = (p as unknown as { bills: RawBill | null }).bills;
       const u = bill?.units;
-      const receipt = (
-        p as unknown as {
-          receipts: { receipt_no: string } | { receipt_no: string }[] | null;
-        }
+      type RawReceipt = {
+        id: string;
+        receipt_no: string;
+        pdf_url: string | null;
+      };
+      const rawReceipt = (
+        p as unknown as { receipts: RawReceipt | RawReceipt[] | null }
       ).receipts;
-      const receiptNo = Array.isArray(receipt)
-        ? (receipt[0]?.receipt_no ?? null)
-        : (receipt?.receipt_no ?? null);
+      const receipt = Array.isArray(rawReceipt)
+        ? (rawReceipt[0] ?? null)
+        : rawReceipt;
+      const receiptNo = receipt?.receipt_no ?? null;
       if (!bill || !u) return null;
       return {
         id: p.id,
@@ -188,6 +194,8 @@ export async function fetchBulkReceiptData(
         paid_by_role: (p as unknown as { paid_by_role: string | null })
           .paid_by_role,
         receipt_no: receiptNo,
+        receipt_id: receipt?.id ?? null,
+        receipt_pdf_url: receipt?.pdf_url ?? null,
         bill_no: bill.bill_no,
         bill_period: bill.period,
         bill_type: null, // not needed for receipt rendering
@@ -326,7 +334,9 @@ export async function renderReceiptFromPrefetch(
   logoDataUri: string | null,
   association: BulkReceiptAssociation,
   lookups: BulkReceiptLookups,
+  renderer: Pick<typeof import('@kit/pdf-templates'), 'renderReceiptPdf'>,
 ): Promise<Buffer | null> {
+  const { renderReceiptPdf } = renderer;
   try {
     const receiptNo =
       payment.receipt_no ?? `RCP-${payment.id.slice(0, 8).toUpperCase()}`;

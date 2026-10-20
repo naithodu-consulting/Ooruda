@@ -97,7 +97,7 @@ async function AdminActivityPage({ searchParams }: Props) {
   ] as string[];
 
   // Only show associations that have at least one audit log entry ever.
-  // Cap at 2000 rows — far more than any realistic association count — to
+  // Cap at 2000 rows - far more than any realistic association count - to
   // prevent an unbounded table scan on large audit_logs tables.
   const { data: activeAssocIdRows } = await adminClient
     .from('audit_logs')
@@ -155,7 +155,7 @@ async function AdminActivityPage({ searchParams }: Props) {
       : 'System',
     association: l.association_id
       ? (assocNameById.get(l.association_id) ?? l.association_id.slice(0, 8))
-      : '—',
+      : '-',
     created_at: l.created_at,
     eventType: l.event_type ?? 'user_action',
     statusCode: l.status_code ?? null,

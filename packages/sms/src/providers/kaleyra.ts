@@ -5,24 +5,24 @@ import type { ISmsProvider, SmsResponse } from '../types';
  * Kaleyra SMS/WhatsApp OTP provider.
  *
  * Environment variables:
- *   KALEYRA_API_KEY           — API key from Kaleyra dashboard
- *   KALEYRA_SID               — Account SID (e.g. AXIN1871893356IN)
- *   KALEYRA_SENDER_ID         — Registered sender/alphanumeric ID (e.g. ABCSOL)
- *   KALEYRA_SMS_TEMPLATE_ID   — DLT template ID (required for India)
- *   KALEYRA_REGION            — "IN" | "SG" | "EU" | "NA"  (default: "IN")
- *   KALEYRA_CHANNEL           — "sms" | "whatsapp"  (default: "sms")
+ *   KALEYRA_API_KEY           - API key from Kaleyra dashboard
+ *   KALEYRA_SID               - Account SID (e.g. AXIN1871893356IN)
+ *   KALEYRA_SENDER_ID         - Registered sender/alphanumeric ID (e.g. ABCSOL)
+ *   KALEYRA_SMS_TEMPLATE_ID   - DLT template ID (required for India)
+ *   KALEYRA_REGION            - "IN" | "SG" | "EU" | "NA"  (default: "IN")
+ *   KALEYRA_CHANNEL           - "sms" | "whatsapp"  (default: "sms")
  *
  * WhatsApp-specific (when KALEYRA_CHANNEL=whatsapp):
- *   KALEYRA_WA_FROM               — WhatsApp sender number (e.g. +919XXXXXXXXX)
- *   KALEYRA_WA_TEMPLATE_NAME      — Approved WA template name for OTP
- *   KALEYRA_WA_TEMPLATE_LANG      — Template language code (default: "en")
- *   KALEYRA_WA_HAS_COPY_BUTTON    — "true" if template has a copy-code button component
+ *   KALEYRA_WA_FROM               - WhatsApp sender number (e.g. +919XXXXXXXXX)
+ *   KALEYRA_WA_TEMPLATE_NAME      - Approved WA template name for OTP
+ *   KALEYRA_WA_TEMPLATE_LANG      - Template language code (default: "en")
+ *   KALEYRA_WA_HAS_COPY_BUTTON    - "true" if template has a copy-code button component
  *
  * Transactional SMS (sendSms):
- *   KALEYRA_SMS_TEMPLATE_BILL_GENERATED   — DLT template ID for bill-generated SMS
- *   KALEYRA_SMS_TEMPLATE_PAYMENT_CONFIRMED — DLT template ID for payment-confirmed SMS
- *   KALEYRA_SMS_TEMPLATE_REMINDER         — DLT template ID for reminder SMS
- *   KALEYRA_SMS_TEMPLATE_OVERDUE          — DLT template ID for overdue SMS
+ *   KALEYRA_SMS_TEMPLATE_BILL_GENERATED   - DLT template ID for bill-generated SMS
+ *   KALEYRA_SMS_TEMPLATE_PAYMENT_CONFIRMED - DLT template ID for payment-confirmed SMS
+ *   KALEYRA_SMS_TEMPLATE_REMINDER         - DLT template ID for reminder SMS
+ *   KALEYRA_SMS_TEMPLATE_OVERDUE          - DLT template ID for overdue SMS
  *
  * NOTE: the Kaleyra OTP send logic is intentionally duplicated in
  * apps/web/supabase/functions/custom-sms-hook/index.ts (Deno-compatible copy).
@@ -94,7 +94,7 @@ export class KaleyraProvider implements ISmsProvider {
     });
 
     if (this.smsTemplateId) {
-      // Use template_id + template_data — Kaleyra substitutes {#num#} server-side.
+      // Use template_id + template_data - Kaleyra substitutes {#num#} server-side.
       // Never send both body and template_id together; body takes priority and must
       // match the DLT-registered content exactly, which is fragile.
       body.set('template_id', this.smsTemplateId);

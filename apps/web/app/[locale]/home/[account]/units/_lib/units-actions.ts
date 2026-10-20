@@ -36,7 +36,7 @@ async function requireAssocAdmin(
 }
 
 /**
- * Create a unit under an association. Admin-only — mirrors the `admin_insert`
+ * Create a unit under an association. Admin-only - mirrors the `admin_insert`
  * RLS policy on `units`. The role check here is defense-in-depth on top of RLS
  * and lets us return a friendly message instead of a raw DB error.
  */
@@ -104,7 +104,7 @@ export async function createUnitAction(
 }
 
 /**
- * Update a unit's details. Admin-only — mirrors `admin_update` on `units`.
+ * Update a unit's details. Admin-only - mirrors `admin_update` on `units`.
  */
 export async function updateUnitAction(
   unitId: string,
@@ -212,7 +212,7 @@ export async function updateUnitAction(
 }
 
 /**
- * Delete a unit. Admin-only — mirrors `admin_delete` on `units`. Cascades to
+ * Delete a unit. Admin-only - mirrors `admin_delete` on `units`. Cascades to
  * the unit's tenancies, sub-meters, and charge overrides at the DB level.
  */
 export async function deleteUnitAction(
@@ -266,7 +266,7 @@ export async function deleteUnitAction(
 /**
  * Assign or unassign a unit's owner. `ownerId: null` clears the owner.
  * Admin-only. The person being assigned must be a member of this association
- * with role `prop_owner` or `assoc_admin` — we don't let an admin point
+ * with role `prop_owner` or `assoc_admin` - we don't let an admin point
  * owner_id at an arbitrary user id.
  */
 export async function assignOwnerAction(
@@ -351,7 +351,7 @@ export async function assignOwnerAction(
 
 /**
  * Move a tenant into a unit. The `tenancies_one_active_per_unit` unique index
- * rejects this if the unit already has an active tenancy — end it first.
+ * rejects this if the unit already has an active tenancy - end it first.
  */
 export async function assignTenantAction(
   unitId: string,
@@ -443,7 +443,7 @@ export async function assignTenantAction(
     action: 'tenancy.started',
     entityType: 'unit',
     entityId: unitId,
-    summary: `New tenant onboarded — Unit ${unit?.unit_no ?? unitId}`,
+    summary: `New tenant onboarded - Unit ${unit?.unit_no ?? unitId}`,
   });
 
   revalidatePath(UNITS_PATH, 'page');
@@ -639,7 +639,7 @@ export async function bulkImportUnitsAction(
     .select('id, unit_no');
 
   if (error) {
-    // Unique (association_id, unit_no) conflict — fall back to row-by-row to
+    // Unique (association_id, unit_no) conflict - fall back to row-by-row to
     // surface which unit_no duplicates so skipped list is accurate.
     if (error.code === '23505') {
       const rowByRow: typeof toInsert = [];

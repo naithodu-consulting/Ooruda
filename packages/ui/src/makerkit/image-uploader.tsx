@@ -57,7 +57,7 @@ export function ImageUploader(
   );
 
   // Resync from the prop only when it actually changes (e.g. the parent
-  // revalidates after a successful upload/clear) — not on every render. The
+  // revalidates after a successful upload/clear) - not on every render. The
   // old code compared props.value !== image during render and called
   // setImage unconditionally, which stomped the local optimistic update
   // (clearing/uploading) back to the stale prop on the very next render,
@@ -142,7 +142,7 @@ function FallbackImage(
           'border-border animate-in fade-in zoom-in-50 hover:border-primary relative flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-full border'
         }
       >
-        <ImageIcon className={'text-primary h-8'} />
+        <ImageIcon className={'text-brand-ink h-8'} />
 
         {props.children}
       </label>

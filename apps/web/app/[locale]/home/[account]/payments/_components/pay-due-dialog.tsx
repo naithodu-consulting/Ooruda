@@ -114,7 +114,7 @@ export function PayDueDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            Pay Due — Unit {unitNo} ({billType})
+            Pay Due - Unit {unitNo} ({billType})
           </DialogTitle>
           <DialogDescription>
             Outstanding: {formatINR(outstanding)}

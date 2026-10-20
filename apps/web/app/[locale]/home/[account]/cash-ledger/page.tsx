@@ -7,6 +7,7 @@ import { Trans } from '@kit/ui/trans';
 import { requireRole } from '~/lib/rbac';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { loadAssociationFeatures } from '../_lib/server/association-features.loader';
 import { CashLedgerSection } from './_components/cash-ledger-section';
 import type { CashLedgerEntryRow } from './_lib/cash-ledger-actions';
 
@@ -28,7 +29,7 @@ function currentFYDates(): { from: string; to: string } {
 
 export default async function CashLedgerPage({ params }: Props) {
   const { account } = await params;
-  const { accountId, role } = await requireRole(account, [
+  const { role, associationId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
     'prop_owner',
@@ -36,25 +37,23 @@ export default async function CashLedgerPage({ params }: Props) {
   ]);
 
   // Owners and tenants see their balance on the dashboard and Payments page.
-  // The Cash Ledger is an admin/operator tool — redirect them away.
+  // The Cash Ledger is an admin/operator tool - redirect them away.
   if (role === 'prop_owner' || role === 'tenant') {
     redirect(`/home/${account}/payments`);
   }
 
   const client = getSupabaseServerClient();
 
-  const { data: association } = await client
-    .from('associations')
-    .select('id, cash_ledger_enabled')
-    .eq('account_id', accountId)
-    .single();
+  const association = associationId ? { id: associationId } : null;
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  // Feature gate: redirect to dashboard if cash ledger is disabled for this association.
-  if (association.cash_ledger_enabled === false) {
+  // Feature gate: redirect to dashboard if cash ledger is disabled for this
+  // association (request-cached, already loaded by the layout).
+  const features = await loadAssociationFeatures(account);
+  if (!features.cashLedgerEnabled) {
     redirect(`/home/${account}`);
   }
 
@@ -72,12 +71,12 @@ export default async function CashLedgerPage({ params }: Props) {
       .select('id, unit_no')
       .eq('association_id', association.id)
       .order('unit_no'),
-    // Direct query — requireRole already authenticated; no extra auth re-check.
+    // Direct query - requireRole already authenticated; no extra auth re-check.
     // Scoped to current FY so the initial load is fast.
     uc(client)
       .from('cash_ledger')
       .select(
-        'id, unit_id, entry_type, bill_type, amount, direction, entry_date, paid_by_name, notes, created_at, reference_bill_id',
+        'id, unit_id, entry_type, bill_type, amount, direction, entry_date, paid_by_name, paid_by_role, razorpay_payment_id, notes, created_at, reference_bill_id',
       )
       .eq('association_id', association.id)
       .gte('entry_date', defaultDateFrom)

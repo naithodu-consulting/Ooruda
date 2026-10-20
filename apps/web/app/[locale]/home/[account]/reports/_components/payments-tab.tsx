@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import {
   Area,
@@ -45,6 +45,7 @@ import {
 } from '../_lib/reports-types';
 import { TOOLTIP_STYLE } from './chart-tooltip-style';
 import { KpiTile } from './kpi-tile';
+import { TablePagination, usePagedRows } from './table-pagination';
 
 interface Props {
   payments: PaymentRow[];
@@ -57,8 +58,6 @@ const MODE_COLORS: Record<string, string> = {
   NetBanking: '#06b6d4',
   Cash: '#10b981',
 };
-
-const PAGE_SIZE = 25;
 
 function shortDate(iso: string) {
   const d = new Date(iso);
@@ -81,8 +80,6 @@ function inrK(val: number) {
 }
 
 export function PaymentsTab({ payments }: Props) {
-  const [page, setPage] = useState(1);
-
   const total = payments.reduce((s, p) => s + p.amount, 0);
   const count = payments.length;
   const avg = count > 0 ? total / count : 0;
@@ -93,9 +90,9 @@ export function PaymentsTab({ payments }: Props) {
     modeCount.set(p.mode, (modeCount.get(p.mode) ?? 0) + 1);
   }
   const topMode =
-    [...modeCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
+    [...modeCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '-';
 
-  // Timeline data — group by week if range > 2 months, else by day
+  // Timeline data - group by week if range > 2 months, else by day
   const timelineData = useMemo(() => {
     const byKey = new Map<string, number>();
     const rangeMs =
@@ -168,8 +165,15 @@ export function PaymentsTab({ payments }: Props) {
     'water',
   ].filter((t) => payments.some((p) => p.bill_type === t));
 
-  const totalPages = Math.ceil(payments.length / PAGE_SIZE);
-  const paged = payments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const {
+    page,
+    setPage,
+    paged,
+    totalPages,
+    total: pagedTotal,
+    fromIndex,
+    toIndex,
+  } = usePagedRows(payments, null);
 
   if (payments.length === 0) {
     return (
@@ -199,11 +203,11 @@ export function PaymentsTab({ payments }: Props) {
 
       {/* Charts row 1 */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Timeline area — 2/3 */}
+        {/* Timeline area - 2/3 */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Payment Timeline</CardTitle>
-            <CardDescription>Cash flow — when residents pay</CardDescription>
+            <CardDescription>Cash flow: when residents pay</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
@@ -225,7 +229,7 @@ export function PaymentsTab({ payments }: Props) {
                 />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 10 }}
+                  tick={{ fontSize: 11 }}
                   tickLine={false}
                   axisLine={false}
                   interval="preserveStartEnd"
@@ -255,7 +259,7 @@ export function PaymentsTab({ payments }: Props) {
           </CardContent>
         </Card>
 
-        {/* Mode donut — 1/3 */}
+        {/* Mode donut - 1/3 */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Payment Mode</CardTitle>
@@ -417,52 +421,39 @@ export function PaymentsTab({ payments }: Props) {
                       {formatINR(p.amount)}
                     </TableCell>
                     <TableCell>
-                      <span className="bg-muted rounded px-1.5 py-0.5 text-[11px]">
+                      <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
                         {p.mode}
                       </span>
                     </TableCell>
                     <TableCell>
                       <span
-                        className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        className={`rounded px-1.5 py-0.5 text-xs font-medium ${
                           p.source === 'cash_ledger'
-                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
-                            : 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400'
+                            ? 'text-success bg-emerald-100 dark:bg-emerald-950'
+                            : 'bg-violet-100 text-violet-700 dark:bg-violet-950'
                         }`}
                       >
                         {p.source === 'cash_ledger' ? 'Cash' : 'Online'}
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
-                      {p.receipt_no ?? '—'}
+                      {p.receipt_no ?? '-'}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">
-                Page {page} of {totalPages}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="disabled:text-muted-foreground hover:bg-muted rounded px-2 py-1 text-sm disabled:pointer-events-none"
-                >
-                  ← Prev
-                </button>
-                <button
-                  disabled={page === totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="disabled:text-muted-foreground hover:bg-muted rounded px-2 py-1 text-sm disabled:pointer-events-none"
-                >
-                  Next →
-                </button>
-              </div>
-            </div>
-          )}
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={pagedTotal}
+            fromIndex={fromIndex}
+            toIndex={toIndex}
+            onPageChange={setPage}
+            label="payments"
+            testPrefix="payments"
+          />
         </CardContent>
       </Card>
     </div>

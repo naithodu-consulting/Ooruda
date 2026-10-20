@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import { billTypeLabel } from '@kit/pdf-templates';
+import { billTypeLabel } from '@kit/pdf-templates/bill-type-labels';
 import { Button } from '@kit/ui/button';
 import {
   Card,
@@ -71,7 +71,7 @@ export function CashLedgerDuesSection({
           </CardTitle>
           <CardDescription>
             {isOwnerView
-              ? 'Additional charges raised by the association — separate from your monthly bills.'
+              ? 'Additional charges raised by the association, separate from your monthly bills.'
               : 'Standalone dues not tied to a generated bill.'}
           </CardDescription>
         </CardHeader>

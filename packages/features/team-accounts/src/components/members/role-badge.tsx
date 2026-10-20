@@ -8,7 +8,7 @@ type Role = string;
 const roles = {
   owner: '',
   member:
-    'bg-blue-50 hover:bg-blue-50 text-blue-500 dark:bg-blue-500/10 dark:hover:bg-blue-500/10',
+    'bg-blue-50 hover:bg-blue-50 text-info dark:bg-blue-500/10 dark:hover:bg-blue-500/10',
 };
 
 const roleClassNameBuilder = cva('font-medium capitalize shadow-none', {

@@ -1,5 +1,5 @@
 /**
- * Supabase Auth Hook — Custom SMS Provider
+ * Supabase Auth Hook - Custom SMS Provider
  *
  * Supabase calls this Edge Function instead of its built-in Twilio integration.
  * Wired in: Supabase Dashboard → Authentication → Hooks → Send SMS hook.
@@ -8,20 +8,20 @@
  *   { user: { phone }, sms: { otp } }
  *
  * Environment variables (set in Supabase Edge Function secrets):
- *   SMS_PROVIDER     — "mock" | "kaleyra" | "msg91" | "2factor"
- *   MOCK_OTP         — "true" in development (logs OTP, skips SMS send)
+ *   SMS_PROVIDER     - "mock" | "kaleyra" | "msg91" | "2factor"
+ *   MOCK_OTP         - "true" in development (logs OTP, skips SMS send)
  *
  *   Kaleyra (SMS_PROVIDER=kaleyra):
- *   KALEYRA_API_KEY              — API key from Kaleyra dashboard
- *   KALEYRA_SID                  — Account SID (e.g. AXIN1871893356IN)
- *   KALEYRA_SENDER_ID            — Registered sender/alphanumeric ID (e.g. ABCSOL)
- *   KALEYRA_SMS_TEMPLATE_ID      — DLT template ID (required for India)
- *   KALEYRA_REGION               — "IN" | "SG" | "EU" | "NA"  (default: IN)
- *   KALEYRA_CHANNEL              — "sms" | "whatsapp"  (default: sms)
- *   KALEYRA_WA_FROM              — WhatsApp sender number (when KALEYRA_CHANNEL=whatsapp)
- *   KALEYRA_WA_TEMPLATE_NAME     — Approved WA template name (when KALEYRA_CHANNEL=whatsapp)
- *   KALEYRA_WA_TEMPLATE_LANG     — Template language code (default: en)
- *   KALEYRA_WA_HAS_COPY_BUTTON   — "true" if template has a copy-code button component
+ *   KALEYRA_API_KEY              - API key from Kaleyra dashboard
+ *   KALEYRA_SID                  - Account SID (e.g. AXIN1871893356IN)
+ *   KALEYRA_SENDER_ID            - Registered sender/alphanumeric ID (e.g. ABCSOL)
+ *   KALEYRA_SMS_TEMPLATE_ID      - DLT template ID (required for India)
+ *   KALEYRA_REGION               - "IN" | "SG" | "EU" | "NA"  (default: IN)
+ *   KALEYRA_CHANNEL              - "sms" | "whatsapp"  (default: sms)
+ *   KALEYRA_WA_FROM              - WhatsApp sender number (when KALEYRA_CHANNEL=whatsapp)
+ *   KALEYRA_WA_TEMPLATE_NAME     - Approved WA template name (when KALEYRA_CHANNEL=whatsapp)
+ *   KALEYRA_WA_TEMPLATE_LANG     - Template language code (default: en)
+ *   KALEYRA_WA_HAS_COPY_BUTTON   - "true" if template has a copy-code button component
  *
  *   MSG91 (SMS_PROVIDER=msg91):
  *   MSG91_AUTH_KEY, MSG91_TEMPLATE_ID
@@ -70,7 +70,7 @@ Deno.serve(async (req: Request) => {
     } else if (provider === '2factor' || provider === 'twofactor') {
       await sendViaTwoFactor(phone, otp);
     } else {
-      // Config error — return 200 so Supabase Auth does not retry indefinitely
+      // Config error - return 200 so Supabase Auth does not retry indefinitely
       console.error(`[custom-sms-hook] Unknown SMS_PROVIDER: ${provider}`);
       return new Response(
         JSON.stringify({ error: `Unknown SMS_PROVIDER: ${provider}` }),
@@ -172,16 +172,15 @@ async function sendViaKaleyra(phone: string, otp: string) {
     const templateId = Deno.env.get('KALEYRA_SMS_TEMPLATE_ID') ?? '';
 
     const url = `https://${host}/v1/${sid}/messages`;
-    const body = new URLSearchParams({ to, type: 'OTP', sender: senderId });
+    const smsBody = `${otp} is your login verification code for Ooruda. Do not share it with anyone. Valid for 10 minutes. - Habbaa Solutions`;
+    const body = new URLSearchParams({
+      to,
+      type: 'OTP',
+      sender: senderId,
+      body: smsBody,
+    });
     if (templateId) {
-      // Use template_id + template_data — Kaleyra substitutes {#num#} server-side.
       body.set('template_id', templateId);
-      body.set('template_data', JSON.stringify({ num: otp }));
-    } else {
-      body.set(
-        'body',
-        `${otp} is your login verification code for Ooruda. Do not share it with anyone. Valid for 10 minutes.`,
-      );
     }
 
     const res = await fetch(url, {
@@ -194,13 +193,16 @@ async function sendViaKaleyra(phone: string, otp: string) {
     });
     const data = (await res.json()) as {
       data?: { id?: string; message_id?: string } | null;
-      error?: { message?: string } | string;
+      message?: string;
+      error?: Record<string, string> | string;
     };
     if (!res.ok || !data.data) {
+      const errDetail =
+        typeof data.error === 'object' && data.error !== null
+          ? Object.values(data.error).join('; ')
+          : (data.error as string | undefined);
       const msg =
-        typeof data.error === 'string'
-          ? data.error
-          : (data.error?.message ?? `Kaleyra SMS failed (${res.status})`);
+        errDetail ?? data.message ?? `Kaleyra SMS failed (${res.status})`;
       throw new Error(msg);
     }
   }

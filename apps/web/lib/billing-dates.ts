@@ -5,7 +5,7 @@
  * PostgREST returns as a plain `'YYYY-MM-DD'` string. The naive
  * `new Date('2026-06-10')` parses that as **UTC midnight**, and a follow-up
  * `.setHours(0, 0, 0, 0)` then re-anchors it to the **server's local**
- * midnight — so any "days overdue" math silently depends on where the server
+ * midnight - so any "days overdue" math silently depends on where the server
  * is hosted (a UTC host and an IST host disagree by up to a day near
  * midnight).
  *

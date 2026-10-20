@@ -1,5 +1,5 @@
 -- =============================================================
--- Ooruda RBAC — roles, permission mapping, JWT claim hook
+-- Ooruda RBAC - roles, permission mapping, JWT claim hook
 -- -------------------------------------------------------------
 -- Validates the role model migrated in 20260614000001/2:
 --   * the four PropOps roles exist at the correct hierarchy levels

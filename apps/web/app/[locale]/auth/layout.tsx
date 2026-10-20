@@ -22,14 +22,14 @@ function AuthLayout({ children }: React.PropsWithChildren) {
             className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl shadow-md"
             style={{ background: '#ffffff' }}
           >
-            <OorudaMark size={36} className="text-[#1a1a1a]" />
+            <OorudaMark size={36} className="text-foreground" />
           </div>
 
-          <h1 className="text-[26px] leading-tight font-black tracking-tight text-[#1a1a1a] lowercase">
+          <h1 className="text-foreground text-2xl leading-tight font-black tracking-tight lowercase">
             ooruda
           </h1>
 
-          <p className="mt-1 text-[10px] font-medium tracking-[0.15em] text-[#5a4a10] uppercase">
+          <p className="text-primary-foreground/75 mt-1 text-xs font-medium tracking-[0.15em] uppercase">
             Property Management
           </p>
         </div>
@@ -57,17 +57,17 @@ function AuthLayout({ children }: React.PropsWithChildren) {
         </div>
 
         <div className="mt-5 flex flex-col items-center gap-1">
-          <p className="text-center text-[11px] text-[#a09070]">
+          <p className="text-primary-foreground/75 text-center text-xs">
             &copy; {new Date().getFullYear()} Ooruda. All rights reserved.
           </p>
 
-          <p className="flex flex-wrap justify-center gap-x-1.5 gap-y-0.5 text-center text-[10px] text-[#a09070]">
+          <p className="text-primary-foreground/75 flex flex-wrap justify-center gap-x-1.5 gap-y-0.5 text-center text-xs">
             {LEGAL_LINKS.map((link, index) => (
               <span key={link.href}>
                 {index > 0 ? <span aria-hidden>· </span> : null}
                 <a
                   href={link.href}
-                  className="underline underline-offset-2 transition-colors hover:text-[#5a4a10]"
+                  className="hover:text-primary-foreground underline underline-offset-2 transition-colors"
                 >
                   {link.label}
                 </a>

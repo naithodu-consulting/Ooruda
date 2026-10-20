@@ -64,12 +64,12 @@ async function getPdfBytes(
 
     if (result.bytes) return result.bytes;
 
-    // Cache hit — signedUrl returned. Use item.pdfUrl (storage path) to
+    // Cache hit - signedUrl returned. Use item.pdfUrl (storage path) to
     // download, but if the storage object was deleted after the query snapshot,
-    // createSignedUrl still succeeds — so we catch the 404 and force-regenerate.
+    // createSignedUrl still succeeds - so we catch the 404 and force-regenerate.
     const storagePath = item.pdfUrl;
     if (!storagePath) {
-      // pdf_url was null at query time but generation just cached it — re-read.
+      // pdf_url was null at query time but generation just cached it - re-read.
       const { data } = await admin
         .from('bills')
         .select('pdf_url')
@@ -99,7 +99,7 @@ async function getPdfBytes(
 
   // Receipts mode
   if (!item.paymentId)
-    throw new Error('No payment found for this bill — cannot generate receipt');
+    throw new Error('No payment found for this bill. Cannot generate receipt.');
 
   const result = await getOrGenerateReceiptPdf(item.paymentId, {
     skipAuth: true,
@@ -108,7 +108,7 @@ async function getPdfBytes(
 
   if (result.bytes) return result.bytes;
 
-  // Cache hit — resolve storage path via payment_id (matches generation call).
+  // Cache hit - resolve storage path via payment_id (matches generation call).
   const storagePath = item.receiptPdfUrl;
   if (!storagePath) {
     const { data } = await admin
@@ -123,7 +123,7 @@ async function getPdfBytes(
   try {
     return await downloadFromStorage(admin, storagePath);
   } catch {
-    // Storage object missing — null cache and regenerate.
+    // Storage object missing - null cache and regenerate.
     await admin
       .from('receipts')
       .update({ pdf_url: null })
@@ -158,7 +158,7 @@ async function downloadFromStorage(
 
 /**
  * Bill numbers contain slashes ("DT/26-27/MNT/000006") which are path
- * separators — they must not reach an attachment filename.
+ * separators - they must not reach an attachment filename.
  */
 function toSafeFilename(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
@@ -185,6 +185,12 @@ async function sendViaResend(params: {
       to: [params.to],
       subject: params.subject,
       html: params.html,
+      reply_to: EMAIL_SENDER,
+      headers: {
+        'List-Unsubscribe': `<mailto:${EMAIL_SENDER}?subject=unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+      tags: [{ name: 'email_type', value: 'bill_dispatch' }],
       attachments: [
         { filename: params.attachmentName, content: params.attachmentBase64 },
       ],

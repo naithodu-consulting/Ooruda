@@ -105,7 +105,7 @@ export async function renderOtpEmail(props: Props) {
                 style={{
                   fontSize: '13px',
                   lineHeight: '20px',
-                  color: '#9a9a8a',
+                  color: '#6b6b5e',
                   margin: '0 0 8px',
                   textAlign: 'center' as const,
                 }}
@@ -117,7 +117,7 @@ export async function renderOtpEmail(props: Props) {
                 style={{
                   fontSize: '13px',
                   lineHeight: '20px',
-                  color: '#9a9a8a',
+                  color: '#6b6b5e',
                   margin: '0',
                   textAlign: 'center' as const,
                 }}

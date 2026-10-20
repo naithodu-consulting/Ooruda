@@ -24,13 +24,7 @@ import {
   DialogTrigger,
 } from '@kit/ui/dialog';
 import { Label } from '@kit/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@kit/ui/select';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 import {
@@ -42,6 +36,7 @@ import {
   TableRow,
 } from '@kit/ui/table';
 
+import { formatPeriod } from '~/lib/format-period';
 import {
   downloadXlsxTemplate,
   parseSpreadsheetFile,
@@ -163,11 +158,11 @@ function parseRows(raw: Record<string, string>[]): ParsedRow[] {
 
     let error: string | undefined;
     if (!sub_meter_no) {
-      error = 'Sub-meter number is missing — add it and re-upload.';
+      error = 'Sub-meter number is missing. Add it and re-upload.';
     } else if (duplicates.has(sub_meter_no.toLowerCase())) {
-      error = `"${sub_meter_no}" appears more than once — remove the duplicate and re-upload.`;
+      error = `"${sub_meter_no}" appears more than once. Remove the duplicate and re-upload.`;
     } else if (currentRaw === '' || Number.isNaN(currentReading)) {
-      error = 'Current reading must be a number — fix it and re-upload.';
+      error = 'Current reading must be a number. Fix it and re-upload.';
     } else if (currentReading < 0) {
       error = 'Current reading must be 0 or greater.';
     } else if (load_kva !== null && (Number.isNaN(load_kva) || load_kva <= 0)) {
@@ -209,6 +204,10 @@ export function ImportMeterReadingsDialog({
     imported: number;
     skipped: { row: number; sub_meter_no: string; reason: string }[];
   } | null>(null);
+
+  // selectedPeriod is the MM/YYYY option value; never show it raw - every
+  // period the operator sees reads as "August 2026".
+  const selectedPeriodLabel = formatPeriod(toDbPeriod(selectedPeriod));
 
   const validRows = rows.filter((r) => !r._error);
   const invalidRows = rows.filter((r) => r._error);
@@ -258,7 +257,9 @@ export function ImportMeterReadingsDialog({
       );
 
       if (!res.success) {
-        toast.error(res.error ?? 'Import failed.');
+        // Rejection reasons (e.g. the block-consumption overage) carry numbers
+        // the operator needs to act on, so give them time to read it.
+        toast.error(res.error ?? 'Import failed.', { duration: 10000 });
         return;
       }
 
@@ -266,7 +267,7 @@ export function ImportMeterReadingsDialog({
 
       if (res.imported > 0) {
         toast.success(
-          `${res.imported} reading(s) imported for ${selectedPeriod}.`,
+          `${res.imported} reading(s) imported for ${selectedPeriodLabel}.`,
         );
         router.refresh();
       }
@@ -299,22 +300,17 @@ export function ImportMeterReadingsDialog({
             {!result && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="billing-month-select">Billing Period</Label>
-                <Select
+                <SearchableSelect
                   items={periodOptions}
                   value={selectedPeriod}
-                  onValueChange={(v) => v && setSelectedPeriod(v)}
-                >
-                  <SelectTrigger id="billing-month-select" className="w-52">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {periodOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(v) => v && setSelectedPeriod(v)}
+                  placeholder="Select a month"
+                  searchPlaceholder="Search months…"
+                  emptyMessage="No months found"
+                  id="billing-month-select"
+                  className="w-52"
+                  data-test="import-readings-period"
+                />
                 <p className="text-muted-foreground text-xs">
                   Select the billing month. Previous reading and minimum charge
                   are auto-filled from sub-meter defaults.
@@ -339,10 +335,10 @@ export function ImportMeterReadingsDialog({
                   className="flex w-full cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed border-orange-500/50 px-6 py-10 text-center transition-colors hover:bg-orange-50/50 dark:hover:bg-orange-950/20"
                 >
                   <CloudUpload
-                    className="h-10 w-10 text-orange-500"
+                    className="text-warning h-10 w-10"
                     strokeWidth={1.5}
                   />
-                  <p className="font-medium text-orange-600">
+                  <p className="text-warning font-medium">
                     {fileName
                       ? fileName
                       : 'Drop CSV or Excel here, or click to browse'}
@@ -402,7 +398,7 @@ export function ImportMeterReadingsDialog({
                   )}
                 </div>
 
-                <div className="max-h-52 overflow-auto rounded-md border">
+                <div className="max-h-52 overflow-y-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -423,21 +419,21 @@ export function ImportMeterReadingsDialog({
                           <TableCell className="text-muted-foreground text-xs">
                             {row._row}
                           </TableCell>
-                          <TableCell>{row.sub_meter_no || '—'}</TableCell>
+                          <TableCell>{row.sub_meter_no || '-'}</TableCell>
                           <TableCell className="tabular-nums">
-                            {row.load_kva != null ? row.load_kva : '—'}
+                            {row.load_kva != null ? row.load_kva : '-'}
                           </TableCell>
                           <TableCell className="tabular-nums">
                             {row.minimum_charge != null
                               ? row.minimum_charge
-                              : '—'}
+                              : '-'}
                           </TableCell>
                           <TableCell className="tabular-nums">
-                            {row._error ? '—' : row.current_reading}
+                            {row._error ? '-' : row.current_reading}
                           </TableCell>
                           <TableCell>
                             {row._error ? (
-                              <span className="text-destructive flex items-center gap-1 text-xs">
+                              <span className="text-destructive flex items-start gap-1 text-xs break-words whitespace-normal">
                                 <AlertCircle className="h-3 w-3 shrink-0" />
                                 {row._error}
                               </span>
@@ -467,7 +463,7 @@ export function ImportMeterReadingsDialog({
                   <CheckCircle2 className="h-4 w-4" />
                   <AlertDescription>
                     <strong>{result.imported}</strong> reading(s) imported
-                    successfully for <strong>{selectedPeriod}</strong>.
+                    successfully for <strong>{selectedPeriodLabel}</strong>.
                     {result.skipped.length > 0 && (
                       <> {result.skipped.length} row(s) were skipped.</>
                     )}
@@ -475,7 +471,7 @@ export function ImportMeterReadingsDialog({
                 </Alert>
 
                 {result.skipped.length > 0 && (
-                  <div className="max-h-40 overflow-auto rounded-md border">
+                  <div className="max-h-40 overflow-y-auto rounded-md border">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -489,7 +485,7 @@ export function ImportMeterReadingsDialog({
                           <TableRow key={s.row} className="bg-destructive/5">
                             <TableCell className="text-xs">{s.row}</TableCell>
                             <TableCell>{s.sub_meter_no}</TableCell>
-                            <TableCell className="text-destructive text-xs">
+                            <TableCell className="text-destructive text-xs break-words whitespace-normal">
                               {s.reason}
                             </TableCell>
                           </TableRow>

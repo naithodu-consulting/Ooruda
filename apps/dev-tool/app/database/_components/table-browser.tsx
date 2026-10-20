@@ -306,7 +306,7 @@ export function TableBrowser({ searchTerm, tables }: TableBrowserProps) {
                               </Badge>
                             </td>
                             <td className="text-muted-foreground py-2 font-mono text-xs">
-                              {column.defaultValue || '—'}
+                              {column.defaultValue || '-'}
                             </td>
                             <td className="py-2">
                               <div className="flex gap-1">

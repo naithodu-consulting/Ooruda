@@ -29,6 +29,7 @@
       }
     ],
     "nextjs/no-html-link-for-pages": "off",
+    "nextjs/no-duplicate-head": "off",
     "no-restricted-imports": [
       "error",
       {

@@ -52,64 +52,64 @@ export async function generateMetadata({ params }: Props) {
  * Level 3: one unit's complete billing history.
  *
  * Every query here is scoped by `unit_id`, which is the whole point of the
- * route — the previous single-page design had to load every bill for the
+ * route - the previous single-page design had to load every bill for the
  * association just in case a row was expanded.
  */
 export default async function UnitBillingPage({ params }: Props) {
   const { account, unitId } = await params;
-  const { accountId, role } = await requireRole(account, [
+  const { role, associationId } = await requireRole(account, [
     'assoc_admin',
     'billing_operator',
   ]);
 
   const client = getSupabaseServerClient();
 
-  const { data: association } = await client
-    .from('associations')
-    .select('id')
-    .eq('account_id', accountId)
-    .single();
+  const association = associationId ? { id: associationId } : null;
 
   if (!association) {
     throw new Error('Unable to load the association for this account.');
   }
 
-  // Scoped by association_id as well as id — a unit belonging to another
-  // association must read as missing, not as forbidden.
-  const { data: unit } = await client
-    .from('units')
-    .select(
-      'id, unit_no, floor, owner_id, owner_is_company, owner_company_name',
-    )
-    .eq('id', unitId)
-    .eq('association_id', association.id)
-    .maybeSingle();
+  // Everything is scoped by association_id as well as id, so the queries can
+  // run in parallel - a unit belonging to another association reads as
+  // missing, not as forbidden.
+  const [
+    { data: unit },
+    billsResult,
+    pendingChargesResult,
+    pendingSinkingChargesResult,
+  ] = await Promise.all([
+    client
+      .from('units')
+      .select(
+        'id, unit_no, floor, owner_id, owner_is_company, owner_company_name',
+      )
+      .eq('id', unitId)
+      .eq('association_id', association.id)
+      .maybeSingle(),
+    client
+      .from('bills')
+      .select(UNIT_BILL_SELECT)
+      .eq('association_id', association.id)
+      .eq('unit_id', unitId)
+      .order('period', { ascending: false })
+      .order('bill_no'),
+    client
+      .from('pending_other_charges')
+      .select('id, unit_id, period, label, amount, due_date')
+      .eq('association_id', association.id)
+      .eq('unit_id', unitId)
+      .eq('billed', false),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (client as any)
+      .from('pending_sinking_fund_charges')
+      .select('id, unit_id, period, label, amount, due_date')
+      .eq('association_id', association.id)
+      .eq('unit_id', unitId)
+      .eq('billed', false),
+  ]);
 
   if (!unit) notFound();
-
-  const [billsResult, pendingChargesResult, pendingSinkingChargesResult] =
-    await Promise.all([
-      client
-        .from('bills')
-        .select(UNIT_BILL_SELECT)
-        .eq('association_id', association.id)
-        .eq('unit_id', unitId)
-        .order('period', { ascending: false })
-        .order('bill_no'),
-      client
-        .from('pending_other_charges')
-        .select('id, unit_id, period, label, amount, due_date')
-        .eq('association_id', association.id)
-        .eq('unit_id', unitId)
-        .eq('billed', false),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (client as any)
-        .from('pending_sinking_fund_charges')
-        .select('id, unit_id, period, label, amount, due_date')
-        .eq('association_id', association.id)
-        .eq('unit_id', unitId)
-        .eq('billed', false),
-    ]);
 
   let ownerName: string | null = unit.owner_is_company
     ? (unit.owner_company_name ?? null)
@@ -203,13 +203,13 @@ export default async function UnitBillingPage({ params }: Props) {
           Back to Bills by Unit
         </Link>
 
-        {/* Summary strip — chips matching the Payments page metrics pattern */}
+        {/* Summary strip - chips matching the Payments page metrics pattern */}
         <div className="flex flex-wrap items-center gap-2">
           <Stat label="Billed" value={formatINR(node.billed)} />
           <Stat label="Collected" value={formatINR(node.collected)} />
           <Stat
             label="Outstanding"
-            value={node.outstanding > 0 ? formatINR(node.outstanding) : '—'}
+            value={node.outstanding > 0 ? formatINR(node.outstanding) : '-'}
             tone={node.outstanding > 0 ? 'warning' : undefined}
           />
           {node.overdueCount > 0 && (
@@ -262,11 +262,11 @@ function Stat({
 }) {
   const toneClass =
     tone === 'warning'
-      ? 'text-[var(--color-warning)]'
+      ? 'text-warning'
       : tone === 'danger'
         ? 'text-destructive'
         : tone === 'info'
-          ? 'text-[var(--color-info)]'
+          ? 'text-info'
           : 'text-foreground';
 
   return (
@@ -274,9 +274,7 @@ function Stat({
       <span className={`text-base font-semibold tabular-nums ${toneClass}`}>
         {value}
       </span>
-      <span className="text-muted-foreground text-[13px] font-medium">
-        {label}
-      </span>
+      <span className="text-muted-foreground text-sm font-medium">{label}</span>
     </div>
   );
 }

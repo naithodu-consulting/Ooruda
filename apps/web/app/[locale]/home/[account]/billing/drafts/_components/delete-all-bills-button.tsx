@@ -7,7 +7,7 @@ import { deleteAllBillsAction } from '../../_lib/billing-actions';
  * Client wrapper around `DangerZoneDeleteAll`.
  *
  * The shared danger-zone component takes an `onDelete` callback, and functions
- * cannot cross the server/client boundary — so the server page passes plain
+ * cannot cross the server/client boundary - so the server page passes plain
  * counts and the action is bound here.
  */
 export function DeleteAllBillsButton({

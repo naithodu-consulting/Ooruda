@@ -161,11 +161,11 @@ export function ChargeTypesCard({
           <div className="flex-1" />
           <div className="w-28" />
           {gstEnabled && (
-            <span className="text-muted-foreground w-12 text-center text-[11px] font-medium tracking-wide">
+            <span className="text-muted-foreground w-12 text-center text-xs font-medium tracking-wide">
               GST
             </span>
           )}
-          <span className="text-muted-foreground w-12 text-center text-[11px] font-medium tracking-wide">
+          <span className="text-muted-foreground w-12 text-center text-xs font-medium tracking-wide">
             Active
           </span>
         </div>
@@ -189,12 +189,12 @@ export function ChargeTypesCard({
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{ct.name}</span>
                     {ct.is_builtin && (
-                      <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide whitespace-nowrap uppercase">
+                      <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs font-medium tracking-wide whitespace-nowrap uppercase">
                         Built-in
                       </span>
                     )}
                     {needsRate && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-700 uppercase">
+                      <span className="text-warning rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold tracking-wide uppercase">
                         Rate required
                       </span>
                     )}
@@ -215,7 +215,7 @@ export function ChargeTypesCard({
                             render={
                               <button
                                 type="button"
-                                className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-blue-600 uppercase transition-colors hover:bg-blue-100"
+                                className="text-info rounded bg-blue-50 px-1.5 py-0.5 text-xs font-semibold tracking-wide uppercase transition-colors hover:bg-blue-100"
                               >
                                 Switch to{' '}
                                 {ct.calc_method === 'per_sqft'
@@ -289,10 +289,10 @@ export function ChargeTypesCard({
                       />
                     ) : (
                       <span
-                        className="text-muted-foreground/40 text-xs"
+                        className="text-muted-foreground text-xs"
                         title="Electricity is pass-through billing. GST not applicable"
                       >
-                        —
+                        -
                       </span>
                     )}
                   </div>

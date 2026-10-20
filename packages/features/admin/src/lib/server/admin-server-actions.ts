@@ -21,6 +21,7 @@ import {
   CreateUserSchema,
   UpdateUserSchema,
 } from './schema/create-user.schema';
+import { FeatureFlagSchema } from './schema/feature-flags.schema';
 import {
   RemoveUserRoleSchema,
   SetUserRoleSchema,
@@ -28,12 +29,13 @@ import {
 import { ResetPasswordSchema } from './schema/reset-password.schema';
 import { createAdminAccountsService } from './services/admin-accounts.service';
 import { createAdminAuthUserService } from './services/admin-auth-user.service';
+import { createFeatureFlagsService } from './services/feature-flags.service';
 import { adminActionClient } from './utils/admin-action-client';
 import { isSuperAdmin, isUserSuperAdmin } from './utils/is-super-admin';
 
 /**
  * Best-effort audit log write for super-admin actions.
- * Uses admin client to bypass RLS — super admins are not association members.
+ * Uses admin client to bypass RLS - super admins are not association members.
  * Never throws; a logging failure must not block the action it describes.
  */
 async function logAdminAudit(
@@ -58,7 +60,10 @@ async function logAdminAudit(
       });
   } catch (err) {
     const logger = await getLogger();
-    logger.warn({ err, action, entityId }, 'logAdminAudit: failed to write audit log — action proceeded unlogged');
+    logger.warn(
+      { err, action, entityId },
+      'logAdminAudit: failed to write audit log - action proceeded unlogged',
+    );
   }
 }
 
@@ -319,7 +324,7 @@ export const createUserAction = adminActionClient
         'admin.user.created',
         'user',
         data.user.id,
-        `New user created: ${fullName} (${normalisedPhone})${associationId ? ` — added to association as ${role}` : ''}`,
+        `New user created: ${fullName} (${normalisedPhone})${associationId ? ` - added to association as ${role}` : ''}`,
         associationId,
       );
 
@@ -579,7 +584,7 @@ export const updateUserDetailsAction = adminActionClient
 
       // 4. Update team membership role if both associationId and role are provided.
       // The DB trigger `kit.prevent_memberships_update` only permits an UPDATE
-      // that actually changes account_role — any update where old == new raises
+      // that actually changes account_role - any update where old == new raises
       // "Only the account_role can be updated". Use .neq() so the statement is
       // a no-op (0 rows) when the role hasn't changed, avoiding the trigger.
       if (associationId && role) {
@@ -682,7 +687,7 @@ export interface BulkInviteRow {
   email?: string;
   role: string;
   association_name: string;
-  /** Unit number from the association XLSX — used to update units.status */
+  /** Unit number from the association XLSX - used to update units.status */
   unit_no?: string;
   /** DB value to write to units.status when unit_no is provided */
   unit_status?: 'Self Occupied' | 'Rented' | 'Vacant';
@@ -743,7 +748,7 @@ export async function bulkInviteMembersAction(
   );
 
   // Resolve existing users for phones AND emails in this batch by querying
-  // auth.users directly (not profiles) — this catches users whose
+  // auth.users directly (not profiles) - this catches users whose
   // profiles.mobile_number was cleared or never populated after a previous
   // import to another association.
   const existingUserByPhone = new Map<string, string>();
@@ -764,7 +769,7 @@ export async function bulkInviteMembersAction(
       if (lookupError) {
         logger.error(
           { error: lookupError },
-          'bulkInvite: initial user lookup failed — will fall back to per-phone recovery in Phase 2',
+          'bulkInvite: initial user lookup failed - will fall back to per-phone recovery in Phase 2',
         );
       }
       for (const u of foundUsers ?? []) {
@@ -921,7 +926,7 @@ export async function bulkInviteMembersAction(
         const userId = data.user.id;
         existingUserByPhone.set(normalised, userId);
 
-        // Profile upsert can run concurrently — fire and don't block batch.
+        // Profile upsert can run concurrently - fire and don't block batch.
         await adminClient.from('profiles').upsert(
           {
             id: userId,
@@ -999,7 +1004,7 @@ export async function bulkInviteMembersAction(
   );
 
   // existingUserByPhone now covers all batch phones (populated at startup + updated
-  // after each new createUser call), so reuse it directly for unit linking —
+  // after each new createUser call), so reuse it directly for unit linking -
   // no second profiles query needed.
   const resolvedUserIdByPhone = existingUserByPhone;
 
@@ -1067,7 +1072,7 @@ export async function bulkInviteMembersAction(
     unitUpdateMap.set(key, existing);
   }
 
-  // All unit updates are independent — run them in parallel.
+  // All unit updates are independent - run them in parallel.
   await Promise.allSettled(
     [...unitUpdateMap.values()].map(
       async ({
@@ -1175,3 +1180,14 @@ function getAdminAccountsService() {
 
   return createAdminAccountsService(adminClient, client);
 }
+
+// ── Feature Flags ─────────────────────────────────────────────────────────────
+
+export const toggleAssociationFeatureFlagAction = adminActionClient
+  .inputSchema(FeatureFlagSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const adminClient = getSupabaseServerAdminClient();
+    const service = createFeatureFlagsService(adminClient);
+    await service.upsertFlag(ctx.user.id, input);
+    revalidatePath(`/admin/accounts/[id]`, 'page');
+  });

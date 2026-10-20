@@ -26,13 +26,36 @@ interface DownloadPdfButtonProps {
 
 /**
  * A bare `<Download />` icon with no visible text reads as decoration, not a
- * control — every download affordance in the billing/payments UI goes
+ * control - every download affordance in the billing/payments UI goes
  * through this component so it's always either a labeled button or an
  * icon button with a tooltip + aria-label, never a naked icon link.
  *
  * Uses fetch + Blob to trigger the download programmatically so we can show
  * a loading spinner during the (potentially slow) PDF generation request.
  */
+/**
+ * Freshly rendered PDFs carry their name in Content-Disposition. Cached ones
+ * arrive via a redirect to a signed Storage URL, where that header isn't
+ * readable cross-origin, so the name travels in the URL's `download` param.
+ */
+function downloadFilename(res: Response, fallback: string): string {
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const fromHeader = disposition.match(/filename="([^"]+)"/)?.[1];
+
+  if (fromHeader) return fromHeader;
+
+  try {
+    // supabase-js encodes the query and then encodeURI()s the whole URL, so
+    // the value arrives percent-encoded one level deeper than usual.
+    const fromUrl = new URL(res.url).searchParams.get('download');
+    if (fromUrl) return decodeURIComponent(fromUrl);
+  } catch {
+    // Fall through to the label-based name.
+  }
+
+  return `${fallback}.pdf`;
+}
+
 export function DownloadPdfButton({
   href,
   label,
@@ -61,10 +84,7 @@ export function DownloadPdfButton({
       const a = document.createElement('a');
       a.href = url;
 
-      // Extract filename from Content-Disposition header when available.
-      const disposition = res.headers.get('Content-Disposition') ?? '';
-      const match = disposition.match(/filename="([^"]+)"/);
-      a.download = match?.[1] ?? label;
+      a.download = downloadFilename(res, label);
 
       document.body.appendChild(a);
       a.click();

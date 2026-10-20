@@ -2,7 +2,7 @@ import 'server-only';
 
 /**
  * Validates that a logo URL is an absolute HTTPS URL pointing to a
- * public host. Rejects private/internal URLs to prevent SSRF — the
+ * public host. Rejects private/internal URLs to prevent SSRF - the
  * @react-pdf/renderer <Image> component fetches this URL server-side.
  */
 export function sanitizeLogoUrl(url: string | null | undefined): string | null {

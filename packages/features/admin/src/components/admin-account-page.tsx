@@ -27,6 +27,7 @@ import { If } from '@kit/ui/if';
 import { PageBody, PageHeader } from '@kit/ui/page';
 import { ProfileAvatar } from '@kit/ui/profile-avatar';
 
+import { createFeatureFlagsService } from '../lib/server/services/feature-flags.service';
 import {
   AdminAssocPermissions,
   type AssocPermissionRow,
@@ -35,6 +36,7 @@ import { AdminBanUserDialog } from './admin-ban-user-dialog';
 import { AdminDeleteAccountDialog } from './admin-delete-account-dialog';
 import { AdminDeleteUserDialog } from './admin-delete-user-dialog';
 import { AdminEditUserDialog } from './admin-edit-user-dialog';
+import { AdminFeatureFlags } from './admin-feature-flags';
 import { AdminImpersonateUserDialog } from './admin-impersonate-user-dialog';
 import { AdminMembersTable } from './admin-members-table';
 import { AdminMembershipsTable } from './admin-memberships-table';
@@ -144,7 +146,7 @@ async function PersonalAccountPage(props: { account: Account }) {
                   variant={'secondary'}
                   data-test={'admin-impersonate-button'}
                 >
-                  <VenetianMask className={'mr-1 h-4 text-blue-500'} />
+                  <VenetianMask className={'text-info mr-1 h-4'} />
                   Impersonate
                 </Button>
               </AdminImpersonateUserDialog>
@@ -207,19 +209,24 @@ async function TeamAccountPage(props: {
 }) {
   const adminClient = getSupabaseServerAdminClient();
 
-  // associations.id ≠ accounts.id — fetch the real association PK first.
+  // associations.id ≠ accounts.id - fetch the real association PK first.
   const { data: assocRow } = await adminClient
     .from('associations')
     .select('id, is_test')
     .eq('account_id', props.account.id)
     .maybeSingle();
 
-  const [members, { data: rawPermissions }] = await Promise.all([
+  const featureFlagsService = createFeatureFlagsService(adminClient);
+
+  const [members, { data: rawPermissions }, featureFlags] = await Promise.all([
     getMembers(props.account.slug ?? ''),
     adminClient
       .from('assoc_admin_permissions')
       .select('target_role, can_invite, can_edit, can_delete')
       .eq('association_id', props.account.id),
+    assocRow?.id
+      ? featureFlagsService.getFlags(assocRow.id)
+      : Promise.resolve({ expense_tracker: false, amc_reminder: false }),
   ]);
 
   const isTestAssociation = assocRow?.is_test ?? false;
@@ -272,7 +279,7 @@ async function TeamAccountPage(props: {
 
           {isTestAssociation && (
             <Badge
-              className={'border-amber-400 bg-amber-50 text-amber-700'}
+              className={'text-warning border-amber-400 bg-amber-50'}
               variant={'outline'}
             >
               Test
@@ -300,6 +307,13 @@ async function TeamAccountPage(props: {
               />
             </CardContent>
           </Card>
+
+          {assocRow?.id && (
+            <AdminFeatureFlags
+              associationId={assocRow.id}
+              flags={featureFlags}
+            />
+          )}
 
           <Card className={'border-destructive border'}>
             <CardHeader>

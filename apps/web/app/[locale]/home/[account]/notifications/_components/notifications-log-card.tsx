@@ -183,7 +183,7 @@ export function NotificationsLogCard(props: { rows: NotificationLogRow[] }) {
               onValueChange={handleTypeFilter}
               data-test="notification-type-filter"
             >
-              <SelectTrigger className="h-8 w-full text-xs sm:w-44">
+              <SelectTrigger className="h-8 w-full text-sm sm:w-44">
                 <SelectValue>
                   {(v: string) =>
                     v === ALL ? 'All types' : (TYPE_CONFIG[v]?.label ?? v)
@@ -207,7 +207,7 @@ export function NotificationsLogCard(props: { rows: NotificationLogRow[] }) {
               onValueChange={handleChannelFilter}
               data-test="notification-channel-filter"
             >
-              <SelectTrigger className="h-8 w-full text-xs sm:w-36">
+              <SelectTrigger className="h-8 w-full text-sm sm:w-36">
                 <SelectValue>
                   {(v: string) =>
                     v === ALL ? 'All channels' : channelLabel(v, v)

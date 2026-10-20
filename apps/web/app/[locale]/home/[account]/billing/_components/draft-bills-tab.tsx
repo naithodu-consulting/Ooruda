@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@kit/ui/button';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -76,7 +77,7 @@ export function DraftBillsTab(props: {
   })[];
   pendingSinkingCharges: PendingSinkingChargeWithUnit[];
   canManage: boolean;
-  /** Renders next to filters — the sole primary CTA for the page. */
+  /** Renders next to filters - the sole primary CTA for the page. */
   generateBillsAction?: React.ReactNode;
   /** Renders in the Other Charges section header (or empty-state card). */
   otherChargesAction?: React.ReactNode;
@@ -116,7 +117,7 @@ export function DraftBillsTab(props: {
     0,
   );
 
-  // Maintenance is an alert/notification, not a stageable item — exclude it
+  // Maintenance is an alert/notification, not a stageable item - exclude it
   // from the count so the badge reflects actual billable items only.
   const totalItems =
     props.pendingElectricityBills.length +
@@ -264,29 +265,25 @@ export function DraftBillsTab(props: {
             <span className="text-muted-foreground text-xs font-bold tracking-wider uppercase">
               Period
             </span>
-            <Select
+            <SearchableSelect
+              items={[
+                { value: 'all', label: 'All Periods' },
+                ...allPeriods.map((p) => ({
+                  value: p,
+                  label: formatPeriod(p),
+                })),
+              ]}
               value={periodFilter}
-              onValueChange={(v) => {
+              onChange={(v) => {
                 if (v) setPeriodFilter(v);
                 setChargesPage(1);
               }}
-            >
-              <SelectTrigger className="bg-background h-9 w-[150px]">
-                <SelectValue>
-                  {periodFilter === 'all'
-                    ? 'All Periods'
-                    : formatPeriod(periodFilter)}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Periods</SelectItem>
-                {allPeriods.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {formatPeriod(p)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="All Periods"
+              searchPlaceholder="Search periods…"
+              emptyMessage="No periods found"
+              className="bg-background h-9 w-[170px]"
+              data-test="draft-bills-period"
+            />
           </div>
         )}
 
@@ -305,16 +302,16 @@ export function DraftBillsTab(props: {
       )}
 
       <div className="flex flex-col gap-4">
-        {/* Pending Maintenance — shown as an info callout, not a data section */}
+        {/* Pending Maintenance - shown as an info callout, not a data section */}
         {showMaintenance && (
           <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3.5 dark:border-blue-800/40 dark:bg-blue-900/20">
-            <Wrench className="mt-0.5 h-4 w-4 shrink-0 text-blue-700 dark:text-blue-400" />
+            <Wrench className="text-info mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-                Maintenance bills for {formatPeriod(props.currentPeriod)} — not
+              <p className="text-info text-sm font-semibold">
+                Maintenance bills for {formatPeriod(props.currentPeriod)} not
                 yet generated
               </p>
-              <p className="mt-0.5 text-sm text-blue-700 dark:text-blue-400">
+              <p className="text-info mt-0.5 text-sm">
                 Click <span className="font-semibold">Generate Bills</span>{' '}
                 above to create maintenance bills for all active units. The bill
                 amount is calculated based on each unit&apos;s area at
@@ -552,7 +549,7 @@ function Chip({
         className={cn(
           'text-base font-semibold tabular-nums',
           highlight
-            ? 'text-primary'
+            ? 'text-brand-ink'
             : muted
               ? 'text-muted-foreground'
               : 'text-foreground',
@@ -560,9 +557,7 @@ function Chip({
       >
         {value}
       </span>
-      <span className="text-muted-foreground text-[13px] font-medium">
-        {label}
-      </span>
+      <span className="text-muted-foreground text-sm font-medium">{label}</span>
     </div>
   );
 }
@@ -581,7 +576,7 @@ function DraftSection(props: {
         <span className="text-muted-foreground">{props.icon}</span>
         <span className="text-base font-semibold">{props.title}</span>
         {props.badge && (
-          <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[13px] font-medium">
+          <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-sm font-medium">
             {props.badge}
           </span>
         )}

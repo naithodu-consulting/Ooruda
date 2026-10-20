@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import {
+  Activity,
   AlertTriangle,
   Banknote,
   Building2,
@@ -21,9 +22,17 @@ import { cn } from '@kit/ui/utils';
 /** Maps an action key prefix to a Lucide icon for the event row. */
 export function ActionIcon({ action }: { action: string }) {
   const cls = 'text-muted-foreground h-4 w-4 shrink-0';
+  // Errors first, so a failed payment shows the warning, not the banknote.
+  if (action.includes('error') || action.includes('failed'))
+    return <AlertTriangle className="text-destructive h-4 w-4 shrink-0" />;
   if (action.startsWith('payment') || action.startsWith('razorpay'))
     return <Banknote className={cls} />;
-  if (action.startsWith('bill') || action.startsWith('bills'))
+  if (
+    action.startsWith('bill') ||
+    action.startsWith('receipt') ||
+    action.startsWith('advance') ||
+    action.startsWith('cash_ledger')
+  )
     return <FileText className={cls} />;
   if (
     action.startsWith('meter') ||
@@ -39,9 +48,8 @@ export function ActionIcon({ action }: { action: string }) {
     action.startsWith('notifications')
   )
     return <Settings className={cls} />;
-  if (action.includes('error') || action.includes('failed'))
-    return <AlertTriangle className="text-destructive h-4 w-4 shrink-0" />;
-  return null;
+  // Every row gets an icon so the event labels line up.
+  return <Activity className={cls} />;
 }
 
 export const ACTION_LABELS: Record<string, string> = {
@@ -55,6 +63,7 @@ export const ACTION_LABELS: Record<string, string> = {
   'tenancy.ended': 'Tenancy ended',
   'bills.generated': 'Bills generated',
   'bills.generation.failed': 'Bill generation failed',
+  'bills.generation.blocked': 'Bill generation blocked',
   'bill.updated': 'Bill updated',
   'bill.pdf_generated': 'Bill PDF generated',
   'payment.recorded': 'Payment recorded',
@@ -82,6 +91,15 @@ export const ACTION_LABELS: Record<string, string> = {
   'razorpay.due_payment.failed': 'Razorpay due-payment failed',
   'razorpay.refund.processed': 'Razorpay refund processed',
   'razorpay.refund.failed': 'Razorpay refund failed',
+  'expense.created': 'Expense added',
+  'expense.updated': 'Expense updated',
+  'expense.deleted': 'Expense deleted',
+  'amc.contract.created': 'AMC contract added',
+  'amc.contract.updated': 'AMC contract updated',
+  'amc.contract.renewed': 'AMC contract renewed',
+  'amc.contract.terminated': 'AMC contract ended',
+  'amc.contract.deleted': 'AMC contract deleted',
+  'amc.settings.updated': 'AMC reminder settings updated',
   'request.unhandled_error': 'Unhandled server error',
   'auth.login': 'Signed in',
   'auth.logout': 'Signed out',
@@ -101,7 +119,7 @@ export function actionLabel(action: string): string {
 }
 
 export function truncateSummary(summary: string | null, max = 90): string {
-  if (!summary) return '—';
+  if (!summary) return '-';
   const braceIdx = summary.search(/[{[]/);
   const stripped = braceIdx > 0 ? summary.slice(0, braceIdx).trim() : '';
   const text = stripped || (braceIdx === 0 ? 'An error occurred.' : summary);
@@ -118,7 +136,7 @@ export function TypeBadge({
 }) {
   if ((statusCode !== null && statusCode >= 500) || eventType === 'error')
     return (
-      <Badge variant="destructive" className="text-[10px]">
+      <Badge variant="destructive" className="text-xs">
         Error{statusCode ? ` · ${statusCode}` : ''}
       </Badge>
     );
@@ -126,20 +144,20 @@ export function TypeBadge({
     return (
       <Badge
         variant="outline"
-        className="border-amber-300 text-[10px] text-amber-700"
+        className="text-warning border-amber-300 text-xs"
       >
         {statusCode}
       </Badge>
     );
   if (eventType === 'system_event')
     return (
-      <Badge variant="secondary" className="text-[10px]">
+      <Badge variant="secondary" className="text-xs">
         System
       </Badge>
     );
   if (eventType === 'auth_event')
     return (
-      <Badge variant="outline" className="text-[10px]">
+      <Badge variant="outline" className="text-xs">
         Auth
       </Badge>
     );
@@ -149,7 +167,7 @@ export function TypeBadge({
 /** @deprecated use TypeBadge */
 export const StatusBadge = TypeBadge;
 
-/** All tabs — used in super-admin view which can see auth + system events. */
+/** All tabs - used in super-admin view which can see auth + system events. */
 export const ADMIN_EVENT_TYPE_TABS = [
   { key: '', label: 'All' },
   { key: 'user_action', label: 'User Actions' },

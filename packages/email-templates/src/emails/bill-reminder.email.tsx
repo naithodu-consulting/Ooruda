@@ -18,7 +18,8 @@ import { EmailHeader } from '../components/header';
 import { EmailHeading } from '../components/heading';
 import { EmailWrapper } from '../components/wrapper';
 
-const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT =
+  "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('en-IN', {
@@ -250,7 +251,7 @@ function BillReminderEmail(props: BillReminderEmailProps) {
               <Text
                 style={{
                   fontSize: '13px',
-                  color: '#9b9b8e',
+                  color: '#6b6b5e',
                   margin: '16px 0 0',
                   fontFamily: FONT,
                 }}

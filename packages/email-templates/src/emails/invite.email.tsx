@@ -106,7 +106,7 @@ export async function renderInviteEmail(props: Props) {
                 style={{
                   fontSize: '13px',
                   lineHeight: '20px',
-                  color: '#9a9a8a',
+                  color: '#6b6b5e',
                   margin: '0 0 8px',
                 }}
               >
@@ -128,7 +128,7 @@ export async function renderInviteEmail(props: Props) {
                 style={{
                   fontSize: '12px',
                   lineHeight: '18px',
-                  color: '#b5b5a5',
+                  color: '#6b6b5e',
                   margin: '16px 0 0',
                 }}
               >

@@ -15,7 +15,7 @@ select tests.authenticate_as('token_creator');
 -- NOTE: actually invoking a function the caller lacks EXECUTE on currently
 -- crashes Postgres (segfault in supautils/pgaudit hook on
 -- permission-denied) on the bundled Postgres version. Assert the privilege
--- instead — same intent, no crash.
+-- instead - same intent, no crash.
 select ok(
     not has_function_privilege(
         'authenticated',

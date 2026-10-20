@@ -1,6 +1,8 @@
 import 'server-only';
 import { getLogger } from '@kit/shared/logger';
 
+import { BILLING_TIME_ZONE } from '~/lib/billing-dates';
+
 export type ErrorClass =
   | 'permission'
   | 'not_found'
@@ -26,7 +28,7 @@ interface PgError {
  *
  * - Logs the full raw error + context server-side via getLogger()
  * - Classifies the error by Postgres error code and message patterns
- * - Returns a safe, user-facing message — never the raw DB/API string
+ * - Returns a safe, user-facing message - never the raw DB/API string
  *
  * ref: short timestamp code included in unrecoverable messages so users
  * can quote it to support and developers can grep server logs.
@@ -37,11 +39,12 @@ export async function sanitizeActionError(
 ): Promise<SanitizeResult> {
   const logger = await getLogger();
 
+  // Built in the billing timezone: the operator reads this code off their own
+  // screen, so a UTC-based ref disagrees with their wall clock by 5h30m and
+  // makes support correlation harder than it needs to be.
   const now = new Date();
-  const ref =
-    now.toISOString().slice(5, 10).replace('-', '') + // MMDD
-    '-' +
-    now.toISOString().slice(11, 16).replace(':', ''); // HHMM
+  const ist = now.toLocaleString('sv-SE', { timeZone: BILLING_TIME_ZONE }); // 'YYYY-MM-DD HH:mm:ss'
+  const ref = `${ist.slice(5, 7)}${ist.slice(8, 10)}-${ist.slice(11, 13)}${ist.slice(14, 16)}`;
 
   const msg =
     error instanceof Error ? error.message : String(error ?? 'Unknown error');
@@ -58,6 +61,14 @@ export async function sanitizeActionError(
     'Action error',
   );
 
+  // Domain rules raised by our own RPCs are already written for the operator
+  // and name the exact problem ("Amount exceeds the outstanding balance
+  // (900.00)"). Routing those through the generic 'server' text replaced
+  // something actionable with "contact support", so pass them through verbatim.
+  if (USER_SAFE_DB_MESSAGES.some((re) => re.test(msg))) {
+    return { userMessage: msg, errorClass: 'validation', ref };
+  }
+
   const errorClass = classify(msg, pgCode);
 
   return {
@@ -66,6 +77,20 @@ export async function sanitizeActionError(
     ref,
   };
 }
+
+/**
+ * Messages raised by `raise exception` in our own Postgres functions. These are
+ * authored for end users and leak nothing about the schema, so they reach the
+ * operator unchanged. Anything not listed here is still sanitized.
+ */
+const USER_SAFE_DB_MESSAGES: RegExp[] = [
+  /exceeds the outstanding balance/i,
+  /payment date cannot be in the future/i,
+  /owners and tenants can only record razorpay payments/i,
+  /this bill is already cancelled/i,
+  /has payments recorded against it/i,
+  /advance credit has been applied to this bill/i,
+];
 
 function classify(msg: string, pgCode: string): ErrorClass {
   // Postgres unique violation
@@ -92,7 +117,7 @@ function classify(msg: string, pgCode: string): ErrorClass {
     return 'permission';
   }
 
-  // Foreign key violation — typically a "not found" for the user
+  // Foreign key violation - typically a "not found" for the user
   if (pgCode === '23503') {
     return 'not_found';
   }
@@ -105,13 +130,13 @@ const USER_MESSAGES: Record<ErrorClass, (ref: string) => string> = {
     "You don't have permission to do this. Contact your association admin if you think this is incorrect.",
 
   not_found: () =>
-    'The item could not be found. It may have been deleted — try refreshing the page.',
+    'The item could not be found. It may have been deleted; try refreshing the page.',
 
   conflict: () =>
     'This already exists. Check for a duplicate entry and try again.',
 
   // Validation messages are thrown explicitly by action code and are already
-  // user-safe — callers should pass the message string directly, not route it
+  // user-safe - callers should pass the message string directly, not route it
   // through sanitizeActionError. This class is a safety net only.
   validation: (ref) =>
     `The submitted data was invalid. Please check your input and try again. (ref: ${ref})`,

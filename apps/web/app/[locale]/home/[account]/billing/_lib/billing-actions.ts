@@ -8,6 +8,7 @@ import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client'
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
+import { formatPeriod } from '~/lib/format-period';
 import { sendBillGeneratedNotifications } from '~/lib/notify';
 import { getAssociationRole } from '~/lib/rbac';
 
@@ -29,6 +30,18 @@ type GenerateBillsResult = ActionResult & {
   created?: number;
   skipped?: number;
 };
+
+/**
+ * Render a meter-label list for an error message, capped so a large association
+ * doesn't produce an unreadable wall of text in a toast.
+ */
+function formatMeterList(labels: string[], max = 5): string {
+  if (labels.length <= max) {
+    return labels.join(', ');
+  }
+
+  return `${labels.slice(0, max).join(', ')} and ${labels.length - max} more`;
+}
 
 async function requireBillingAccess(
   associationId: string,
@@ -76,7 +89,7 @@ export async function generateBillsAction(
   const { period, billType } = parsed.data;
   const client = getSupabaseServerClient();
 
-  // Fetch units first — we need unitIds before the parallel wave below.
+  // Fetch units first - we need unitIds before the parallel wave below.
   const { data: units } = await client
     .from('units')
     .select('id, unit_no, type, area_sqft')
@@ -90,7 +103,7 @@ export async function generateBillsAction(
 
   const unitIds = unitRows.map((u) => u.id);
 
-  // All of these are independent of each other — fire in parallel.
+  // All of these are independent of each other - fire in parallel.
   const [
     { data: chargeTypes },
     { data: activeTenancies },
@@ -241,7 +254,7 @@ export async function generateBillsAction(
   if (hasElectricityChargeType && mescomBill && mescomBill.invoice_amount > 0) {
     const { data: subMeters } = await client
       .from('sub_meters')
-      .select('id, unit_id, meter_type')
+      .select('id, unit_id, meter_type, meter_label, is_active')
       .in('unit_id', unitIds);
 
     const subMeterIds = (subMeters ?? []).map((m) => m.id);
@@ -257,6 +270,74 @@ export async function generateBillsAction(
         .select('sub_meter_id, consumed_units, minimum_charge')
         .eq('period', period)
         .in('sub_meter_id', subMeterIds);
+
+      // Pre-flight: every ACTIVE sub-meter must have a sane reading for this
+      // period before any electricity bill is written. A meter with no reading
+      // silently drops out of the split (its unit gets a zero bill and everyone
+      // else's rate is computed without it); a negative reading corrupts the
+      // block rate for the whole association. Both are unrecoverable once bills
+      // exist, because recording readings is locked after billing - so refuse
+      // up front rather than generating a wrong set.
+      // A period with NO readings at all is not the dangerous case: blockRate
+      // stays null, no electricity bill is written, and readings remain
+      // editable - so an "All" run can still produce maintenance/other bills
+      // exactly as before. Only a PARTIAL (or negative) set is unrecoverable.
+      // An explicit "Electricity" run is always checked, since an empty period
+      // would otherwise silently create nothing.
+      const hasAnyReading = (readings ?? []).length > 0;
+      const shouldCheckReadings =
+        billType === 'Electricity' || (billType === 'All' && hasAnyReading);
+
+      if (shouldCheckReadings) {
+        const readingBySubMeter = new Map(
+          (readings ?? []).map((r) => [r.sub_meter_id, r]),
+        );
+
+        const missingLabels: string[] = [];
+        const negativeLabels: string[] = [];
+
+        for (const meter of subMeters ?? []) {
+          if (!meter.is_active) continue;
+
+          const label = meter.meter_label ?? 'Unnamed meter';
+          const reading = readingBySubMeter.get(meter.id);
+
+          if (!reading) {
+            missingLabels.push(label);
+          } else if ((reading.consumed_units ?? 0) < 0) {
+            negativeLabels.push(label);
+          }
+        }
+
+        if (missingLabels.length > 0 || negativeLabels.length > 0) {
+          const problems: string[] = [];
+
+          if (missingLabels.length > 0) {
+            problems.push(
+              `${missingLabels.length} meter(s) have no reading for this period (${formatMeterList(missingLabels)})`,
+            );
+          }
+
+          if (negativeLabels.length > 0) {
+            problems.push(
+              `${negativeLabels.length} meter(s) have a current reading below the previous reading (${formatMeterList(negativeLabels)})`,
+            );
+          }
+
+          await logAuditEvent({
+            associationId,
+            action: 'bills.generation.blocked',
+            entityType: 'bill',
+            eventType: 'error',
+            summary: `Electricity bill generation blocked for ${formatPeriod(period)}: ${problems.join('; ')}.`,
+          });
+
+          return {
+            success: false,
+            error: `Cannot generate electricity bills for ${formatPeriod(period)}: ${problems.join(' and ')}. Enter the missing or corrected readings in Electricity - Enter Readings and try again.`,
+          };
+        }
+      }
 
       let totalSubMeterUnits = 0;
       for (const r of readings ?? []) {
@@ -529,7 +610,7 @@ export async function generateBillsAction(
               action: 'bills.generation.failed',
               entityType: 'bill',
               eventType: 'error',
-              summary: `Failed to allocate bill number for ${typePrefix} in period ${period}: ${seqError?.message ?? 'no bill number returned'}`,
+              summary: `Failed to allocate bill number for ${typePrefix} in period ${formatPeriod(period)}: ${seqError?.message ?? 'no bill number returned'}`,
             });
             return false;
           }
@@ -599,13 +680,13 @@ export async function generateBillsAction(
               action: 'bills.generation.failed',
               entityType: 'bill',
               eventType: 'error',
-              summary: `Failed to generate ${type} bill for period ${period} (unit ${unit.id}): ${rpcError.message}`,
+              summary: `Failed to generate ${type} bill for period ${formatPeriod(period)} (unit ${unit.id}): ${rpcError.message}`,
             });
             return false;
           }
 
           // The advance_applied ledger debit is written atomically inside
-          // create_bill_with_items — no separate call needed here.
+          // create_bill_with_items - no separate call needed here.
 
           created += 1;
           return true;
@@ -695,8 +776,8 @@ export async function generateBillsAction(
             }
           }
 
-          // Sinking Fund — ad-hoc. Each distinct collection generates a new SNK bill.
-          // If an SNK bill already exists for this period, skip silently — the admin
+          // Sinking Fund - ad-hoc. Each distinct collection generates a new SNK bill.
+          // If an SNK bill already exists for this period, skip silently - the admin
           // should void the existing bill before re-collecting for the same period.
           if (shouldGenSinking && sinkingItems.length > 0) {
             if (!hasSinking) {
@@ -734,7 +815,7 @@ export async function generateBillsAction(
         }
 
         // Track how many SNK bills were generated in this run (separate from `created`
-        // which spans all types — needed to gate the mark-billed step accurately).
+        // which spans all types - needed to gate the mark-billed step accurately).
         if (billsToGenerate.some((b) => b.type === 'sinking fund')) {
           sinkingCreated += 1;
         }
@@ -818,7 +899,7 @@ export async function generateBillsAction(
     after(async () => {
       const adminClient = getSupabaseServerAdminClient();
 
-      // Bills with units — no tenancies join (no FK from bills→tenancies)
+      // Bills with units - no tenancies join (no FK from bills→tenancies)
       const { data: newBills } = await adminClient
         .from('bills')
         .select(`
@@ -1239,7 +1320,7 @@ const BILLING_DOCUMENTS_BUCKET = 'billing-documents';
  * numbering, and cleans up orphaned cached PDFs from storage.
  *
  * Authorization is enforced inside the `super_admin_delete_all_bills` RPC
- * itself (security definer, checks `is_super_admin()`) — NOT via the
+ * itself (security definer, checks `is_super_admin()`) - NOT via the
  * `assoc_admin`-scoped `requireBillingAccess` helper used elsewhere in this
  * file, because a super admin viewing an "opened workspace" resolves to
  * `assoc_admin` too (see `getAssociationRole`), so that check alone can't
@@ -1267,7 +1348,7 @@ export async function deleteAllBillsAction(associationId: string): Promise<
     return { success: false, error: error.message };
   }
 
-  // Best-effort cleanup of cached PDFs orphaned by the delete above — the
+  // Best-effort cleanup of cached PDFs orphaned by the delete above - the
   // storage bucket has no FK/cascade tie to the bills table.
   const admin = getSupabaseServerAdminClient();
   for (const prefix of [
@@ -1383,7 +1464,7 @@ export async function voidBillsBulkAction(
       associationId,
       action: 'bill.bulk_voided',
       entityType: 'bill',
-      summary: `Bulk cancelled ${voided} bills for ${period} (type: ${billType}). Reason: ${reason}`,
+      summary: `Bulk cancelled ${voided} bills for ${formatPeriod(period)} (type: ${billType}). Reason: ${reason}`,
     }),
   );
 

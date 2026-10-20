@@ -16,7 +16,7 @@ export const metadata = {
   title: `Accounts`,
 };
 
-// Specific test-number prefixes — narrow enough to never match real Airtel/Vodafone numbers.
+// Specific test-number prefixes - narrow enough to never match real Airtel/Vodafone numbers.
 // Covers +919911000000–99 and +919999999900–99 (matches all known test accounts).
 function isTestPhone(mobile_number: string | null): boolean {
   if (!mobile_number) return false;
@@ -33,7 +33,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
   const initialTab: 'team' | 'personal' =
     searchParams.account_type === 'personal' ? 'personal' : 'team';
 
-  // Load all data in one parallel batch — dataset is small (~3-5 assocs, ~70 users)
+  // Load all data in one parallel batch - dataset is small (~3-5 assocs, ~70 users)
   const [
     { data: associationAccounts },
     { data: userAccounts },
@@ -67,7 +67,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
 
   if (authUsers?.users.length === 1000) {
     console.error(
-      '[admin/accounts] listUsers returned exactly 1000 results — super admin detection may be incomplete. Implement cursor pagination.',
+      '[admin/accounts] listUsers returned exactly 1000 results - super admin detection may be incomplete. Implement cursor pagination.',
     );
   }
   if (testAssocError)
@@ -93,6 +93,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
     { associationId: string; associationName: string; role: string }[]
   > = {};
   const phoneByAccountId: Record<string, string> = {};
+  const consentByAccountId: Record<string, string | null> = {};
   const effectiveTestIds = new Set(testAccountIds);
 
   if (personalIds.length > 0) {
@@ -107,7 +108,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
         .in('user_id', personalIds),
       adminClient
         .from('profiles')
-        .select('id, mobile_number')
+        .select('id, mobile_number, consent_accepted_at')
         .in('id', personalIds),
     ]);
 
@@ -124,6 +125,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
         phoneByAccountId[p.id] = p.mobile_number;
         if (isTestPhone(p.mobile_number)) effectiveTestIds.add(p.id);
       }
+      consentByAccountId[p.id] = p.consent_accepted_at ?? null;
     }
   }
 
@@ -136,6 +138,7 @@ async function AccountsPage(props: AdminAccountsPageProps) {
         users={userAccounts ?? []}
         membershipsByAccountId={membershipsByAccountId}
         phoneByAccountId={phoneByAccountId}
+        consentByAccountId={consentByAccountId}
         superAdminIds={superAdminIds}
         testAccountIds={effectiveTestIds}
         initialTab={initialTab}

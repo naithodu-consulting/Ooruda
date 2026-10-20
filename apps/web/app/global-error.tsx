@@ -6,6 +6,7 @@ import { useUser } from '@kit/supabase/hooks/use-user';
 import { SiteHeader } from '~/(marketing)/_components/site-header';
 import { ErrorPageContent } from '~/components/error-page-content';
 import { RootProviders } from '~/components/root-providers';
+import { getFontsClassName } from '~/lib/fonts';
 
 const GlobalErrorPage = ({
   error,
@@ -17,7 +18,10 @@ const GlobalErrorPage = ({
   useCaptureException(error);
 
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      className={`bg-background min-h-screen antialiased ${getFontsClassName()}`}
+    >
       <body>
         <RootProviders messages={{}}>
           <GlobalErrorContent reset={reset} />

@@ -1,7 +1,11 @@
 import 'server-only';
+import { cache } from 'react';
+
 import { notFound, redirect } from 'next/navigation';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
+
+import { requireUserInServerComponent } from '~/lib/server/require-user-in-server-component';
 
 export const PROPOPS_ROLES = [
   'assoc_admin',
@@ -26,6 +30,67 @@ export const ROLE_LABELS: Record<PropOpsRole, string> = {
   tenant: 'Tenant',
 };
 
+type ResolvedRole = {
+  role: PropOpsRole | null;
+  accountId: string;
+  accountName: string;
+  associationId: string | null;
+  associationStatus: string | null;
+  userId: string;
+  isSuperAdmin: boolean;
+};
+
+/**
+ * Resolves the caller's role in an association in a single round trip.
+ *
+ * Cached per request: the workspace layout, the page and any nested server
+ * component all share one lookup. The user comes from
+ * `requireUserInServerComponent`, which the layout has already resolved, so
+ * no extra call to the Auth server is made.
+ */
+const resolveRole = cache(
+  async (accountSlug: string): Promise<ResolvedRole> => {
+    const client = getSupabaseServerClient();
+    const user = await requireUserInServerComponent();
+
+    const [{ data: account }, { data: isSuperAdmin }] = await Promise.all([
+      client
+        .from('accounts')
+        .select(
+          'id, name, associations(id, status), accounts_memberships(account_role)',
+        )
+        .eq('slug', accountSlug)
+        .eq('is_personal_account', false)
+        .eq('accounts_memberships.user_id', user.id)
+        .maybeSingle(),
+      client.rpc('is_super_admin'),
+    ]);
+
+    if (!account) {
+      notFound();
+    }
+
+    const association = one(account.associations);
+    const membership = one(account.accounts_memberships);
+
+    return {
+      role: isSuperAdmin
+        ? 'assoc_admin'
+        : ((membership?.account_role as PropOpsRole | undefined) ?? null),
+      accountId: account.id,
+      accountName: account.name,
+      associationId: association?.id ?? null,
+      associationStatus: association?.status ?? null,
+      userId: user.id,
+      isSuperAdmin: !!isSuperAdmin,
+    };
+  },
+);
+
+function one<T>(value: T | T[] | null | undefined): T | null {
+  return (Array.isArray(value) ? value[0] : value) ?? null;
+}
+
 /**
  * Asserts the authenticated user holds one of `allowedRoles` in the given
  * association (identified by its MakerKit account slug).
@@ -34,56 +99,29 @@ export const ROLE_LABELS: Record<PropOpsRole, string> = {
  * - 404s if the account slug doesn't exist.
  * - Redirects to /home if the user has no membership or the wrong role.
  *
+ * Also returns the association id, so pages need no second lookup for it.
+ *
  * Use in Server Components and Route Handlers (never in Client Components).
  */
 export async function requireRole(
   accountSlug: string,
   allowedRoles: PropOpsRole[],
-): Promise<{ role: PropOpsRole; accountId: string; userId: string }> {
-  const client = getSupabaseServerClient();
+): Promise<{
+  role: PropOpsRole;
+  accountId: string;
+  accountName: string;
+  associationId: string | null;
+  associationStatus: string | null;
+  userId: string;
+  isSuperAdmin: boolean;
+}> {
+  const { role, ...rest } = await resolveRole(accountSlug);
 
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-
-  if (!user) {
-    redirect('/auth/sign-in');
-  }
-
-  const { data: account } = await client
-    .from('accounts')
-    .select('id')
-    .eq('slug', accountSlug)
-    .eq('is_personal_account', false)
-    .single();
-
-  if (!account) {
-    notFound();
-  }
-
-  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
-  if (isSuperAdmin) {
-    return { role: 'assoc_admin', accountId: account.id, userId: user.id };
-  }
-
-  const { data: membership } = await client
-    .from('accounts_memberships')
-    .select('account_role')
-    .eq('account_id', account.id)
-    .eq('user_id', user.id)
-    .single();
-
-  if (!membership) {
+  if (!role || !allowedRoles.includes(role)) {
     redirect('/home');
   }
 
-  const role = membership.account_role as PropOpsRole;
-
-  if (!allowedRoles.includes(role)) {
-    redirect('/home');
-  }
-
-  return { role, accountId: account.id, userId: user.id };
+  return { role, ...rest };
 }
 
 /**
@@ -91,44 +129,61 @@ export async function requireRole(
  * (not the account slug), or null if they have no membership.
  *
  * Use this in Server Actions for an explicit authorization check before a
- * mutation — defense-in-depth on top of the database RLS policies.
+ * mutation - defense-in-depth on top of the database RLS policies.
  */
 export async function getAssociationRole(
   associationId: string,
 ): Promise<PropOpsRole | null> {
   const client = getSupabaseServerClient();
+  const userId = await getCurrentUserId();
 
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-
-  if (!user) {
+  if (!userId) {
     return null;
   }
 
-  const { data: association } = await client
-    .from('associations')
-    .select('account_id')
-    .eq('id', associationId)
-    .single();
+  // One query for the association + this user's membership, in parallel with
+  // the super-admin check (was four sequential round trips).
+  const [{ data: association }, { data: isSuperAdmin }] = await Promise.all([
+    client
+      .from('associations')
+      .select('account_id, accounts!inner(accounts_memberships(account_role))')
+      .eq('id', associationId)
+      .eq('accounts.accounts_memberships.user_id', userId)
+      .maybeSingle(),
+    client.rpc('is_super_admin'),
+  ]);
 
   if (!association) {
     return null;
   }
 
-  const { data: isSuperAdmin } = await client.rpc('is_super_admin');
   if (isSuperAdmin) {
     return 'assoc_admin';
   }
 
-  const { data: membership } = await client
-    .from('accounts_memberships')
-    .select('account_role')
-    .eq('account_id', association.account_id)
-    .eq('user_id', user.id)
-    .single();
+  const account = one(
+    association.accounts as
+      | { accounts_memberships: { account_role: string }[] | null }
+      | { accounts_memberships: { account_role: string }[] | null }[]
+      | null,
+  );
+  const membership = one(account?.accounts_memberships ?? null);
 
-  return (membership?.account_role as PropOpsRole) ?? null;
+  return (membership?.account_role as PropOpsRole | undefined) ?? null;
+}
+
+/**
+ * The signed-in user's id, from the verified session JWT.
+ *
+ * `getClaims` verifies the token locally when the project uses asymmetric
+ * signing keys (and falls back to the Auth server otherwise), so this avoids
+ * the unconditional network round trip of `getUser`.
+ */
+export async function getCurrentUserId(): Promise<string | null> {
+  const client = getSupabaseServerClient();
+  const { data } = await client.auth.getClaims();
+
+  return data?.claims?.sub ?? null;
 }
 
 /**

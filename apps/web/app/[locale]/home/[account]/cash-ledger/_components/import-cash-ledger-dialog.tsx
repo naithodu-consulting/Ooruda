@@ -73,7 +73,7 @@ function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
         amount: 0,
         paid_by,
         paid_on,
-        _error: 'Unit number is missing — add it and re-upload.',
+        _error: 'Unit number is missing. Add it and re-upload.',
       };
     if (!type)
       return {
@@ -84,7 +84,7 @@ function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
         amount: 0,
         paid_by,
         paid_on,
-        _error: 'Entry type is missing — use "Due" or "Advance Payment".',
+        _error: 'Entry type is missing. Use "Due" or "Advance Payment".',
       };
     if (
       ![
@@ -103,7 +103,7 @@ function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
         amount: 0,
         paid_by,
         paid_on,
-        _error: `"${type}" is not a valid type — use "Due" or "Advance Payment".`,
+        _error: `"${type}" is not a valid type. Use "Due" or "Advance Payment".`,
       };
     if (!bill_type)
       return {
@@ -114,7 +114,7 @@ function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
         amount: 0,
         paid_by,
         paid_on,
-        _error: 'Bill type is missing — add it and re-upload.',
+        _error: 'Bill type is missing. Add it and re-upload.',
       };
     const amount = parseFloat(amountRaw);
     if (isNaN(amount) || amount <= 0)
@@ -127,8 +127,8 @@ function parseRawRows(raw: Record<string, string>[]): ParsedRow[] {
         paid_by,
         paid_on,
         _error: amountRaw
-          ? `"${amountRaw}" is not a valid amount — enter a number greater than 0.`
-          : 'Amount is missing — enter a number greater than 0.',
+          ? `"${amountRaw}" is not a valid amount. Enter a number greater than 0.`
+          : 'Amount is missing. Enter a number greater than 0.',
       };
 
     return { _row: row, unit_no, type, bill_type, amount, paid_by, paid_on };
@@ -276,7 +276,7 @@ export function ImportCashLedgerDialog({
           <div className="flex flex-col gap-4">
             <div className="text-muted-foreground flex items-center gap-2 text-sm">
               <FileSpreadsheet className="h-4 w-4" />
-              {fileName} — {rows.length} rows ({validRows.length} valid
+              {fileName} - {rows.length} rows ({validRows.length} valid
               {hasErrors && `, ${rows.length - validRows.length} errors`})
             </div>
 
@@ -316,7 +316,7 @@ export function ImportCashLedgerDialog({
                       <TableCell>{r.bill_type}</TableCell>
                       <TableCell>
                         {r._error ? (
-                          <span className="text-xs text-red-600">
+                          <span className="text-destructive text-xs">
                             {r._error}
                           </span>
                         ) : (
@@ -349,7 +349,7 @@ export function ImportCashLedgerDialog({
 
         {step === 'done' && (
           <div className="flex flex-col items-center gap-4 py-4">
-            <CheckCircle2 className="h-10 w-10 text-green-600" />
+            <CheckCircle2 className="text-success h-10 w-10" />
             <p className="font-medium">Import complete</p>
             {skipped.length > 0 && (
               <Alert>

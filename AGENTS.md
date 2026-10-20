@@ -23,7 +23,7 @@
 
 # Next.js: ALWAYS read docs before coding
 
-Before any Next.js work, find and read the relevant doc in `apps/web/node_modules/next/dist/docs/`. Your training data is outdated — the docs are the source of truth.
+Before any Next.js work, find and read the relevant doc in `apps/web/node_modules/next/dist/docs/`. Your training data is outdated - the docs are the source of truth.
 
 <!-- END:nextjs-agent-rules -->
 
@@ -71,7 +71,7 @@ After implementation, always run:
 
 ## Release Notes
 
-**REQUIRED before every push:** Update `RELEASE_NOTES.md` with a summary of all changes in the current batch — new features, bug fixes, migrations, and UX changes. Add new migrations to the Migrations Changelog table. Update the `Last updated` date at the bottom.
+**REQUIRED before every push:** Update `RELEASE_NOTES.md` with a summary of all changes in the current batch - new features, bug fixes, migrations, and UX changes. Add new migrations to the Migrations Changelog table. Update the `Last updated` date at the bottom.
 
 ## Deployment & Environment Setup
 

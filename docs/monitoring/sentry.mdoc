@@ -119,7 +119,7 @@ Sentry initialization is owned by the monitoring instrumentation files, not by `
 - `apps/web/instrumentation-client.ts` → `registerClientMonitoringInstrumentation()` → `initializeSentryBrowserClient()`
 - `apps/web/instrumentation.ts` → `registerMonitoringInstrumentation()` → `initializeSentryServerClient()`
 
-`instrumentation-client.ts` also installs provider-agnostic `window.onerror` and `unhandledrejection` listeners. The Sentry client config explicitly filters out Sentry's `GlobalHandlers` integration to avoid double-reporting — keep that filter in place if you customize integrations.
+`instrumentation-client.ts` also installs provider-agnostic `window.onerror` and `unhandledrejection` listeners. The Sentry client config explicitly filters out Sentry's `GlobalHandlers` integration to avoid double-reporting - keep that filter in place if you customize integrations.
 
 ### Client-side configuration
 
@@ -156,7 +156,7 @@ export function initializeSentryBrowserClient(
 }
 ```
 
-If you need extra integrations, pass them via `props.integrations` — they're composed with Sentry's defaults and the `GlobalHandlers` filter is reapplied on top.
+If you need extra integrations, pass them via `props.integrations` - they're composed with Sentry's defaults and the `GlobalHandlers` filter is reapplied on top.
 
 ### Server-side configuration
 
@@ -197,8 +197,8 @@ Error capture is not affected by sampling. All errors are captured regardless of
 
 All uncaught exceptions are automatically captured:
 
-- **Client-side**: React errors, unhandled promise rejections — captured by the global handlers installed in `instrumentation-client.ts`, then forwarded to Sentry via `captureException` with a `mechanism` of `onerror`, `onunhandledrejection`, or `react-error-boundary`.
-- **Server-side**: Server Component errors, Server Action errors, Route Handler errors, Middleware errors — forwarded to Sentry's `captureRequestError` helper from `@sentry/nextjs`, which records the full Next.js request context.
+- **Client-side**: React errors, unhandled promise rejections - captured by the global handlers installed in `instrumentation-client.ts`, then forwarded to Sentry via `captureException` with a `mechanism` of `onerror`, `onunhandledrejection`, or `react-error-boundary`.
+- **Server-side**: Server Component errors, Server Action errors, Route Handler errors, Middleware errors - forwarded to Sentry's `captureRequestError` helper from `@sentry/nextjs`, which records the full Next.js request context.
 
 Each error includes:
 

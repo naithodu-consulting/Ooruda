@@ -87,7 +87,7 @@ export function VoidBillDialog({
         </DialogHeader>
 
         <div className="space-y-3">
-          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-300">
+          <div className="text-warning flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm dark:border-amber-800/40 dark:bg-amber-900/20">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
               Only bills with no payments or advance credit applied can be
@@ -96,7 +96,7 @@ export function VoidBillDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="void-reason">Reason for voiding</Label>
+            <Label htmlFor="void-reason">Reason for voiding *</Label>
             <Textarea
               ref={textareaRef}
               id="void-reason"
@@ -105,15 +105,15 @@ export function VoidBillDialog({
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               className="resize-none"
+              required
+              aria-required="true"
               disabled={isPending}
             />
-            {error && (
-              <p className="text-sm text-[var(--color-danger)]">{error}</p>
-            )}
+            {error && <p className="text-danger text-sm">{error}</p>}
           </div>
         </div>
 
-        {/* Plain flex row — avoids DialogFooter's hardcoded bg-muted which clashes with the dialog's bg-popover */}
+        {/* Plain flex row - avoids DialogFooter's hardcoded bg-muted which clashes with the dialog's bg-popover */}
         <div className="flex flex-row justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose} disabled={isPending}>
             Keep Bill
@@ -194,7 +194,7 @@ export function VoidBillsBulkDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Void All Bills — {periodLabel}</DialogTitle>
+          <DialogTitle>Void All Bills - {periodLabel}</DialogTitle>
           <DialogDescription>
             All {billCount} bill{billCount !== 1 ? 's' : ''} for{' '}
             <strong>{periodLabel}</strong> will be voided. Bills with payments
@@ -203,7 +203,7 @@ export function VoidBillsBulkDialog({
         </DialogHeader>
 
         <div className="space-y-3">
-          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-300">
+          <div className="text-warning flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm dark:border-amber-800/40 dark:bg-amber-900/20">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
               This cannot be undone. Bill numbers will never be reused. After
@@ -212,7 +212,7 @@ export function VoidBillsBulkDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="bulk-void-reason">Reason for voiding</Label>
+            <Label htmlFor="bulk-void-reason">Reason for voiding *</Label>
             <Textarea
               id="bulk-void-reason"
               placeholder="e.g. Incorrect rates applied, re-generating with updated charges…"
@@ -220,15 +220,15 @@ export function VoidBillsBulkDialog({
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               className="resize-none"
+              required
+              aria-required="true"
               disabled={isPending}
             />
-            {error && (
-              <p className="text-sm text-[var(--color-danger)]">{error}</p>
-            )}
+            {error && <p className="text-danger text-sm">{error}</p>}
           </div>
         </div>
 
-        {/* Plain flex row — avoids DialogFooter's hardcoded bg-muted which clashes with the dialog's bg-popover */}
+        {/* Plain flex row - avoids DialogFooter's hardcoded bg-muted which clashes with the dialog's bg-popover */}
         <div className="flex flex-row justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose} disabled={isPending}>
             Keep Bills

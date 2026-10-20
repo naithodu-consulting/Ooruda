@@ -262,7 +262,7 @@ describe('KitDevService', () => {
 
       const result = await service.start({ services: ['app'] });
 
-      // Should only start app — no supabase:start, no stripe
+      // Should only start app - no supabase:start, no stripe
       expect(executeCalls).not.toEqual(
         expect.arrayContaining([expect.stringContaining('supabase:start')]),
       );
@@ -906,7 +906,7 @@ describe('KitDevService', () => {
         }),
       );
 
-      // Should not throw — database stop errors are caught
+      // Should not throw - database stop errors are caught
       const result = await service.stop({ services: ['database'] });
       expect(result.stopped).toContain('database');
     });

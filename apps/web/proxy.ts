@@ -46,20 +46,40 @@ interface RateLimitBucket {
 // Map key: "<route-group>:<ip>"
 const rateLimitStore = new Map<string, RateLimitBucket>();
 
-const RATE_LIMIT_RULES = [
-  // Auth routes (sign-in, OTP, password reset) — 5 per minute
-  { pathPrefix: '/auth', limit: 5, windowMs: 60_000, group: 'auth' },
-  // API routes — 30 per 10 seconds
+const RATE_LIMIT_RULES: {
+  pathPrefix: string;
+  limit: number;
+  windowMs: number;
+  group: string;
+  /** Only count these methods; all methods when omitted. */
+  methods?: string[];
+}[] = [
+  // Auth submissions (send code, verify, invitation checks) - 20 per minute.
+  // Only POSTs count: sign-in form actions are POSTs to the page URL. Page
+  // loads, prefetches and redirects under /auth used to count too, so one
+  // sign-in used 3-5 of the old 5/min budget and a single mistyped code - or
+  // several people behind one carrier/office IP - locked users out.
+  {
+    pathPrefix: '/auth',
+    limit: 20,
+    windowMs: 60_000,
+    group: 'auth',
+    methods: ['POST'],
+  },
+  // API routes - 30 per 10 seconds
   { pathPrefix: '/api', limit: 30, windowMs: 10_000, group: 'api' },
 ];
 
 function checkRateLimit(
   ip: string,
   pathname: string,
+  method: string,
 ): { limited: boolean; retryAfter?: number } {
   const normalized = getNormalizedPathname(pathname);
-  const rule = RATE_LIMIT_RULES.find((r) =>
-    normalized.startsWith(r.pathPrefix),
+  const rule = RATE_LIMIT_RULES.find(
+    (r) =>
+      normalized.startsWith(r.pathPrefix) &&
+      (!r.methods || r.methods.includes(method)),
   );
   if (!rule) return { limited: false };
 
@@ -110,7 +130,11 @@ export default async function proxy(request: NextRequest) {
     request.headers.get('x-real-ip') ??
     '0.0.0.0';
 
-  const { limited, retryAfter } = checkRateLimit(ip, request.nextUrl.pathname);
+  const { limited, retryAfter } = checkRateLimit(
+    ip,
+    request.nextUrl.pathname,
+    request.method,
+  );
   if (limited) {
     return new NextResponse('Too Many Requests', {
       status: 429,
@@ -121,7 +145,7 @@ export default async function proxy(request: NextRequest) {
     });
   }
 
-  // ── Skip non-page routes (API) — no i18n/session middleware needed ──────────
+  // ── Skip non-page routes (API) - no i18n/session middleware needed ──────────
   if (request.nextUrl.pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
@@ -224,7 +248,7 @@ async function buildPatterns() {
       // PIN gate: /auth/* and /home/* require the access cookie.
       // Visitors without it are sent to /access?next=<destination>.
       pattern: new URLPattern({ pathname: '/(auth|home)/*?' }),
-      handler: async (req: NextRequest, res: NextResponse) => {
+      handler: async (req: NextRequest, _res: NextResponse) => {
         const hasAccess = req.cookies.get(ACCESS_COOKIE)?.value === '1';
 
         if (!hasAccess) {
@@ -250,7 +274,7 @@ async function buildPatterns() {
         const isVerifyMfa = normalizedPathname === pathsConfig.auth.verifyMfa;
 
         // the complete-profile page lives under /auth but is for already
-        // logged-in users adding a mandatory email — don't bounce them home.
+        // logged-in users adding a mandatory email - don't bounce them home.
         const isCompleteProfile =
           normalizedPathname === pathsConfig.auth.completeProfile;
 
@@ -277,7 +301,9 @@ async function buildPatterns() {
       handler: async (req: NextRequest, res: NextResponse) => {
         const hasSessionCookie = req.cookies
           .getAll()
-          .some((c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'));
+          .some(
+            (c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'),
+          );
 
         if (!hasSessionCookie) return; // no session — let the landing page render
 

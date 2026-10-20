@@ -8,13 +8,13 @@ import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client'
  *
  * Email is a fallback for users who ALREADY exist (provisioned via phone by an
  * admin or a phone invitation). It never creates a new account, so this only
- * reports whether the email belongs to an existing user — it always returns
+ * reports whether the email belongs to an existing user - it always returns
  * `shouldCreateUser: false`.
  *
  * Note: like the phone gate (`checkPhoneInvitationAction`, which returns
  * `not_invited`), an unregistered email surfaces an explicit
  * `email_not_registered` message rather than a silent no-op. This is a
- * deliberate UX choice for an invite-only B2B app — it is a mild
+ * deliberate UX choice for an invite-only B2B app - it is a mild
  * account-existence oracle, accepted for consistency with the phone channel.
  */
 export async function checkEmailLoginAction(email: string) {

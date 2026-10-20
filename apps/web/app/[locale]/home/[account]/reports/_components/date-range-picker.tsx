@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { CalendarRange, Loader2 } from 'lucide-react';
 
 import { Button } from '@kit/ui/button';
+import { DatePicker } from '@kit/ui/date-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@kit/ui/popover';
 
 import {
@@ -59,7 +60,7 @@ export function DateRangePicker({
   onCustom,
 }: Props) {
   const [open, setOpen] = useState(false);
-  // Local state for the popover — reset to current range on open
+  // Local state for the popover - reset to current range on open
   const [customFrom, setCustomFrom] = useState(from);
   const [customTo, setCustomTo] = useState(to);
 
@@ -108,7 +109,7 @@ export function DateRangePicker({
 
       {/* Custom date range popover */}
       <Popover open={open} onOpenChange={handleOpen}>
-        {/* PopoverTrigger renders as <button> — do NOT nest <Button> inside it */}
+        {/* PopoverTrigger renders as <button> - do NOT nest <Button> inside it */}
         <PopoverTrigger
           disabled={loading}
           className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 ${
@@ -131,15 +132,13 @@ export function DateRangePicker({
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-muted-foreground text-xs font-medium">
+              <label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                 From
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={customFrom}
+                onChange={setCustomFrom}
                 max={customTo || undefined}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                className="border-input bg-background text-foreground focus:ring-ring h-9 w-full rounded-md border px-3 text-sm focus:ring-1 focus:outline-none"
               />
               {customFrom && (
                 <p className="text-muted-foreground text-xs">
@@ -149,15 +148,13 @@ export function DateRangePicker({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-muted-foreground text-xs font-medium">
+              <label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                 To
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={customTo}
+                onChange={setCustomTo}
                 min={customFrom || undefined}
-                onChange={(e) => setCustomTo(e.target.value)}
-                className="border-input bg-background text-foreground focus:ring-ring h-9 w-full rounded-md border px-3 text-sm focus:ring-1 focus:outline-none"
               />
               {customTo && (
                 <p className="text-muted-foreground text-xs">

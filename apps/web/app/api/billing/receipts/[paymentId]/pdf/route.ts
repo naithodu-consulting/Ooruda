@@ -6,6 +6,7 @@ import { enhanceRouteHandler } from '@kit/next/routes';
 import { getLogger } from '@kit/shared/logger';
 
 import { getOrGenerateReceiptPdf } from '~/home/[account]/billing/_lib/server/pdf-generation';
+import { safePdfFilename } from '~/lib/server/pdf-cache';
 
 export const GET = enhanceRouteHandler(
   async function ({ params }) {
@@ -41,7 +42,7 @@ export const GET = enhanceRouteHandler(
     return new NextResponse(new Uint8Array(pdf.bytes!), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${pdf.filename}"`,
+        'Content-Disposition': `attachment; filename="${safePdfFilename(pdf.filename)}"`,
         'Cache-Control': 'private, no-store',
       },
     });

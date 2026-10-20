@@ -2,10 +2,12 @@ import {
   Activity,
   Bell,
   Building2,
+  CalendarClock,
   ClipboardList,
   CreditCard,
   FileText,
   LayoutDashboard,
+  Receipt,
   ScrollText,
   Settings,
   Users,
@@ -63,6 +65,16 @@ const getRoutes = (account: string) => [
         label: 'association.nav.statement',
         path: `${pathsConfig.app.accountHome.replace('[account]', account)}/statement`,
         Icon: <ScrollText className={iconClasses} />,
+      },
+      {
+        label: 'association.nav.expenses',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/expenses`,
+        Icon: <Receipt className={iconClasses} />,
+      },
+      {
+        label: 'association.nav.amc',
+        path: `${pathsConfig.app.accountHome.replace('[account]', account)}/amc`,
+        Icon: <CalendarClock className={iconClasses} />,
       },
     ],
   },
@@ -130,6 +142,8 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[] | '*'> = {
     'association.nav.audit',
     'association.nav.members',
     'association.nav.settings',
+    'association.nav.expenses',
+    'association.nav.amc',
   ],
   billing_operator: [
     'association.nav.dashboard',
@@ -139,6 +153,7 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[] | '*'> = {
     'association.nav.payments',
     'association.nav.cashLedger',
     'association.nav.reports',
+    'association.nav.expenses',
   ],
   prop_owner: [
     'association.nav.dashboard',
@@ -157,7 +172,7 @@ type SidebarConfig = ReturnType<typeof getTeamAccountSidebarConfig>;
 /**
  * Filter a sidebar config down to the nav items the given role may see,
  * dropping any section left with no visible children. Pages remain protected
- * by requireRole() regardless — this only controls what the sidebar shows.
+ * by requireRole() regardless - this only controls what the sidebar shows.
  */
 export function filterSidebarConfigByRole(
   config: SidebarConfig,

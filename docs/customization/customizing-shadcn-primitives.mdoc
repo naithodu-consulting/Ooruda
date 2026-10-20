@@ -6,7 +6,7 @@ order: 2
 description: "Add project-specific behavior to Shadcn UI primitives in Makerkit without losing the ability to use the Shadcn CLI to swap themes or sync upstream components."
 ---
 
-`packages/ui/src/shadcn/` is **upstream-owned**. The Shadcn CLI may overwrite any file there when you sync a component or switch themes — anything custom you put in those files will be silently lost on the next sync.
+`packages/ui/src/shadcn/` is **upstream-owned**. The Shadcn CLI may overwrite any file there when you sync a component or switch themes - anything custom you put in those files will be silently lost on the next sync.
 
 This guide explains how the Shadcn CLI workflow is wired in Makerkit and the two patterns to use when you need to add project-specific behavior on top of an upstream primitive.
 
@@ -42,13 +42,13 @@ And in `packages/ui/components.json`:
 
 **Why this matters:**
 
-- Files inside `packages/ui/src/shadcn/` import siblings via `#components/*`, `#utils`, etc. — exactly the form the CLI emits. No post-CLI edits are needed when you sync a component.
+- Files inside `packages/ui/src/shadcn/` import siblings via `#components/*`, `#utils`, etc. - exactly the form the CLI emits. No post-CLI edits are needed when you sync a component.
 - The public package exports (e.g., `@kit/ui/button`) live in `packages/ui/package.json` under `"exports"`, separate from these internal aliases. Consumers outside the package always import from `@kit/ui/<name>`, never from `#components/*`.
-- When you redirect a public export to a `makerkit/` wrapper (see patterns below), the underlying `shadcn/<name>.tsx` keeps using `#components/*` internally — the wrapper sits on top.
+- When you redirect a public export to a `makerkit/` wrapper (see patterns below), the underlying `shadcn/<name>.tsx` keeps using `#components/*` internally - the wrapper sits on top.
 
 `#components/*` is a Node.js subpath import that only resolves *inside the `@kit/ui` package*. Don't try to use it from any other workspace; from outside the package you always use the public `@kit/ui/<name>` form.
 
-## Pattern 1 — Wrap and re-export
+## Pattern 1 - Wrap and re-export
 
 Use this when you want to **change the behavior of a primitive transparently** at every call site (e.g., make `FormMessage` translate error keys via i18n, or add `toast` to the sonner export).
 
@@ -75,9 +75,9 @@ export { Toaster } from '../shadcn/sonner';
 }
 ```
 
-Call sites continue to import from `@kit/ui/sonner` — they don't know the wrapper exists.
+Call sites continue to import from `@kit/ui/sonner` - they don't know the wrapper exists.
 
-## Pattern 2 — Companion token map
+## Pattern 2 - Companion token map
 
 Use this when you want to **add visual variants** to a primitive (e.g., `success`, `warning`, `info` on `Badge` or `Alert`) without widening the upstream variant union.
 
@@ -154,7 +154,7 @@ import { alertExtras } from '@kit/ui/alert-extras';
 
 ## Caveats
 
-- Always merge with `cn()` from `@kit/ui/utils` — it uses `tailwind-merge` to resolve conflicting utility classes (e.g., `bg-primary` from the default variant vs `bg-green-600/10` from your token).
+- Always merge with `cn()` from `@kit/ui/utils` - it uses `tailwind-merge` to resolve conflicting utility classes (e.g., `bg-primary` from the default variant vs `bg-green-600/10` from your token).
 - `tailwind-merge` resolves utilities like `bg-*`, `text-*`, `border-*`, but **does not** detect conflicts in arbitrary selectors like `[&>svg]:text-*`. If upstream changes a primitive's icon color rule, your override may need to tighten its selector to win.
 - Always add a header comment in the makerkit file explaining why the wrapper exists. Future-you (or the CLI sync diff) needs to know what's going on.
-- Never edit files in `packages/ui/src/shadcn/` to add project behavior — the CLI will silently overwrite your changes on the next sync.
+- Never edit files in `packages/ui/src/shadcn/` to add project behavior - the CLI will silently overwrite your changes on the next sync.

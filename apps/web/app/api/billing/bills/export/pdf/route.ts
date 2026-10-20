@@ -104,7 +104,7 @@ export const POST = enhanceRouteHandler(
         bill_no: b.bill_no,
         period: b.period,
         unit_no:
-          (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '—',
+          (b.units as unknown as { unit_no: string } | null)?.unit_no ?? '-',
         bill_type: b.bill_type ?? 'maintenance',
         total_amount: billData.total_amount,
         paid_amount: billData.paid_amount,

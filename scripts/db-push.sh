@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# db-push.sh — safely push migrations to the linked Supabase project.
+# db-push.sh - safely push migrations to the linked Supabase project.
 # Blocks pushes to Ooruda Production unless --production flag is explicitly passed.
 #
 # Usage:

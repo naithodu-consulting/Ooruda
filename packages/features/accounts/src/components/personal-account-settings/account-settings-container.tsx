@@ -1,5 +1,7 @@
 'use client';
 
+import * as React from 'react';
+
 import type { Provider } from '@supabase/supabase-js';
 
 import { routing } from '@kit/i18n';
@@ -34,6 +36,12 @@ export function PersonalAccountSettingsContainer(
       enablePasswordUpdate: boolean;
       enableAccountLinking: boolean;
       showLinkEmailOption: boolean;
+      /** Show the email-change card. Defaults to true. */
+      showEmailUpdate?: boolean;
+      /** Show the multi-factor authentication card. Defaults to true. */
+      showMultiFactorAuth?: boolean;
+      /** Show the linked sign-in methods card. Defaults to true. */
+      showLinkedAccounts?: boolean;
     };
 
     paths: {
@@ -45,8 +53,14 @@ export function PersonalAccountSettingsContainer(
 ) {
   const supportsLanguageSelection = useSupportMultiLanguage();
   const user = usePersonalAccountData(props.userId);
+  const hydrated = useHydrated();
 
-  if (!user.data || user.isPending) {
+  // The server always renders the loading state (the account query only runs
+  // in the browser). If another component has already cached the account by
+  // the time this one hydrates, rendering the settings straight away would
+  // not match the server HTML (React #418). Render the loading state for the
+  // first client pass too, then switch.
+  if (!hydrated || !user.data || user.isPending) {
     return <LoadingOverlay fullPage />;
   }
 
@@ -112,21 +126,23 @@ export function PersonalAccountSettingsContainer(
         </Card>
       </If>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            <Trans i18nKey={'account.updateEmailCardTitle'} />
-          </CardTitle>
+      <If condition={props.features.showEmailUpdate ?? true}>
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <Trans i18nKey={'account.updateEmailCardTitle'} />
+            </CardTitle>
 
-          <CardDescription>
-            <Trans i18nKey={'account.updateEmailCardDescription'} />
-          </CardDescription>
-        </CardHeader>
+            <CardDescription>
+              <Trans i18nKey={'account.updateEmailCardDescription'} />
+            </CardDescription>
+          </CardHeader>
 
-        <CardContent>
-          <UpdateEmailFormContainer callbackPath={props.paths.callback} />
-        </CardContent>
-      </Card>
+          <CardContent>
+            <UpdateEmailFormContainer callbackPath={props.paths.callback} />
+          </CardContent>
+        </Card>
+      </If>
 
       <If condition={props.features.enablePasswordUpdate}>
         <Card>
@@ -146,43 +162,47 @@ export function PersonalAccountSettingsContainer(
         </Card>
       </If>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            <Trans i18nKey={'account.multiFactorAuth'} />
-          </CardTitle>
+      <If condition={props.features.showMultiFactorAuth ?? true}>
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <Trans i18nKey={'account.multiFactorAuth'} />
+            </CardTitle>
 
-          <CardDescription>
-            <Trans i18nKey={'account.multiFactorAuthDescription'} />
-          </CardDescription>
-        </CardHeader>
+            <CardDescription>
+              <Trans i18nKey={'account.multiFactorAuthDescription'} />
+            </CardDescription>
+          </CardHeader>
 
-        <CardContent>
-          <MultiFactorAuthFactorsList userId={props.userId} />
-        </CardContent>
-      </Card>
+          <CardContent>
+            <MultiFactorAuthFactorsList userId={props.userId} />
+          </CardContent>
+        </Card>
+      </If>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            <Trans i18nKey={'account.linkedAccounts'} />
-          </CardTitle>
+      <If condition={props.features.showLinkedAccounts ?? true}>
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <Trans i18nKey={'account.linkedAccounts'} />
+            </CardTitle>
 
-          <CardDescription>
-            <Trans i18nKey={'account.linkedAccountsDescription'} />
-          </CardDescription>
-        </CardHeader>
+            <CardDescription>
+              <Trans i18nKey={'account.linkedAccountsDescription'} />
+            </CardDescription>
+          </CardHeader>
 
-        <CardContent>
-          <LinkAccountsList
-            providers={props.providers}
-            enabled={props.features.enableAccountLinking}
-            showEmailOption={props.features.showLinkEmailOption}
-            showPasswordOption={props.features.enablePasswordUpdate}
-            redirectTo={'/home/settings'}
-          />
-        </CardContent>
-      </Card>
+          <CardContent>
+            <LinkAccountsList
+              providers={props.providers}
+              enabled={props.features.enableAccountLinking}
+              showEmailOption={props.features.showLinkEmailOption}
+              showPasswordOption={props.features.enablePasswordUpdate}
+              redirectTo={'/home/settings'}
+            />
+          </CardContent>
+        </Card>
+      </If>
 
       <If condition={props.features.enableAccountDeletion}>
         <Card className={'border-destructive'}>
@@ -209,4 +229,17 @@ function useSupportMultiLanguage() {
   const { locales } = routing;
 
   return locales.length > 1;
+}
+
+/** False during SSR and the hydration render, true once mounted. */
+function useHydrated() {
+  return React.useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
+  );
+}
+
+function subscribeNoop() {
+  return () => undefined;
 }

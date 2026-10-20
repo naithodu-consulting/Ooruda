@@ -1,23 +1,22 @@
 import 'server-only';
+import { after } from 'next/server';
+
 import type { BillingEntityData } from '@kit/pdf-templates';
-import {
-  renderAdvanceApplicationPdf,
-  renderBillPdf,
-  renderElectricityBillPdf,
-  renderReceiptPdf,
-} from '@kit/pdf-templates';
 import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { logAuditEvent } from '~/lib/audit-log';
-import { getAssociationRole } from '~/lib/rbac';
+import { getAssociationRole, getCurrentUserId } from '~/lib/rbac';
+import { safePdfFilename } from '~/lib/server/pdf-cache';
+import { loadPdfRenderer } from '~/lib/server/pdf-renderer';
 const LOGO_MAX_PX = 208;
 const LOGO_BUCKET = 'account_image';
 
-// Cached processed logos — keyed by raw Storage URL. Survives the process
+// Cached processed logos - keyed by raw Storage URL. Survives the process
 // lifetime so the logo download + sharp resize only happens once per deploy.
 const logoCache = new Map<string, string>();
+const logoInflight = new Map<string, Promise<string | null>>();
 
 /**
  * Downloads the association logo from Supabase Storage via the admin client,
@@ -33,6 +32,17 @@ export async function preprocessLogoForPdf(
   const cached = logoCache.get(rawUrl);
   if (cached) return cached;
 
+  // Concurrent renders on a cold instance share one download + resize.
+  let inflight = logoInflight.get(rawUrl);
+  if (!inflight) {
+    inflight = processLogo(rawUrl).finally(() => logoInflight.delete(rawUrl));
+    logoInflight.set(rawUrl, inflight);
+  }
+
+  return inflight;
+}
+
+async function processLogo(rawUrl: string): Promise<string | null> {
   // Extract the storage object path from the URL.
   // Local:  http://127.0.0.1:54321/storage/v1/object/public/account_image/<path>
   // Remote: https://<ref>.supabase.co/storage/v1/object/public/account_image/<path>
@@ -44,14 +54,20 @@ export async function preprocessLogoForPdf(
 
   const logger = await getLogger();
   try {
-    // account_image is a public bucket — prefer a direct HTTP fetch so that
+    // account_image is a public bucket - prefer a direct HTTP fetch so that
     // cross-environment URLs resolve correctly (e.g. dev DB storing a
     // production Storage URL, which the dev admin client cannot access).
     // Fall back to the admin SDK download for cases where the direct fetch
     // fails (network policy, etc.).
     let buffer: Buffer | null = null;
 
-    const res = await fetch(rawUrl, { cache: 'no-store' }).catch((err) => {
+    // Bounded: a slow Storage response must not stall the download - on a
+    // timeout the admin SDK fallback runs, and failing that the PDF renders
+    // without the logo.
+    const res = await fetch(rawUrl, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3000),
+    }).catch((err) => {
       logger.warn(
         { rawUrl, err },
         'preprocessLogoForPdf: direct fetch failed, trying admin SDK',
@@ -86,7 +102,7 @@ export async function preprocessLogoForPdf(
     if (!buffer) return null;
 
     const sharp = (await import('sharp')).default;
-    // Check for alpha channel before JPEG conversion — JPEG has no transparency
+    // Check for alpha channel before JPEG conversion - JPEG has no transparency
     // support, so any alpha pixels map to black by default. Flatten against white
     // when the source has an alpha channel (PNG, WEBP, etc.) so the logo renders
     // on the white PDF background as intended.
@@ -114,17 +130,105 @@ const BUCKET = 'billing-documents';
 
 const pendingPdfGenerations = new Map<string, Promise<GeneratedPdf | null>>();
 
+/**
+ * How a freshly rendered PDF is written to the Storage cache:
+ * - 'background' (default for user downloads): the bytes go back to the
+ *   caller immediately and the upload + pdf_url write run after the response
+ *   via `after()`, taking two or three round trips off every cache miss.
+ * - 'inline': awaited before returning - for server flows (pre-render,
+ *   dispatch) that rely on pdf_url being set when the call resolves.
+ */
+type PersistMode = 'inline' | 'background';
+
+interface GenerateOptions {
+  skipAuth?: boolean;
+  persist?: PersistMode;
+}
+
+function persistModeOf(opts?: GenerateOptions): PersistMode {
+  return opts?.persist ?? (opts?.skipAuth ? 'inline' : 'background');
+}
+
+async function runPersist(mode: PersistMode, task: () => Promise<void>) {
+  if (mode === 'inline') {
+    await task();
+    return;
+  }
+
+  // `after` needs a request scope; fall back to awaiting outside of one.
+  try {
+    after(task);
+  } catch {
+    await task();
+  }
+}
+
+/**
+ * Records a cached bill PDF's path - but only if the bill still has the
+ * amounts and status that were rendered. A payment recorded while the PDF was
+ * rendering or uploading changes those fields (and clears pdf_url in the
+ * same trigger); writing the path anyway would cache a PDF showing the old
+ * paid amount. When they differ nothing is written and the next download
+ * renders afresh.
+ */
+export async function recordCachedBillPdf(
+  bill: {
+    id: string;
+    total_amount: number;
+    paid_amount: number;
+    advance_applied: number | null;
+    status: string;
+  },
+  storagePath: string,
+) {
+  let update = getSupabaseServerAdminClient()
+    .from('bills')
+    .update({
+      pdf_url: storagePath,
+      pdf_generated_at: new Date().toISOString(),
+    })
+    .eq('id', bill.id)
+    .eq('total_amount', bill.total_amount)
+    .eq('paid_amount', bill.paid_amount)
+    .eq('status', bill.status);
+
+  update =
+    bill.advance_applied === null
+      ? update.is('advance_applied', null)
+      : update.eq('advance_applied', bill.advance_applied);
+
+  return update;
+}
+
+/**
+ * Signs a cached PDF path, or returns null when the object is missing. The
+ * `download` option makes Storage serve it as an attachment named `filename`
+ * (and carries the name in the URL for the client-side downloader).
+ */
+async function signCachedPdf(
+  path: string | null | undefined,
+  filename: string,
+) {
+  if (!path) return null;
+
+  const { data } = await getSupabaseServerAdminClient()
+    .storage.from(BUCKET)
+    .createSignedUrl(path, 300, { download: safePdfFilename(filename) });
+
+  return data?.signedUrl ?? null;
+}
+
 export interface GeneratedPdf {
-  /** Raw bytes — set when the PDF was just rendered (cache miss). */
+  /** Raw bytes - set when the PDF was just rendered (cache miss). */
   bytes?: Buffer;
-  /** Signed Storage URL — set when the PDF was already cached (cache hit). Redirect the browser here directly to avoid proxying through Next.js. */
+  /** Signed Storage URL - set when the PDF was already cached (cache hit). Redirect the browser here directly to avoid proxying through Next.js. */
   signedUrl?: string;
   filename: string;
 }
 
 /**
  * The `bills`/`payments` RLS policy only checks association membership
- * (`is_association_member`), not which unit a row belongs to — any role,
+ * (`is_association_member`), not which unit a row belongs to - any role,
  * including tenant/prop_owner, can SELECT any bill in their association.
  * Unit-level scoping ("my unit only") is enforced at the app layer
  * everywhere else (see association-dashboard.tsx's owned/tenancy lookup),
@@ -132,7 +236,7 @@ export interface GeneratedPdf {
  *
  * Owners may access every bill/receipt for a unit they own, regardless of
  * which tenancy was active when it was generated. Tenants may only access
- * bills/receipts attributed to their OWN tenancy (`billTenancyId`) — a bill
+ * bills/receipts attributed to their OWN tenancy (`billTenancyId`) - a bill
  * with no tenancy_id predates any tenant (self-occupied period) and stays
  * accessible, but a bill attributed to a *different* tenancy belongs to a
  * past or future tenant on the same unit and must stay hidden from this one.
@@ -143,7 +247,22 @@ async function canAccessUnit(
   ownerId: string | null,
   billTenancyId: string | null,
 ): Promise<boolean> {
-  const role = await getAssociationRole(associationId);
+  const client = getSupabaseServerClient();
+  const userId = await getCurrentUserId();
+
+  if (!userId) {
+    return false;
+  }
+
+  // The role and the caller's active tenancy on this unit are independent, so
+  // they're looked up in parallel (the tenancy is only consulted for
+  // owners/tenants).
+  const [role, tenancyId] = await Promise.all([
+    getAssociationRole(associationId),
+    ownerId === userId
+      ? Promise.resolve(null)
+      : getActiveTenancyId(client, unitId, userId),
+  ]);
 
   if (role === 'assoc_admin' || role === 'billing_operator') {
     return true;
@@ -153,21 +272,9 @@ async function canAccessUnit(
     return false;
   }
 
-  const client = getSupabaseServerClient();
-
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-
-  if (!user) {
-    return false;
-  }
-
-  if (ownerId && ownerId === user.id) {
+  if (ownerId && ownerId === userId) {
     return true;
   }
-
-  const tenancyId = await getActiveTenancyId(client, unitId, user.id);
 
   if (!tenancyId) {
     return false;
@@ -194,14 +301,14 @@ type TenancyBillingRow = {
 };
 
 /**
- * Resolves the billing entity for a unit — used for BILL PDFs only.
+ * Resolves the billing entity for a unit - used for BILL PDFs only.
  * - bill_to=auto: use the tenancy that was active when the bill was
  *   generated, if any, else owner.
  * - bill_to=owner: always owner.
  * - bill_to=tenant: use that tenancy if present, else fall back to owner.
  *
  * `tenancyId` is the specific tenancy row the bill was attributed to at
- * generation time (`bills.tenancy_id`) — NOT "whichever tenancy happens to
+ * generation time (`bills.tenancy_id`) - NOT "whichever tenancy happens to
  * be active right now". Resolving against the current active tenancy would
  * make an old bill's "Bill To" name silently change to a new tenant's name
  * after a tenancy turnover and PDF cache regeneration.
@@ -234,7 +341,7 @@ async function resolveBillingEntity(
         companyGstin: tenancy.company_gstin,
       };
     }
-    // tenancies.tenant_id → auth.users(id), not profiles.id — PostgREST cannot
+    // tenancies.tenant_id → auth.users(id), not profiles.id - PostgREST cannot
     // resolve profiles() as an embedded join from tenancies. Fetch separately.
     const { data: profileData } = await admin
       .from('profiles')
@@ -283,7 +390,7 @@ async function resolveBillingEntity(
 }
 
 /**
- * Resolves the PAYER entity for RECEIPT PDFs — "Received From".
+ * Resolves the PAYER entity for RECEIPT PDFs - "Received From".
  *
  * Uses `paid_by_role` (the explicit choice made at payment time) rather than
  * `bill_to` (the billing preference on the unit), so the receipt always
@@ -383,27 +490,43 @@ async function resolvePayerEntity(
  */
 export async function getOrGenerateBillPdf(
   billId: string,
-  opts?: { skipAuth?: boolean },
+  opts?: GenerateOptions,
 ): Promise<GeneratedPdf | null> {
   // Auth is checked independently for every caller before consulting the
-  // dedup map — without this, a concurrent second request could receive the
+  // dedup map - without this, a concurrent second request could receive the
   // shared in-flight promise before its auth is checked.
   if (!opts?.skipAuth) {
     const client = getSupabaseServerClient();
     const { data: billMeta } = await client
       .from('bills')
-      .select('association_id, unit_id, tenancy_id, units(owner_id)')
+      .select(
+        'association_id, unit_id, tenancy_id, bill_no, pdf_url, units(owner_id)',
+      )
       .eq('id', billId)
       .maybeSingle();
     if (!billMeta) return null;
-    const authorized = await canAccessUnit(
-      billMeta.association_id,
-      billMeta.unit_id,
-      (billMeta.units as unknown as { owner_id: string | null } | null)
-        ?.owner_id ?? null,
-      billMeta.tenancy_id,
-    );
+
+    // Cache-hit fast path: sign the cached object while the access check runs.
+    // The URL is only handed back once the caller is authorised.
+    const [authorized, signedUrl] = await Promise.all([
+      canAccessUnit(
+        billMeta.association_id,
+        billMeta.unit_id,
+        (billMeta.units as unknown as { owner_id: string | null } | null)
+          ?.owner_id ?? null,
+        billMeta.tenancy_id,
+      ),
+      signCachedPdf(billMeta.pdf_url, `${billMeta.bill_no}.pdf`),
+    ]);
     if (!authorized) return null;
+
+    if (signedUrl) {
+      return { signedUrl, filename: `${billMeta.bill_no}.pdf` };
+    }
+
+    // Cache miss: start loading and warming the renderer now so it overlaps
+    // with the data fetch below.
+    void loadPdfRenderer().catch(() => undefined);
   }
 
   const cacheKey = `bill_${billId}`;
@@ -418,7 +541,7 @@ export async function getOrGenerateBillPdf(
     // Fetch the bill using the admin client to ensure we get the full
     // nested association + accounts join (which might otherwise be filtered
     // by RLS for non-members, obscuring the logo). Auth was already confirmed
-    // by canAccessUnit() before this generate() closure was entered — the
+    // by canAccessUnit() before this generate() closure was entered - the
     // second check is intentionally removed to avoid 6+ serial DB calls.
     const { data: bill, error: billError } = await admin
       .from('bills')
@@ -450,14 +573,12 @@ export async function getOrGenerateBillPdf(
     const filename = `${bill.bill_no}.pdf`;
 
     if (bill.pdf_url) {
-      const { data: signed } = await admin.storage
-        .from(BUCKET)
-        .createSignedUrl(bill.pdf_url, 300);
+      const signedUrl = await signCachedPdf(bill.pdf_url, filename);
 
-      if (signed?.signedUrl) {
-        return { signedUrl: signed.signedUrl, filename };
+      if (signedUrl) {
+        return { signedUrl, filename };
       }
-      // Signed URL creation failed (e.g. object missing) — fall through and regenerate.
+      // Signed URL creation failed (e.g. object missing) - fall through and regenerate.
     }
 
     const association = bill.associations;
@@ -499,7 +620,7 @@ export async function getOrGenerateBillPdf(
       // bill, query by meter_type + units join instead of unit_id.
       const isCommonAreaBill = unitData.type === 'Common Area';
 
-      // Fetch mescom_bill, sub_meters, billing entity, and logo in parallel —
+      // Fetch mescom_bill, sub_meters, billing entity, and logo in parallel -
       // none of these depend on each other.
       const [{ data: mescomBill }, { data: subMeters }, billTo, logoUrl] =
         await Promise.all([
@@ -606,6 +727,7 @@ export async function getOrGenerateBillPdf(
       });
 
       try {
+        const { renderElectricityBillPdf } = await loadPdfRenderer();
         bytes = await renderElectricityBillPdf({
           association: {
             name: association.accounts?.name ?? 'Association',
@@ -666,6 +788,7 @@ export async function getOrGenerateBillPdf(
         preprocessLogoForPdf(association.accounts?.picture_url),
       ]);
       try {
+        const { renderBillPdf } = await loadPdfRenderer();
         bytes = await renderBillPdf({
           association: {
             name: association.accounts?.name ?? 'Association',
@@ -717,32 +840,28 @@ export async function getOrGenerateBillPdf(
     }
 
     const storagePath = `bills/${bill.association_id}/${bill.id}.pdf`;
+    const pdfBytes = bytes;
 
-    // Upload must be awaited: bills.pdf_url must be written before the next
-    // request arrives so cache hits can return a signed URL instead of
-    // re-rendering. Background void would lose the write on serverless.
-    const { error: uploadError } = await admin.storage
-      .from(BUCKET)
-      .upload(storagePath, bytes, {
-        contentType: 'application/pdf',
-        upsert: true,
-      });
+    // Cache the render so later downloads (and ZIP exports) are signed-URL
+    // hits. bills.pdf_url is only written once the object exists.
+    await runPersist(persistModeOf(opts), async () => {
+      const { error: uploadError } = await admin.storage
+        .from(BUCKET)
+        .upload(storagePath, pdfBytes, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
 
-    if (uploadError) {
-      logger.error(
-        { billId, storagePath, error: uploadError },
-        'Failed to cache generated bill PDF in storage',
-      );
-    } else {
-      // bills.update and audit can run concurrently — saves ~100ms vs sequential.
+      if (uploadError) {
+        logger.error(
+          { billId, storagePath, error: uploadError },
+          'Failed to cache generated bill PDF in storage',
+        );
+        return;
+      }
+
       await Promise.all([
-        admin
-          .from('bills')
-          .update({
-            pdf_url: storagePath,
-            pdf_generated_at: new Date().toISOString(),
-          })
-          .eq('id', billId),
+        recordCachedBillPdf(bill, storagePath),
         logAuditEvent({
           associationId: bill.association_id,
           action: 'bill.pdf_generated',
@@ -751,7 +870,7 @@ export async function getOrGenerateBillPdf(
           summary: `Generated PDF for bill ${bill.bill_no}`,
         }),
       ]);
-    }
+    });
 
     return { bytes, filename };
   };
@@ -767,7 +886,7 @@ export async function getOrGenerateBillPdf(
 
 /**
  * Best-effort background PDF pre-render called after bill generation.
- * Skips auth — only invoke from server-side generation flows (generateBillsAction).
+ * Skips auth - only invoke from server-side generation flows (generateBillsAction).
  * Errors are logged and swallowed so one failed render never blocks the others.
  */
 export async function preRenderBillPdf(billId: string): Promise<void> {
@@ -777,9 +896,42 @@ export async function preRenderBillPdf(billId: string): Promise<void> {
     const logger = await getLogger();
     logger.error(
       { billId, err },
-      'preRenderBillPdf: background render failed — will render on first download instead',
+      'preRenderBillPdf: background render failed - will render on first download instead',
     );
   }
+}
+
+/**
+ * Schedules the documents a new payment affects to be rendered and cached
+ * after the response: the payment's receipt, and its bill (whose cached PDF
+ * the payment trigger just invalidated, since it prints the paid amount).
+ * The first download of either is then a signed-URL hit instead of a render.
+ *
+ * Skips auth - only call from server flows that already recorded the payment.
+ */
+export function preRenderPaymentDocumentsAfterResponse(
+  payments: { paymentId: string; billId: string }[],
+) {
+  if (payments.length === 0) return;
+
+  after(async () => {
+    const billIds = [...new Set(payments.map((p) => p.billId))];
+
+    await Promise.all([
+      ...payments.map(({ paymentId }) =>
+        getOrGenerateReceiptPdf(paymentId, { skipAuth: true }).catch(
+          async (err) => {
+            const logger = await getLogger();
+            logger.error(
+              { paymentId, err },
+              'Receipt pre-render failed - it will render on first download',
+            );
+          },
+        ),
+      ),
+      ...billIds.map(preRenderBillPdf),
+    ]);
+  });
 }
 
 /**
@@ -787,14 +939,16 @@ export async function preRenderBillPdf(billId: string): Promise<void> {
  */
 export async function getOrGenerateReceiptPdf(
   paymentId: string,
-  opts?: { skipAuth?: boolean },
+  opts?: GenerateOptions,
 ): Promise<GeneratedPdf | null> {
-  // Auth pre-check before the dedup map — see getOrGenerateBillPdf for rationale.
+  // Auth pre-check before the dedup map - see getOrGenerateBillPdf for rationale.
   if (!opts?.skipAuth) {
     const authClient = getSupabaseServerClient();
     const { data: paymentMeta } = await authClient
       .from('payments')
-      .select('association_id, bills(unit_id, tenancy_id, units(owner_id))')
+      .select(
+        'association_id, bills(unit_id, tenancy_id, units(owner_id)), receipts(receipt_no, pdf_url)',
+      )
       .eq('id', paymentId)
       .maybeSingle();
     if (!paymentMeta?.bills) return null;
@@ -803,13 +957,35 @@ export async function getOrGenerateReceiptPdf(
       tenancy_id: string | null;
       units: { owner_id: string | null } | null;
     };
-    const authorized = await canAccessUnit(
-      paymentMeta.association_id,
-      bill.unit_id,
-      bill.units?.owner_id ?? null,
-      bill.tenancy_id,
-    );
+    const metaReceipt = paymentMeta.receipts as
+      | { receipt_no: string; pdf_url: string | null }
+      | { receipt_no: string; pdf_url: string | null }[]
+      | null;
+    const cachedReceipt = Array.isArray(metaReceipt)
+      ? (metaReceipt[0] ?? null)
+      : metaReceipt;
+
+    // Cache-hit fast path: sign while the access check runs; the URL is only
+    // returned once the caller is authorised.
+    const [authorized, signedUrl] = await Promise.all([
+      canAccessUnit(
+        paymentMeta.association_id,
+        bill.unit_id,
+        bill.units?.owner_id ?? null,
+        bill.tenancy_id,
+      ),
+      signCachedPdf(
+        cachedReceipt?.pdf_url,
+        `${cachedReceipt?.receipt_no ?? paymentId}.pdf`,
+      ),
+    ]);
     if (!authorized) return null;
+
+    if (signedUrl && cachedReceipt) {
+      return { signedUrl, filename: `${cachedReceipt.receipt_no}.pdf` };
+    }
+
+    void loadPdfRenderer().catch(() => undefined);
   }
 
   const cacheKey = `receipt_${paymentId}`;
@@ -838,16 +1014,12 @@ export async function getOrGenerateReceiptPdf(
       ? (quickReceipt[0]?.receipt_no ?? null)
       : (quickReceipt?.receipt_no ?? null);
     if (existingPdfUrl && existingReceiptNo) {
-      const { data: signed } = await admin.storage
-        .from(BUCKET)
-        .createSignedUrl(existingPdfUrl, 300);
-      if (signed?.signedUrl) {
-        return {
-          signedUrl: signed.signedUrl,
-          filename: `${existingReceiptNo}.pdf`,
-        };
+      const existingFilename = `${existingReceiptNo}.pdf`;
+      const signedUrl = await signCachedPdf(existingPdfUrl, existingFilename);
+      if (signedUrl) {
+        return { signedUrl, filename: existingFilename };
       }
-      // Object missing from storage — fall through to regenerate.
+      // Object missing from storage - fall through to regenerate.
     }
 
     // Cache miss: fetch with full joins to render the PDF.
@@ -885,38 +1057,18 @@ export async function getOrGenerateReceiptPdf(
       return null;
     }
 
-    if (
-      !opts?.skipAuth &&
-      !(await canAccessUnit(
-        payment.association_id,
-        payment.bills.unit_id,
-        (payment.bills.units as unknown as { owner_id: string | null } | null)
-          ?.owner_id ?? null,
-        payment.bills.tenancy_id,
-      ))
-    ) {
-      logger.warn(
-        {
-          paymentId,
-          associationId: payment.association_id,
-          unitId: payment.bills.unit_id,
-        },
-        "Caller is not authorized to access this payment's unit",
-      );
-      return null;
-    }
+    // Access was already checked before entering generate() (same unit and
+    // tenancy as the joins above), so it isn't repeated here.
 
     const filename = `${receipt.receipt_no}.pdf`;
 
     if (receipt.pdf_url) {
-      const { data: signed } = await admin.storage
-        .from(BUCKET)
-        .createSignedUrl(receipt.pdf_url, 300);
+      const signedUrl = await signCachedPdf(receipt.pdf_url, filename);
 
-      if (signed?.signedUrl) {
-        return { signedUrl: signed.signedUrl, filename };
+      if (signedUrl) {
+        return { signedUrl, filename };
       }
-      // Signed URL creation failed (e.g. object missing) — fall through and regenerate.
+      // Signed URL creation failed (e.g. object missing) - fall through and regenerate.
     }
 
     type ExtendedUnit = {
@@ -955,6 +1107,7 @@ export async function getOrGenerateReceiptPdf(
     let bytes: Buffer;
 
     try {
+      const { renderReceiptPdf } = await loadPdfRenderer();
       bytes = await renderReceiptPdf({
         association: {
           name: association.accounts?.name ?? 'Association',
@@ -1001,22 +1154,24 @@ export async function getOrGenerateReceiptPdf(
     }
 
     const storagePath = `receipts/${payment.association_id}/${payment.id}.pdf`;
+    const pdfBytes = bytes;
 
-    // Upload must be awaited so receipts.pdf_url is written before the next
-    // request; bills.update + audit run concurrently to save ~100ms.
-    const { error: uploadError } = await admin.storage
-      .from(BUCKET)
-      .upload(storagePath, bytes, {
-        contentType: 'application/pdf',
-        upsert: true,
-      });
+    await runPersist(persistModeOf(opts), async () => {
+      const { error: uploadError } = await admin.storage
+        .from(BUCKET)
+        .upload(storagePath, pdfBytes, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
 
-    if (uploadError) {
-      logger.error(
-        { paymentId, storagePath, error: uploadError },
-        'Failed to cache generated receipt PDF in storage',
-      );
-    } else {
+      if (uploadError) {
+        logger.error(
+          { paymentId, storagePath, error: uploadError },
+          'Failed to cache generated receipt PDF in storage',
+        );
+        return;
+      }
+
       await Promise.all([
         admin
           .from('receipts')
@@ -1030,7 +1185,7 @@ export async function getOrGenerateReceiptPdf(
           summary: `Generated PDF for receipt ${receipt.receipt_no}`,
         }),
       ]);
-    }
+    });
 
     return { bytes, filename };
   };
@@ -1054,6 +1209,7 @@ export async function getOrGenerateReceiptPdf(
  */
 export async function getOrGenerateAdvanceApplicationPdf(
   voucherNo: string,
+  opts?: Pick<GenerateOptions, 'persist'>,
 ): Promise<GeneratedPdf | null> {
   const authClient = getSupabaseServerClient();
 
@@ -1075,13 +1231,24 @@ export async function getOrGenerateAdvanceApplicationPdf(
   };
   const meta = receiptMeta as ReceiptMeta;
 
-  const authorized = await canAccessUnit(
-    meta.association_id,
-    meta.unit_id,
-    meta.units?.owner_id ?? null,
-    null, // advance applications are not tenancy-scoped; any current tenant may access
-  );
+  // Sign the cached object while the access check runs; the URL is only
+  // returned once the caller is authorised.
+  const [authorized, signedUrl] = await Promise.all([
+    canAccessUnit(
+      meta.association_id,
+      meta.unit_id,
+      meta.units?.owner_id ?? null,
+      null, // advance applications are not tenancy-scoped; any current tenant may access
+    ),
+    signCachedPdf(meta.pdf_url, `${voucherNo}.pdf`),
+  ]);
   if (!authorized) return null;
+
+  if (signedUrl) {
+    return { signedUrl, filename: `${voucherNo}.pdf` };
+  }
+
+  void loadPdfRenderer().catch(() => undefined);
 
   const cacheKey = `advance_application_${voucherNo}`;
   if (pendingPdfGenerations.has(cacheKey)) {
@@ -1094,18 +1261,8 @@ export async function getOrGenerateAdvanceApplicationPdf(
 
     const filename = `${voucherNo}.pdf`;
 
-    // Serve from cache if available.
-    if (meta.pdf_url) {
-      const { data: signed } = await admin.storage
-        .from(BUCKET)
-        .createSignedUrl(meta.pdf_url, 300);
-      if (signed?.signedUrl) {
-        return { signedUrl: signed.signedUrl, filename };
-      }
-    }
-
     // Fetch full record for PDF generation.
-    // Use authClient — advance_application_receipts has REVOKE ALL FROM service_role.
+    // Use authClient - advance_application_receipts has REVOKE ALL FROM service_role.
     const { data: receipt, error } = await authClient
       .from('advance_application_receipts')
       .select(
@@ -1180,7 +1337,7 @@ export async function getOrGenerateAdvanceApplicationPdf(
     // Resolve "Received From" as whoever paid the advance into the ledger.
     // The advance_application_receipts row is a debit; the original credit
     // entries for that unit/bill_type carry paid_by_user_id and paid_by_name.
-    // Use the most recent advance credit as the attributed payer — it is the
+    // Use the most recent advance credit as the attributed payer - it is the
     // best approximation when multiple deposits exist.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cashLedgerAdmin = admin as any;
@@ -1198,7 +1355,7 @@ export async function getOrGenerateAdvanceApplicationPdf(
           .maybeSingle(),
       ).then(async ({ data: creditEntry }: { data: unknown }) => {
         if (!creditEntry) {
-          // No advance credit found — fall back to owner.
+          // No advance credit found - fall back to owner.
           return resolvePayerEntity('Owner', unitData, null);
         }
         const entry = creditEntry as {
@@ -1221,7 +1378,7 @@ export async function getOrGenerateAdvanceApplicationPdf(
             companyGstin: null,
           } satisfies BillingEntityData;
         }
-        // paid_by_user_id is null — admin entered free-text name
+        // paid_by_user_id is null - admin entered free-text name
         return {
           isCompany: false,
           name: entry.paid_by_name || null,
@@ -1237,6 +1394,7 @@ export async function getOrGenerateAdvanceApplicationPdf(
 
     let bytes: Buffer;
     try {
+      const { renderAdvanceApplicationPdf } = await loadPdfRenderer();
       bytes = await renderAdvanceApplicationPdf({
         association: {
           name: association.accounts?.name ?? 'Association',
@@ -1279,21 +1437,25 @@ export async function getOrGenerateAdvanceApplicationPdf(
     }
 
     const storagePath = `advance-applications/${meta.association_id}/${voucherNo}.pdf`;
+    const pdfBytes = bytes;
 
-    const { error: uploadError } = await admin.storage
-      .from(BUCKET)
-      .upload(storagePath, bytes, {
-        contentType: 'application/pdf',
-        upsert: true,
-      });
+    await runPersist(opts?.persist ?? 'background', async () => {
+      const { error: uploadError } = await admin.storage
+        .from(BUCKET)
+        .upload(storagePath, pdfBytes, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
 
-    if (uploadError) {
-      logger.error(
-        { voucherNo, storagePath, error: uploadError },
-        'Failed to cache advance application PDF',
-      );
-    } else {
-      await Promise.all([
+      if (uploadError) {
+        logger.error(
+          { voucherNo, storagePath, error: uploadError },
+          'Failed to cache advance application PDF',
+        );
+        return;
+      }
+
+      const [{ error: updateError }] = await Promise.all([
         admin
           .from('advance_application_receipts')
           .update({ pdf_url: storagePath })
@@ -1306,7 +1468,14 @@ export async function getOrGenerateAdvanceApplicationPdf(
           summary: `Generated PDF for advance application voucher ${voucherNo}`,
         }),
       ]);
-    }
+
+      if (updateError) {
+        logger.error(
+          { voucherNo, error: updateError },
+          'Failed to record cached advance application PDF path',
+        );
+      }
+    });
 
     return { bytes, filename };
   };

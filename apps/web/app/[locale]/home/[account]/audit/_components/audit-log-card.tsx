@@ -61,7 +61,7 @@ export interface AuditLogRow {
 
 function RoleBadge({ roleLabel }: { roleLabel: string | null }) {
   if (!roleLabel)
-    return <span className="text-muted-foreground text-xs">—</span>;
+    return <span className="text-muted-foreground text-xs">-</span>;
 
   const isSuperAdmin = roleLabel === 'Super Admin';
   const isAdmin = roleLabel === 'Association Admin';
@@ -81,9 +81,9 @@ function RoleBadge({ roleLabel }: { roleLabel: string | null }) {
         isSuperAdmin
           ? 'text-destructive text-sm font-medium'
           : isAdmin
-            ? 'text-primary text-sm font-medium'
+            ? 'text-brand-ink text-sm font-medium'
             : isOperator
-              ? 'text-sm font-medium text-[var(--color-success)]'
+              ? 'text-success text-sm font-medium'
               : 'text-muted-foreground text-sm font-medium'
       }
     >
@@ -116,13 +116,7 @@ export function AuditLogCard(props: {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-bold">Audit Log</h2>
-          <p className="text-muted-foreground text-sm">
-            All events, actions, and system events
-          </p>
-        </div>
+      <div className="flex justify-end">
         <AuditSearchBar
           defaultValue={search}
           basePath={basePath}
@@ -174,7 +168,7 @@ export function AuditLogCard(props: {
                               {actionLabel(row.action)}
                             </span>
                             {row.path && (
-                              <div className="text-muted-foreground mt-0.5 font-mono text-[10px]">
+                              <div className="text-muted-foreground mt-0.5 font-mono text-xs">
                                 {row.path}
                               </div>
                             )}
@@ -187,10 +181,12 @@ export function AuditLogCard(props: {
                       <TableCell className="py-3.5">
                         <RoleBadge roleLabel={row.actorRoleLabel} />
                       </TableCell>
-                      <TableCell className="text-muted-foreground py-3.5 text-sm">
+                      {/* Details wraps (table cells default to nowrap), so long summaries
+                          don't widen the table and push Status/Time off-screen. */}
+                      <TableCell className="text-muted-foreground min-w-56 py-3.5 text-sm break-words whitespace-normal">
                         {truncateSummary(row.summary)}
                         {row.errorCode && (
-                          <div className="text-destructive mt-0.5 font-mono text-[10px]">
+                          <div className="text-destructive mt-0.5 font-mono text-xs">
                             {row.errorCode}
                           </div>
                         )}

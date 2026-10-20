@@ -5,9 +5,10 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
+import { DatePicker } from '@kit/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -35,6 +37,7 @@ import {
 import { toast } from '@kit/ui/sonner';
 import { Spinner } from '@kit/ui/spinner';
 
+import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatINR } from '~/lib/format-inr';
 
 import { recordPaymentAction } from '../_lib/payments-actions';
@@ -107,10 +110,11 @@ function RecordPaymentForm(props: {
       mode: 'Cash' as const,
       paid_by_role: 'Owner' as const,
       reference_no: '',
+      paid_on: todayInBillingZone(),
     },
   });
 
-  const selectedMode = form.watch('mode');
+  const selectedMode = useWatch({ control: form.control, name: 'mode' });
 
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
@@ -146,6 +150,32 @@ function RecordPaymentForm(props: {
             </FormItem>
           )}
         />
+
+        {selectedMode !== 'Razorpay' && (
+          <FormField
+            name="paid_on"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Payment Date</FormLabel>
+                <FormControl>
+                  <DatePicker
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    max={todayInBillingZone()}
+                    placeholder="Select payment date"
+                    data-test="payment-date"
+                  />
+                </FormControl>
+                <FormDescription>
+                  When the money was actually received, not necessarily today.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <FormField
           name="mode"

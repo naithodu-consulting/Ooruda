@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from '@kit/ui/dialog';
 import { If } from '@kit/ui/if';
+import { SearchableSelect } from '@kit/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -103,7 +104,7 @@ export function AdminManageRolesDialog(props: {
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Manage roles — {props.userName}</DialogTitle>
+          <DialogTitle>Manage roles - {props.userName}</DialogTitle>
           <DialogDescription>
             Assign this user to an association with a role, or remove an
             existing assignment.
@@ -136,7 +137,7 @@ export function AdminManageRolesDialog(props: {
                       <span className="font-medium">
                         {membership.associationName}
                       </span>{' '}
-                      — {roleLabel(membership.role)}
+                      - {roleLabel(membership.role)}
                     </span>
 
                     <Button
@@ -162,27 +163,20 @@ export function AdminManageRolesDialog(props: {
             <span className="text-sm font-medium">Assign / change role</span>
 
             <div className="flex flex-col gap-2">
-              <Select
+              <SearchableSelect
+                className="w-full"
+                data-test={'admin-manage-roles-association-select'}
+                aria-label="Association"
+                items={props.associations.map((association) => ({
+                  value: association.id,
+                  label: association.name,
+                }))}
                 value={associationId}
-                onValueChange={(value) => setAssociationId(value ?? '')}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select an association">
-                    {(value: string) =>
-                      props.associations.find((a) => a.id === value)?.name ??
-                      'Select an association'
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-
-                <SelectContent>
-                  {props.associations.map((association) => (
-                    <SelectItem key={association.id} value={association.id}>
-                      {association.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={setAssociationId}
+                placeholder="Select an association"
+                searchPlaceholder="Search associations…"
+                emptyMessage="No associations found"
+              />
 
               <Select
                 value={role}

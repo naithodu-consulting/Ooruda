@@ -13,7 +13,7 @@ import { billOutstanding, displayBillStatus } from '~/lib/bill-status';
 import { formatINR } from '~/lib/format-inr';
 
 /**
- * Narrow bill shape the tiles need — see `BILL_AMOUNTS_SELECT`.
+ * Narrow bill shape the tiles need - see `BILL_AMOUNTS_SELECT`.
  *
  * `advance_applied` is required rather than optional on purpose. This component
  * previously received a row type that omitted it, so `displayBillStatus` saw
@@ -50,7 +50,7 @@ export function BillingOverview({
 
   const thisMonth = bills.filter((b) => b.period === currentPeriod);
   const thisMonthBilled = thisMonth.reduce((s, b) => s + b.total_amount, 0);
-  // Settled, not just paid — advance credit applied to a bill is real
+  // Settled, not just paid - advance credit applied to a bill is real
   // collection, and is what the unit list reports in its Outstanding column.
   const thisMonthCollected = thisMonth.reduce(
     (s, b) => s + Math.min(b.paid_amount + b.advance_applied, b.total_amount),

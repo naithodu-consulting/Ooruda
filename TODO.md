@@ -1,15 +1,15 @@
-# Ooruda — Backlog & Upcoming Work
+# Ooruda - Backlog & Upcoming Work
 
 Items that are scoped and understood but not yet implemented. Each entry includes enough context to pick up without re-investigating.
 
 ---
 
-## Dev DB sync — pending steps (do before next release push)
+## Dev DB sync - pending steps (do before next release push)
 
-**Priority:** High — must complete before pushing v1.4 to dev/staging  
+**Priority:** High - must complete before pushing v1.4 to dev/staging  
 **Linked Supabase project:** `bcdosjrbkkemsqowhigj` (dev)
 
-### Step 1 — Push pending migrations
+### Step 1 - Push pending migrations
 
 4 migrations are not yet on dev. Run:
 
@@ -26,10 +26,10 @@ Pending migrations:
 | `20260806000002_reminder_cron.sql` | pg_cron schedule for `send-reminders` Edge Function |
 | `20260806000003_drop_in_app_notifications.sql` | Drop legacy in-app notification tables |
 
-### Step 2 — Register auth-events-hook in Supabase Dashboard
+### Step 2 - Register auth-events-hook in Supabase Dashboard
 
-⚠️ **Blocked — Supabase free/pro plan limitation.**  
-The Auth Hooks page only exposes: Send Email hook, JWT Claims hook, Before User Created hook. A generic post-auth-event webhook (needed to log login/logout/OTP to `audit_logs`) requires **Team or Enterprise plan**. The `auth-events-hook` Edge Function is deployed and ready — registration is blocked by plan tier.
+⚠️ **Blocked - Supabase free/pro plan limitation.**  
+The Auth Hooks page only exposes: Send Email hook, JWT Claims hook, Before User Created hook. A generic post-auth-event webhook (needed to log login/logout/OTP to `audit_logs`) requires **Team or Enterprise plan**. The `auth-events-hook` Edge Function is deployed and ready - registration is blocked by plan tier.
 
 **When upgraded to Team plan:**
 1. Go to Supabase Dashboard → **Authentication → Hooks**
@@ -37,9 +37,9 @@ The Auth Hooks page only exposes: Send Email hook, JWT Claims hook, Before User 
 3. URL: `https://bcdosjrbkkemsqowhigj.supabase.co/functions/v1/auth-events-hook`
 4. Set `AUTH_HOOK_SECRET` in Dashboard → Edge Functions → auth-events-hook → Secrets
 
-### Step 3 — Wire send-reminders scheduling
+### Step 3 - Wire send-reminders scheduling
 
-✅ **Unblocked (2026-08-11).** The `alter database postgres set app.supabase_project_url / app.supabase_service_key` approach works via the Supabase Dashboard SQL Editor — earlier assumption that it required superuser was incorrect.
+✅ **Unblocked (2026-08-11).** The `alter database postgres set app.supabase_project_url / app.supabase_service_key` approach works via the Supabase Dashboard SQL Editor - earlier assumption that it required superuser was incorrect.
 
 Setup steps (once per environment, done via Supabase Dashboard SQL Editor):
 ```sql
@@ -51,17 +51,17 @@ select pg_reload_conf();
 Then set Edge Function secrets for `send-reminders`:
 - `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `SMS_PROVIDER=mock`, `NEXT_PUBLIC_SITE_URL`
 
-**SMS reminders: not yet active.** The `send-reminders` function supports SMS via Kaleyra but requires two DLT-approved template IDs: `KALEYRA_SMS_TEMPLATE_REMINDER` and `KALEYRA_SMS_TEMPLATE_OVERDUE`. These are separate from the OTP template (`KALEYRA_SMS_TEMPLATE_ID`). Until these are registered and approved with Kaleyra, keep `SMS_PROVIDER=mock` in the Edge Function secrets — email reminders work fully. Enable SMS by setting `SMS_PROVIDER=kaleyra` and adding both template IDs once approved.
+**SMS reminders: not yet active.** The `send-reminders` function supports SMS via Kaleyra but requires two DLT-approved template IDs: `KALEYRA_SMS_TEMPLATE_REMINDER` and `KALEYRA_SMS_TEMPLATE_OVERDUE`. These are separate from the OTP template (`KALEYRA_SMS_TEMPLATE_ID`). Until these are registered and approved with Kaleyra, keep `SMS_PROVIDER=mock` in the Edge Function secrets - email reminders work fully. Enable SMS by setting `SMS_PROVIDER=kaleyra` and adding both template IDs once approved.
 
 The `overdue-recompute` job works fine (pure SQL, no secrets).
 
-### Step 4 — Smoke-test auth events
+### Step 4 - Smoke-test auth events
 
 Log out and log back in, then check the super-admin Activity Log → Auth Events tab. A `auth.login` row should appear.
 
 ---
 
-## Activity Log — Phase 4 deferred items
+## Activity Log - Phase 4 deferred items
 
 **Feature:** Activity Log / Audit Log (v1.4)  
 **Context:** Phase 1–3 shipped in v1.4 (audit_logs table, UI with tabs/icons/search/pagination, error instrumentation, Edge Function hooks). These items were descoped to keep scope manageable.
@@ -110,7 +110,7 @@ Consider whether auth_event and error rows should have a longer retention (180 d
 **Priority:** Low  
 **File:** `packages/features/admin/src/lib/server/admin-server-actions.ts`
 
-Safe-action failures (e.g. duplicate email on Edit User, invalid phone) throw and return a typed error to the UI but never write to `audit_logs`. The Errors tab in the super-admin Activity Log only shows rows explicitly written with `event_type: 'error'` via `lib/audit-log.ts` — unhandled safe-action throws are invisible there.
+Safe-action failures (e.g. duplicate email on Edit User, invalid phone) throw and return a typed error to the UI but never write to `audit_logs`. The Errors tab in the super-admin Activity Log only shows rows explicitly written with `event_type: 'error'` via `lib/audit-log.ts` - unhandled safe-action throws are invisible there.
 
 **Fix:** Add a `catch` block in each admin action that writes a failure row:
 
@@ -147,7 +147,7 @@ Affects all actions in `admin-server-actions.ts`. Consider a shared `withAuditEr
 **Priority:** Medium  
 **File:** `apps/web/app/[locale]/home/[account]/payments/_components/payments-section.tsx:133`
 
-**Root cause:** The Partial filter gates on `b.due_date >= today`, so it only finds partially paid bills still within their due date. Once a partial bill crosses its due date, `displayBillStatus()` promotes its badge to "Overdue" and the Partial filter stops matching it. In a live association where most partial bills have aged past due, the filter returns nothing — which looks broken to the admin.
+**Root cause:** The Partial filter gates on `b.due_date >= today`, so it only finds partially paid bills still within their due date. Once a partial bill crosses its due date, `displayBillStatus()` promotes its badge to "Overdue" and the Partial filter stops matching it. In a live association where most partial bills have aged past due, the filter returns nothing - which looks broken to the admin.
 
 **Fix:** Remove the date restriction from the Partial filter:
 ```typescript
@@ -158,7 +158,7 @@ rows = rows.filter((b) => b.status === 'Partial' && b.due_date >= today);
 rows = rows.filter((b) => b.status === 'Partial');
 ```
 
-"Partial" should mean any bill with a payment received but not fully paid, regardless of due date. The row-level badge already distinguishes Partial vs Overdue per bill. This is consistent with how the Paid and Collected filters work (no date restriction). The overlap between Partial and Overdue filters is acceptable — the badge tells the full story at row level.
+"Partial" should mean any bill with a payment received but not fully paid, regardless of due date. The row-level badge already distinguishes Partial vs Overdue per bill. This is consistent with how the Paid and Collected filters work (no date restriction). The overlap between Partial and Overdue filters is acceptable - the badge tells the full story at row level.
 
 ---
 
@@ -169,7 +169,7 @@ rows = rows.filter((b) => b.status === 'Partial');
 
 ### Background
 
-An `assoc_admin` who is also a unit owner or tenant currently sees the full admin view of all association bills. They have no personal "My Bills" view and cannot pay their own bill online via Razorpay — the self-service Pay button is only wired up for `prop_owner` and `tenant` roles.
+An `assoc_admin` who is also a unit owner or tenant currently sees the full admin view of all association bills. They have no personal "My Bills" view and cannot pay their own bill online via Razorpay - the self-service Pay button is only wired up for `prop_owner` and `tenant` roles.
 
 The multi-role assignment gate has already been fixed (merged to `main`): an admin can now be assigned as `owner_id` on a unit and/or as `tenant_id` on a tenancy. The payments page also already unions owned + tenanted unit IDs for restricted users. What is missing is:
 
@@ -205,7 +205,7 @@ Then fetch personal bills separately (same query used for `prop_owner`/`tenant`)
 
 **`PaymentsSection` component**
 
-Add a `canPay` prop (boolean). When true, render the Razorpay Pay / Pay All buttons (already exists in `week-4` branch, gated on `canManage === false && canPay === true`). Currently those buttons check `isUserRestricted` implicitly — after `week-4` merge, expose `canPay` as an explicit prop so admins can get the button too.
+Add a `canPay` prop (boolean). When true, render the Razorpay Pay / Pay All buttons (already exists in `week-4` branch, gated on `canManage === false && canPay === true`). Currently those buttons check `isUserRestricted` implicitly - after `week-4` merge, expose `canPay` as an explicit prop so admins can get the button too.
 
 **UI layout on payments page**
 
@@ -214,8 +214,8 @@ Add a `canPay` prop (boolean). When true, render the Razorpay Pay / Pay All butt
 
 ### Notes
 
-- No DB or RLS changes needed — `units.owner_id` and `tenancies.tenant_id` are already set correctly after the multi-role fix
-- The Razorpay `create-order` and `verify` routes live in `week-4`; do not re-implement them — just merge that branch first
+- No DB or RLS changes needed - `units.owner_id` and `tenancies.tenant_id` are already set correctly after the multi-role fix
+- The Razorpay `create-order` and `verify` routes live in `week-4`; do not re-implement them - just merge that branch first
 - After merging `week-4`, search for `isUserRestricted` in the payments section and replace with the explicit `canPay` prop pattern
 
 ---
@@ -225,7 +225,7 @@ Add a `canPay` prop (boolean). When true, render the Razorpay Pay / Pay All butt
 **Priority:** Medium  
 **Context:** Citadel PRISM sub-meters were imported without `INITIAL_METER_READING` values, so `sub_meters.initial_reading = 0` for all meters. This means the first bill's consumption is calculated as (current reading − 0) instead of (current reading − actual installation reading), producing inflated first-period units.
 
-**Fix:** Run a one-time SQL update with the correct initial readings per meter, confirmed with the association admin. No code change needed — the column and import path exist and work correctly.
+**Fix:** Run a one-time SQL update with the correct initial readings per meter, confirmed with the association admin. No code change needed - the column and import path exist and work correctly.
 
 ```sql
 -- Example: update initial_reading for specific meters
@@ -234,45 +234,39 @@ UPDATE sub_meters SET initial_reading = <actual_value> WHERE meter_label = '<lab
 
 ---
 
-## Sitemap omits the production homepage (do during the v2.3 → main merge)
+## SEO / GEO / AEO - public site improvements
 
-**Priority:** Medium — SEO regression, only bites once v2.3 reaches production
+**Priority:** High once the product is ready to be discovered. Audit done 2026-09-24 against `main` and live https://ooruda.com.
 
-`apps/web/app/sitemap.ts` lists only the three legal pages. That is correct on `v2.3`/`release`, where `/` redirects to sign-in and there is nothing at the root worth indexing.
+### Current state
 
-It is **wrong on `main`**. The public landing page lives at `apps/web/app/[locale]/(landing)/page.tsx`, which exists only on `main` — so after the merge, ooruda.com's own homepage is missing from ooruda.com's sitemap.
+- Done (Sept SEO commit): robots.txt (blocks `/home`, `/admin`, `/api`; AI crawlers allowed), sitemap, title/description, Open Graph + Twitter tags with OG image, Organization / SoftwareApplication / WebSite JSON-LD, one H1 then H2/H3, image alt text.
+- Gaps: the homepage is ~200 words of generic copy; title is "Ooruda — Private Beta"; no canonical; `www.ooruda.com` serves 200 (duplicate host); no `llms.txt`; no FAQ/feature/pricing pages; no India/GST/MESCOM wording; `sameAs` points to an unverified Twitter; hero images hotlinked from Unsplash/Pexels; `lang="en"` not `en-IN`; homepage lastmod stale (2026-07-19); root layout reads `headers()` (CSRF token) so every public page renders dynamically - one cold request took 4.2s.
 
-### Fix
+### Actions (in priority order)
 
-Re-add the root entry to `getPaths()` when merging v2.3 into main:
+1. ~~**Keep the landing page on the v2.3 -> main merge.**~~ **Done (2026-10-20)** in the `release` -> `main` merge: `/` remains the public landing page and the root entry is retained in `apps/web/app/sitemap.ts`.
+2. **Rewrite the homepage around what the product does** (~800-1,200 words): one-line definition, a section per module (billing + GST invoices, electricity sub-metering, payments + receipts, cash ledger, owner/tenant portal, reports), who it is for, where it works (India), how onboarding works. Retitle, e.g. "Ooruda – Billing & Management Software for Commercial Property Associations in India"; make title/description match the OG copy. *Needs wording/positioning input.*
+3. **Add 3-5 focused pages** - Features (per module), Pricing (even "contact us"), FAQ, About, Security & data. Each: clear H1, a one-paragraph direct answer at the top, a short FAQ. Add them to the sitemap.
+4. **Structured data to match:** FAQPage on the FAQ; SoftwareApplication with `offers`, `areaServed: IN` and a feature list; BreadcrumbList on inner pages; Organization with real `sameAs` (LinkedIn etc.) and a contactPoint. Remove/replace the Twitter `sameAs` if the account doesn't exist.
+5. **Fix duplicate host + canonicals:** redirect `www` → apex in Vercel domain settings (dashboard, not code); add a per-page canonical on each public page (not in the root layout - it would be inherited app-wide).
+6. **Add `/llms.txt`:** plain-text summary of what Ooruda is, who it is for, key features, links to the pages above.
+7. **Off-site presence (biggest GEO lever, non-code):** LinkedIn company page, Google Business Profile, SaaS directories (G2, Capterra, Indian SaaS directories); 1-2 topical articles, e.g. "How to split a commercial electricity bill across sub-meters", "GST on association maintenance charges".
+8. **Make public pages static/cacheable:** stop the root layout reading `headers()` for public routes so the landing page prerenders (removes the cold-start delay).
+9. **Small items:** self-host the hero images (and use `next/image`), set `lang="en-IN"`, keep sitemap lastmod accurate.
 
-```ts
-{
-  path: '/',
-  priority: 1.0,
-  lastmod: '<landing page last change>',
-  changeFrequency: 'weekly',
-},
-```
-
-### Why it cannot simply be added now
-
-On `v2.3` the root is a `redirect()` to `/home`. Listing it would advertise a redirect to crawlers, which is worse than omitting it. The entry is only correct once the branch carrying the landing page is the one being deployed.
-
-### Related
-
-Same merge should also revisit `(marketing)/layout.tsx`, which still performs a `requireUser()` Supabase call to render a header for a route group whose only page is a redirect. See [RELEASE_NOTES.md](RELEASE_NOTES.md) v2.3 for the legal-page and marketing-cleanup context.
+Code: 1, 2, 3, 4, 5 (canonical), 6, 8, 9. Dashboard/off-site: 5 (www redirect), 7.
 
 ---
 
-## UI Component Modernization — site-wide audit
+## UI Component Modernization - site-wide audit
 
 **Priority:** Medium  
 **Context:** Identified during Villa 19 (Habbaa) build. The same issues exist in Ooruda. All forms and interactive components should use modern, custom-built UI instead of OS-native or outdated widgets.
 
 ### 1. Replace native `<input type="date">` with a custom DatePicker
 
-OS-native date pickers look like 2012 — ugly, inconsistent across browsers and OSes, and impossible to brand. Replace everywhere with a custom React calendar component.
+OS-native date pickers look like 2012 - ugly, inconsistent across browsers and OSes, and impossible to brand. Replace everywhere with a custom React calendar component.
 
 **Reference implementation:** `villa-booking/src/components/ui/DatePicker.tsx`  
 - Zero external dependencies (pure React + CSS variables)  
@@ -299,7 +293,7 @@ Every interactive button must have visible hover feedback. No `transition-all` w
 | WhatsApp green (`#25D366`) | `hover:brightness-110` | `active:scale-95` |
 | Frosted glass on dark bg | `hover:bg-white/25` | `active:scale-95` |
 | Outline on light bg | `hover:border-[brand]` + text darken | `active:scale-[0.98]` |
-| Ghost / text | `hover:bg-[tint]` | — |
+| Ghost / text | `hover:bg-[tint]` | - |
 
 ### 3. Form input focus rings
 
