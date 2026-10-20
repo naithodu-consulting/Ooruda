@@ -259,6 +259,17 @@ Code: 1, 2, 3, 4, 5 (canonical), 6, 8, 9. Dashboard/off-site: 5 (www redirect), 
 
 ---
 
+## Known bug: Add Expense dialog intermittently stuck on "Saving…" (production build)
+
+**Priority:** Medium (user-visible; the expense IS saved)
+**Found:** 2026-09-29 during the Villa M0 regression gate. Reproduced on `release` (4c54799a) in a production build: 2 of 5 runs of `flows.spec.ts › expense: create, find, delete` fail. Not caused by villa work.
+
+**Symptom:** after clicking Save, the server action returns success (`{"data":{"id":…}}`, HTTP 200 in ~200ms) and the row is written, but the dialog stays on "Saving…"; the success toast never shows, so `useAction`'s `onSuccess` never runs. The page's route-refresh requests all complete within ~0.5s, with no console errors.
+
+**Where to look:** `expenses/_components/add-expense-dialog.tsx` wraps `execute()` in `startTransition` while the action calls `revalidatePath(...)` for the current page. The transition likely waits on the revalidated RSC tree, and something in it occasionally never commits. Only seen in production builds, not `next dev`. Candidates: drop the extra `startTransition` (next-safe-action already manages pending state), or close the dialog from `onSuccess` before any refresh.
+
+---
+
 ## UI Component Modernization - site-wide audit
 
 **Priority:** Medium  

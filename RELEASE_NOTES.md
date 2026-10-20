@@ -4,59 +4,519 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
-## Production promotion - release (v2.1 -> v2.3) merged to main - 2026-10-20
+## Production promotion - Villa v1.0 + release (v2.1 -> v2.3) merged to main - 2026-10-20
 
-Promotion of the `release` branch to `main` (dev -> production). No new feature work: this section records
-what reaches production and the database changes that accompany it. Ooruda Villa is **not** part of this
-release - it remains on `villa-v1.0`, and none of its code or migrations enter `main` or the production
-database (verified: zero villa files in the merged tree, zero villa migrations applied on production).
+Promotion of the `release` branch to `main` (dev -> production). Includes all villa v1.0 work (M0-M8 + fixes) and v2.1-v2.3 association features.
 
-### What reaches production
+### Villa v1.0 — what reaches production
 
-Everything from v2.1, v2.2 and v2.3, previously released to dev/staging only:
-advance deposits and the user consent gate; the expense tracker, AMC reminder and feature-flag
-infrastructure; the reports screen expansion and Other Charges report; electricity reading guards and
-period formatting; payment date on Record Payment; the SearchableSelect / DatePicker primitives and
-app-wide Select migration; the typography and colour accessibility pass; page-load and PDF download
-performance work; and the full regression pass (126 automated cases).
+The complete villa product: villa accounts and roles, booking-site connection, settings (rates, add-ons, contacts), bookings (take, find, check out, cancel), calendar and blocked dates, guests and ID documents, payments/receipts/refunds/expenses, reports, automated guest emails, discount codes with 25% ceiling and Ooruda approval, receipt/refund vouchers, villa switcher, and all post-launch fixes (role rename to villa_admin, dashboard restructuring, manager restrictions, booking cutoff date).
 
-### Production-only content preserved through the merge
+16 villa migrations applied to production (`20260927110925` through `20261020210000`).
 
-The landing page, the access-PIN gate (`/access`, `proxy.ts`), the three legal policy pages, the sitemap's
-root entry and the `db-push.sh` guardrail live only on `main` and are carried through unchanged.
-`(marketing)/page.tsx` stays deleted so it does not collide with `(landing)/page.tsx` on `/`.
+### Association features (v2.1-v2.3) — what reaches production
+
+Advance deposits and the user consent gate; the expense tracker, AMC reminder and feature-flag infrastructure; the reports screen expansion and Other Charges report; electricity reading guards and period formatting; payment date on Record Payment; the SearchableSelect / DatePicker primitives and app-wide Select migration; the typography and colour accessibility pass; page-load and PDF download performance work; and the full regression pass (126 automated cases).
 
 ### Fixes a live production defect
 
-Production currently carries **two** `record_payment` overloads. Because the app calls with named
-arguments it resolves to the 8-arg version, which lacks the `advance_applied` fix - so a bill partly
-covered by advance credit reports its outstanding as `total - paid`, and a second payment could be
-recorded against an already-settled bill. `20260908000001` collapses both overloads into a single
-9-arg definition carrying the fix.
-
-### Migrations
-
-| Migration | Change |
-|---|---|
-| `20260813000001_user_consent` | Adds `consent_accepted_at timestamptz` to `profiles` |
-| `20260815000001_advance_payment_razorpay` | Adds `razorpay_order_id`, `razorpay_payment_id`, `paid_by_role`, `tenancy_id` to `cash_ledger`; unique partial index; `record_advance_payment()` |
-| `20260820000001_expense_tracker_amc_reminder` | New tables `association_feature_flags`, `expense_categories`, `vendors`, `expenses`, `amc_contracts`, `amc_renewal_history` with RLS and indexes |
-| `20260821000001_expenses_netbanking_constraint` | Widens `expenses.mode_of_payment` CHECK to include netbanking |
-| `20260825000001_amc_date_constraint_fix` | Allows `end_date = start_date` (same-day AMC contracts) |
-| `20260828000001_unit_outstanding_summary` | Adds `get_unit_outstanding_summary(uuid)` |
-| `20260908000001_record_payment_paid_at` | Single 9-arg `record_payment` with `p_paid_at` and the `advance_applied` fix; drops the 5-arg and 8-arg overloads |
-| `20260924000001_advance_application_pdf_cache_grant` | Grants `service_role` select / update(pdf_url) on `advance_application_receipts` |
-| `20260924000002_invalidate_pdf_cache_on_branding_change` | Triggers on `associations` and `accounts` to clear cached PDFs when branding changes; one-time reset of existing caches |
-
-**Operational note.** The one-time cache reset clears every cached `pdf_url`. Measured on production
-before the push: 83 bills, 44 receipts, 0 advance receipts - 127 rows, so no maintenance window is
-needed. Affected PDFs regenerate on next download.
-
-**Feature flags.** The expense tracker and AMC reminder are gated by `association_feature_flags`, which
-starts empty - both ship **off** in production until enabled per association.
+Production currently carries **two** `record_payment` overloads. Because the app calls with named arguments it resolves to the 8-arg version, which lacks the `advance_applied` fix - so a bill partly covered by advance credit reports its outstanding as `total - paid`, and a second payment could be recorded against an already-settled bill. `20260908000001` collapses both overloads into a single 9-arg definition carrying the fix.
 
 ---
 
+
+## Villa v1.0 - Booking cutoff date, cancel/ID cleanup - 2026-10-20
+
+### Booking cutoff date
+
+New `booking_cutoff_date` setting in `villa_account_settings`. When set, the new-booking dialog greys out dates beyond the cutoff, and the server rejects any booking with check-in past it. Admins can change or clear the date from Villa Settings (shown above the tabs). Managers see it read-only. Set to 15 Dec 2026 in production.
+
+| Migration | Description |
+|-----------|-------------|
+| `20261020210000_villa_booking_cutoff_date.sql` | Adds nullable `booking_cutoff_date` column |
+
+### Cancel booking: hide after check-in
+
+Cancel button now hidden once the stay has started (day after check-in). Still visible on check-in day itself.
+
+### Guest IDs: removed false DPDP retention text
+
+Removed the "automatically purged on {date}" notice — no scheduler exists to back the claim. The purge logic runs opportunistically on page visits but is not cron-scheduled.
+
+---
+
+## Villa v1.0 - Villa Admin role rename, dashboard restructuring, discount updates, manager restrictions - 2026-10-20
+
+### `villa_owner` renamed to `villa_admin`
+
+The villa top role is now **Villa Admin** everywhere: database role rows, memberships, role permissions, invitations, every RLS policy and security-definer function that hardcoded the old name, plus code, i18n labels, the admin "create association" dialog, e2e and pgTAP tests.
+
+### Manager restrictions
+
+- **Discounts**: nav entry hidden for managers and the route returns 404 for them.
+- **Undo check-out**: admin-only, now enforced server-side as well as in the UI. Shown only when the stay is completed, has no invoice, and check-out was under 24h ago.
+
+### Manual guest emails switched off
+
+"Send now / Send again" guest-email buttons are disabled for all roles, and the server action refuses to send. Automatic emails are unaffected. Re-enable with `VILLA_MANUAL_GUEST_EMAILS=true` (documented in `OORUDA_VILLA_OPEN_ITEMS.md`).
+
+### UI and Layout Updates
+
+- **Removed unused sections**:
+  - Removed "Your villa workspace" card.
+  - Removed "Booking site" connection status card.
+  - Removed "Policies" tab in Villa Settings.
+- Main dashboard focuses strictly on today's arrivals/departures and the month's KPI summaries.
+
+### Villa discounts: optional fields & 999 uses per guest
+
+- **Optional fields**: `minNights`, `minBookingValue`, and `maxUsesPerGuest` can now be left empty in the discount code dialog (defaulting to 1 night, 0 min value, and 1 use per guest).
+- **Max uses per guest**: raised upper limit from 20 to 999 in both the validation schema and the database check constraint.
+
+### Other
+
+- Guest ID document photo uploads are now enabled by default (supports JPEG, PNG, WebP, PDF up to 10 MB with automatic post-checkout retention purge).
+- Streamlined "Add a guest ID" dialog: ID document photo upload is now always required when adding an ID, and the "How it was checked" dropdown section has been removed.
+- Removed "Ask for IDs on WhatsApp" and "IDs received on WhatsApp" buttons and WhatsApp request helpers from the guest IDs panel.
+- Local dev: test OTPs for the villa users (`919900000001/2` = `123456`) and `[auth.sms.twilio] enabled = true` in `config.toml` so phone login works locally.
+- New idempotent, localhost-only seed script `apps/web/supabase/seeds/seed_villa_test_users.sh` to recreate the villa test users, account and data after a local DB reset.
+
+### Migrations Changelog
+
+| Migration | Description |
+| --- | --- |
+| `20261020115735_villa_rename_owner_to_admin.sql` | Renames `villa_owner` to `villa_admin` in roles, memberships, role_permissions and invitations, and in all RLS policies and security-definer functions |
+| `20261020192500_villa_discount_max_uses_999.sql` | Increases `villa_discount_codes.max_uses_per_guest` check constraint ceiling from 20 to 999 |
+
+---
+
+## Villa v1.0 - Rate changes reach the guest site immediately - 2026-10-08
+
+### The bug
+
+Changing the nightly rate in **Villa Settings** updated the per-night prices in the booking site's calendar but **not** the "Total nights" figure in the booking widget, which kept quoting the old rate. The two numbers came from different places: the calendar read the database on every request, while the widget priced the stay from values baked into the page when it was last rendered. The guest site's homepage was statically generated, so those values never changed until the next deployment.
+
+### Cache invalidation (the missing link)
+
+The booking site already exposed a secret-guarded `POST /api/revalidate` for Ooruda to purge its cache after an edit, but **nothing ever called it**. Saving base rates, seasonal rates or policies now calls it, so changes appear on the guest site within seconds instead of waiting for a deploy. This also fixes staleness for policies and other site content edited from Ooruda.
+
+Note that this purges the rendered pages, not the calendar endpoint's own CDN entry, so per-night prices in the date picker still carry up to their 60-second cache window. The purge is what makes page content and the widget's own rates current; it is not by itself the fix for the reported bug.
+
+The call is best-effort: if the guest site is unreachable, the settings save still succeeds and the failure is logged. Configure with `VILLA_SITE_URL` and `VILLA_SITE_REVALIDATE_SECRET` (the latter must match `CONTENT_REVALIDATE_SECRET` on the booking-site deployment). Left unset, revalidation is skipped — which is the correct local-development behaviour.
+
+### Guest-site changes (villa-booking repository)
+
+- **Homepage** now revalidates every 60 s instead of being generated once at build time; the **checkout page** is fully dynamic, since the price shown there is the price charged.
+- **The booking widget prices stays from the calendar endpoint**, the same source as the per-night prices shown in the date picker, so the total and the calendar can no longer disagree. It falls back to the page's own rates for any month not yet loaded.
+- **Whichever source is newer wins.** The calendar endpoint is CDN-cached for up to two minutes, so its rates are not automatically the fresher ones — on the per-request checkout page they are usually older. The endpoint now reports when it read the database, and the page reports when it read its own rates; live rates are preferred only when they are genuinely newer. Without this, a just-changed price would show briefly and then be corrected upward at the payment step, which is the wrong direction for a money figure.
+- **The calendar refreshes when a guest returns to the tab** (at most once a minute). A tab left open overnight previously priced stays at yesterday's rates and showed nights as free that had since been booked. The refresh is issued in six-month slices, because the endpoint refuses spans over 186 nights and a single oversized request would have failed silently, leaving the stale rates in place. Responses superseded by a refresh are discarded so a slow reply cannot reinstate old rates.
+- **Non-numeric `?children=` in a checkout link** produced a `₹NaN` total instead of being rejected.
+- **Price-change guard at payment**: checkout sends the total it displayed, and `create-order` refuses with `409 PRICE_CHANGED` if its own authoritative total differs, showing the guest the new price to confirm rather than silently charging a different amount. No booking or date hold is created when it refuses. Amounts were already computed server-side, so this closes a consent gap, not a security one.
+- **"Starting from" price** now only considers seasonal rules within the next six months — the window the calendar loads. Previously any future rule counted, so a cheap off-season rate a year out could set the headline price for a date nobody could book.
+- **Date bug**: "today" was computed in UTC in `getPricingRules` and in `create-order`'s promo-code validity check, so between 00:00 and 05:30 IST a code could be honoured a day early or rejected on its last valid day. Both now use the property timezone.
+
+No schema migrations.
+
+---
+
+## Villa v1.0 - UI Polish: Dashboard Quick Actions, Today Alerts, Copy + Calendar Chips - 2026-10-06
+
+### Dashboard quick actions
+
+The villa dashboard welcome card now shows three quick-action buttons — **New booking**, **Calendar & blocks**, and **Add expense** — so staff can navigate to the most common tasks without hunting the sidebar. The welcome description is now role-aware: owners see the invite-manager prompt; managers see a shift-focused message. The Invite Manager button stays for owners, moved into a secondary row.
+
+### Today panel: arrival alerts
+
+Each arrival row now shows a compact inline badge when something needs attention before the guest walks in:
+
+- **ID** (amber) — guest ID documents not yet received
+- **Due** (rose/destructive) — payment not fully settled
+
+Both badges appear only on arrivals, not departures or in-house stays.
+
+### Today panel: overdue check-out redesign
+
+The "not checked out" banner was tightened: each overdue guest is now a pill-shaped link with a "→ Check out" arrow so staff can jump directly to that booking in one click. The guest count badge and helper text are clearer.
+
+### Calendar: multi-night chip border radius
+
+Booking chips in the calendar grid now visually connect across nights — the left chip has a rounded left edge only, mid-span chips have no rounding, and the right chip has a rounded right edge — giving each booking a continuous pill appearance.
+
+### Copy and labelling improvements
+
+- **Villa Settings → Policies**: all toggle labels and descriptions rewritten for clarity ("Pre-arrival welcome email", "Post-checkout thank-you email", "Allow managers to cancel bookings", "Online travel channels"). Business-details descriptions clarified.
+- **Villa Settings → Contacts**: description updated; "Add" button renamed "Add contact".
+- **Guest IDs panel**: purge-date notice upgraded to a styled DPDP retention info box with a ShieldCheck icon.
+- **Discount Codes**: info alert copy tightened; "Refuse" renamed "Decline".
+- **Reports**: bars now cap at 48 px wide so they don't balloon on sparse monthly data; expense column shows "₹0" instead of "—" for months with no expenses.
+- **Booking detail**: guest email rendered as a clickable `mailto:` link.
+
+No schema migrations.
+
+---
+
+## Villa v1.0 - Discount code redemption tracking - 2026-10-04
+
+### Discount code usage stats
+
+Each discount code on the Discount Codes screen now shows how many times it has been redeemed, the total discount given, and who last used it and when. Codes that have never been used say "Not used yet". The data comes from the bookings mirror so no additional queries hit the booking site.
+
+- **`discount_code` mirrored**: the coupon code used at checkout is now carried into `villa_bookings_mirror` alongside the existing `discount_amount`. Every incremental sync (runs before the page renders) will pick up new redemptions automatically.
+- **Per-code stats**: the Discount Codes page aggregates mirror rows for each property, matching by code string, and computes times used, total discount, and most recent use.
+
+| Migration | Change |
+| --- | --- |
+| `20261004080000_villa_mirror_discount_code.sql` | `villa_bookings_mirror.discount_code` (nullable text, mirrors the booking site coupon code) |
+
+---
+
+## Villa v1.0 (M8b) - Discount Codes at Checkout + Reports Revamp - 2026-10-03
+
+### Discount codes at checkout (M8b)
+
+Completes the discount codes feature started in M8a: codes defined in Ooruda now go live on the villa booking site. No change for association users.
+
+- **Guest discount code input**: a discount code field on the checkout page lets guests enter a code before paying. The code is validated live (active, in-date, minimum nights/value, no blackout overlap, within global and per-guest use limits). On success the discount row appears in the Stay Summary and the Pay button amount updates immediately. Errors are inline. Guests can clear the code and try another.
+- **Server-side re-validation**: the promo code is re-validated in the `create-order` API route (all the same rules) and inside `create_booking_atomic` (atomic, inside the advisory property lock — no race on `max_uses`). A tampered discount amount cannot be injected by the client; the server computes it from the code's terms.
+- **Discount amount**: applied to the pre-tax base (base stay + extra guests). The discount reduces what the guest pays. `bookings.total_amount` records the pre-discount total; `bookings.discount_amount` records the saving. The Razorpay order is created for `total_amount − discount_amount`.
+- **Sync from Ooruda**: when an owner saves, pauses, resumes, or an Ooruda super-admin approves/rejects a code, `syncDiscountCode` pushes the current state to the villa-booking `discount_codes` mirror table (fire-and-forget; Ooruda is the source of truth and a sync failure is logged but not surfaced to the user).
+- **Manager cancel booking**: managers can now cancel bookings when the villa owner enables "Let managers cancel bookings" in Villa Settings > Policies.
+- **Guest-facing wording**: the checkout calls it a "Discount code" throughout (field, applied-code badge, Stay Summary row). The code entry field now uses the site's own typeface instead of a monospace font, so it matches every other field on the form.
+- **Errors the guest sees vs. errors we log**: internal error codes no longer reach the guest. A date conflict used to surface the raw database message (`DATE_UNAVAILABLE: …`); the guest now reads "These dates are no longer available. Please go back and select different dates." and the original message, code and all, goes to the server log for diagnosis. The same split applies to blocked dates and to every discount-code rejection.
+
+### Reports revamp (Ooruda villa reports)
+
+A significantly more useful reports screen replacing the previous dense-text layout.
+
+- **Overview tab**: three hero KPIs (Revenue, Occupancy %, Net Income) + four secondary metrics (ADR, RevPAR, Expenses, GST collected) at the top. Revenue bar chart with an occupancy line overlay (2+ months). Monthly breakdown table with a totals footer row and colour-coded Net column.
+- **Channels tab**: donut chart (2+ channels), channel icon cards, detail table.
+- **Guests tab**: unique/new/returning tiles; guest rows with avatar initials and ×N repeat-stay badge; human-readable date format.
+- **Controls bar**: period selector (left) + single Export dropdown with CSV and Print options (right). Period shown as pill badges. Page no longer has a redundant H1.
+- **Expense percentages now total 100%**: "Where the money went" rounded each category on its own, so a financial-year view across eleven categories displayed percentages adding up to 98%. The shares are now apportioned so the rounded figures always sum to exactly 100, with the remainder going to the categories that lost the most to rounding. Amounts were always correct; only the percentages were affected.
+
+### Figures are now current on the first page load
+
+Reports and the dashboard read Ooruda's copy of the bookings rather than the booking site, so long date ranges stay fast. That copy used to be refreshed *after* the page had rendered, which meant a change made on the booking site showed up only on the load after the one where you went looking for it.
+
+The copy is now refreshed *before* the figures are read, so one refresh is enough. Page speed is protected three ways: a copy refreshed in the last five minutes is left alone; the very first copy of a villa reads its whole history, so that one still happens in the background and the page shows what it already has; and a routine refresh — which reads only a recent window — is waited for, but never for longer than 2.5 seconds, after which the page renders and the refresh finishes on its own. The Bookings list and Calendar were already live and are unchanged.
+
+### A discount now comes off before GST, and reaches the revenue figures
+
+Two corrections to how a redeemed discount code is accounted for.
+
+**GST follows the discount.** The saving used to be subtracted from the GST-inclusive total, so a guest was charged tax on money they never paid. The discount now comes off the taxable value and GST is charged on what is actually payable — matching the rule Ooruda already applied on its own side. On a ₹10,000 stay with ₹2,000 off, GST is ₹1,440 rather than ₹1,800, and the guest pays ₹9,440 instead of ₹9,800. The Stay Summary shows the discount above the GST line so the arithmetic reads in order, and the booking now records the amount actually payable, which also makes a refund default to the sum collected rather than the list price.
+
+**Discounted stays no longer overstate revenue.** The saving was recorded on the booking site but never reached Ooruda, so Reports and the dashboard counted the full list price of every discounted stay. The discount is now carried across into the bookings copy and taken off revenue, pro-rated with the rest of the money when a stay straddles the end of a month. Stays booked before discount codes went live are unaffected; they carry no discount.
+
+| Migration | Change |
+| --- | --- |
+| `20261003175415_villa_mirror_discount_amount.sql` | `villa_bookings_mirror.discount_amount` (rupees, defaults to 0, metadata-only column add) |
+
+### Internal
+- Regenerated the booking-site type definitions on both sides, so the discount-code sync is fully type-checked. This removes the temporary `as any` cast in `villa-discounts.service.ts`.
+- The discount-code sync to the booking site now runs through `after()`, so the cross-database write is no longer cut short when the response ends, and its log lines use the structured form the rest of the codebase uses.
+- A discount rejection raised without the expected `CODE: message` shape no longer passes a mangled internal code to the guest, and every rejection is now logged server-side.
+- Guest-facing: an applied discount code is dropped if the dates or guest count change afterwards, instead of showing a saving the booking may no longer qualify for. The code entry, Apply and Remove controls gained `data-test` hooks.
+
+### Testing
+- Typecheck: 28/28 packages pass (Ooruda); `tsc --noEmit` clean (villa-booking).
+- Browser-verified: all three report tabs, discount code validation (valid and invalid), discount reflected in price summary and Pay button, and expense percentages totalling 100%.
+
+| Migration | Change |
+| --- | --- |
+| `00062_discount_codes.sql` (villa-booking) | `discount_codes` mirror table (service-role only, RLS on), `bookings.discount_code` + `bookings.discount_amount`, `create_booking_atomic` updated with discount validation params (backward-compatible defaults) |
+
+---
+
+## Villa v1.0 - Receipt Vouchers and Villa Switcher - 2026-09-30
+
+- **Receipt and refund vouchers:** every receipt and refund number on a booking's Payments card opens a printable voucher (Print / Save as PDF): business name, address (from the booking site), GSTIN when set, voucher number and date, who paid, booking and stay, mode and reference, the amount in figures and in words (Indian style: lakh, crore), and a note that a receipt is not a tax invoice. A voided receipt shows VOID.
+- **Business details** in Villa Settings > Policies (owner): the name to print on receipts and the GSTIN (checked against the official 15-character format).
+- **Villa switcher** on the Dashboard, Reports, Expenses and Discount codes for accounts with more than one villa (Bookings, Calendar and Villa Settings already had one). The choice is kept in the link.
+
+### Testing
+- Vitest: amounts in words (units to crores, paise, rounding).
+- pgTAP `villa-business-details.test.sql`: owner sets name and GSTIN, invalid GSTIN refused, managers cannot change them.
+- Playwright (full regression 150 passing; the one failure is the known expense-dialog flake): receipt and refund vouchers open with the right number and amount in words.
+
+| Migration | Change |
+| --- | --- |
+| `20260930072244_villa_business_details.sql` | `villa_properties.legal_name`, `villa_properties.gstin` (format check, owner-editable) |
+
+## Villa v1.0 (M8a) - Discount Codes (Ooruda's half, switched off) - 2026-09-30
+
+Discount codes defined and approved in Ooruda. **Switched off** (`NEXT_PUBLIC_VILLA_DISCOUNTS`) until the booking site can enforce them at checkout (villa-booking TODO 1); publishing codes to the site and reading redemptions back is M8b. No change for association users.
+
+- **Owners** create and edit codes: percentage (with the most a booking can save) or a flat amount; bookable-from/until dates; minimum nights; minimum booking value; uses in all and per guest (by phone); blackout nights (e.g. New Year). Website bookings only, never travel-site bookings, never combined. Managers see them read-only.
+- **25% ceiling, enforced by the database**: a percentage over 25%, or a flat amount over 25% of its minimum booking value (or with no minimum), is saved as **awaiting Ooruda approval** and cannot be switched on by the owner. Only an Ooruda super-admin can approve or refuse it. Changing any term of a code voids its approval. Checks fail closed (unusual values, including "not a number", are refused or treated as needing approval).
+- Pause and resume; every create, change, pause, approval and refusal is in the code's history with who did it.
+- Expenses: a deleted expense now disappears from the list at once, even if the page refresh is slow.
+
+### Testing
+- pgTAP `villa-m8-discounts.test.sql` (29): ceiling on percent and flat codes, owner cannot approve their own, super-admin approves and refuses, edits void approval, no direct writes, managers read only, other villas locked out, unique codes, blackout checks, NaN refused, blackouts stored clean.
+- Playwright: switched off, the page is not found and not in the menu; switched on, the owner's 10% code is active, the 40% code waits, and Ooruda approves it (full regression passing in both builds).
+
+| Migration | Change |
+| --- | --- |
+| `20260930052559_villa_m8_discount_codes.sql` | `villa_discount_codes` (terms, `needs_approval`, ceiling constraint), `villa_discount_audit`, `save_villa_discount` / `set_villa_discount_active` / `review_villa_discount` |
+
+## Villa v1.0 (M7) - Automated Guest Emails - 2026-09-30
+
+Two automatic emails to villa guests, sent from the booking site's address. No change for association users.
+
+### When they go (and when they don't)
+- **Before arrival** (dates and times, booking number, ID reminder, WhatsApp and contacts marked "share with guests"): from **10:00 IST the day before check-in**, up to 3 hours before check-in time. Right before sending, the booking is read **live from the booking site**: a stay cancelled at the last moment gets nothing, and a stay moved to another date gets its email for the new date instead.
+- **Thank you**: **3 hours after staff press Check out** on the booking, never from the calendar date. A guest who stays a few hours longer is not checked out yet, so nothing goes; an extension of days moves the check-out and the email waits for the real one. A check-out pressed by mistake can be **undone** (within a day, before any invoice), and the email then waits for the next check-out.
+- A guest never gets the same automatic email twice, even if two runs overlap. A send that failed, or whose outcome is unknown, is never retried on its own (the email may already have gone): the booking page says so, and staff use **Send now**.
+- The dashboard's Today panel lists **stays past their check-out that nobody checked out**, so the thank-you is not held up by a forgotten button.
+
+### On the booking page
+- A **Guest emails** card: what went and when, what was skipped and why, or when it will go; **Send now / Send again** (never replaces the automatic one); **Undo check-out**.
+
+### Settings
+- Villa Settings > Policies: switch each email off for the villa.
+
+### Set-up needed (see `OORUDA_VILLA_OPEN_ITEMS.md`)
+- `VILLA_EMAIL_FROM` (the booking site's sender) and that domain verified in Ooruda's Resend account.
+- The scheduled job (`/api/villa/sync`), suggested every 15 minutes. Until then emails go only when someone opens a villa dashboard (at most every 5 minutes per villa).
+
+### Testing
+- pgTAP `villa-m7-guest-emails.test.sql`: one automatic email per booking and date (a moved stay may get a new one), manual sends alongside, server-only writes, other villas see nothing, both emails on by default.
+- Vitest: the send windows (10:00 the day before, 3 hours before check-in, one-digit hours), the thank-you delay and 7-day limit, email content and escaping.
+- Playwright (full regression): manual arrival email delivered to the local mail catcher with the site's sender; a booking for tomorrow is picked up by the scheduled run (sent after 10:00 IST, scheduled before) and, once cancelled, not sent; the scheduled route refuses a wrong secret.
+
+| Migration | Change |
+| --- | --- |
+| `20260930032217_villa_m7_guest_emails.sql` | `villa_message_log` (claim-before-send, one automatic email per booking and date), email switches on `villa_account_settings`, `reopened` booking activity |
+
+## Villa v1.0 (M6) - Reports - 2026-09-30
+
+A **Reports** page for villa owners and managers. No change for association users.
+
+- **Periods:** this month, last month, this financial year, last financial year, or a custom range (up to 3 years; an invalid one says so).
+- **Overview:** occupancy, revenue before GST, average per booked night, revenue per available night, expenses (with the GST part), revenue less expenses, and GST collected on stays; a month-by-month chart and table of revenue, expenses and net; where the money went, by expense category.
+- **Channels:** revenue, stays and nights by where the booking came from (website, phone, WhatsApp, referral…), with shares.
+- **Guests:** how many guests stayed and how many were returning, and a list of returning guests (stays, nights and revenue to date). Guests are matched by phone number, never by name alone.
+- **Download** the current tab as CSV (opens cleanly in Excel; formula-like cells are neutralised) or **Print / PDF** (the report without the app around it).
+- Counting rules: a stay counts by its nights inside the period and its revenue pro rata (from its dates), only confirmed and checked-out stays count, and month lines add up exactly to the totals. Figures come from Ooruda's copy of the bookings, refreshed in the background; the page says as of when.
+- Large villas: results are read in pages, so a year of bookings is never cut off at the database's 1,000-row limit (not yet exercised by a test at that size).
+
+### Testing
+- Vitest: periods (financial years, custom range checks), overview figures and month split, channels, returning guests, CSV quoting.
+- Playwright (full regression 148 passing): owner opens Reports, switches to the financial year (12 months), downloads the CSV, opens Channels and Guests; no sideways scroll at 360 px.
+
+No migrations.
+
+## Villa v1.0 (M5a) - Payments, Receipts, Refunds, Expenses - 2026-09-30
+
+A **Payments** section on every villa booking and an **Expenses** page. Tax invoices and credit notes follow in M5b (they wait for the booking site to issue invoices at check-out, villa-booking TODO 8c, and the CA's confirmation of the GST slabs). No change for association users.
+
+### Payments (booking page)
+- One view of a stay's money: total, received (website plus offline), refunded, and balance due or paid extra.
+- **Record a payment** (owner or manager) for money taken off the website: cash, UPI, bank transfer, card at the villa. Each gets a **receipt number** from the villa's own gapless series per financial year, e.g. `V19/RCT/2627/0001` (a new series from 1 April). Payments cannot be dated in the future or more than a year back; a warning shows when the amount is more than is due.
+- **Refund** (owner only) against a receipt, with a reason; refunds get their own series (`V19/RFD/2627/0001`) and can never add up to more than the payment, even when two are entered at once.
+- **Void** (owner only) a receipt entered by mistake: it stays in the list, marked void with the reason, so the numbers have no gaps. A receipt with refunds cannot be voided.
+- A double click or a retried submit never issues two receipts.
+- The guest's booking page follows along (Unpaid / Part paid / Refunded). "Paid" is held back on the site until invoices move to check-out, because marking a booking paid there issues a GST invoice today; a booking the site itself marked paid is never downgraded.
+- Website (Razorpay) payments are shown from the booking site. Online refunds are still done in the Razorpay dashboard for now (villa-booking TODO 8f asks the site to record refunded amounts).
+
+### Expenses
+- Month by month: what was spent, the GST part, a split by category (housekeeping, laundry, utilities, repairs, pool, garden, supplies, food, staff, commissions, marketing, taxes and fees, insurance, other), vendor and bill number.
+- Owners and managers add and correct; only owners delete. An expense cannot be moved to another villa or re-attributed.
+
+### Safety
+- Receipts and refunds are written only by database functions that check the role themselves; the ledger is read-only otherwise. The booking on a receipt is checked against Ooruda's copy of the booking (refreshed from the site first), and its booking code comes from there.
+
+### Testing
+- pgTAP `villa-m5-money.test.sql` (39): receipt series and financial years, no gaps, idempotent submits, refunds capped (also concurrently), owner-only refunds and voids, voids keep the number, no direct writes, other villas locked out, same prefix in two villas, expense rules.
+- Vitest: the booking ledger in paise (website + offline, voids, refunds, excess, cancelled stays) and the site status rule.
+- Playwright (full regression 147 passing; villa spec twice more): manager records a payment and gets a receipt; owner's refund above the payment is refused, then a partial refund; manager adds an expense, only the owner deletes it.
+
+| Migration | Change |
+| --- | --- |
+| `20260930003722_villa_m5_payments_expenses.sql` | `villa_sequences`, `villa_booking_payments`, `villa_refunds`, `record_villa_payment` / `void_villa_payment` / `record_villa_refund`, `villa_expenses` |
+
+## Villa v1.0 (M4) - Guests and ID Documents - 2026-09-30
+
+A **Guests and IDs** section on every villa booking, and a villa section in Ooruda's Privacy Policy. No change for association users.
+
+### Guests and IDs (booking page)
+- Record an ID for each adult guest: type (Aadhaar, passport, driving licence, voter ID, other) and number. **Only the last 4 characters are ever kept** (`XXXX XXXX 1234`); the full number is never stored, and the database refuses 5 or more digits in a row.
+- The first ID defaults to the lead guest who booked. Guests are kept in a register per villa, one per phone number, so returning guests are recognised (repeat-guest reports come with M6).
+- **Ask for IDs on WhatsApp**: opens a chat with the guest carrying only the booking code and, when the villa's WhatsApp number is set (Villa Settings > Policies), the booking site's share link in its exact wording.
+- **IDs received on WhatsApp** / **Mark IDs checked** update the guest's booking page on the booking site (never downgrading "checked"). Recording an ID marks it received automatically.
+- **Storing ID photos is built but switched off** (`VILLA_GUEST_ID_UPLOADS`), until the booking site's privacy notice is live too (villa-booking TODO 7). Until then staff record IDs "seen in person" with no photo.
+- When switched on: photos (JPEG, PNG, WebP, PDF up to 10 MB, checked by content, not name) go to a private bucket that members cannot read directly. Opening one records who viewed it first (refused if that record cannot be written), then gives a 60-second link. Owners can delete a photo early; a note of what was held stays.
+- **Deleted automatically 30 days after check-out**, and immediately when a booking is cancelled. The purge runs on the scheduled route and on dashboard visits, retries file by file, and records each deletion.
+- Owners see who uploaded, viewed, checked, deleted or purged each ID (access record, append-only).
+
+### Privacy Policy
+- New section 5, "Villa Guests and Identity Documents": what is collected, why (statutory guest records), who can see it, masked numbers only, every view recorded, deletion 30 days after check-out. Sections renumbered; last updated 30 Sep 2026.
+
+### Safety
+- Guests, booking links and ID records are read-only for members at the database; only the server writes them, after checking the role and the booking. A villa still holding ID photos cannot be deleted (no orphaned files).
+
+### Testing
+- pgTAP `villa-m4-guest-ids.test.sql` (28): masking constraint, server-only writes, private bucket, owner-only access record, other villas see nothing, one lead guest, WhatsApp number owner-only, deletion guards.
+- Vitest: ID masking per type, retention date, WhatsApp links in the contract wording, file-type sniffing.
+- Playwright (full regression, 143 of 144 passing; the one failure is the known, pre-existing expense-save flake in `TODO.md`, green on 3 reruns): manager records an ID, full number never on the page, site status received then verified. With uploads on (`web-prod-3002-id-uploads`): photo upload, recorded view through the signed link, purge on cancellation.
+
+| Migration | Change |
+| --- | --- |
+| `20260929194538_villa_m4_guests_ids.sql` | `villa_guests`, `villa_booking_guests`, `villa_guest_documents` (masked numbers, retention date), `villa_guest_document_access` (append-only), private bucket `villa-guest-docs`, `villa_properties.whatsapp_number`, guard against deleting a villa with stored IDs |
+
+## Villa v1.0 (M3b) - Calendar, Blocked Dates, Dashboard Figures - 2026-09-30
+
+A **Calendar** page and a working villa **Dashboard** for villa owners and managers. No change for association users.
+
+### Calendar
+- Month grid on tablet and desktop, a date-ordered list on phones. Bookings, holds awaiting payment and blocked nights, read live from the booking site; tap a booking to open it.
+- **Block dates** (maintenance or the owner's own use) by first and last night, with a team-only note. Blocks stop the website and booking channels selling those nights at once, and are refused over a guest's stay.
+- **Unblock** some or all nights of a block; nights outside the chosen range stay blocked. Past nights cannot be blocked or unblocked.
+- New booking straight from the calendar; "N of M nights booked" for the month.
+
+### Dashboard
+- **Today** (live from the booking site): arriving, to check out, staying tonight.
+- **This month** (from Ooruda's copy of the bookings): occupancy, revenue before GST, average per booked night, revenue per available night, with "figures updated N min ago". Stays crossing a month end count only their nights in the month.
+- The copy refreshes in the background when it is older than 5 minutes (the page never waits for the booking site); changes made in Ooruda update it at once. A scheduled refresh route (`/api/villa/sync`, `CRON_SECRET`) is ready but not yet scheduled.
+- Villa Settings: on phones the active tab scrolls into view.
+
+### Testing
+- pgTAP `villa-m3b-mirror.test.sql` (12): server-only writes, members read-only, other villas see nothing, cross-account rows refused.
+- Vitest: calendar model (month grid, agenda, occupancy, notes) and dashboard figures (pro rata, ADR, RevPAR, today board).
+- Playwright (full regression, 143 passing): manager blocks three nights, unblocks the middle one, cleans up; dashboard figures at 360 and 1280 px.
+
+| Migration | Change |
+| --- | --- |
+| `20260929190825_villa_m3b_bookings_mirror.sql` | `villa_bookings_mirror` (read-only copy of site bookings, rupees) and `villa_mirror_sync_state` (last refresh, errors, sync lease) |
+
+## Villa v1.0 (M3a) - Bookings: Take, Find, Check Out, Cancel - 2026-09-30
+
+A **Bookings** page for villa owners and managers, working directly on the villa's guest booking site. No change for association users.
+
+### Bookings list
+- Upcoming, In house, Past and Cancelled views, each a shareable link.
+- Search by booking code (typed any way: lower case, no hyphens, O for 0), name, phone or email; the search runs on the booking site across every status. A valid code opens that booking directly. Long lists show the first 100 with a hint to search.
+
+### New booking (phone, WhatsApp, walk-in, events)
+- Pick dates and guests to see **live availability and the price** from the booking site: nights, extra guests, GST and total. Taken nights, a seasonal minimum stay or too many guests are explained before you can save.
+- The price is always recalculated on the server when the booking is saved; it matches what the website charges for the same stay (checked against the site's own pricing code). If the price changed between the quote and saving (for example a rate edit in between), nothing is saved and the new total is shown.
+- Payment on a new booking can only be Unpaid or Partly paid; payments and invoices come with M5.
+- Saving blocks the dates on the booking site immediately (through the site's own locking booking function), so the website and channel managers can't sell them. Mark event bookings as events.
+
+### Booking page
+- Stay, guest (tap to call), amount, payment and ID status, and a history of who did what. The history is written only by the server after the change succeeds on the booking site, so it cannot be forged.
+- **Check out** (owner or manager) once the stay has started.
+- **Cancel** a confirmed booking (owner, or managers if the owner allowed it in Policies) with a **required reason** from the agreed list of 19, grouped by guest / payment / villa side / outside events; some reasons require a note. The dates are freed straight away. Refunds come with M5.
+
+### Testing
+- pgTAP `villa-m3a-bookings.test.sql` (12): reasons, activity trail append-only and server-written only, cancellation needs a reason, other villas can't read or write.
+- Vitest: quote engine incl. five parity cases against the booking site's `pricing-engine.ts`, phone format for the site; integration: the site stores Indian mobiles as 10 digits.
+- Playwright (full regression, 141 passing): owner books with a live quote, finds it by a loosely typed code, manager cancels with a reason.
+
+| Migration | Change |
+| --- | --- |
+| `20260929144458_villa_m3a_bookings.sql` | `villa_cancellation_reasons` (19 seeded) and `villa_booking_activity` (append-only trail; a cancellation always has a reason) |
+
+## Villa v1.0 (M2) - Villa Settings: Rates, Add-ons, Contacts, Policies - 2026-09-29
+
+A **Villa Settings** page for villa accounts (owners edit; managers see it read-only). No change for association users.
+
+### Rates & guests (saved on the booking site)
+- Weekday and weekend nightly rates, guests included, maximum guests, the extra-guest rate and an optional second tier, and check-in / check-out times. Saved straight to the guest booking site, so new online bookings and phone quotes use the same numbers; existing bookings keep their price.
+- The extra-guest pricing is spelled out as you type (e.g. "Guests 9-11 pay ₹1,000 each per night; guests 12-14 pay ₹700").
+- **Ideal for (guests)**: the site's "Ideal for 8–14 guests" line and its default guest count; kept at or below the maximum so checkout can't break.
+- Rules the booking site enforces are checked as you type, under the field (both second-tier fields or neither; the tier must start after the included guests).
+
+### Seasonal rates (saved on the booking site)
+- List, add and remove seasonal/holiday rates. Owners pick the **first and last night** (not the check-out day); overlapping rates are refused with the name of the clash.
+
+### Add-ons, emergency contacts, policies (saved in Ooruda)
+- **Add-ons** (extra bed, breakfast, BBQ, early check-in…): price and how it is charged (per stay / night / guest per night / each); switch one off without deleting it. For bookings and invoices in Ooruda; the guest site does not sell add-ons yet.
+- **Emergency contacts** per villa: type, name, phone (stored in international format, tap to call), notes, and whether to include it in the guest welcome email.
+- **Policies**: let managers cancel bookings (refund overrides stay owner-only), buffer nights for online travel sites, and the guest-ID retention period (30 days, shown read-only; changed only by Ooruda).
+
+- A villa account with more than one property gets a villa switcher above the tabs.
+
+### Fixes found in review
+- **Disconnecting a booking site no longer deletes the villa's settings.** It used to delete the property, taking its add-ons and emergency contacts with it. Disconnect now only removes the link and the stored key; the property shows as "Disconnected" with a **Reconnect** button, which re-links it with everything intact.
+- A super-admin editing a villa's settings had one change (the OTA buffer) silently dropped; it now saves.
+- Editing or removing an add-on or contact that no longer exists says so, instead of claiming success.
+- Add-on names are unique regardless of case.
+- A failed database read shows an error instead of looking like "nothing set up yet".
+- **Form labels (app-wide fix in `@kit/ui/form`)**: `FormControl` pointed each field's `aria-labelledby` at the field itself, so screen readers read a field's value as its name. The villa forms now pass fields through `FormControl`'s `render` prop and are correctly labelled; other forms in the app still need the same one-line change (tracked separately).
+- Confirmation dialogs use a plain button row (the dialog footer's grey band clashed with the white dialog).
+
+### Testing
+- pgTAP `villa-m2-settings.test.sql` (17): owner writes, manager and other-villa isolation, a row cannot point at another account's property, E.164 and price checks, case-insensitive add-on names, retention not owner-editable, super-admin edits applied.
+- Vitest: base-rate validation against the site's rules (6) and a save/read-back/restore round trip on a real local booking-site database.
+- Playwright (`villa.spec.ts`): owner edits every tab (incl. adding and removing a seasonal rate through the date pickers), fields found by their labels, manager read-only, no horizontal overflow at 360px; the suite now always releases its booking-site link, even after a failure.
+
+| Migration | Change |
+| --- | --- |
+| `20260929143252_villa_unlink_keeps_settings.sql` | `disconnect_villa_property()` unlinks instead of deleting; `connect_villa_property()` gains `p_property_id` to re-link an existing property (old 7-argument signature dropped, no overload left) |
+| `20260929131714_villa_m2_settings_addons_contacts.sql` | `villa_account_settings`, `villa_addons` (case-insensitive unique name), `villa_emergency_contacts` (members read, owners write); `villa_properties.ota_buffer_nights` (owner) and `retention_days` (default 30, super-admin only); owner update policy on `villa_properties` admits super-admins; `kit.assert_villa_row_scope()` |
+
+## Villa v1.0 (M1) - Connection to the Villa Booking Site - 2026-09-29
+
+Ooruda Villa can now read and write the villa's guest booking site database (bookings, blocked dates, rates), as that site's integration contract prescribes. No change for association users.
+
+### For the super-admin
+- A villa account's page (**Admin → Accounts → the villa**) has a **Booking site** card with **Connect**: enter the site's database URL, its service key and the property's slug. The connection is checked before anything is saved (a wrong slug or key is reported and nothing is stored). Running Connect again rotates the key.
+- The key is stored encrypted in Supabase Vault and never shown again. Villa owners can rename a property but cannot change which site property it points to. Re-connecting (to rotate a key) keeps the owner's name and on/off setting.
+- A booking-site property can be connected to only one villa account, so a mistyped slug on a shared booking site can never give one villa access to another's bookings.
+- **Disconnect** removes the link and deletes the stored key; nothing on the booking site changes.
+- Villa account pages no longer show association-only settings (role-permission matrix) and say "Villa" / "Delete Villa Account".
+
+### For villa owners and managers
+- The dashboard shows a **Booking site** card: Connected, Not connected, or Can't reach the site. It loads separately, so a slow site never delays the page.
+
+### Under the hood
+- `lib/villa-db`: server-only connector for the booking site with availability checks, blocking and unblocking dates (including splitting a block, done in a fail-safe order), recording phone/WhatsApp bookings through the site's own locking booking function, cancelling, marking a stay completed, reading bookings, base rates, and adding/removing seasonal rates with an overlap check. Every query is scoped to the villa's own property, so villas sharing one booking site cannot touch each other's data. Requests time out after 10 seconds.
+- Every write to the booking site is recorded in a sync log. If the site does not answer a write in time, the operator is told the change *may* have been saved (never "nothing changed"), and a booking that did commit is recognised rather than reported as failed.
+- A property switched off in Ooruda cannot read or write its booking site.
+- Money crosses from rupees to paise only in this connector.
+
+### Testing
+- pgTAP `villa-m1-site-connection.test.sql` (23): column-level protection of the site link, one site property per account, re-connect keeps owner edits, Vault round-trip/rotation/cleanup, no `anon` rights, manager and outsider access.
+- Vitest: 17 unit tests (booking-code parity with codes the site's database generated, dates, error mapping, credential resolution) and 7 integration tests against a real local booking-site database (blocks and splitting, two concurrent partial unblocks, booking create/confirm/cancel, the site's double-booking lock, cross-villa isolation, rate overlaps).
+- Playwright: connect flow (wrong slug rejected, key never rendered), the owner's Connected status, and disconnect, in `villa.spec.ts` (re-runnable: each run cleans up its link).
+
+| Migration | Change |
+| --- | --- |
+| `20260929091855_villa_m1_site_connection.sql` | `villa_properties` (site link writable by service role only; owners may edit name/status; one site property per villa account); `kit.assert_villa_account()`; Vault key deleted with its property; `connect_villa_property()` (link + key in one transaction) and `get_villa_site_credentials()`, service role only; `villa_sync_log`; no `anon` rights |
+
+## Villa v1.0 (M0) - Villa Product Foundations - 2026-09-27
+
+First step of **Ooruda Villa**, a villa operator workspace that lives beside associations on the same app and database (plan: `OORUDA_VILLA_PLAN.md`). No change for association users.
+
+### Villa accounts
+- Every team account now has a product type: `association` (all existing accounts) or `villa`. It is set at creation and cannot be changed.
+- Super-admin **Accounts → Create Account** now asks for the account type. Villa accounts are created with their owner as **Villa Owner** and get no association record, so no billing, units or electricity data can ever attach to them. Villa accounts show a "Villa" badge in the list.
+- New roles **Villa Owner** and **Villa Manager**. A database rule stops a villa role being given on an association account and vice versa, whichever screen or script tries it.
+
+### Villa workspace
+- A villa account opens at the usual `/home/<account>` address with its own sidebar (Dashboard, Members for owners; Dashboard for managers) and a setup dashboard. Properties, calendar, bookings, guests and reports follow in later milestones.
+- Association pages (Billing, Units, Electricity, Payments and the rest) send a villa account back to its dashboard.
+- Villa owners can invite a Villa Manager from Members; the role pickers only ever offer roles of the account's own product (association admins never see villa roles).
+- A super-admin opening a villa account acts as Villa Owner.
+
+### Fixes found on the way
+- The sidebar used to show **every** item to a role it did not recognise; it now shows nothing. All four association roles are unaffected.
+- Super-admin role dropdowns (Create User, Edit User, Manage Roles) only offer roles valid for the selected account.
+- `role_permissions` inserts could silently do nothing when the id sequence lagged behind existing rows; the migration resyncs it.
+- Ownership transfer now promotes the new owner to the account's own top role (Villa Owner on villa accounts; unchanged Association Admin elsewhere). It previously always used Association Admin.
+- Expense and AMC detail pages: "Back" link buttons no longer log a Base UI `nativeButton` warning.
+- Association settings unit tests updated to the current action (billing settings upsert, sanitised DB errors, current messages); the obsolete minimum-charge case was removed.
+
+### Testing
+- pgTAP: `villa-m0-foundations.test.sql` (20 assertions: product type, roles, invariants, immutability, `villa_role()`, RPC privileges). The rest of the pgTAP suite gives identical results with and without this migration.
+- Unit: `lib/roles.test.ts` (product mapping, levels, villa vs association nav, deny-by-default).
+- Playwright: `tests/ooruda/regression/villa.spec.ts` (create villa account, owner and manager workspaces, association pages redirect, invite with villa roles, owner's association membership unaffected, association admin never offered villa roles).
+
+| Migration | Change |
+| --- | --- |
+| `20260927110925_villa_m0_foundations.sql` | `accounts.product_type` (immutable) and `roles.product_type`; product-aware `transfer_team_account_ownership` via new `get_upper_role_for_account()`; `villa_owner` (10) and `villa_manager` (11) roles with permissions; role/product match trigger on memberships and invitations; association auto-create skips villa accounts; `create_villa_account()` (service role only); `villa_role()` RLS helper; `role_permissions` id sequence resync |
 
 ## v2.3 - Regression Pass: Responsive, Sign-in Limits, PDF Cache & Settings Fixes - 2026-09-24
 
@@ -4138,4 +4598,4 @@ Separated the single Supabase project into three distinct environments - local D
 | `20260804093956_reconcile_schema_drift.sql` | Drop orphaned functions, fix `account_image` storage policy, revoke anon grants |
 | `20260805000002_missing_fk_indexes.sql` | 8 missing FK indexes (CONCURRENTLY), GIN trigram indexes on `profiles.full_name` and `audit_logs.action`, new `get_unit_ledger_balances()` RPC for DB-side aggregation |
 
-_Last updated: 2026-08-05_  <!-- Performance audit Phase 1-9 -->
+_Last updated: 2026-10-20_

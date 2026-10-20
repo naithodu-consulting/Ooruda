@@ -26,6 +26,9 @@ const alias = [
 
 export default defineConfig({
   resolve: { alias },
+  // Config modules such as the sidebar nav hold JSX icons; use the automatic
+  // runtime (as Next.js does) so they can be imported without a React global.
+  esbuild: { jsx: 'automatic' },
   test: {
     alias,
     environment: 'node',

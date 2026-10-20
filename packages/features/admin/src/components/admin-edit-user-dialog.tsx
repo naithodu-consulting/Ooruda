@@ -43,6 +43,7 @@ import { toast } from '@kit/ui/sonner';
 import { updateUserDetailsAction } from '../lib/server/admin-server-actions';
 import {
   ASSIGNABLE_ROLES,
+  ROLES_BY_PRODUCT,
   ROLE_LABELS,
 } from '../lib/server/schema/create-user.schema';
 
@@ -60,6 +61,16 @@ export function AdminEditUserDialog(
 ) {
   const router = useRouter();
   const isTeamMode = !!props.teamAccountId;
+
+  // A member's current role identifies the account's product (the database
+  // only allows roles of the account's own product), so offer only those.
+  const roleOptions =
+    ROLES_BY_PRODUCT[
+      props.currentRole === 'villa_admin' ||
+      props.currentRole === 'villa_manager'
+        ? 'villa'
+        : 'association'
+    ];
 
   // Support both controlled (open/onOpenChange) and uncontrolled (trigger-only) usage.
   const [internalOpen, setInternalOpen] = useState(false);
@@ -233,7 +244,7 @@ export function AdminEditUserDialog(
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {ASSIGNABLE_ROLES.map((role) => (
+                        {roleOptions.map((role) => (
                           <SelectItem key={role} value={role}>
                             {ROLE_LABELS[role]}
                           </SelectItem>

@@ -1,0 +1,41 @@
+{
+  "nav": {
+    "portfolio": "Portfolio",
+    "dashboard": "Dashboard",
+    "reports": "Reports",
+    "operations": "Operations",
+    "admin": "Admin",
+    "members": "Members",
+    "settings": "Villa Settings",
+    "calendar": "Calendar",
+    "bookings": "Bookings",
+    "expenses": "Expenses",
+    "discounts": "Discount codes"
+  },
+  "roles": {
+    "villa_admin": "Villa Admin",
+    "villa_manager": "Villa Manager"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "setupTitle": "Your villa workspace",
+    "setupDescriptionOwner": "Everything is ready for your property: bookings, calendar, guest IDs, payments, reports and expenses.",
+    "setupDescriptionManager": "Everything is ready for your shift. Track today's arrivals and departures, manage guest IDs, record bookings, and log expenses.",
+    "inviteManager": "Invite a manager",
+    "quickActions": "Quick actions",
+    "newBooking": "New booking",
+    "calendar": "Calendar & blocks",
+    "addExpense": "Add expense",
+    "signedInAs": "You are signed in as"
+  },
+  "site": {
+    "title": "Booking site",
+    "description": "Bookings, blocked dates and rates are read from and saved to the villa's guest booking site.",
+    "none": "Not connected yet. Ooruda support will connect your booking site.",
+    "connected": "Connected",
+    "notConfigured": "Not connected",
+    "unreachable": "Can't reach the site",
+    "error": "Connection error: contact Ooruda support",
+    "loadError": "Couldn't load the booking site status. Refresh to try again."
+  }
+}

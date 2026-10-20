@@ -28,7 +28,7 @@ function useFetchRoles(props: { maxRoleHierarchy: number }) {
     queryFn: async () => {
       const { error, data } = await supabase
         .from('roles')
-        .select('name')
+        .select('name, hierarchy_level, product_type')
         .gte('hierarchy_level', props.maxRoleHierarchy)
         .order('hierarchy_level', { ascending: true });
 
@@ -36,7 +36,19 @@ function useFetchRoles(props: { maxRoleHierarchy: number }) {
         throw error;
       }
 
-      return data.map((item) => item.name);
+      // Roles belong to a product (association or villa), and a membership
+      // can only hold a role of its account's product (enforced by a DB
+      // trigger). Offer only roles of the same product as the viewer's own
+      // role, so an association admin is never offered villa roles.
+      // If the viewer's level matches no role, fall back to the association
+      // product rather than offering every product's roles.
+      const product =
+        data.find((item) => item.hierarchy_level === props.maxRoleHierarchy)
+          ?.product_type ?? 'association';
+
+      return data
+        .filter((item) => item.product_type === product)
+        .map((item) => item.name);
     },
     staleTime: 1000 * 60 * 30, // 30 minutes
   });

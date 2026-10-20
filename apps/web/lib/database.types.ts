@@ -44,6 +44,7 @@ export type Database = {
           name: string
           picture_url: string | null
           primary_owner_user_id: string
+          product_type: string
           public_data: Json
           slug: string | null
           updated_at: string | null
@@ -58,6 +59,7 @@ export type Database = {
           name: string
           picture_url?: string | null
           primary_owner_user_id?: string
+          product_type?: string
           public_data?: Json
           slug?: string | null
           updated_at?: string | null
@@ -72,6 +74,7 @@ export type Database = {
           name?: string
           picture_url?: string | null
           primary_owner_user_id?: string
+          product_type?: string
           public_data?: Json
           slug?: string | null
           updated_at?: string | null
@@ -2132,14 +2135,17 @@ export type Database = {
         Row: {
           hierarchy_level: number
           name: string
+          product_type: string
         }
         Insert: {
           hierarchy_level: number
           name: string
+          product_type?: string
         }
         Update: {
           hierarchy_level?: number
           name?: string
+          product_type?: string
         }
         Relationships: []
       }
@@ -2518,6 +2524,1470 @@ export type Database = {
           },
         ]
       }
+      villa_account_settings: {
+        Row: {
+          account_id: string
+          booking_cutoff_date: string | null
+          created_at: string
+          guest_emails_checked_at: string | null
+          managers_can_cancel: boolean
+          pre_arrival_email: boolean
+          thank_you_email: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_id: string
+          booking_cutoff_date?: string | null
+          created_at?: string
+          guest_emails_checked_at?: string | null
+          managers_can_cancel?: boolean
+          pre_arrival_email?: boolean
+          thank_you_email?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_id?: string
+          booking_cutoff_date?: string | null
+          created_at?: string
+          guest_emails_checked_at?: string | null
+          managers_can_cancel?: boolean
+          pre_arrival_email?: boolean
+          thank_you_email?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_account_settings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_account_settings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_account_settings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_addons: {
+        Row: {
+          account_id: string
+          created_at: string
+          description: string | null
+          display_order: number
+          id: string
+          is_active: boolean
+          name: string
+          price: number
+          pricing_unit: string
+          property_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          price: number
+          pricing_unit: string
+          property_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          price?: number
+          pricing_unit?: string
+          property_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_addons_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_addons_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_addons_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_addons_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_booking_activity: {
+        Row: {
+          account_id: string
+          action: string
+          actor_user_id: string | null
+          booking_code: string | null
+          created_at: string
+          id: string
+          note: string | null
+          property_id: string
+          reason_code: string | null
+          site_booking_id: string
+        }
+        Insert: {
+          account_id: string
+          action: string
+          actor_user_id?: string | null
+          booking_code?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          property_id: string
+          reason_code?: string | null
+          site_booking_id: string
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          actor_user_id?: string | null
+          booking_code?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          property_id?: string
+          reason_code?: string | null
+          site_booking_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_booking_activity_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_activity_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_activity_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_activity_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_activity_reason_code_fkey"
+            columns: ["reason_code"]
+            isOneToOne: false
+            referencedRelation: "villa_cancellation_reasons"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      villa_booking_guests: {
+        Row: {
+          account_id: string
+          created_at: string
+          guest_id: string
+          id: string
+          is_adult: boolean
+          is_primary: boolean
+          property_id: string
+          site_booking_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          guest_id: string
+          id?: string
+          is_adult?: boolean
+          is_primary?: boolean
+          property_id: string
+          site_booking_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          guest_id?: string
+          id?: string
+          is_adult?: boolean
+          is_primary?: boolean
+          property_id?: string
+          site_booking_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_booking_guests_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_guests_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_guests_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_guests_guest_id_fkey"
+            columns: ["guest_id"]
+            isOneToOne: false
+            referencedRelation: "villa_guests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_guests_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_booking_payments: {
+        Row: {
+          account_id: string
+          amount: number
+          booking_code: string | null
+          id: string
+          mode: string
+          note: string | null
+          paid_on: string
+          payer_name: string | null
+          property_id: string
+          receipt_no: string
+          recorded_at: string
+          recorded_by: string | null
+          reference: string | null
+          request_id: string
+          site_booking_id: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          booking_code?: string | null
+          id?: string
+          mode: string
+          note?: string | null
+          paid_on: string
+          payer_name?: string | null
+          property_id: string
+          receipt_no: string
+          recorded_at?: string
+          recorded_by?: string | null
+          reference?: string | null
+          request_id: string
+          site_booking_id: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          booking_code?: string | null
+          id?: string
+          mode?: string
+          note?: string | null
+          paid_on?: string
+          payer_name?: string | null
+          property_id?: string
+          receipt_no?: string
+          recorded_at?: string
+          recorded_by?: string | null
+          reference?: string | null
+          request_id?: string
+          site_booking_id?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_booking_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_booking_payments_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_bookings_mirror: {
+        Row: {
+          account_id: string
+          adults: number
+          base_amount: number
+          booking_code: string | null
+          booking_kind: string
+          channel: string | null
+          check_in: string
+          check_out: string
+          children: number
+          discount_amount: number
+          discount_code: string | null
+          extra_guest_amount: number
+          guest_email: string | null
+          guest_name: string
+          guest_phone: string | null
+          id_status: string | null
+          infants: number
+          invoice_number: string | null
+          nights: number
+          payment_status: string
+          property_id: string
+          reference_number: string
+          site_booking_id: string
+          site_property_id: string
+          site_updated_at: string | null
+          status: string
+          synced_at: string
+          tax_amount: number
+          total_amount: number
+        }
+        Insert: {
+          account_id: string
+          adults: number
+          base_amount: number
+          booking_code?: string | null
+          booking_kind?: string
+          channel?: string | null
+          check_in: string
+          check_out: string
+          children: number
+          discount_amount?: number
+          discount_code?: string | null
+          extra_guest_amount: number
+          guest_email?: string | null
+          guest_name: string
+          guest_phone?: string | null
+          id_status?: string | null
+          infants: number
+          invoice_number?: string | null
+          nights: number
+          payment_status: string
+          property_id: string
+          reference_number: string
+          site_booking_id: string
+          site_property_id: string
+          site_updated_at?: string | null
+          status: string
+          synced_at?: string
+          tax_amount: number
+          total_amount: number
+        }
+        Update: {
+          account_id?: string
+          adults?: number
+          base_amount?: number
+          booking_code?: string | null
+          booking_kind?: string
+          channel?: string | null
+          check_in?: string
+          check_out?: string
+          children?: number
+          discount_amount?: number
+          discount_code?: string | null
+          extra_guest_amount?: number
+          guest_email?: string | null
+          guest_name?: string
+          guest_phone?: string | null
+          id_status?: string | null
+          infants?: number
+          invoice_number?: string | null
+          nights?: number
+          payment_status?: string
+          property_id?: string
+          reference_number?: string
+          site_booking_id?: string
+          site_property_id?: string
+          site_updated_at?: string | null
+          status?: string
+          synced_at?: string
+          tax_amount?: number
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_bookings_mirror_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_bookings_mirror_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_bookings_mirror_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_bookings_mirror_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_cancellation_reasons: {
+        Row: {
+          code: string
+          default_refund: string
+          display_order: number
+          initiated_by: string
+          is_active: boolean
+          label: string
+          note_required: boolean
+        }
+        Insert: {
+          code: string
+          default_refund: string
+          display_order: number
+          initiated_by: string
+          is_active?: boolean
+          label: string
+          note_required?: boolean
+        }
+        Update: {
+          code?: string
+          default_refund?: string
+          display_order?: number
+          initiated_by?: string
+          is_active?: boolean
+          label?: string
+          note_required?: boolean
+        }
+        Relationships: []
+      }
+      villa_discount_audit: {
+        Row: {
+          account_id: string
+          action: string
+          actor: string | null
+          code_id: string
+          created_at: string
+          id: string
+          terms: Json
+        }
+        Insert: {
+          account_id: string
+          action: string
+          actor?: string | null
+          code_id: string
+          created_at?: string
+          id?: string
+          terms: Json
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          actor?: string | null
+          code_id?: string
+          created_at?: string
+          id?: string
+          terms?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_discount_audit_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_discount_audit_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_discount_audit_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_discount_audit_code_id_fkey"
+            columns: ["code_id"]
+            isOneToOne: false
+            referencedRelation: "villa_discount_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_discount_codes: {
+        Row: {
+          account_id: string
+          approved_at: string | null
+          approved_by: string | null
+          blackouts: Json
+          channels: string[]
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          max_discount: number | null
+          max_uses: number | null
+          max_uses_per_guest: number
+          min_booking_value: number
+          min_nights: number
+          needs_approval: boolean | null
+          note: string | null
+          property_id: string
+          stackable: boolean
+          status: string
+          updated_at: string
+          valid_from: string
+          valid_to: string
+        }
+        Insert: {
+          account_id: string
+          approved_at?: string | null
+          approved_by?: string | null
+          blackouts?: Json
+          channels?: string[]
+          code: string
+          created_at?: string
+          created_by?: string | null
+          discount_type: string
+          discount_value: number
+          id?: string
+          max_discount?: number | null
+          max_uses?: number | null
+          max_uses_per_guest?: number
+          min_booking_value?: number
+          min_nights?: number
+          needs_approval?: boolean | null
+          note?: string | null
+          property_id: string
+          stackable?: boolean
+          status: string
+          updated_at?: string
+          valid_from: string
+          valid_to: string
+        }
+        Update: {
+          account_id?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          blackouts?: Json
+          channels?: string[]
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          discount_type?: string
+          discount_value?: number
+          id?: string
+          max_discount?: number | null
+          max_uses?: number | null
+          max_uses_per_guest?: number
+          min_booking_value?: number
+          min_nights?: number
+          needs_approval?: boolean | null
+          note?: string | null
+          property_id?: string
+          stackable?: boolean
+          status?: string
+          updated_at?: string
+          valid_from?: string
+          valid_to?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_discount_codes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_discount_codes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_discount_codes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_discount_codes_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_emergency_contacts: {
+        Row: {
+          account_id: string
+          category: string
+          created_at: string
+          display_order: number
+          id: string
+          name: string
+          notes: string | null
+          phone: string
+          property_id: string
+          share_with_guests: boolean
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          category: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          name: string
+          notes?: string | null
+          phone: string
+          property_id: string
+          share_with_guests?: boolean
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          category?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string
+          property_id?: string
+          share_with_guests?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_emergency_contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_emergency_contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_emergency_contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_emergency_contacts_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_expenses: {
+        Row: {
+          account_id: string
+          amount: number
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string
+          gst_amount: number
+          id: string
+          invoice_no: string | null
+          mode: string
+          notes: string | null
+          property_id: string
+          spent_on: string
+          updated_at: string
+          vendor: string | null
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description: string
+          gst_amount?: number
+          id?: string
+          invoice_no?: string | null
+          mode: string
+          notes?: string | null
+          property_id: string
+          spent_on: string
+          updated_at?: string
+          vendor?: string | null
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          gst_amount?: number
+          id?: string
+          invoice_no?: string | null
+          mode?: string
+          notes?: string | null
+          property_id?: string
+          spent_on?: string
+          updated_at?: string
+          vendor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_expenses_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_expenses_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_expenses_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_expenses_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_guest_document_access: {
+        Row: {
+          account_id: string
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          document_id: string
+          id: string
+        }
+        Insert: {
+          account_id: string
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          document_id: string
+          id?: string
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          document_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_guest_document_access_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_guest_document_access_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_guest_document_access_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_guest_document_access_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "villa_guest_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_guest_documents: {
+        Row: {
+          account_id: string
+          captured_at: string
+          captured_by: string | null
+          content_type: string | null
+          doc_type: string
+          guest_id: string
+          id: string
+          masked_number: string | null
+          property_id: string
+          purge_after: string
+          purged_at: string | null
+          site_booking_id: string
+          stage: string
+          storage_path: string | null
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          account_id: string
+          captured_at?: string
+          captured_by?: string | null
+          content_type?: string | null
+          doc_type: string
+          guest_id: string
+          id?: string
+          masked_number?: string | null
+          property_id: string
+          purge_after: string
+          purged_at?: string | null
+          site_booking_id: string
+          stage: string
+          storage_path?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          account_id?: string
+          captured_at?: string
+          captured_by?: string | null
+          content_type?: string | null
+          doc_type?: string
+          guest_id?: string
+          id?: string
+          masked_number?: string | null
+          property_id?: string
+          purge_after?: string
+          purged_at?: string | null
+          site_booking_id?: string
+          stage?: string
+          storage_path?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_guest_documents_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_guest_documents_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_guest_documents_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_guest_documents_guest_id_fkey"
+            columns: ["guest_id"]
+            isOneToOne: false
+            referencedRelation: "villa_guests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_guest_documents_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_guests: {
+        Row: {
+          account_id: string
+          created_at: string
+          created_by: string | null
+          email: string | null
+          full_name: string
+          id: string
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          full_name: string
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          full_name?: string
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_guests_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_guests_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_guests_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_message_log: {
+        Row: {
+          account_id: string
+          booking_code: string | null
+          check_in: string | null
+          created_at: string
+          id: string
+          manual: boolean
+          property_id: string
+          provider_id: string | null
+          reason: string | null
+          sent_by: string | null
+          site_booking_id: string
+          status: string
+          template: string
+          to_email: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          booking_code?: string | null
+          check_in?: string | null
+          created_at?: string
+          id?: string
+          manual?: boolean
+          property_id: string
+          provider_id?: string | null
+          reason?: string | null
+          sent_by?: string | null
+          site_booking_id: string
+          status: string
+          template: string
+          to_email?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          booking_code?: string | null
+          check_in?: string | null
+          created_at?: string
+          id?: string
+          manual?: boolean
+          property_id?: string
+          provider_id?: string | null
+          reason?: string | null
+          sent_by?: string | null
+          site_booking_id?: string
+          status?: string
+          template?: string
+          to_email?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_message_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_message_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_message_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_message_log_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_mirror_sync_state: {
+        Row: {
+          account_id: string
+          full_site_property_id: string | null
+          last_error: string | null
+          last_error_at: string | null
+          last_full_at: string | null
+          last_synced_at: string | null
+          property_id: string
+          rows_synced: number
+          sync_started_at: string | null
+        }
+        Insert: {
+          account_id: string
+          full_site_property_id?: string | null
+          last_error?: string | null
+          last_error_at?: string | null
+          last_full_at?: string | null
+          last_synced_at?: string | null
+          property_id: string
+          rows_synced?: number
+          sync_started_at?: string | null
+        }
+        Update: {
+          account_id?: string
+          full_site_property_id?: string | null
+          last_error?: string | null
+          last_error_at?: string | null
+          last_full_at?: string | null
+          last_synced_at?: string | null
+          property_id?: string
+          rows_synced?: number
+          sync_started_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_mirror_sync_state_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_mirror_sync_state_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_mirror_sync_state_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_mirror_sync_state_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: true
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_properties: {
+        Row: {
+          account_id: string
+          booking_code_prefix: string | null
+          created_at: string
+          gstin: string | null
+          id: string
+          is_test: boolean
+          legal_name: string | null
+          name: string
+          ota_buffer_nights: number
+          retention_days: number
+          site_credentials_ref: string | null
+          site_project_ref: string | null
+          site_property_id: string | null
+          status: string
+          updated_at: string
+          whatsapp_number: string | null
+        }
+        Insert: {
+          account_id: string
+          booking_code_prefix?: string | null
+          created_at?: string
+          gstin?: string | null
+          id?: string
+          is_test?: boolean
+          legal_name?: string | null
+          name: string
+          ota_buffer_nights?: number
+          retention_days?: number
+          site_credentials_ref?: string | null
+          site_project_ref?: string | null
+          site_property_id?: string | null
+          status?: string
+          updated_at?: string
+          whatsapp_number?: string | null
+        }
+        Update: {
+          account_id?: string
+          booking_code_prefix?: string | null
+          created_at?: string
+          gstin?: string | null
+          id?: string
+          is_test?: boolean
+          legal_name?: string | null
+          name?: string
+          ota_buffer_nights?: number
+          retention_days?: number
+          site_credentials_ref?: string | null
+          site_project_ref?: string | null
+          site_property_id?: string | null
+          status?: string
+          updated_at?: string
+          whatsapp_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_properties_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_properties_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_properties_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_refunds: {
+        Row: {
+          account_id: string
+          amount: number
+          id: string
+          mode: string
+          payment_id: string
+          property_id: string
+          razorpay_refund_id: string | null
+          reason: string
+          recorded_at: string
+          recorded_by: string | null
+          reference: string | null
+          refund_no: string
+          refunded_on: string
+          request_id: string
+          site_booking_id: string
+          status: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          id?: string
+          mode: string
+          payment_id: string
+          property_id: string
+          razorpay_refund_id?: string | null
+          reason: string
+          recorded_at?: string
+          recorded_by?: string | null
+          reference?: string | null
+          refund_no: string
+          refunded_on: string
+          request_id: string
+          site_booking_id: string
+          status?: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          id?: string
+          mode?: string
+          payment_id?: string
+          property_id?: string
+          razorpay_refund_id?: string | null
+          reason?: string
+          recorded_at?: string
+          recorded_by?: string | null
+          reference?: string | null
+          refund_no?: string
+          refunded_on?: string
+          request_id?: string
+          site_booking_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_refunds_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_refunds_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_refunds_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_refunds_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "villa_booking_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_refunds_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_sequences: {
+        Row: {
+          financial_year: number
+          kind: string
+          last_value: number
+          property_id: string
+        }
+        Insert: {
+          financial_year: number
+          kind: string
+          last_value?: number
+          property_id: string
+        }
+        Update: {
+          financial_year?: number
+          kind?: string
+          last_value?: number
+          property_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_sequences_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      villa_sync_log: {
+        Row: {
+          account_id: string
+          actor_user_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          operation: string
+          outcome: string
+          property_id: string | null
+          site_id: string | null
+        }
+        Insert: {
+          account_id: string
+          actor_user_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          operation: string
+          outcome: string
+          property_id?: string | null
+          site_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          actor_user_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          operation?: string
+          outcome?: string
+          property_id?: string | null
+          site_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_sync_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_sync_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_sync_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_sync_log_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "villa_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       user_account_workspace: {
@@ -2604,6 +4074,19 @@ export type Database = {
       can_action_account_member: {
         Args: { target_team_account_id: string; target_user_id: string }
         Returns: boolean
+      }
+      connect_villa_property: {
+        Args: {
+          p_account_id: string
+          p_booking_code_prefix: string
+          p_name: string
+          p_property_id?: string
+          p_service_key: string
+          p_site_project_ref: string
+          p_site_property_id: string
+          p_site_url: string
+        }
+        Returns: string
       }
       create_bill_with_items:
         | {
@@ -2720,6 +4203,7 @@ export type Database = {
           name: string
           picture_url: string | null
           primary_owner_user_id: string
+          product_type: string
           public_data: Json
           slug: string | null
           updated_at: string | null
@@ -2731,6 +4215,34 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      create_villa_account: {
+        Args: { account_name: string; account_slug?: string; user_id: string }
+        Returns: {
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          id: string
+          is_personal_account: boolean
+          name: string
+          picture_url: string | null
+          primary_owner_user_id: string
+          product_type: string
+          public_data: Json
+          slug: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "accounts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      disconnect_villa_property: {
+        Args: { p_account_id: string; p_property_id: string }
+        Returns: undefined
       }
       find_users_by_phones_or_emails: {
         Args: { p_emails: string[]; p_phones: string[] }
@@ -2822,7 +4334,18 @@ export type Database = {
           unit_no: string
         }[]
       }
+      get_upper_role_for_account: {
+        Args: { p_account_id: string }
+        Returns: string
+      }
       get_upper_system_role: { Args: never; Returns: string }
+      get_villa_site_credentials: {
+        Args: { p_property_id: string }
+        Returns: {
+          service_key: string
+          url: string
+        }[]
+      }
       has_active_subscription: {
         Args: { target_account_id: string }
         Returns: boolean
@@ -2854,6 +4377,10 @@ export type Database = {
           target_user_id: string
         }
         Returns: boolean
+      }
+      invalidate_association_pdf_cache: {
+        Args: { p_association_id: string }
+        Returns: undefined
       }
       invite_to_association_by_phone: {
         Args: {
@@ -2938,11 +4465,205 @@ export type Database = {
         Args: { p_razorpay_payment_id: string; p_refund_amount?: number }
         Returns: undefined
       }
+      record_villa_payment: {
+        Args: {
+          p_amount: number
+          p_mode: string
+          p_note: string
+          p_paid_on: string
+          p_payer_name: string
+          p_property_id: string
+          p_reference: string
+          p_request_id: string
+          p_site_booking_id: string
+        }
+        Returns: {
+          account_id: string
+          amount: number
+          booking_code: string | null
+          id: string
+          mode: string
+          note: string | null
+          paid_on: string
+          payer_name: string | null
+          property_id: string
+          receipt_no: string
+          recorded_at: string
+          recorded_by: string | null
+          reference: string | null
+          request_id: string
+          site_booking_id: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_booking_payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_villa_refund: {
+        Args: {
+          p_amount: number
+          p_mode: string
+          p_payment_id: string
+          p_reason: string
+          p_reference: string
+          p_refunded_on: string
+          p_request_id: string
+        }
+        Returns: {
+          account_id: string
+          amount: number
+          id: string
+          mode: string
+          payment_id: string
+          property_id: string
+          razorpay_refund_id: string | null
+          reason: string
+          recorded_at: string
+          recorded_by: string | null
+          reference: string | null
+          refund_no: string
+          refunded_on: string
+          request_id: string
+          site_booking_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_refunds"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      review_villa_discount: {
+        Args: { p_approve: boolean; p_id: string }
+        Returns: {
+          account_id: string
+          approved_at: string | null
+          approved_by: string | null
+          blackouts: Json
+          channels: string[]
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          max_discount: number | null
+          max_uses: number | null
+          max_uses_per_guest: number
+          min_booking_value: number
+          min_nights: number
+          needs_approval: boolean | null
+          note: string | null
+          property_id: string
+          stackable: boolean
+          status: string
+          updated_at: string
+          valid_from: string
+          valid_to: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_discount_codes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       revoke_nonce: {
         Args: { p_id: string; p_reason?: string }
         Returns: boolean
       }
+      save_villa_discount: {
+        Args: {
+          p_blackouts: Json
+          p_code: string
+          p_discount_type: string
+          p_discount_value: number
+          p_id: string
+          p_max_discount: number
+          p_max_uses: number
+          p_max_uses_per_guest: number
+          p_min_booking_value: number
+          p_min_nights: number
+          p_note: string
+          p_property_id: string
+          p_valid_from: string
+          p_valid_to: string
+        }
+        Returns: {
+          account_id: string
+          approved_at: string | null
+          approved_by: string | null
+          blackouts: Json
+          channels: string[]
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          max_discount: number | null
+          max_uses: number | null
+          max_uses_per_guest: number
+          min_booking_value: number
+          min_nights: number
+          needs_approval: boolean | null
+          note: string | null
+          property_id: string
+          stackable: boolean
+          status: string
+          updated_at: string
+          valid_from: string
+          valid_to: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_discount_codes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       send_amc_reminders: { Args: never; Returns: undefined }
+      set_villa_discount_active: {
+        Args: { p_active: boolean; p_id: string }
+        Returns: {
+          account_id: string
+          approved_at: string | null
+          approved_by: string | null
+          blackouts: Json
+          channels: string[]
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          max_discount: number | null
+          max_uses: number | null
+          max_uses_per_guest: number
+          min_booking_value: number
+          min_nights: number
+          needs_approval: boolean | null
+          note: string | null
+          property_id: string
+          stackable: boolean
+          status: string
+          updated_at: string
+          valid_from: string
+          valid_to: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_discount_codes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       super_admin_delete_all_bills: {
@@ -3058,6 +4779,7 @@ export type Database = {
         }
         Returns: Json
       }
+      villa_role: { Args: { p_account_id: string }; Returns: string }
       void_bill: {
         Args: { p_bill_id: string; p_reason: string }
         Returns: undefined
@@ -3070,6 +4792,35 @@ export type Database = {
           p_reason: string
         }
         Returns: number
+      }
+      void_villa_payment: {
+        Args: { p_payment_id: string; p_reason: string }
+        Returns: {
+          account_id: string
+          amount: number
+          booking_code: string | null
+          id: string
+          mode: string
+          note: string | null
+          paid_on: string
+          payer_name: string | null
+          property_id: string
+          receipt_no: string
+          recorded_at: string
+          recorded_by: string | null
+          reference: string | null
+          request_id: string
+          site_booking_id: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_booking_payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {

@@ -2,7 +2,7 @@
   "homeTabLabel": "Home",
   "homeTabDescription": "Welcome to your home page",
   "accountMembers": "Members",
-  "membersTabDescription": "Manage who can access this association and what they are allowed to do.",
+  "membersTabDescription": "Manage who can access this workspace and what they are allowed to do.",
   "billingTabLabel": "Billing",
   "billingTabDescription": "Manage your billing and subscription",
   "dashboardTabLabel": "Dashboard",
@@ -86,6 +86,12 @@
     },
     "tenant": {
       "label": "Tenant"
+    },
+    "villa_admin": {
+      "label": "Villa Admin"
+    },
+    "villa_manager": {
+      "label": "Villa Manager"
     }
   },
   "otp": {

@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import { createClient } from '@supabase/supabase-js';
+
 import { getLogger } from '@kit/shared/logger';
 import { normalizePhoneNumber } from '@kit/shared/utils';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
@@ -16,6 +18,10 @@ import {
   ReactivateUserSchema,
 } from './schema/admin-actions.schema';
 import { AssocAdminPermissionsSchema } from './schema/assoc-permissions.schema';
+import {
+  ConnectVillaSiteSchema,
+  DisconnectVillaSiteSchema,
+} from './schema/connect-villa-site.schema';
 import { CreateAssociationSchema } from './schema/create-association.schema';
 import {
   CreateUserSchema,
@@ -345,33 +351,46 @@ export const createUserAction = adminActionClient
  */
 export const createAssociationAction = adminActionClient
   .inputSchema(CreateAssociationSchema)
-  .action(async ({ parsedInput: { name, ownerId }, ctx }) => {
+  .action(async ({ parsedInput: { name, ownerId, productType }, ctx }) => {
     const adminClient = getSupabaseServerAdminClient();
     const logger = await getLogger();
+    const isVilla = productType === 'villa';
+    const label = isVilla ? 'villa account' : 'association';
 
-    logger.info({ name, ownerId }, `Super Admin is creating an association...`);
+    logger.info(
+      { name, ownerId, productType },
+      `Super Admin is creating a ${label}...`,
+    );
 
-    const { data, error } = await adminClient.rpc('create_team_account', {
-      account_name: name,
-      user_id: ownerId,
-    });
+    // Villa accounts are created by their own RPC, which sets product_type in
+    // the INSERT (so no associations row is auto-created) and makes the
+    // owner a villa_admin.
+    const { data, error } = isVilla
+      ? await adminClient.rpc('create_villa_account', {
+          account_name: name,
+          user_id: ownerId,
+        })
+      : await adminClient.rpc('create_team_account', {
+          account_name: name,
+          user_id: ownerId,
+        });
 
     if (error) {
-      logger.error({ error }, `Error creating association`);
-      throw new Error(`Error creating association: ${error.message}`);
+      logger.error({ error }, `Error creating ${label}`);
+      throw new Error(`Error creating ${label}: ${error.message}`);
     }
 
     logger.info(
-      { accountId: data?.id, name },
-      `Super Admin has successfully created an association`,
+      { accountId: data?.id, name, productType },
+      `Super Admin has successfully created a ${label}`,
     );
 
     void logAdminAudit(
       ctx.user.id,
-      'admin.association.created',
+      isVilla ? 'admin.villa.created' : 'admin.association.created',
       'account',
       data?.id ?? null,
-      `Association created: ${name}`,
+      `${isVilla ? 'Villa account' : 'Association'} created: ${name}`,
     );
 
     revalidatePath(`/admin/accounts`);
@@ -1190,4 +1209,183 @@ export const toggleAssociationFeatureFlagAction = adminActionClient
     const service = createFeatureFlagsService(adminClient);
     await service.upsertFlag(ctx.user.id, input);
     revalidatePath(`/admin/accounts/[id]`, 'page');
+  });
+
+/**
+ * @name connectVillaSiteAction
+ * @description Links a villa account to a property on its villa-booking
+ * (guest site) database, and stores that database's service key in Vault.
+ *
+ * Verifies the connection first — the key must actually open the site and the
+ * property slug must exist there — so a typo is caught here, not later on the
+ * owner's calendar. Idempotent: re-running with new credentials rotates them.
+ * The key is never logged, audited or returned.
+ */
+export const connectVillaSiteAction = adminActionClient
+  .inputSchema(ConnectVillaSiteSchema)
+  .action(
+    async ({
+      parsedInput: {
+        accountId,
+        propertyId,
+        name,
+        siteUrl,
+        serviceKey,
+        siteSlug,
+      },
+      ctx,
+    }) => {
+      const adminClient = getSupabaseServerAdminClient();
+      const logger = await getLogger();
+
+      const { data: account } = await adminClient
+        .from('accounts')
+        .select('id, slug, product_type')
+        .eq('id', accountId)
+        .maybeSingle();
+
+      if (!account || account.product_type !== 'villa') {
+        throw new Error(
+          'Booking sites can only be connected to villa accounts.',
+        );
+      }
+
+      // 1. Prove the credentials open the site and the property exists.
+      const site = createClient(siteUrl, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: {
+          fetch: (input, init) =>
+            fetch(input, { ...init, signal: AbortSignal.timeout(10_000) }),
+        },
+      });
+
+      const { data: property, error: siteError } = await site
+        .from('properties')
+        .select('id, name, booking_code_prefix')
+        .eq('slug', siteSlug)
+        .maybeSingle();
+
+      if (siteError) {
+        logger.warn(
+          { accountId, siteUrl, code: siteError.code },
+          'villa site connection check failed',
+        );
+        throw new Error(
+          'Could not open the booking site with that URL and key. Check both and try again.',
+        );
+      }
+
+      if (!property) {
+        throw new Error(
+          `No property with slug "${siteSlug}" on that booking site.`,
+        );
+      }
+
+      // 2. Link the property and store the key in ONE transaction. On an
+      //    existing link this rotates the key and keeps the owner's name and
+      //    status. A site property already linked to ANOTHER villa account is
+      //    refused, so a slug typo on a shared site cannot cross-wire villas.
+      const { data: connectedId, error: connectError } = await adminClient.rpc(
+        'connect_villa_property',
+        {
+          p_account_id: accountId,
+          p_site_url: siteUrl,
+          p_site_project_ref: new URL(siteUrl).host,
+          p_site_property_id: property.id,
+          // Nullable in SQL; generated RPC arg types cannot express that.
+          p_booking_code_prefix: (property.booking_code_prefix ??
+            null) as string,
+          p_name: name?.trim() || property.name,
+          p_service_key: serviceKey,
+          // Nullable in SQL (re-link only); generated arg types cannot say so.
+          p_property_id: (propertyId ?? null) as string,
+        },
+      );
+
+      if (connectError) {
+        logger.error(
+          { accountId, code: connectError.code },
+          'villa property could not be connected',
+        );
+
+        throw new Error(
+          connectError.code === '23505'
+            ? 'That booking-site property is already connected to another villa account.'
+            : 'Could not save the connection. Please try again.',
+        );
+      }
+
+      const villaProperty = { id: connectedId as string };
+
+      void logAdminAudit(
+        ctx.user.id,
+        'admin.villa.site_connected',
+        'villa_property',
+        villaProperty.id,
+        `Booking site connected: ${property.name} (${siteSlug})`,
+      );
+
+      revalidatePath(`/admin/accounts/${accountId}`);
+      if (account.slug) revalidatePath(`/home/${account.slug}`, 'layout');
+
+      return { success: true, propertyId: villaProperty.id };
+    },
+  );
+
+/**
+ * @name disconnectVillaSiteAction
+ * @description Unlinks a villa property from its booking site and deletes its
+ * stored key. The property and its settings stay in Ooruda; nothing on the
+ * booking site itself changes.
+ */
+export const disconnectVillaSiteAction = adminActionClient
+  .inputSchema(DisconnectVillaSiteSchema)
+  .action(async ({ parsedInput: { accountId, propertyId }, ctx }) => {
+    const adminClient = getSupabaseServerAdminClient();
+
+    // Unlink only: the property, its add-ons, contacts and history stay, so a
+    // later Connect (or a move to another booking site) loses nothing.
+    const { data: property } = await adminClient
+      .from('villa_properties')
+      .select('id, name')
+      .eq('id', propertyId)
+      .eq('account_id', accountId)
+      .maybeSingle();
+
+    if (!property) {
+      throw new Error('That villa property no longer exists.');
+    }
+
+    const { error } = await adminClient.rpc('disconnect_villa_property', {
+      p_account_id: accountId,
+      p_property_id: propertyId,
+    });
+
+    if (error) {
+      const logger = await getLogger();
+      logger.error(
+        { accountId, propertyId, code: error.code },
+        'villa disconnect failed',
+      );
+      throw new Error('Could not disconnect. Please try again.');
+    }
+
+    void logAdminAudit(
+      ctx.user.id,
+      'admin.villa.site_disconnected',
+      'villa_property',
+      propertyId,
+      `Booking site disconnected: ${property.name}`,
+    );
+
+    const { data: account } = await adminClient
+      .from('accounts')
+      .select('slug')
+      .eq('id', accountId)
+      .maybeSingle();
+
+    revalidatePath(`/admin/accounts/${accountId}`);
+    if (account?.slug) revalidatePath(`/home/${account.slug}`, 'layout');
+
+    return { success: true };
   });

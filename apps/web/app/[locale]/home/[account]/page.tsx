@@ -7,16 +7,17 @@ import { PageBody } from '@kit/ui/page';
 import { Skeleton } from '@kit/ui/skeleton';
 import { Trans } from '@kit/ui/trans';
 
-import { PROPOPS_ROLES, requireRole } from '~/lib/rbac';
+import { PROPOPS_ROLES, getAccountContext, requireRole } from '~/lib/rbac';
 
 import { AssociationDashboard } from './_components/association-dashboard';
 import { TeamAccountLayoutPageHeader } from './_components/team-account-layout-page-header';
+import { VillaDashboard } from './_components/villa-dashboard';
 
 export const dynamic = 'force-dynamic';
 
 interface TeamAccountHomePageProps {
   params: Promise<{ account: string }>;
-  searchParams: Promise<{ d?: string }>;
+  searchParams: Promise<{ d?: string; property?: string }>;
 }
 
 export const generateMetadata = async () => {
@@ -53,8 +54,22 @@ async function TeamAccountHomePage({
   params,
   searchParams,
 }: TeamAccountHomePageProps) {
-  const [{ account }, { d }] = await Promise.all([params, searchParams]);
+  const [{ account }, { d, property }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const duration = d ?? 'all';
+
+  // Both products share /home/[account]. requireRole() sends a product
+  // mismatch back here, so this page must branch before asserting roles —
+  // asserting association roles first would redirect a villa account to
+  // itself forever.
+  const { productType } = await getAccountContext(account);
+
+  if (productType === 'villa') {
+    return <VillaDashboard account={account} property={property} />;
+  }
+
   const {
     role,
     accountId,

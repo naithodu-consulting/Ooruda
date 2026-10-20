@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAction } from 'next-safe-action/hooks';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import {
@@ -29,10 +29,19 @@ import { useAsyncDialog } from '@kit/ui/hooks/use-async-dialog';
 import { If } from '@kit/ui/if';
 import { Input } from '@kit/ui/input';
 import { SearchableSelect } from '@kit/ui/searchable-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@kit/ui/select';
 import { toast } from '@kit/ui/sonner';
 
 import { createAssociationAction } from '../lib/server/admin-server-actions';
 import {
+  ACCOUNT_PRODUCT_LABELS,
+  ACCOUNT_PRODUCT_TYPES,
   CreateAssociationSchema,
   CreateAssociationSchemaType,
 } from '../lib/server/schema/create-association.schema';
@@ -54,14 +63,22 @@ export function AdminCreateAssociationDialog(
     defaultValues: {
       name: '',
       ownerId: '',
+      productType: 'association' as CreateAssociationSchemaType['productType'],
     },
     mode: 'onChange',
   });
 
+  const productType = useWatch({ control: form.control, name: 'productType' });
+  const isVilla = productType === 'villa';
+
   const { execute, result } = useAction(createAssociationAction, {
     onExecute: () => setIsPending(true),
     onSuccess: () => {
-      toast.success('Association created successfully');
+      toast.success(
+        isVilla
+          ? 'Villa account created successfully'
+          : 'Association created successfully',
+      );
       form.reset();
       setIsPending(false);
       setOpen(false);
@@ -80,11 +97,12 @@ export function AdminCreateAssociationDialog(
 
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Create New Association</AlertDialogTitle>
+          <AlertDialogTitle>Create New Account</AlertDialogTitle>
 
           <AlertDialogDescription>
-            Create an association and assign an existing user as its Association
-            Admin. You can add more members afterwards from the accounts list.
+            Create an association or a villa account and assign an existing user
+            as its owner. The account type cannot be changed later. You can add
+            more members afterwards from the accounts list.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -104,16 +122,61 @@ export function AdminCreateAssociationDialog(
             </If>
 
             <FormField
+              name={'productType'}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Account type</FormLabel>
+
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger
+                        className="w-full"
+                        data-test={'admin-account-product-select'}
+                      >
+                        <SelectValue>
+                          {(value: string) =>
+                            ACCOUNT_PRODUCT_LABELS[
+                              value as keyof typeof ACCOUNT_PRODUCT_LABELS
+                            ] ?? 'Select a type'
+                          }
+                        </SelectValue>
+                      </SelectTrigger>
+                    </FormControl>
+
+                    <SelectContent>
+                      {ACCOUNT_PRODUCT_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {ACCOUNT_PRODUCT_LABELS[type]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <FormDescription>
+                    Cannot be changed after the account is created.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
               name={'name'}
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Association Name</FormLabel>
+                  <FormLabel>
+                    {isVilla ? 'Villa name' : 'Association Name'}
+                  </FormLabel>
 
                   <FormControl>
                     <Input
                       required
                       type="text"
-                      placeholder={'e.g. Green Meadows Association'}
+                      placeholder={
+                        isVilla
+                          ? 'e.g. Villa 19'
+                          : 'e.g. Green Meadows Association'
+                      }
                       {...field}
                     />
                   </FormControl>
@@ -126,7 +189,9 @@ export function AdminCreateAssociationDialog(
               name={'ownerId'}
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Association Admin (owner)</FormLabel>
+                  <FormLabel>
+                    {isVilla ? 'Villa Admin' : 'Association Admin (owner)'}
+                  </FormLabel>
 
                   <FormControl>
                     <SearchableSelect
@@ -146,7 +211,9 @@ export function AdminCreateAssociationDialog(
                   </FormControl>
 
                   <FormDescription>
-                    This user becomes the Association Admin.
+                    {isVilla
+                      ? 'This user becomes the Villa Admin.'
+                      : 'This user becomes the Association Admin.'}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -157,7 +224,11 @@ export function AdminCreateAssociationDialog(
               <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
 
               <Button disabled={isPending} type={'submit'}>
-                {isPending ? 'Creating...' : 'Create Association'}
+                {isPending
+                  ? 'Creating...'
+                  : isVilla
+                    ? 'Create Villa Account'
+                    : 'Create Association'}
               </Button>
             </AlertDialogFooter>
           </form>

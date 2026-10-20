@@ -7,7 +7,10 @@ import { If } from '@kit/ui/if';
 import { AppLogo } from '~/components/app-logo';
 import { ProfileAccountDropdownContainer } from '~/components/personal-account-dropdown-container';
 import featureFlagsConfig from '~/config/feature-flags.config';
-import { getTeamAccountSidebarConfig } from '~/config/team-account-navigation.config';
+import {
+  filterSidebarConfigByRole,
+  getTeamAccountSidebarConfig,
+} from '~/config/team-account-navigation.config';
 import { TeamAccountAccountsSelector } from '~/home/[account]/_components/team-account-accounts-selector';
 
 // local imports
@@ -19,7 +22,12 @@ export function TeamAccountNavigationMenu(props: {
 }) {
   const { account, user, accounts } = props.workspace;
 
-  const routes = getTeamAccountSidebarConfig(account.slug).routes.reduce<
+  // Same role filter as the sidebar, so the header layout never shows a role
+  // more than the sidebar would.
+  const routes = filterSidebarConfigByRole(
+    getTeamAccountSidebarConfig(account.slug, account.role),
+    account.role,
+  ).routes.reduce<
     Array<{
       path: string;
       label: string;
