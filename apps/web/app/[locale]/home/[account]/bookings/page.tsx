@@ -22,6 +22,7 @@ import { isVillaDbError } from '~/lib/villa-db/errors';
 import { selectVillaProperty } from '~/lib/villa/properties';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { VillaWorkspaceCard } from '../_components/villa-workspace-card';
 import { BookingsList } from './_components/bookings-list';
 import { BookingsToolbar } from './_components/bookings-toolbar';
 import { NewBookingDialog } from './_components/new-booking-dialog';
@@ -43,7 +44,7 @@ export default async function BookingsPage({ params, searchParams }: Props) {
     : 'upcoming';
   const q = sp.q?.trim() ?? '';
 
-  const { accountId } = await requireRole(account, VILLA_ROLES, 'villa');
+  const { role, accountId } = await requireRole(account, VILLA_ROLES, 'villa');
 
   const { properties, property } = await selectVillaProperty(
     accountId,
@@ -105,6 +106,7 @@ export default async function BookingsPage({ params, searchParams }: Props) {
       </TeamAccountLayoutPageHeader>
 
       <div className="flex max-w-5xl flex-col gap-4">
+        <VillaWorkspaceCard account={account} role={role} />
         {!property ? (
           <Alert data-test={'villa-bookings-no-property'}>
             <CircleAlert className="h-4 w-4" />

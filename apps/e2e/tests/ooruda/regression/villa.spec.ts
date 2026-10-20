@@ -212,6 +212,13 @@ test.describe.serial('villa product (M0)', () => {
     await settle(page);
     await expectNoErrorBoundary(page);
 
+    // The workspace card now lives on Bookings, not the dashboard.
+    await expect(
+      page.locator('[data-test="villa-dashboard-setup"]'),
+    ).toHaveCount(0);
+    await page.goto(`${VILLA_HOME}/bookings`);
+    await settle(page);
+    await expectNoErrorBoundary(page);
     await expect(
       page.locator('[data-test="villa-dashboard-setup"]'),
     ).toBeVisible();
@@ -226,7 +233,9 @@ test.describe.serial('villa product (M0)', () => {
       await expect(nav.getByRole('link', { name: hidden })).toHaveCount(0);
     }
 
-    // M1: not linked to a booking site yet.
+    // M1: not linked to a booking site yet (booking site card is on Settings).
+    await page.goto(`${VILLA_HOME}/villa-settings`);
+    await settle(page);
     await expect(
       page.locator('[data-test="villa-site-status-none"]'),
     ).toBeVisible();
@@ -237,7 +246,8 @@ test.describe.serial('villa product (M0)', () => {
       await page.waitForURL(new RegExp(`${VILLA_HOME}$`));
       await expect(
         page.locator('[data-test="villa-dashboard-setup"]'),
-      ).toBeVisible();
+      ).toHaveCount(0);
+      await expectNoErrorBoundary(page);
     }
 
     expect(issues.serverErrors).toEqual([]);
@@ -288,7 +298,7 @@ test.describe.serial('villa product (M0)', () => {
 
     const page = await signedInPage(browser, VILLA_OWNER.phone);
 
-    await page.goto(VILLA_HOME);
+    await page.goto(`${VILLA_HOME}/villa-settings`);
     await settle(page);
 
     const status = page.locator('[data-test="villa-site-status-row"]');
@@ -438,6 +448,16 @@ test.describe.serial('villa product (M0)', () => {
     await page.goto(VILLA_HOME);
     await settle(page);
 
+    const nav = sidebar(page);
+    await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+    await expect(
+      nav.getByRole('link', { name: 'Villa Settings' }),
+    ).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Members' })).toHaveCount(0);
+
+    await page.goto(`${VILLA_HOME}/bookings`);
+    await settle(page);
+
     await expect(
       page.locator('[data-test="villa-dashboard-setup"]'),
     ).toBeVisible();
@@ -447,13 +467,6 @@ test.describe.serial('villa product (M0)', () => {
     await expect(
       page.locator('[data-test="villa-dashboard-invite-manager"]'),
     ).toHaveCount(0);
-
-    const nav = sidebar(page);
-    await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-    await expect(
-      nav.getByRole('link', { name: 'Villa Settings' }),
-    ).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Members' })).toHaveCount(0);
 
     expect(issues.serverErrors).toEqual([]);
     await page.context().close();

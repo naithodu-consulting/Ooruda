@@ -4,7 +4,7 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
-## Villa v1.0 - Villa Admin role rename, manager restrictions, manual guest emails off - 2026-10-20
+## Villa v1.0 - Villa Admin role rename, dashboard restructuring, discount updates, manager restrictions - 2026-10-20
 
 ### `villa_owner` renamed to `villa_admin`
 
@@ -19,6 +19,17 @@ The villa top role is now **Villa Admin** everywhere: database role rows, member
 
 "Send now / Send again" guest-email buttons are disabled for all roles, and the server action refuses to send. Automatic emails are unaffected. Re-enable with `VILLA_MANUAL_GUEST_EMAILS=true` (documented in `OORUDA_VILLA_OPEN_ITEMS.md`).
 
+### Dashboard layout updates
+
+- **Villa workspace section**: moved from the home dashboard into the **Bookings** page (`VillaWorkspaceCard`), keeping the role-aware greeting, quick links and manager invitation action in the bookings workspace.
+- **Booking site connection**: moved from the home dashboard into the **Villa Settings** page (`VillaSiteStatus`).
+- Main dashboard now focuses strictly on today's arrivals/departures and the month's KPI summaries.
+
+### Villa discounts: optional fields & 999 uses per guest
+
+- **Optional fields**: `minNights`, `minBookingValue`, and `maxUsesPerGuest` can now be left empty in the discount code dialog (defaulting to 1 night, 0 min value, and 1 use per guest).
+- **Max uses per guest**: raised upper limit from 20 to 999 in both the validation schema and the database check constraint.
+
 ### Other
 
 - ID-request WhatsApp message wording updated.
@@ -30,6 +41,7 @@ The villa top role is now **Villa Admin** everywhere: database role rows, member
 | Migration | Description |
 | --- | --- |
 | `20261020115735_villa_rename_owner_to_admin.sql` | Renames `villa_owner` to `villa_admin` in roles, memberships, role_permissions and invitations, and in all RLS policies and security-definer functions |
+| `20261020192500_villa_discount_max_uses_999.sql` | Increases `villa_discount_codes.max_uses_per_guest` check constraint ceiling from 20 to 999 |
 
 ---
 

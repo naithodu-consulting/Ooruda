@@ -583,10 +583,14 @@ function DiscountDialog(props: {
                   </FormItem>
                 )}
               />
-              {num('minNights', 'Minimum nights')}
+              {num(
+                'minNights',
+                'Minimum nights (optional)',
+                'Leave empty for 1.',
+              )}
               {money(
                 'minBookingValue',
-                'Minimum booking value',
+                'Minimum booking value (optional)',
                 'Before GST. 0 for none.',
               )}
               {num(
@@ -596,8 +600,8 @@ function DiscountDialog(props: {
               )}
               {num(
                 'maxUsesPerGuest',
-                'Uses per guest',
-                'Counted by phone number.',
+                'Uses per guest (optional)',
+                'Counted by phone number. 1 to 999 (default 1).',
               )}
             </div>
 

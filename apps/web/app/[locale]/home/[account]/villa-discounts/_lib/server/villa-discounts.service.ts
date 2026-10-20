@@ -116,10 +116,14 @@ export function createVillaDiscountsService(client: Client) {
           : input.maxDiscount) as number,
         p_valid_from: input.validFrom,
         p_valid_to: input.validTo,
-        p_min_nights: input.minNights,
-        p_min_booking_value: input.minBookingValue,
+        p_min_nights: (input.minNights === '' ? 1 : input.minNights) as number,
+        p_min_booking_value: (input.minBookingValue === ''
+          ? 0
+          : input.minBookingValue) as number,
         p_max_uses: (input.maxUses === '' ? null : input.maxUses) as number,
-        p_max_uses_per_guest: input.maxUsesPerGuest,
+        p_max_uses_per_guest: (input.maxUsesPerGuest === ''
+          ? 1
+          : input.maxUsesPerGuest) as number,
         // People pick the last blocked NIGHT; stored end-exclusive.
         p_blackouts: input.blackouts.map((b) => ({
           start: b.start,

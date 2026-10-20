@@ -25,10 +25,27 @@ export const DiscountSchema = z
     maxDiscount: z.union([z.literal(''), z.coerce.number().positive()]),
     validFrom: ymd,
     validTo: ymd,
-    minNights: z.coerce.number().int().min(1).max(60),
-    minBookingValue: z.coerce.number().min(0).max(10_000_000),
+    minNights: z.union([
+      z.literal(''),
+      z.coerce
+        .number()
+        .int()
+        .min(1, 'At least 1 night')
+        .max(60, 'Up to 60 nights'),
+    ]),
+    minBookingValue: z.union([
+      z.literal(''),
+      z.coerce.number().min(0).max(10_000_000),
+    ]),
     maxUses: optionalInt(100_000),
-    maxUsesPerGuest: z.coerce.number().int().min(1).max(20),
+    maxUsesPerGuest: z.union([
+      z.literal(''),
+      z.coerce
+        .number()
+        .int()
+        .min(1, 'At least 1 use')
+        .max(999, 'Up to 999 uses per guest'),
+    ]),
     blackouts: z.array(z.object({ start: ymd, lastNight: ymd })).max(30),
     note: z.string().trim().max(300),
   })
@@ -88,10 +105,10 @@ export const DISCOUNT_CEILING_PCT = 25;
 export function needsApproval(v: {
   discountType: 'percent' | 'flat';
   discountValue: number;
-  minBookingValue: number;
+  minBookingValue: number | string;
 }): boolean {
+  const minVal = Number(v.minBookingValue) || 0;
   return v.discountType === 'percent'
     ? v.discountValue > DISCOUNT_CEILING_PCT
-    : v.minBookingValue === 0 ||
-        v.discountValue > (v.minBookingValue * DISCOUNT_CEILING_PCT) / 100;
+    : minVal === 0 || v.discountValue > (minVal * DISCOUNT_CEILING_PCT) / 100;
 }
