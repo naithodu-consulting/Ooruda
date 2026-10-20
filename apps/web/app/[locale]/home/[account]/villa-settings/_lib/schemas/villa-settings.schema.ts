@@ -175,6 +175,7 @@ export type PoliciesInput = z.input<typeof PoliciesSchema>;
 
 export const BookingCutoffSchema = z.object({
   accountId: z.string().uuid(),
+  propertyId: z.string().uuid(),
   cutoffDate: z.string().date().nullable(),
 });
 

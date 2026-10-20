@@ -23,6 +23,7 @@ import { saveBookingCutoffAction } from '../_lib/server/villa-settings-actions';
 
 export function BookingCutoffCard(props: {
   accountId: string;
+  propertyId: string;
   bookingCutoffDate: string | null;
   canEdit: boolean;
 }) {
@@ -95,7 +96,7 @@ export function BookingCutoffCard(props: {
               size="sm"
               disabled={isPending}
               onClick={() =>
-                execute({ accountId: props.accountId, cutoffDate: value })
+                execute({ accountId: props.accountId, propertyId: props.propertyId, cutoffDate: value })
               }
               data-test={'villa-settings-booking-cutoff-save'}
             >

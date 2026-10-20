@@ -151,11 +151,14 @@ export function VillaSettingsClient(props: {
         </div>
       ) : null}
 
-      <BookingCutoffCard
-        accountId={props.accountId}
-        bookingCutoffDate={props.bookingCutoffDate}
-        canEdit={props.canEdit}
-      />
+      {props.property ? (
+        <BookingCutoffCard
+          accountId={props.accountId}
+          propertyId={props.property.id}
+          bookingCutoffDate={props.bookingCutoffDate}
+          canEdit={props.canEdit}
+        />
+      ) : null}
 
       <Tabs value={tab} onValueChange={changeTab} className="w-full">
         <div

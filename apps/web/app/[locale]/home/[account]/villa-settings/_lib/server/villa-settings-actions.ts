@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { authActionClient } from '@kit/next/safe-action';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import { getVillaSite } from '~/lib/villa-db/client';
 import { requireVillaRole } from '~/lib/villa/auth';
 import { revalidateBookingSite } from '~/lib/villa/revalidate-site';
 
@@ -114,6 +115,8 @@ export const saveBookingCutoffAction = authActionClient
   .action(async ({ parsedInput }) => {
     await requireVillaRole(parsedInput.accountId, ['villa_admin']);
     const client = getSupabaseServerClient();
+
+    // 1. Save to Ooruda's settings (controls the admin "New booking" dialog).
     const { error } = await client
       .from('villa_account_settings')
       .update({ booking_cutoff_date: parsedInput.cutoffDate })
@@ -121,7 +124,20 @@ export const saveBookingCutoffAction = authActionClient
 
     if (error) throw new Error(`Could not save cutoff: ${error.message}`);
 
+    // 2. Write to the villa-booking DB so the guest site respects it too.
+    const site = await getVillaSite(parsedInput.accountId, parsedInput.propertyId);
+    // The column is added by villa-booking migration 00097. The villa-booking
+    // DB types in this repo lag behind, so we cast to bypass the type check.
+    const { error: siteError } = await site.client
+      .from('properties')
+      .update({ booking_cutoff_date: parsedInput.cutoffDate } as never)
+      .eq('id', site.sitePropertyId);
+
+    if (siteError) {
+      throw new Error(`Saved locally but could not sync to booking site: ${siteError.message}`);
+    }
+
     revalidateSettings();
-    // Also revalidate the bookings page so the date picker picks up the change.
     revalidatePath('/[locale]/home/[account]/bookings', 'page');
+    await revalidateBookingSite('booking-cutoff');
   });
