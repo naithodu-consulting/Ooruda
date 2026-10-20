@@ -144,9 +144,7 @@ export function AdminAccountsTable(props: {
   const personalCount = props.users.length;
   const showCounts = !query;
 
-  const assocLabel = showCounts
-    ? `Associations (${teamCount})`
-    : 'Associations';
+  const assocLabel = showCounts ? `Accounts (${teamCount})` : 'Accounts';
   const usersLabel = showCounts ? `Users (${personalCount})` : 'Users';
 
   const columns = getColumns(
@@ -192,7 +190,7 @@ export function AdminAccountsTable(props: {
                         placeholder={
                           activeTab === 'personal'
                             ? 'Search user...'
-                            : 'Search association...'
+                            : 'Search account...'
                         }
                         {...field}
                         onChange={(e) => {
@@ -278,7 +276,7 @@ export function AdminAccountsTable(props: {
 }
 
 function EmptyState(props: { type: 'team' | 'personal'; query?: string }) {
-  const label = props.type === 'personal' ? 'users' : 'associations';
+  const label = props.type === 'personal' ? 'users' : 'accounts';
   return (
     <div className="text-muted-foreground flex flex-col items-center justify-center py-16 text-sm">
       <Search className="mb-3 h-8 w-8 opacity-30" />
@@ -591,7 +589,7 @@ function ActionsCell({
                 variant="destructive"
                 onClick={() => setActiveDialog('delete-account')}
               >
-                Delete Association
+                Delete Account
               </DropdownMenuItem>
             )}
           </DropdownMenuGroup>

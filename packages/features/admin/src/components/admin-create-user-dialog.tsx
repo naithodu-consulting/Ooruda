@@ -110,8 +110,8 @@ export function AdminCreateUserDialog(
 
           <AlertDialogDescription>
             Enter the user&apos;s name, phone number and email, then assign them
-            to an association. They can sign in via phone OTP (primary) or email
-            OTP (secondary).
+            to an account. They can sign in via phone OTP (primary) or email OTP
+            (secondary).
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -202,7 +202,7 @@ export function AdminCreateUserDialog(
               name={'associationId'}
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Association</FormLabel>
+                  <FormLabel>Account</FormLabel>
 
                   <FormControl>
                     <SearchableSelect
@@ -218,9 +218,9 @@ export function AdminCreateUserDialog(
                         form.resetField('role');
                       }}
                       onBlur={field.onBlur}
-                      placeholder="Select an association"
-                      searchPlaceholder="Search associations…"
-                      emptyMessage="No associations found"
+                      placeholder="Select an account"
+                      searchPlaceholder="Search accounts…"
+                      emptyMessage="No accounts found"
                     />
                   </FormControl>
                   <FormMessage />
