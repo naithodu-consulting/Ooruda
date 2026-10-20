@@ -66,7 +66,7 @@ export function AdminEditUserDialog(
   // only allows roles of the account's own product), so offer only those.
   const roleOptions =
     ROLES_BY_PRODUCT[
-      props.currentRole === 'villa_owner' ||
+      props.currentRole === 'villa_admin' ||
       props.currentRole === 'villa_manager'
         ? 'villa'
         : 'association'

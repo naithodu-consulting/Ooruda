@@ -3,10 +3,12 @@ import { Mail } from 'lucide-react';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 
+import type { VillaRole } from '~/lib/roles';
 import type { SiteBooking } from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
 import { getBaseRates } from '~/lib/villa-db/rates';
+import { manualGuestEmailsEnabled } from '~/lib/villa/flags';
 import {
   GUEST_EMAIL_LABELS,
   type GuestEmailTemplate,
@@ -33,6 +35,7 @@ export async function GuestEmailsSection(props: {
   accountId: string;
   propertyId: string;
   booking: SiteBooking;
+  role: VillaRole;
 }) {
   const client = getSupabaseServerClient();
   const { booking } = props;
@@ -75,7 +78,10 @@ export async function GuestEmailsSection(props: {
     lastResult.data?.action === 'completed'
       ? new Date(lastResult.data.created_at)
       : null;
+  const isAdmin = props.role === 'villa_admin';
+  const manualSend = manualGuestEmailsEnabled();
   const canUndo =
+    isAdmin &&
     booking.status === 'completed' &&
     !booking.invoiceNumber &&
     checkedOutAt !== null &&
@@ -185,12 +191,27 @@ export async function GuestEmailsSection(props: {
                   </span>
                 </div>
                 {sendable ? (
-                  <GuestEmailButton {...ref} template={t} again={sentBefore} />
+                  <GuestEmailButton
+                    {...ref}
+                    template={t}
+                    again={sentBefore}
+                    disabled={!manualSend}
+                  />
                 ) : null}
               </li>
             );
           })}
         </ul>
+
+        {!manualSend ? (
+          <p
+            className="text-muted-foreground text-xs"
+            data-test={'villa-guest-emails-manual-off'}
+          >
+            Sending by hand is switched off for now. Automatic emails are not
+            affected.
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );

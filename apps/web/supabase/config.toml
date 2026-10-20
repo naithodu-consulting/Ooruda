@@ -63,7 +63,10 @@ enable_confirmations = true
 # Twilio stub - only here to satisfy GoTrue's requirement for a provider so that
 # GOTRUE_EXTERNAL_PHONE_ENABLED=true. Test OTP numbers bypass this entirely.
 # The send_sms hook below overrides actual delivery for real numbers.
+# `enabled = true` is required: without it the CLI reports "no SMS provider is
+# enabled" and GoTrue rejects every phone OTP with phone_provider_disabled.
 [auth.sms.twilio]
+enabled = true
 account_sid = "AClocal00000000000000000000000000"
 auth_token = "local0000000000000000000000000000"
 message_service_sid = "MGlocal0000000000000000000000000000"
@@ -77,6 +80,8 @@ message_service_sid = "MGlocal0000000000000000000000000000"
 919535622767 = "123456"
 919739676686 = "123456"
 919742914274 = "123456"
+919900000001 = "123456"
+919900000002 = "123456"
 919911000001 = "123456"
 919911000002 = "123456"
 919911000003 = "123456"

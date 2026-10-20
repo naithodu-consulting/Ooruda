@@ -16,7 +16,7 @@ import {
 } from '../schemas/guests.schema';
 import { createGuestsService } from './guests.service';
 
-const STAFF = ['villa_owner', 'villa_manager'] as const;
+const STAFF = ['villa_admin', 'villa_manager'] as const;
 
 function revalidateBooking() {
   revalidatePath('/[locale]/home/[account]/bookings/[bookingId]', 'page');
@@ -69,7 +69,7 @@ export const setIdStatusAction = authActionClient
 export const deleteIdAction = authActionClient
   .inputSchema(DeleteIdSchema)
   .action(async ({ parsedInput, ctx }) => {
-    await requireVillaRole(parsedInput.accountId, ['villa_owner']);
+    await requireVillaRole(parsedInput.accountId, ['villa_admin']);
     await service().deleteId(parsedInput, ctx.user.id);
     revalidateBooking();
   });

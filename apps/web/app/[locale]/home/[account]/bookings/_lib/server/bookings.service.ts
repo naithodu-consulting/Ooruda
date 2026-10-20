@@ -307,8 +307,8 @@ export function createBookingsService(client: Client) {
         throw new Error('Could not cancel right now. Please try again.');
       }
 
-      if (role !== 'villa_owner' && !settings?.managers_can_cancel) {
-        throw new Error('Only the villa owner can cancel bookings.');
+      if (role !== 'villa_admin' && !settings?.managers_can_cancel) {
+        throw new Error('Only a villa admin can cancel bookings.');
       }
 
       if (!reason?.is_active) {

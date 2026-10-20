@@ -190,7 +190,7 @@ export function AdminCreateAssociationDialog(
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
-                    {isVilla ? 'Villa Owner' : 'Association Admin (owner)'}
+                    {isVilla ? 'Villa Admin' : 'Association Admin (owner)'}
                   </FormLabel>
 
                   <FormControl>
@@ -212,7 +212,7 @@ export function AdminCreateAssociationDialog(
 
                   <FormDescription>
                     {isVilla
-                      ? 'This user becomes the Villa Owner.'
+                      ? 'This user becomes the Villa Admin.'
                       : 'This user becomes the Association Admin.'}
                   </FormDescription>
                   <FormMessage />

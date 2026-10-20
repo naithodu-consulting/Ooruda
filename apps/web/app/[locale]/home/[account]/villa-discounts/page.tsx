@@ -35,6 +35,10 @@ export default async function VillaDiscountsPage({
 
   const [{ account }, sp] = await Promise.all([params, searchParams]);
   const { role, accountId } = await requireRole(account, VILLA_ROLES, 'villa');
+
+  // Managers have no access to discount codes (also hidden from their nav). A
+  // platform super-admin acts as villa_admin, so is unaffected.
+  if (role !== 'villa_admin') notFound();
   const client = getSupabaseServerClient();
   const [{ properties, property }, superAdmin] = await Promise.all([
     selectVillaProperty(accountId, sp.property),
@@ -202,7 +206,7 @@ export default async function VillaDiscountsPage({
       <DiscountsView
         accountId={accountId}
         propertyId={property.id}
-        canEdit={role === 'villa_owner'}
+        canEdit={role === 'villa_admin'}
         canApprove={superAdmin}
         today={today}
         codes={codes}

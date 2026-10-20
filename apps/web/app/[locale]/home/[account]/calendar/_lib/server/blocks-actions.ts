@@ -22,7 +22,7 @@ export const createBlockAction = authActionClient
   .inputSchema(CreateBlockSchema)
   .action(async ({ parsedInput, ctx }) => {
     await requireVillaRole(parsedInput.accountId, [
-      'villa_owner',
+      'villa_admin',
       'villa_manager',
     ]);
 
@@ -37,7 +37,7 @@ export const releaseBlockAction = authActionClient
   .inputSchema(ReleaseBlockSchema)
   .action(async ({ parsedInput, ctx }) => {
     await requireVillaRole(parsedInput.accountId, [
-      'villa_owner',
+      'villa_admin',
       'villa_manager',
     ]);
 

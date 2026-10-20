@@ -216,7 +216,7 @@ test.describe.serial('villa product (M0)', () => {
       page.locator('[data-test="villa-dashboard-setup"]'),
     ).toBeVisible();
     await expect(page.locator('[data-test="villa-dashboard-role"]')).toHaveText(
-      'Villa Owner',
+      'Villa Admin',
     );
 
     const nav = sidebar(page);
@@ -400,7 +400,7 @@ test.describe.serial('villa product (M0)', () => {
       page.locator('[data-test="role-option-villa_manager"]'),
     ).toBeVisible();
     await expect(
-      page.locator('[data-test="role-option-villa_owner"]'),
+      page.locator('[data-test="role-option-villa_admin"]'),
     ).toBeVisible();
     for (const role of [
       'assoc_admin',
@@ -735,7 +735,9 @@ test.describe.serial('villa product (M0)', () => {
     await page.context().close();
   });
 
-  test('villa manager sends the arrival email by hand', async ({ browser }) => {
+  test('villa manager and the arrival email by hand (greyed out unless switched on)', async ({
+    browser,
+  }) => {
     test.skip(!VILLA_SITE.key || !bookingCode, 'no booking created');
 
     const page = await signedInPage(browser, VILLA_MANAGER.phone);
@@ -757,6 +759,23 @@ test.describe.serial('villa product (M0)', () => {
     await expect(
       card.locator('[data-test="villa-guest-email-thank_you-send"]'),
     ).toHaveCount(0);
+
+    const send = card.locator(
+      '[data-test="villa-guest-email-pre_arrival-send"]',
+    );
+
+    // Sending by hand is switched off unless the app runs with
+    // VILLA_MANUAL_GUEST_EMAILS=true: greyed out for everyone, never sends.
+    if (process.env.VILLA_MANUAL_GUEST_EMAILS !== 'true') {
+      await expect(send).toBeDisabled();
+      await expect(
+        card.locator('[data-test="villa-guest-emails-manual-off"]'),
+      ).toBeVisible();
+      expect(issues.serverErrors).toEqual([]);
+      await page.context().close();
+
+      return;
+    }
 
     await card
       .locator('[data-test="villa-guest-email-pre_arrival-send"]')
@@ -1347,7 +1366,7 @@ test.describe.serial('villa product (M0)', () => {
       page.locator('[data-test="role-option-tenant"]'),
     ).toBeVisible();
     await expect(
-      page.locator('[data-test="role-option-villa_owner"]'),
+      page.locator('[data-test="role-option-villa_admin"]'),
     ).toHaveCount(0);
     await expect(
       page.locator('[data-test="role-option-villa_manager"]'),

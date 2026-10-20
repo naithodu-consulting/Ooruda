@@ -132,7 +132,7 @@ export default async function BookingPage({ params, searchParams }: Props) {
   const active = booking.status === 'confirmed';
   const canCancel =
     active &&
-    (role === 'villa_owner' || Boolean(settings?.managers_can_cancel));
+    (role === 'villa_admin' || Boolean(settings?.managers_can_cancel));
   const canCheckOut =
     booking.status === 'confirmed' && booking.checkIn <= today;
   const guests = booking.adults + booking.children;
@@ -347,6 +347,7 @@ export default async function BookingPage({ params, searchParams }: Props) {
               accountId={accountId}
               propertyId={propertyId}
               booking={booking}
+              role={role}
             />
           </Suspense>
 

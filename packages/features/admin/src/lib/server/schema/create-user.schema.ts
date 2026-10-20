@@ -13,7 +13,7 @@ export const ASSIGNABLE_ROLES = [
   'billing_operator',
   'prop_owner',
   'tenant',
-  'villa_owner',
+  'villa_admin',
   'villa_manager',
 ] as const;
 
@@ -24,7 +24,7 @@ export const ROLE_LABELS: Record<AssignableRole, string> = {
   billing_operator: 'Billing Operator',
   prop_owner: 'Property Owner',
   tenant: 'Tenant',
-  villa_owner: 'Villa Owner',
+  villa_admin: 'Villa Admin',
   villa_manager: 'Villa Manager',
 };
 
@@ -35,7 +35,7 @@ export const ROLES_BY_PRODUCT: Record<
   readonly AssignableRole[]
 > = {
   association: ['assoc_admin', 'billing_operator', 'prop_owner', 'tenant'],
-  villa: ['villa_owner', 'villa_manager'],
+  villa: ['villa_admin', 'villa_manager'],
 };
 
 // Email is mandatory: it is the secondary (email-OTP) login identity and is

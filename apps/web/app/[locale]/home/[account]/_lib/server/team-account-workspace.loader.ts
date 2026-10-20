@@ -38,7 +38,7 @@ async function workspaceLoader(accountSlug: string) {
 
   if (isSuperAdmin) {
     // A super-admin acts as the top role of the workspace's product
-    // (assoc_admin or villa_owner). Request-cached; shared with requireRole.
+    // (assoc_admin or villa_admin). Request-cached; shared with requireRole.
     const { role: superAdminRole } = await getAccountContext(accountSlug);
     const actingRole = superAdminRole ?? 'assoc_admin';
 

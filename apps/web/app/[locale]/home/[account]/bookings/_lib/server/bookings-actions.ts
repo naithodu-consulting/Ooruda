@@ -8,6 +8,7 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { getBooking } from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { requireVillaRole } from '~/lib/villa/auth';
+import { manualGuestEmailsEnabled } from '~/lib/villa/flags';
 import { sendGuestEmailNow } from '~/lib/villa/guest-email-runner';
 
 import {
@@ -29,7 +30,7 @@ export const createBookingAction = authActionClient
   .inputSchema(NewBookingSchema)
   .action(async ({ parsedInput, ctx }) => {
     await requireVillaRole(parsedInput.accountId, [
-      'villa_owner',
+      'villa_admin',
       'villa_manager',
     ]);
 
@@ -48,7 +49,7 @@ export const cancelBookingAction = authActionClient
   .inputSchema(CancelBookingSchema)
   .action(async ({ parsedInput, ctx }) => {
     const role = await requireVillaRole(parsedInput.accountId, [
-      'villa_owner',
+      'villa_admin',
       'villa_manager',
     ]);
 
@@ -65,7 +66,7 @@ export const completeStayAction = authActionClient
   .inputSchema(CompleteStaySchema)
   .action(async ({ parsedInput, ctx }) => {
     await requireVillaRole(parsedInput.accountId, [
-      'villa_owner',
+      'villa_admin',
       'villa_manager',
     ]);
 
@@ -80,10 +81,9 @@ export const completeStayAction = authActionClient
 export const reopenStayAction = authActionClient
   .inputSchema(ReopenStaySchema)
   .action(async ({ parsedInput, ctx }) => {
-    await requireVillaRole(parsedInput.accountId, [
-      'villa_owner',
-      'villa_manager',
-    ]);
+    // Admin only: undoing a check-out re-opens a stay and re-arms the thank-you
+    // email, so it is not a front-desk action.
+    await requireVillaRole(parsedInput.accountId, ['villa_admin']);
 
     await createBookingsService(getSupabaseServerClient()).reopen(
       parsedInput,
@@ -98,9 +98,15 @@ export const sendGuestEmailAction = authActionClient
   .inputSchema(SendGuestEmailSchema)
   .action(async ({ parsedInput, ctx }) => {
     await requireVillaRole(parsedInput.accountId, [
-      'villa_owner',
+      'villa_admin',
       'villa_manager',
     ]);
+
+    if (!manualGuestEmailsEnabled()) {
+      throw new Error(
+        'Sending guest emails by hand is switched off for now. Automatic emails are not affected.',
+      );
+    }
 
     const site = await getVillaSite(
       parsedInput.accountId,

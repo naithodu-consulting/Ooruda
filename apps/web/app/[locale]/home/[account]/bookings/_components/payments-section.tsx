@@ -34,7 +34,7 @@ export async function PaymentsSection(props: {
       bookingId={props.booking.id}
       bookingStatus={props.booking.status}
       guestName={props.booking.guestName}
-      isOwner={props.role === 'villa_owner'}
+      isOwner={props.role === 'villa_admin'}
       summary={{
         total: fromPaise(s.totalPaise),
         received: fromPaise(s.onlinePaise + s.offlinePaise),

@@ -24,7 +24,7 @@ import { createVillaSettingsService } from './villa-settings.service';
 // Ooruda-side tables; site-side writes run with the booking site's service
 // key, so this check is the gate for those.
 async function ownerService(accountId: string) {
-  await requireVillaRole(accountId, ['villa_owner']);
+  await requireVillaRole(accountId, ['villa_admin']);
   return createVillaSettingsService(getSupabaseServerClient());
 }
 

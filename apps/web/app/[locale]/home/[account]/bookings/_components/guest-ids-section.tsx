@@ -87,7 +87,7 @@ export async function GuestIdsSection(props: {
       adults={booking.adults}
       idStatus={booking.idStatus}
       editable={['confirmed', 'completed'].includes(booking.status)}
-      isOwner={props.role === 'villa_owner'}
+      isOwner={props.role === 'villa_admin'}
       uploadsEnabled={guestIdUploadsEnabled()}
       businessWhatsApp={propertyResult.data?.whatsapp_number ?? null}
       guests={guests}

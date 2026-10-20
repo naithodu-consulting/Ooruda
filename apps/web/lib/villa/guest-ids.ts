@@ -112,10 +112,10 @@ export function idRequestLink(
   bookingCode: string,
   adults: number,
 ): string {
-  const ask = `Hello! For your booking ${bookingCode}, please share a photo ID for each adult guest (Aadhaar, passport or driving licence).`;
+  const greeting = `Hello! We're looking forward to hosting you (Booking: ${bookingCode}). To help us prepare for a smooth check-in, could you please share a photo ID (Aadhaar, passport or driving licence) for each adult guest?`;
   const text = businessWhatsApp
-    ? `${ask} Tap this link to send them to us on WhatsApp: ${idShareLink(businessWhatsApp, bookingCode, adults)}`
-    : `${ask} You can reply to this chat with the photos.`;
+    ? `${greeting} You can send them using this link: ${idShareLink(businessWhatsApp, bookingCode, adults)}`
+    : `${greeting} You can simply reply to this chat with the photos. Thank you!`;
 
   return `https://wa.me/${guestPhone.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
 }

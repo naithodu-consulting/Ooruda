@@ -4,7 +4,7 @@
 -- Validates 20260927110925_villa_m0_foundations.sql:
 --   * existing accounts/roles default to the association product
 --   * villa roles exist at levels 10/11 with the villa product
---   * create_villa_account() makes a villa account, a villa_owner
+--   * create_villa_account() makes a villa account, a villa_admin
 --     membership, and NO associations row
 --   * create_team_account() still auto-creates an associations row
 --   * a membership/invitation role must match the account's product
@@ -27,7 +27,7 @@ set local role postgres;
 select results_eq(
   $$ select name, hierarchy_level, product_type from public.roles
      where product_type = 'villa' order by hierarchy_level $$,
-  $$ values ('villa_owner'::varchar, 10, 'villa'::text),
+  $$ values ('villa_admin'::varchar, 10, 'villa'::text),
             ('villa_manager'::varchar, 11, 'villa'::text) $$,
   'villa roles exist at levels 10 and 11 with the villa product'
 );
@@ -41,8 +41,8 @@ select is_empty(
 
 select isnt_empty(
   $$ select 1 from public.role_permissions
-     where role = 'villa_owner' and permission = 'invites.manage' $$,
-  'villa_owner can invite members'
+     where role = 'villa_admin' and permission = 'invites.manage' $$,
+  'villa_admin can invite members'
 );
 
 select is_empty(
@@ -75,8 +75,8 @@ select is(
 select is(
   (select account_role::text from public.accounts_memberships
     where account_id = (select id from villa_acct)),
-  'villa_owner',
-  'the creator becomes villa_owner'
+  'villa_admin',
+  'the creator becomes villa_admin'
 );
 
 select is_empty(
@@ -120,7 +120,7 @@ select throws_ok(
   $$ insert into public.invitations (account_id, invited_by, role, invite_token, email)
      values ((select id from assoc_acct),
              tests.get_supabase_uid('villa_owner_user'),
-             'villa_owner', 'tok-villa-m0', 'x@test.com') $$,
+             'villa_admin', 'tok-villa-m0', 'x@test.com') $$,
   '23514',
   null,
   'a villa role cannot be invited to an association account'
@@ -156,7 +156,7 @@ select tests.authenticate_as('villa_owner_user');
 
 select is(
   public.villa_role((select id from villa_acct)),
-  'villa_owner',
+  'villa_admin',
   'villa_role resolves the caller''s villa role'
 );
 
@@ -214,8 +214,8 @@ select is(
   (select account_role::text from public.accounts_memberships
     where account_id = (select id from villa_acct)
       and user_id = tests.get_supabase_uid('villa_other_user')),
-  'villa_owner',
-  'the new villa owner is promoted to villa_owner, not assoc_admin'
+  'villa_admin',
+  'the new villa owner is promoted to villa_admin, not assoc_admin'
 );
 
 select is(

@@ -102,7 +102,7 @@ export default async function VillaSettingsPage({
       <VillaSettingsClient
         account={account}
         accountId={accountId}
-        canEdit={role === 'villa_owner'}
+        canEdit={role === 'villa_admin'}
         initialTab={tab}
         properties={properties.map((p) => ({ id: p.id, name: p.name }))}
         property={

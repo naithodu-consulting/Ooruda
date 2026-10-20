@@ -9,3 +9,13 @@ import 'server-only';
 export function guestIdUploadsEnabled(): boolean {
   return process.env.VILLA_GUEST_ID_UPLOADS === 'true';
 }
+
+/**
+ * Sending a guest email by hand ("Send now" / "Send again") is switched off
+ * for now so that no email goes out by mistake: the buttons show greyed out for
+ * every role and the server action refuses. Automatic emails (scheduled run,
+ * Villa Settings toggles) are not affected. Server-side only.
+ */
+export function manualGuestEmailsEnabled(): boolean {
+  return process.env.VILLA_MANUAL_GUEST_EMAILS === 'true';
+}

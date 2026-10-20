@@ -23,14 +23,14 @@ export const PROPOPS_ROLES = [
 
 export type PropOpsRole = (typeof PROPOPS_ROLES)[number];
 
-export const VILLA_ROLES = ['villa_owner', 'villa_manager'] as const;
+export const VILLA_ROLES = ['villa_admin', 'villa_manager'] as const;
 
 export type VillaRole = (typeof VILLA_ROLES)[number];
 
 export type AppRole = PropOpsRole | VillaRole;
 
 export const VILLA_ROLE_LABELS: Record<VillaRole, string> = {
-  villa_owner: 'Villa Owner',
+  villa_admin: 'Villa Admin',
   villa_manager: 'Villa Manager',
 };
 
@@ -43,14 +43,14 @@ export const ROLE_HIERARCHY_LEVEL_BY_ROLE: Record<AppRole, number> = {
   billing_operator: 2,
   prop_owner: 3,
   tenant: 4,
-  villa_owner: 10,
+  villa_admin: 10,
   villa_manager: 11,
 };
 
 /** The role a platform super-admin acts as inside a workspace. */
 export const SUPER_ADMIN_ROLE_BY_PRODUCT: Record<ProductType, AppRole> = {
   association: 'assoc_admin',
-  villa: 'villa_owner',
+  villa: 'villa_admin',
 };
 
 export function isVillaRole(

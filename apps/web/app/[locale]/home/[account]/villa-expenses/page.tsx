@@ -107,7 +107,7 @@ export default async function VillaExpensesPage({
         <ExpensesView
           accountId={accountId}
           propertyId={property.id}
-          isOwner={role === 'villa_owner'}
+          isOwner={role === 'villa_admin'}
           defaultDate={month === today.slice(0, 7) ? today : `${month}-01`}
           expenses={(expenses ?? []).map((e) => ({
             id: e.id,

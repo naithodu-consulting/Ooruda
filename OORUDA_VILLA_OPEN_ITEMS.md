@@ -42,6 +42,9 @@ Last updated: 2026-09-30 (after M8a).
 
 ## B. Switches that are built but off
 
+- [ ] **Sending guest emails by hand** — greyed out for everyone (and refused by the server) so no
+      email goes out by mistake. Set `VILLA_MANUAL_GUEST_EMAILS=true` in the app's environment to
+      switch "Send now" / "Send again" back on. Automatic emails are not affected.
 - [ ] **Guest ID photo storage** — set `VILLA_GUEST_ID_UPLOADS=true` in the app's environment
       **only after** the booking site's Privacy page states ID storage and the 30-day
       retention (villa-booking TODO 7). Until then staff record IDs "seen in person" (last 4

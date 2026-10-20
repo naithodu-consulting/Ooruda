@@ -65,7 +65,7 @@ export const POST = enhanceRouteHandler(
 
     const role = await getVillaRole(parsed.data.accountId);
 
-    if (role !== 'villa_owner' && role !== 'villa_manager') {
+    if (role !== 'villa_admin' && role !== 'villa_manager') {
       return NextResponse.json(
         { ok: false, message: "You don't have permission to do this." },
         { status: 403 },

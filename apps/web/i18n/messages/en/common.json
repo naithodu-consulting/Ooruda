@@ -87,8 +87,8 @@
     "tenant": {
       "label": "Tenant"
     },
-    "villa_owner": {
-      "label": "Villa Owner"
+    "villa_admin": {
+      "label": "Villa Admin"
     },
     "villa_manager": {
       "label": "Villa Manager"

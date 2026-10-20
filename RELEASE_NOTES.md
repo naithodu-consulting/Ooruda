@@ -4,6 +4,35 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa v1.0 - Villa Admin role rename, manager restrictions, manual guest emails off - 2026-10-20
+
+### `villa_owner` renamed to `villa_admin`
+
+The villa top role is now **Villa Admin** everywhere: database role rows, memberships, role permissions, invitations, every RLS policy and security-definer function that hardcoded the old name, plus code, i18n labels, the admin "create association" dialog, e2e and pgTAP tests.
+
+### Manager restrictions
+
+- **Discounts**: nav entry hidden for managers and the route returns 404 for them.
+- **Undo check-out**: admin-only, now enforced server-side as well as in the UI. Shown only when the stay is completed, has no invoice, and check-out was under 24h ago.
+
+### Manual guest emails switched off
+
+"Send now / Send again" guest-email buttons are disabled for all roles, and the server action refuses to send. Automatic emails are unaffected. Re-enable with `VILLA_MANUAL_GUEST_EMAILS=true` (documented in `OORUDA_VILLA_OPEN_ITEMS.md`).
+
+### Other
+
+- ID-request WhatsApp message wording updated.
+- Local dev: test OTPs for the villa users (`919900000001/2` = `123456`) and `[auth.sms.twilio] enabled = true` in `config.toml` so phone login works locally.
+- New idempotent, localhost-only seed script `apps/web/supabase/seeds/seed_villa_test_users.sh` to recreate the villa test users, account and data after a local DB reset.
+
+### Migrations Changelog
+
+| Migration | Description |
+| --- | --- |
+| `20261020115735_villa_rename_owner_to_admin.sql` | Renames `villa_owner` to `villa_admin` in roles, memberships, role_permissions and invitations, and in all RLS policies and security-definer functions |
+
+---
+
 ## Villa v1.0 - Rate changes reach the guest site immediately - 2026-10-08
 
 ### The bug

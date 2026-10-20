@@ -29,8 +29,13 @@ interface Ref {
 }
 
 export function GuestEmailButton(
-  props: Ref & { template: 'pre_arrival' | 'thank_you'; again: boolean },
+  props: Ref & {
+    template: 'pre_arrival' | 'thank_you';
+    again: boolean;
+    disabled?: boolean;
+  },
 ) {
+  const { again, disabled, ...ref } = props;
   const router = useRouter();
   const { execute, isPending } = useAction(sendGuestEmailAction, {
     onSuccess: () => {
@@ -45,12 +50,13 @@ export function GuestEmailButton(
     <Button
       variant="outline"
       size="sm"
-      disabled={isPending}
-      onClick={() => execute({ ...props, template: props.template })}
+      disabled={isPending || disabled}
+      title={disabled ? 'Sending by hand is switched off for now' : undefined}
+      onClick={() => execute(ref)}
       data-test={`villa-guest-email-${props.template}-send`}
     >
       <Send className="mr-1.5 h-3.5 w-3.5" />
-      {isPending ? 'Sending…' : props.again ? 'Send again' : 'Send now'}
+      {isPending ? 'Sending…' : again ? 'Send again' : 'Send now'}
     </Button>
   );
 }

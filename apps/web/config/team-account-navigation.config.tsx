@@ -227,7 +227,7 @@ export function getTeamAccountSidebarConfig(
 // tenants get a minimal portal (dashboard + payments) per the prototype;
 // billing operators see operations + insights but not the Admin section;
 // assoc_admin sees everything. A super-admin opening a workspace acts as
-// assoc_admin (association) or villa_owner (villa).
+// assoc_admin (association) or villa_admin (villa).
 //
 // Deny by default: a role missing from this map sees NO nav items. (It used
 // to see everything, which would have shown villa roles the whole
@@ -268,7 +268,7 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
     'association.nav.payments',
     'association.nav.statement',
   ],
-  villa_owner: [
+  villa_admin: [
     'villa.nav.dashboard',
     'villa.nav.reports',
     'villa.nav.calendar',
@@ -279,13 +279,13 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
     'villa.nav.settings',
   ],
   // Managers see settings read-only (rates, contacts they need on shift).
+  // No access to discount codes or members.
   villa_manager: [
     'villa.nav.dashboard',
     'villa.nav.reports',
     'villa.nav.calendar',
     'villa.nav.bookings',
     'villa.nav.expenses',
-    'villa.nav.discounts',
     'villa.nav.settings',
   ],
 };

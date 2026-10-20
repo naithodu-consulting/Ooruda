@@ -115,7 +115,7 @@ export async function VillaDashboard({
             <CardDescription>
               <Trans
                 i18nKey={
-                  role === 'villa_owner'
+                  role === 'villa_admin'
                     ? 'villa.dashboard.setupDescriptionOwner'
                     : 'villa.dashboard.setupDescriptionManager'
                 }
@@ -168,7 +168,7 @@ export async function VillaDashboard({
                 </span>
               </p>
 
-              {role === 'villa_owner' ? (
+              {role === 'villa_admin' ? (
                 <Button
                   className="w-full sm:w-auto"
                   size="sm"

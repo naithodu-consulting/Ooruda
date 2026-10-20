@@ -19,7 +19,7 @@ export const saveVillaExpenseAction = authActionClient
   .inputSchema(ExpenseSchema)
   .action(async ({ parsedInput, ctx }) => {
     await requireVillaRole(parsedInput.accountId, [
-      'villa_owner',
+      'villa_admin',
       'villa_manager',
     ]);
     await service().save(parsedInput, ctx.user.id);
@@ -29,7 +29,7 @@ export const saveVillaExpenseAction = authActionClient
 export const deleteVillaExpenseAction = authActionClient
   .inputSchema(DeleteExpenseSchema)
   .action(async ({ parsedInput }) => {
-    await requireVillaRole(parsedInput.accountId, ['villa_owner']);
+    await requireVillaRole(parsedInput.accountId, ['villa_admin']);
     await service().remove(parsedInput);
     revalidatePath('/[locale]/home/[account]/villa-expenses', 'page');
   });

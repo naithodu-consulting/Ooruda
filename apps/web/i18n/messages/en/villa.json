@@ -13,7 +13,7 @@
     "discounts": "Discount codes"
   },
   "roles": {
-    "villa_owner": "Villa Owner",
+    "villa_admin": "Villa Admin",
     "villa_manager": "Villa Manager"
   },
   "dashboard": {

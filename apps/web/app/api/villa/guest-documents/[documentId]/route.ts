@@ -23,7 +23,7 @@ export const GET = enhanceRouteHandler(
 
     const role = await getVillaRole(accountId);
 
-    if (role !== 'villa_owner' && role !== 'villa_manager') {
+    if (role !== 'villa_admin' && role !== 'villa_manager') {
       return new NextResponse('Not found', { status: 404 });
     }
 

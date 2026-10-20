@@ -52,8 +52,8 @@ describe('role hierarchy levels', () => {
     }
   });
 
-  it('ranks villa_owner above villa_manager', () => {
-    expect(ROLE_HIERARCHY_LEVEL_BY_ROLE.villa_owner).toBeLessThan(
+  it('ranks villa_admin above villa_manager', () => {
+    expect(ROLE_HIERARCHY_LEVEL_BY_ROLE.villa_admin).toBeLessThan(
       ROLE_HIERARCHY_LEVEL_BY_ROLE.villa_manager,
     );
   });
@@ -62,7 +62,7 @@ describe('role hierarchy levels', () => {
 describe('super-admin acting role', () => {
   it('is the top role of each product', () => {
     expect(SUPER_ADMIN_ROLE_BY_PRODUCT.association).toBe('assoc_admin');
-    expect(SUPER_ADMIN_ROLE_BY_PRODUCT.villa).toBe('villa_owner');
+    expect(SUPER_ADMIN_ROLE_BY_PRODUCT.villa).toBe('villa_admin');
   });
 });
 
@@ -80,7 +80,7 @@ describe('team sidebar by product', () => {
     }
   });
 
-  it('hides Members from villa managers', () => {
+  it('hides Members and Discounts from villa managers', () => {
     const labels = navLabels(
       filterSidebarConfigByRole(
         getTeamAccountSidebarConfig('v', 'villa_manager'),
@@ -89,6 +89,7 @@ describe('team sidebar by product', () => {
     );
 
     expect(labels).not.toContain('villa.nav.members');
+    expect(labels).not.toContain('villa.nav.discounts');
   });
 
   it('builds the association nav for association roles, never villa items', () => {
@@ -118,7 +119,7 @@ describe('team sidebar by product', () => {
     const labels = navLabels(
       filterSidebarConfigByRole(
         getTeamAccountSidebarConfig('a', 'assoc_admin'),
-        'villa_owner',
+        'villa_admin',
       ),
     );
 

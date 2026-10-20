@@ -7,7 +7,7 @@ import { type VillaRole, isVillaRole } from '~/lib/roles';
 /**
  * The caller's role in a villa account, for server actions — defence in depth
  * on top of RLS, like getAssociationRole() for associations. A platform
- * super-admin acts as villa_owner. Null for non-members and non-villa accounts.
+ * super-admin acts as villa_admin. Null for non-members and non-villa accounts.
  */
 export async function getVillaRole(
   accountId: string,
@@ -37,7 +37,7 @@ export async function getVillaRole(
     .eq('id', accountId)
     .maybeSingle();
 
-  return account?.product_type === 'villa' ? 'villa_owner' : null;
+  return account?.product_type === 'villa' ? 'villa_admin' : null;
 }
 
 /** Throws unless the caller holds one of `allowed` in the villa account. */

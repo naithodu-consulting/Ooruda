@@ -364,7 +364,7 @@ export const createAssociationAction = adminActionClient
 
     // Villa accounts are created by their own RPC, which sets product_type in
     // the INSERT (so no associations row is auto-created) and makes the
-    // owner a villa_owner.
+    // owner a villa_admin.
     const { data, error } = isVilla
       ? await adminClient.rpc('create_villa_account', {
           account_name: name,

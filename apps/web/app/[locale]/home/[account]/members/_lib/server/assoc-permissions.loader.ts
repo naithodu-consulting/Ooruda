@@ -7,7 +7,7 @@ import { type ProductType } from '~/lib/roles';
 /** Roles an inviter may grant when no per-role gating is configured. */
 export const DEFAULT_INVITE_ROLES: Record<ProductType, string[]> = {
   association: ['assoc_admin', 'billing_operator', 'prop_owner', 'tenant'],
-  villa: ['villa_owner', 'villa_manager'],
+  villa: ['villa_admin', 'villa_manager'],
 };
 
 export interface AssocAdminPermissionEntry {

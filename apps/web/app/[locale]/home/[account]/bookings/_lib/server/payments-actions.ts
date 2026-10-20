@@ -26,7 +26,7 @@ export const recordPaymentAction = authActionClient
   .inputSchema(RecordPaymentSchema)
   .action(async ({ parsedInput, ctx }) => {
     await requireVillaRole(parsedInput.accountId, [
-      'villa_owner',
+      'villa_admin',
       'villa_manager',
     ]);
     const result = await service().record(parsedInput, ctx.user.id);
@@ -38,7 +38,7 @@ export const recordPaymentAction = authActionClient
 export const voidPaymentAction = authActionClient
   .inputSchema(VoidPaymentSchema)
   .action(async ({ parsedInput, ctx }) => {
-    await requireVillaRole(parsedInput.accountId, ['villa_owner']);
+    await requireVillaRole(parsedInput.accountId, ['villa_admin']);
     await service().void(parsedInput, ctx.user.id);
     revalidateBooking();
   });
@@ -47,7 +47,7 @@ export const voidPaymentAction = authActionClient
 export const recordRefundAction = authActionClient
   .inputSchema(RecordRefundSchema)
   .action(async ({ parsedInput, ctx }) => {
-    await requireVillaRole(parsedInput.accountId, ['villa_owner']);
+    await requireVillaRole(parsedInput.accountId, ['villa_admin']);
     const result = await service().refund(parsedInput, ctx.user.id);
     revalidateBooking();
     return result;
