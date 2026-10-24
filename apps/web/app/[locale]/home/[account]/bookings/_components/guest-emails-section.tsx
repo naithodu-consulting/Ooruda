@@ -52,7 +52,7 @@ export async function GuestEmailsSection(props: {
       .order('created_at'),
     client
       .from('villa_account_settings')
-      .select('pre_arrival_email, thank_you_email')
+      .select('booking_confirmation_email, pre_arrival_email, thank_you_email')
       .eq('account_id', props.accountId)
       .maybeSingle(),
     client
@@ -71,6 +71,8 @@ export async function GuestEmailsSection(props: {
 
   const log = logResult.data ?? [];
   const on = {
+    booking_confirmation:
+      settingsResult.data?.booking_confirmation_email ?? true,
     pre_arrival: settingsResult.data?.pre_arrival_email ?? true,
     thank_you: settingsResult.data?.thank_you_email ?? true,
   };
@@ -115,6 +117,10 @@ export async function GuestEmailsSection(props: {
         : `Sending now.${extra}`;
     }
     if (!on[template]) return `Switched off in Villa Settings.${extra}`;
+
+    if (template === 'booking_confirmation') {
+      return `Sent automatically when the booking was created.${extra}`;
+    }
 
     if (template === 'pre_arrival') {
       if (booking.status !== 'confirmed')
@@ -162,45 +168,50 @@ export async function GuestEmailsSection(props: {
         ) : null}
 
         <ul className="divide-border divide-y rounded-lg border">
-          {(['pre_arrival', 'thank_you'] as const).map((t) => {
-            const sendable =
-              Boolean(booking.guestEmail) &&
-              (t === 'pre_arrival'
-                ? booking.status === 'confirmed' &&
-                  booking.checkIn >= todayIst()
-                : booking.status === 'completed');
-            const sentBefore = log.some(
-              (l) => l.template === t && l.status === 'sent',
-            );
+          {(['booking_confirmation', 'pre_arrival', 'thank_you'] as const).map(
+            (t) => {
+              const sendable =
+                Boolean(booking.guestEmail) &&
+                (t === 'booking_confirmation'
+                  ? booking.status === 'confirmed' ||
+                    booking.status === 'completed'
+                  : t === 'pre_arrival'
+                    ? booking.status === 'confirmed' &&
+                      booking.checkIn >= todayIst()
+                    : booking.status === 'completed');
+              const sentBefore = log.some(
+                (l) => l.template === t && l.status === 'sent',
+              );
 
-            return (
-              <li
-                key={t}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3"
-                data-test={`villa-guest-email-${t}`}
-              >
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-sm font-medium">
-                    {GUEST_EMAIL_LABELS[t]}
-                  </span>
-                  <span
-                    className="text-muted-foreground text-xs"
-                    data-test={`villa-guest-email-${t}-status`}
-                  >
-                    {status(t)}
-                  </span>
-                </div>
-                {sendable ? (
-                  <GuestEmailButton
-                    {...ref}
-                    template={t}
-                    again={sentBefore}
-                    disabled={!manualSend}
-                  />
-                ) : null}
-              </li>
-            );
-          })}
+              return (
+                <li
+                  key={t}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3"
+                  data-test={`villa-guest-email-${t}`}
+                >
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-sm font-medium">
+                      {GUEST_EMAIL_LABELS[t]}
+                    </span>
+                    <span
+                      className="text-muted-foreground text-xs"
+                      data-test={`villa-guest-email-${t}-status`}
+                    >
+                      {status(t)}
+                    </span>
+                  </div>
+                  {sendable ? (
+                    <GuestEmailButton
+                      {...ref}
+                      template={t}
+                      again={sentBefore}
+                      disabled={!manualSend}
+                    />
+                  ) : null}
+                </li>
+              );
+            },
+          )}
         </ul>
 
         {!manualSend ? (

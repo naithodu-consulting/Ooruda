@@ -125,7 +125,10 @@ export const saveBookingCutoffAction = authActionClient
     if (error) throw new Error(`Could not save cutoff: ${error.message}`);
 
     // 2. Write to the villa-booking DB so the guest site respects it too.
-    const site = await getVillaSite(parsedInput.accountId, parsedInput.propertyId);
+    const site = await getVillaSite(
+      parsedInput.accountId,
+      parsedInput.propertyId,
+    );
     // The column is added by villa-booking migration 00097. The villa-booking
     // DB types in this repo lag behind, so we cast to bypass the type check.
     const { error: siteError } = await site.client
@@ -134,7 +137,9 @@ export const saveBookingCutoffAction = authActionClient
       .eq('id', site.sitePropertyId);
 
     if (siteError) {
-      throw new Error(`Saved locally but could not sync to booking site: ${siteError.message}`);
+      throw new Error(
+        `Saved locally but could not sync to booking site: ${siteError.message}`,
+      );
     }
 
     revalidateSettings();

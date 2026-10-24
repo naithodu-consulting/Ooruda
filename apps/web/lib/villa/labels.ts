@@ -96,6 +96,18 @@ export function paymentStatusLabel(status: string): string {
   return PAYMENT_STATUS_LABELS[status as PaymentStatus] ?? status;
 }
 
+export const PAYMENT_MODE_LABELS: Record<string, string> = {
+  cash: 'Cash',
+  upi: 'UPI',
+  bank: 'Bank transfer',
+  card: 'Card (at the villa)',
+  other: 'Other',
+};
+
+export function paymentModeLabel(mode: string): string {
+  return PAYMENT_MODE_LABELS[mode] ?? mode;
+}
+
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   pending: 'Awaiting payment',
   confirmed: 'Confirmed',

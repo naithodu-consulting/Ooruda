@@ -4,6 +4,147 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa: guest ID review follow-ups — 2026-10-24
+
+### Download all produced unopenable filenames
+The zip packed every file as `aadhaar-3ba77d0e-9623-4c49-843a-b1ccc6828497`. The storage path carries no extension, so taking the text after the last dot yielded the file's UUID. It now derives the extension from the stored content type, matching the single-file download.
+
+### Download all read the whole account's ID files
+`allFileUrls` selected every ID file row on the account and filtered to the booking in memory. It now resolves the booking's documents first and queries only those files.
+
+### Guest ID purge: fewer queries, and self-healing
+The retention job ran one count query per document per batch — up to 100 round trips a round, 20 rounds a run. Parent documents are now tombstoned with a single query for the whole batch.
+
+The file tombstone and the document tombstone are separate writes, so a process that died between them left a document with no live files still marked live — and it could never be picked up again, because its files were already purged. Each run now ends with a sweep for those stranded documents. A document recorded as *seen in person*, which never had a photo, is deliberately left alone.
+
+### Managers can delete guest IDs
+Deleting an ID before its retention date was restricted to `villa_admin` while `villa_manager` could already view and download the same scans. A manager is the person at the desk when a guest asks for their ID to be removed, so both roles can now delete; the deletion is logged against whoever did it either way. Enforced server-side in `deleteIdAction`, not just in the UI.
+
+### Guest ID migration hardened before it reaches production
+`villa_guest_documents.content_type` is nullable, but the new files table requires it, so the migration defaulted unknown rows to `image/jpeg` — which would have renamed PDFs and PNGs to `.jpg`. It now recovers the true type from the storage object's recorded mimetype, accepting only the four types the table allows, and falls back to JPEG only for files already deleted. Tested against the local bucket: with every `content_type` forced to null, the join recovered one PDF and two PNGs, and nothing fell through to the default.
+
+The migration also drops `storage_path` and `content_type` irreversibly. It now counts the copied rows against the source and aborts rather than dropping if they disagree — verified to raise on a deliberately short copy. Insert, check and drop are one transaction, so a failure leaves the source columns untouched.
+
+---
+
+## Members: invited name and email no longer lost — 2026-10-24
+
+### Invitee email was silently discarded on first sign-in
+A member invited by phone could end up in the members list with **no name and no email**, showing as a bare phone number.
+
+Two causes, one already half-fixed:
+
+1. **Name and email were optional on the invite form**, so an invite sent without them left nothing to show.
+2. **The email was thrown away even when supplied.** When a brand-new user signs in for the first time, `create_profile_on_signup()` claims their pending invitations and then deletes those rows. `20260709000000_fix_claim_invite_full_name.sql` added a backfill so the invitee's **name** survived that delete — but not the **email**, which was lost with the deleted invitation. An *existing* user invited by phone was unaffected: `invite_to_association_by_phone` copies both onto their profile.
+
+The backfill now carries the email across as well. Verified against the local database by claiming an invite before and after the change: the pre-fix function produced `Test Invitee / (no email)`, the fixed one produces `Test Invitee / invitee@example.com`. Neither value overwrites anything the sign-up itself supplied.
+
+### Name and email are now required when inviting
+Both fields are mandatory on the Invite Members form, so a member has an identity from the moment they are added instead of appearing as a phone number until they fill in a profile. Placeholders changed from "Name (optional)" / "Email (optional)" to "Full name" / "Email address".
+
+### Create User dialog no longer clipped
+The super-admin **Create New User** dialog inherited the default `max-w-sm` (384px) width, which cut off the Association field and the Create User button on narrower windows, with no way to scroll to them. It now uses a `max-w-lg` shell that holds the header fixed and scrolls the form body within the viewport, and drops `AlertDialogFooter` whose `bg-muted` band two-tones against the dialog surface.
+
+| Migration | Description |
+|-----------|-------------|
+| `20261024055901_fix_claim_invite_email.sql` | `create_profile_on_signup()` also backfills `profiles.email` from `invitations.email` before claimed invites are deleted |
+
+---
+
+## Villa: Confirmation email delivery fixes + guest ID polish — 2026-10-24
+
+### Villa email now sends from the villa's own Resend account
+Villa guest email leaves from `habbaa.com` (`VILLA_EMAIL_FROM`) while Ooruda's auth, invite and contact email leaves from `ooruda.com`. Resend only accepts a `from:` address whose domain is verified in the sending account, and the shared `getMailer()` binds a single `RESEND_API_KEY` at module load — so villa mail sent on Ooruda's key was rejected with a 403.
+
+Villa email now goes through a dedicated sender (`lib/villa/guest-mailer.ts`) using `VILLA_RESEND_API_KEY`. When that variable is unset it falls back to the shared mailer, so a deployment keeping both domains in one Resend account still works.
+
+**New environment variables:**
+
+| Variable | Purpose |
+|----------|---------|
+| `VILLA_EMAIL_FROM` | Villa guest-email sender, e.g. `Villa 19 by Habbaa <reservations@habbaa.com>`. Without it no villa email sends at all. |
+| `VILLA_RESEND_API_KEY` | The villa Resend account key. Optional — falls back to `RESEND_API_KEY`. |
+
+### Confirmation send no longer dropped on Vercel
+The send was an unawaited promise, which a serverless function can discard the moment it returns the response — meaning the email could silently never go out in production. It now runs inside Next's `after()`, which keeps the invocation alive until the send finishes.
+
+### Guest email is required on manual bookings
+The confirmation email is the guest's only record of a booking taken by phone or message, and a booking saved without an email sent nothing while the booking page still claimed *"Sent automatically when the booking was created."* Email is now a required field on the new-booking form, with helper text explaining where the confirmation goes.
+
+### Advance payment is captured when the booking is taken
+Staff could mark a booking "part paid" but had nowhere to say **how much** — the form held only a status dropdown and wrote no receipt. So every manual booking reached the guest's email with no figure at all.
+
+Choosing "Part paid" on the new-booking form now reveals **Amount received**, **Received by** (cash / UPI / bank / card / other) and an optional **Reference**. The amount is written as a receipt against the booking, so it lands in the ledger, appears in the Payments panel, and is the figure the guest sees in their confirmation. The amount is refused if it exceeds the booking total, and a receipt that fails to write is logged rather than rolling back a booking the guest has already been promised.
+
+### Confirmation email reads the ledger, not the site's payment status
+A villa booking that is fully paid still carries `payment_status = 'partially_paid'` on the booking site — `sitePaymentStatus()` pins it there deliberately so the site does not issue its GST invoice before check-out. The email was quoting that field, so a guest who had paid in full was told a balance was due, and the "paid in full" badge could never appear on any villa booking.
+
+The email now takes its payment figures and label from Ooruda's own ledger (website payments + offline receipts − refunds) wherever the ledger has seen money, and falls back to the site status otherwise — which keeps bookings taken before this change reading as "a deposit was received" rather than as unpaid. Four cases are covered by regression tests in `guest-emails.test.ts`:
+
+| Case | Guest sees |
+|------|-----------|
+| Advance captured | Deposit received ₹20,000 · Balance due ₹34,280 |
+| Paid in full | "Amount is paid in full" badge, no balance row |
+| Part paid, never receipted (pre-existing bookings) | "Deposit received —", balance due at check-in, no figure |
+| Unpaid | Balance due in full, payable at check-in |
+
+### Guest ID section polish
+- **Front/Back labels removed** from the Add ID dialog — staff attach photos without classifying each one.
+- **Add ID dialog scrolling fixed** — the dialog body scrolls within the viewport instead of overflowing and clipping the save buttons.
+- **"ID photos (2 of 4)"** counter dropped; the heading is now just "ID photos".
+- **Download filenames fixed** — files saved as `id-<short-id>.jpg/.png/.webp/.pdf` from the stored content type, instead of a URL-encoded storage path.
+- **"Photo 1: / Photo 2:"** ordinal labels removed; each photo is its own row of View / Download actions.
+- **Delete ID dialog** retitled "Delete Guest IDs" with clearer copy, a Cancel action, and more spacing between "Mark checked" and the delete control.
+
+---
+
+## Villa: Booking confirmation email — 2026-10-21
+
+### Automatic confirmation on booking creation
+When staff create a manual booking (phone/WhatsApp/in-person) through Ooruda, a confirmation email is now sent automatically to the guest's email address the moment the booking is saved. The email includes:
+- Check-in and check-out dates with times
+- Number of nights and booking reference code
+- Payment status: "paid in full", "deposit received — balance due at check-in", or "due at check-in"
+- Villa WhatsApp and emergency contacts (same as the pre-arrival email)
+
+The send runs after the response and never fails the booking — a failed or skipped send is logged in `villa_message_log` and surfaced on the booking page so staff can resend manually.
+
+### Resend from the booking page
+The **Guest emails** section now shows a "Booking confirmation" row above the existing pre-arrival and thank-you rows. Staff can use "Send again" on any confirmed or completed booking if the original send failed.
+
+### Per-account toggle
+A `booking_confirmation_email` column in `villa_account_settings` (default `true`) lets owners switch off the automatic confirmation if needed (e.g. they send their own branded email through another tool).
+
+| Migration | Description |
+|-----------|-------------|
+| `20261021120000_villa_m10_booking_confirmation_email.sql` | Adds `booking_confirmation_email` boolean to `villa_account_settings` (default `true`) |
+
+---
+
+## Villa: Guest ID improvements — 2026-10-21
+
+### Download IDs
+- **Per-file Download** button alongside each View button on every guest ID document. Routes through the existing signed-URL infrastructure with `?download=1`, adding `Content-Disposition: attachment` so the browser saves the file.
+- **Download all** button in the panel header (visible when any IDs are on the booking) — sends a zip of all live files to the browser via `/api/villa/guest-documents/download-all`.
+- Access log records downloads as `downloaded` (distinct from `viewed`).
+
+### Multiple photos per ID (front + back)
+New `villa_guest_document_files` child table: one ID document row, N file rows. The Add ID dialog now lets staff attach multiple photos in one submission, optionally labelling each **Front** or **Back**. The UI shows each file's View/Download buttons grouped under the document.
+
+Existing single-file documents are migrated automatically (1 file row per existing `storage_path`). Purge and retention logic (retention.ts, booking-cancel shortcut) updated to operate on the files table.
+
+### Mark IDs checked — per-ID + gated bulk
+- **Per-ID "Mark checked"** button on each document row. Stamps `verified_at` on that document and auto-advances the booking `id_status` to `verified` when all docs on the booking are checked.
+- **"Mark all IDs checked"** bulk button retained, but now only shown when there are IDs recorded (previously showed even with zero IDs), and carries a tooltip: *"Confirm you've compared each ID photo against the guest at check-in."*
+- Both buttons are hidden once `id_status = 'verified'`.
+- Verified documents show a green "Checked" badge.
+
+| Migration | Description |
+|-----------|-------------|
+| `20261021045954_villa_m9_guest_doc_files.sql` | New `villa_guest_document_files` table; drops `storage_path`/`content_type` from `villa_guest_documents`; adds `downloaded` to access-log action enum; migrates existing file rows |
+
+---
+
 ## Production promotion - Villa v1.0 + release (v2.1 -> v2.3) merged to main - 2026-10-20
 
 Promotion of the `release` branch to `main` (dev -> production). Includes all villa v1.0 work (M0-M8 + fixes) and v2.1-v2.3 association features.

@@ -30,7 +30,7 @@ interface Ref {
 
 export function GuestEmailButton(
   props: Ref & {
-    template: 'pre_arrival' | 'thank_you';
+    template: 'booking_confirmation' | 'pre_arrival' | 'thank_you';
     again: boolean;
     disabled?: boolean;
   },

@@ -1,4 +1,6 @@
 import 'server-only';
+import { after } from 'next/server';
+
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type * as z from 'zod';
@@ -21,6 +23,7 @@ import { getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
 import { VillaDbError } from '~/lib/villa-db/errors';
 import { getPricingInputs } from '~/lib/villa-db/rates';
+import { sendBookingConfirmation } from '~/lib/villa/guest-email-runner';
 import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
 import { mirrorBooking } from '~/lib/villa/mirror';
 import { fromPaise, fromPaiseToString } from '~/lib/villa/money';
@@ -151,13 +154,18 @@ export function createBookingsService(client: Client) {
     propertyId: string,
     bookingId: string,
   ) {
-    const { error } = await getSupabaseServerAdminClient()
+    const admin = getSupabaseServerAdminClient();
+    const today = todayIst();
+
+    // Update purge_after on the document rows (kept for query convenience).
+    const { error, data: docs } = await admin
       .from('villa_guest_documents')
-      .update({ purge_after: todayIst() })
+      .update({ purge_after: today })
       .eq('account_id', accountId)
       .eq('property_id', propertyId)
       .eq('site_booking_id', bookingId)
-      .is('purged_at', null);
+      .is('purged_at', null)
+      .select('id');
 
     if (error) {
       (await getLogger()).error(
@@ -165,6 +173,18 @@ export function createBookingsService(client: Client) {
         'villa cancel: guest id purge date update failed',
       );
       return;
+    }
+
+    // Also bring forward the files table so the purge job can find them.
+    if ((docs ?? []).length > 0) {
+      await admin
+        .from('villa_guest_document_files')
+        .update({ purge_after: today })
+        .in(
+          'document_id',
+          (docs ?? []).map((d) => d.id),
+        )
+        .is('purged_at', null);
     }
 
     await purgeExpiredGuestIds(accountId).catch(async (e: unknown) =>
@@ -309,6 +329,61 @@ export function createBookingsService(client: Client) {
         actor,
       );
       await mirrorBooking(site, booking, input.isEvent ? 'event' : 'stay');
+
+      // The advance taken when the booking was agreed becomes a receipt, so
+      // the ledger — and the confirmation email that reads it — states a real
+      // figure instead of "a deposit was received". Written before the email
+      // is queued below. A receipt that fails must not undo a booking the
+      // guest has been promised, so it is logged for staff to add by hand.
+      if (
+        input.paymentStatus === 'partially_paid' &&
+        input.amountReceived > 0
+      ) {
+        if (input.amountReceived > fromPaise(q.totalPaise)) {
+          throw new VillaDbError(
+            'INVALID_INPUT',
+            `advance ${input.amountReceived} over total ${q.totalPaise}`,
+            'The amount received is more than the booking total.',
+          );
+        }
+
+        const { error } = await client.rpc('record_villa_payment', {
+          p_property_id: input.propertyId,
+          p_site_booking_id: booking.id,
+          p_request_id: crypto.randomUUID(),
+          p_mode: input.paymentMode,
+          p_amount: input.amountReceived,
+          p_paid_on: todayIst(),
+          p_reference: input.paymentReference,
+          p_payer_name: input.guestName,
+          p_note: 'Advance taken when the booking was made',
+        });
+
+        if (error) {
+          (await getLogger()).error(
+            { bookingId: booking.id, code: error.code },
+            'villa booking advance receipt failed',
+          );
+        }
+      }
+
+      // Runs after the response: never fails the booking if the email fails,
+      // but after() keeps the invocation alive so the send is not dropped
+      // when the function would otherwise freeze on returning.
+      after(async () => {
+        try {
+          await sendBookingConfirmation(
+            input.accountId,
+            input.propertyId,
+            booking,
+          );
+        } catch (e) {
+          (await getLogger()).error(
+            { bookingId: booking.id, error: String(e) },
+            'villa booking confirmation send failed',
+          );
+        }
+      });
 
       return booking;
     },

@@ -10,7 +10,6 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
@@ -104,7 +103,7 @@ export function AdminCreateUserDialog(
     >
       <AlertDialogTrigger render={props.children as React.ReactElement} />
 
-      <AlertDialogContent>
+      <AlertDialogContent className="flex max-h-[90dvh] flex-col overflow-hidden sm:max-w-lg">
         <AlertDialogHeader>
           <AlertDialogTitle>Create New User</AlertDialogTitle>
 
@@ -118,7 +117,7 @@ export function AdminCreateUserDialog(
         <Form {...form}>
           <form
             data-test={'admin-create-user-form'}
-            className={'flex flex-col space-y-4'}
+            className={'flex min-h-0 flex-col space-y-4 overflow-y-auto'}
             onSubmit={form.handleSubmit((data: CreateUserSchemaType) =>
               execute(data),
             )}
@@ -259,13 +258,14 @@ export function AdminCreateUserDialog(
               )}
             />
 
-            <AlertDialogFooter>
+            {/* Not AlertDialogFooter: its bg-muted band clashes with the dialog. */}
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
 
               <Button disabled={isPending} type={'submit'}>
-                {isPending ? 'Creating...' : 'Create User'}
+                {isPending ? 'Creating…' : 'Create User'}
               </Button>
-            </AlertDialogFooter>
+            </div>
           </form>
         </Form>
       </AlertDialogContent>

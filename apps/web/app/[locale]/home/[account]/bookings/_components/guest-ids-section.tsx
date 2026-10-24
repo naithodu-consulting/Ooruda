@@ -5,12 +5,17 @@ import type { VillaRole } from '~/lib/roles';
 import type { SiteBooking } from '~/lib/villa-db/bookings';
 import { guestIdUploadsEnabled } from '~/lib/villa/flags';
 
-import { type GuestDoc, type GuestRow, GuestIdsPanel } from './guest-ids-panel';
+import {
+  type GuestDoc,
+  type GuestDocFile,
+  type GuestRow,
+  GuestIdsPanel,
+} from './guest-ids-panel';
 
 /**
  * Guests and their ID documents for one booking. Loads its own data (inside
  * Suspense on the booking page). Only what the screen needs reaches the
- * browser: never a storage path, never a full ID number (none is stored).
+ * browser: never a full ID number (none is stored).
  */
 export async function GuestIdsSection(props: {
   accountId: string;
@@ -31,7 +36,7 @@ export async function GuestIdsSection(props: {
     client
       .from('villa_guest_documents')
       .select(
-        'id, guest_id, doc_type, masked_number, stage, storage_path, purged_at, purge_after, captured_at, verified_at',
+        'id, guest_id, doc_type, masked_number, stage, purged_at, purge_after, captured_at, verified_at, villa_guest_document_files(id, file_order, label, purged_at)',
       )
       .eq('property_id', props.propertyId)
       .eq('site_booking_id', booking.id)
@@ -56,18 +61,35 @@ export async function GuestIdsSection(props: {
     };
   });
 
-  const docs: GuestDoc[] = (docsResult.data ?? []).map((d) => ({
-    id: d.id,
-    guestId: d.guest_id,
-    docType: d.doc_type,
-    maskedNumber: d.masked_number,
-    stage: d.stage as GuestDoc['stage'],
-    hasFile: Boolean(d.storage_path) && !d.purged_at,
-    purgedAt: d.purged_at,
-    purgeAfter: d.purge_after,
-    capturedAt: d.captured_at,
-    verified: Boolean(d.verified_at),
-  }));
+  const docs: GuestDoc[] = (docsResult.data ?? []).map((d) => {
+    const rawFiles = Array.isArray(d.villa_guest_document_files)
+      ? d.villa_guest_document_files
+      : d.villa_guest_document_files
+        ? [d.villa_guest_document_files]
+        : [];
+
+    const files: GuestDocFile[] = rawFiles
+      .filter((f) => !f.purged_at)
+      .sort((a, b) => a.file_order - b.file_order)
+      .map((f) => ({
+        id: f.id,
+        label: f.label ?? null,
+        fileOrder: f.file_order,
+      }));
+
+    return {
+      id: d.id,
+      guestId: d.guest_id,
+      docType: d.doc_type,
+      maskedNumber: d.masked_number,
+      stage: d.stage as GuestDoc['stage'],
+      files,
+      purgedAt: d.purged_at,
+      purgeAfter: d.purge_after,
+      capturedAt: d.captured_at,
+      verified: Boolean(d.verified_at),
+    };
+  });
 
   return (
     <GuestIdsPanel
@@ -81,7 +103,6 @@ export async function GuestIdsSection(props: {
       adults={booking.adults}
       idStatus={booking.idStatus}
       editable={['confirmed', 'completed'].includes(booking.status)}
-      isOwner={props.role === 'villa_admin'}
       uploadsEnabled={guestIdUploadsEnabled()}
       guests={guests}
       docs={docs}

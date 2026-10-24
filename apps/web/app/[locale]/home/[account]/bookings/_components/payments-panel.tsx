@@ -45,6 +45,7 @@ import { RupeeInput } from '~/components/rupee-input';
 import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatDateReadable } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
+import { paymentModeLabel } from '~/lib/villa/labels';
 
 import {
   PAYMENT_MODES,
@@ -61,16 +62,7 @@ import {
   voidPaymentAction,
 } from '../_lib/server/payments-actions';
 
-const MODE_LABELS: Record<(typeof PAYMENT_MODES)[number], string> = {
-  cash: 'Cash',
-  upi: 'UPI',
-  bank: 'Bank transfer',
-  card: 'Card (at the villa)',
-  other: 'Other',
-};
-
-const modeLabel = (m: string) =>
-  MODE_LABELS[m as keyof typeof MODE_LABELS] ?? m;
+const modeLabel = paymentModeLabel;
 
 const STATUS_LABELS: Record<string, string> = {
   unpaid: 'Unpaid',
@@ -420,7 +412,7 @@ function ModeField({
             <SelectContent>
               {PAYMENT_MODES.map((m) => (
                 <SelectItem key={m} value={m} data-test={`${test}-${m}`}>
-                  {MODE_LABELS[m]}
+                  {modeLabel(m)}
                 </SelectItem>
               ))}
             </SelectContent>

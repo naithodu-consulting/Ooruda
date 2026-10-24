@@ -2527,6 +2527,7 @@ export type Database = {
       villa_account_settings: {
         Row: {
           account_id: string
+          booking_confirmation_email: boolean
           booking_cutoff_date: string | null
           created_at: string
           guest_emails_checked_at: string | null
@@ -2538,6 +2539,7 @@ export type Database = {
         }
         Insert: {
           account_id: string
+          booking_confirmation_email?: boolean
           booking_cutoff_date?: string | null
           created_at?: string
           guest_emails_checked_at?: string | null
@@ -2549,6 +2551,7 @@ export type Database = {
         }
         Update: {
           account_id?: string
+          booking_confirmation_email?: boolean
           booking_cutoff_date?: string | null
           created_at?: string
           guest_emails_checked_at?: string | null
@@ -3423,12 +3426,82 @@ export type Database = {
           },
         ]
       }
+      villa_guest_document_files: {
+        Row: {
+          account_id: string
+          captured_at: string
+          captured_by: string | null
+          content_type: string
+          document_id: string
+          file_order: number
+          id: string
+          label: string | null
+          purge_after: string
+          purged_at: string | null
+          storage_path: string
+        }
+        Insert: {
+          account_id: string
+          captured_at?: string
+          captured_by?: string | null
+          content_type: string
+          document_id: string
+          file_order?: number
+          id?: string
+          label?: string | null
+          purge_after: string
+          purged_at?: string | null
+          storage_path: string
+        }
+        Update: {
+          account_id?: string
+          captured_at?: string
+          captured_by?: string | null
+          content_type?: string
+          document_id?: string
+          file_order?: number
+          id?: string
+          label?: string | null
+          purge_after?: string
+          purged_at?: string | null
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "villa_guest_document_files_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_guest_document_files_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_account_workspace"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_guest_document_files_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "user_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "villa_guest_document_files_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "villa_guest_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       villa_guest_documents: {
         Row: {
           account_id: string
           captured_at: string
           captured_by: string | null
-          content_type: string | null
           doc_type: string
           guest_id: string
           id: string
@@ -3438,7 +3511,6 @@ export type Database = {
           purged_at: string | null
           site_booking_id: string
           stage: string
-          storage_path: string | null
           verified_at: string | null
           verified_by: string | null
         }
@@ -3446,7 +3518,6 @@ export type Database = {
           account_id: string
           captured_at?: string
           captured_by?: string | null
-          content_type?: string | null
           doc_type: string
           guest_id: string
           id?: string
@@ -3456,7 +3527,6 @@ export type Database = {
           purged_at?: string | null
           site_booking_id: string
           stage: string
-          storage_path?: string | null
           verified_at?: string | null
           verified_by?: string | null
         }
@@ -3464,7 +3534,6 @@ export type Database = {
           account_id?: string
           captured_at?: string
           captured_by?: string | null
-          content_type?: string | null
           doc_type?: string
           guest_id?: string
           id?: string
@@ -3474,7 +3543,6 @@ export type Database = {
           purged_at?: string | null
           site_booking_id?: string
           stage?: string
-          storage_path?: string | null
           verified_at?: string | null
           verified_by?: string | null
         }

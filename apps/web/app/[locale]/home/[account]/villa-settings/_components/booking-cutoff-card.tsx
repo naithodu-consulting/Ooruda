@@ -16,8 +16,8 @@ import {
 import { DatePicker } from '@kit/ui/date-picker';
 import { toast } from '@kit/ui/sonner';
 
-import { formatDateReadable } from '~/lib/format-date';
 import { todayInBillingZone } from '~/lib/billing-dates';
+import { formatDateReadable } from '~/lib/format-date';
 
 import { saveBookingCutoffAction } from '../_lib/server/villa-settings-actions';
 
@@ -96,7 +96,11 @@ export function BookingCutoffCard(props: {
               size="sm"
               disabled={isPending}
               onClick={() =>
-                execute({ accountId: props.accountId, propertyId: props.propertyId, cutoffDate: value })
+                execute({
+                  accountId: props.accountId,
+                  propertyId: props.propertyId,
+                  cutoffDate: value,
+                })
               }
               data-test={'villa-settings-booking-cutoff-save'}
             >

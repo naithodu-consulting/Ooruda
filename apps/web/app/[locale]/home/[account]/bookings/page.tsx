@@ -2,12 +2,11 @@ import { redirect } from 'next/navigation';
 
 import { CircleAlert } from 'lucide-react';
 
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
-
-import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import pathsConfig from '~/config/paths.config';
 import { VILLA_ROLES, requireRole } from '~/lib/rbac';

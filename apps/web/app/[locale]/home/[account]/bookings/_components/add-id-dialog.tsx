@@ -3,7 +3,7 @@
 import { useState } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { IdCard } from 'lucide-react';
+import { IdCard, Plus, X } from 'lucide-react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
@@ -48,6 +48,12 @@ import {
 import type { GuestRow } from './guest-ids-panel';
 
 const NEW_GUEST = '__new__';
+const MAX_FILES = 4;
+
+interface FileEntry {
+  file: File;
+  error: string | null;
+}
 
 export function AddIdDialog(props: {
   accountId: string;
@@ -103,18 +109,36 @@ function AddIdForm(
     },
   });
 
-  const guestId = useWatch({
-    control: form.control,
-    name: 'guestId',
-  });
+  const guestId = useWatch({ control: form.control, name: 'guestId' });
 
-  const [file, setFile] = useState<File | null>(null);
-  const [fileError, setFileError] = useState<string | null>(null);
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [globalFileError, setGlobalFileError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  function addFile(raw: File | null) {
+    if (!raw) return;
+    setGlobalFileError(null);
+
+    if (files.length >= MAX_FILES) {
+      setGlobalFileError(`You can attach up to ${MAX_FILES} photos.`);
+      return;
+    }
+
+    if (raw.size > ID_FILE_MAX_BYTES) {
+      setGlobalFileError('That file is larger than 10 MB.');
+      return;
+    }
+
+    setFiles((prev) => [...prev, { file: raw, error: null }]);
+  }
+
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function upload(values: RecordIdInput) {
-    if (!file) {
-      setFileError('Attach the ID photo.');
+    if (files.length === 0) {
+      setGlobalFileError('Attach at least one ID photo.');
       return;
     }
 
@@ -123,7 +147,10 @@ function AddIdForm(
     try {
       const body = new FormData();
       body.set('data', JSON.stringify(values));
-      body.set('file', file);
+
+      files.forEach(({ file }, i) => {
+        body.set(`file_${i}`, file);
+      });
 
       const response = await fetch('/api/villa/guest-documents', {
         method: 'POST',
@@ -148,12 +175,10 @@ function AddIdForm(
     }
   }
 
-  const busy = uploading;
-
   return (
     <Dialog open onOpenChange={(o) => (!o ? props.onClose() : undefined)}>
       <DialogContent
-        className="max-h-[92vh] max-w-lg overflow-y-auto"
+        className="flex max-h-[90dvh] max-w-lg flex-col overflow-hidden"
         data-test={'villa-add-id-dialog'}
       >
         <DialogHeader>
@@ -166,9 +191,10 @@ function AddIdForm(
 
         <Form {...form}>
           <form
-            className="flex flex-col gap-4"
+            className="flex min-h-0 flex-col gap-4 overflow-y-auto"
             onSubmit={form.handleSubmit((values) => upload(values))}
           >
+            {/* Guest picker */}
             <FormField
               name="guestId"
               control={form.control}
@@ -219,6 +245,7 @@ function AddIdForm(
               )}
             />
 
+            {/* New guest fields */}
             {guestId === '' ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormField
@@ -282,6 +309,7 @@ function AddIdForm(
               </div>
             ) : null}
 
+            {/* ID type + number */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField
                 name="docType"
@@ -343,36 +371,83 @@ function AddIdForm(
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="villa-id-file" className="text-sm font-medium">
-                ID photo
-              </label>
-              <Input
-                id="villa-id-file"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,application/pdf"
-                capture="environment"
-                onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  setFileError(
-                    f && f.size > ID_FILE_MAX_BYTES
-                      ? 'The file is larger than 10 MB.'
-                      : null,
-                  );
-                  setFile(f && f.size <= ID_FILE_MAX_BYTES ? f : null);
-                }}
-                data-test={'villa-add-id-file'}
-              />
+            {/* Multi-file upload */}
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium">ID photos</p>
               <p className="text-muted-foreground text-xs">
-                JPEG, PNG, WebP or PDF, up to 10 MB.
+                Attach the front, and optionally the back, of the ID. JPEG, PNG,
+                WebP or PDF, up to 10 MB each.
               </p>
-              {fileError ? (
+
+              {/* Uploaded files list */}
+              {files.length > 0 ? (
+                <ul className="flex flex-col gap-2">
+                  {files.map((entry, i) => (
+                    <li
+                      key={i}
+                      className="bg-muted/40 flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-xs">
+                        {entry.file.name}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 shrink-0 p-0"
+                        onClick={() => removeFile(i)}
+                        aria-label="Remove file"
+                        data-test={`villa-add-id-file-remove-${i}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              {/* Add file button */}
+              {files.length < MAX_FILES ? (
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    nativeButton={false}
+                    render={
+                      <label
+                        htmlFor="villa-id-file-add"
+                        className="cursor-pointer"
+                      />
+                    }
+                    data-test={'villa-add-id-file-btn'}
+                  >
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    {files.length === 0 ? 'Attach photo' : 'Add another photo'}
+                  </Button>
+                  <Input
+                    id="villa-id-file-add"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    capture="environment"
+                    className="sr-only"
+                    onChange={(e) => {
+                      addFile(e.target.files?.[0] ?? null);
+                      // Reset so the same file can be re-added after removal.
+                      e.target.value = '';
+                    }}
+                    data-test={'villa-add-id-file'}
+                  />
+                </div>
+              ) : null}
+
+              {globalFileError ? (
                 <p
                   className="text-destructive text-sm"
                   role="alert"
                   data-test={'villa-add-id-file-error'}
                 >
-                  {fileError}
+                  {globalFileError}
                 </p>
               ) : null}
             </div>
@@ -389,10 +464,10 @@ function AddIdForm(
               </Button>
               <Button
                 type="submit"
-                disabled={busy}
+                disabled={uploading}
                 data-test={'villa-add-id-submit'}
               >
-                {busy ? 'Saving…' : 'Save ID'}
+                {uploading ? 'Saving…' : 'Save ID'}
               </Button>
             </div>
           </form>

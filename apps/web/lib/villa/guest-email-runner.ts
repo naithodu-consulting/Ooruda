@@ -1,7 +1,6 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { getMailer } from '@kit/mailers';
 import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 
@@ -10,6 +9,7 @@ import {
   type SiteBooking,
   getBooking,
   listBookings,
+  listSitePayments,
 } from '~/lib/villa-db/bookings';
 import { type VillaSite, getVillaSite } from '~/lib/villa-db/client';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
@@ -23,7 +23,9 @@ import {
   renderGuestEmail,
   THANK_YOU_WINDOW_DAYS,
 } from './guest-emails';
+import { sendVillaEmail } from './guest-mailer';
 import { contactCategoryLabel } from './labels';
+import { type LedgerStatus, summariseLedger } from './ledger';
 
 /**
  * Sends the automatic guest emails that are due (guest-emails.ts has the
@@ -92,7 +94,20 @@ async function loadContext(
   };
 }
 
-function contextFor(ctx: PropertyContext, b: SiteBooking): GuestEmailContext {
+function contextFor(
+  ctx: PropertyContext,
+  b: SiteBooking,
+  ledger?: { netPaidPaise: number; status: LedgerStatus },
+): GuestEmailContext {
+  // The site's payment_status is not the truth for this: sitePaymentStatus()
+  // pins a fully paid villa booking to 'partially_paid' so the site does not
+  // issue its GST invoice before check-out. Quoting it would tell a guest who
+  // has paid in full that a balance is due. Ooruda's ledger is the exact
+  // record, so it wins wherever it has seen money. With no receipts the site
+  // value stands, which keeps bookings taken before advances were captured
+  // reading as "a deposit was received" rather than as unpaid.
+  const known = ledger !== undefined && ledger.netPaidPaise > 0;
+
   return {
     villaName: ctx.name,
     guestName: b.guestName,
@@ -102,6 +117,20 @@ function contextFor(ctx: PropertyContext, b: SiteBooking): GuestEmailContext {
     checkInTime: ctx.checkInTime,
     checkOutTime: ctx.checkOutTime,
     adults: b.adults,
+    children: b.children,
+    guestPhone: b.guestPhone || undefined,
+    baseAmountPaise: b.baseAmountPaise,
+    extraGuestAmountPaise: b.extraGuestAmountPaise,
+    discountAmountPaise: b.discountAmountPaise,
+    discountCode: b.discountCode,
+    taxAmountPaise: b.taxAmountPaise,
+    totalAmountPaise: b.totalAmountPaise,
+    amountPaidPaise: known
+      ? ledger.netPaidPaise
+      : b.paymentStatus === 'paid'
+        ? b.totalAmountPaise
+        : 0,
+    paymentStatus: known ? ledger.status : b.paymentStatus,
     whatsApp: ctx.whatsApp,
     contacts: ctx.contacts,
   };
@@ -194,6 +223,55 @@ async function finish(
   }
 }
 
+/**
+ * What the guest has actually paid, from Ooruda's own ledger (website
+ * payments plus offline receipts, less refunds), with the status that follows
+ * from it. netPaidPaise is 0 when nothing is receipted against the booking.
+ */
+async function ledgerFor(
+  ctx: PropertyContext,
+  b: SiteBooking,
+): Promise<{ netPaidPaise: number; status: LedgerStatus }> {
+  const admin = getSupabaseServerAdminClient();
+
+  const [online, offline, refunds] = await Promise.all([
+    listSitePayments(ctx.site, b.id),
+    admin
+      .from('villa_booking_payments')
+      .select('amount, voided_at')
+      .eq('property_id', ctx.propertyId)
+      .eq('site_booking_id', b.id),
+    admin
+      .from('villa_refunds')
+      .select('amount, status')
+      .eq('property_id', ctx.propertyId)
+      .eq('site_booking_id', b.id),
+  ]);
+
+  if (offline.error || refunds.error) {
+    return { netPaidPaise: 0, status: 'unpaid' };
+  }
+
+  const summary = summariseLedger({
+    totalPaise: b.totalAmountPaise,
+    bookingStatus: b.status,
+    online: online.map((p) => ({
+      amountPaise: p.amountPaise,
+      status: p.status,
+    })),
+    offline: (offline.data ?? []).map((p) => ({
+      amount: Number(p.amount),
+      voided: Boolean(p.voided_at),
+    })),
+    refunds: (refunds.data ?? []).map((r) => ({
+      amount: Number(r.amount),
+      status: r.status,
+    })),
+  });
+
+  return { netPaidPaise: summary.netPaidPaise, status: summary.status };
+}
+
 /** Sends one email to the booking's guest. Never throws. */
 export async function deliverGuestEmail(
   ctx: PropertyContext,
@@ -214,21 +292,24 @@ export async function deliverGuestEmail(
   if (!b.guestEmail)
     return { status: 'skipped', reason: 'The booking has no guest email.' };
 
-  const { subject, html } = renderGuestEmail(template, contextFor(ctx, b));
+  // Only the confirmation prints a payment breakdown.
+  const ledger =
+    template === 'booking_confirmation'
+      ? await ledgerFor(ctx, b).catch(() => undefined)
+      : undefined;
+
+  const { subject, html } = renderGuestEmail(
+    template,
+    contextFor(ctx, b, ledger),
+  );
 
   try {
-    const result = await (
-      await getMailer()
-    ).sendEmail({
+    const { providerId } = await sendVillaEmail({
       to: b.guestEmail,
       from,
       subject,
       html,
     });
-    const providerId =
-      result && typeof result === 'object' && 'id' in result
-        ? String((result as { id: unknown }).id)
-        : undefined;
 
     return { status: 'sent', providerId };
   } catch (error) {
@@ -452,15 +533,19 @@ export async function sendGuestEmailNow(
   actor: string,
 ) {
   const allowed =
-    template === 'pre_arrival'
-      ? booking.status === 'confirmed' && booking.checkIn >= todayIst()
-      : booking.status === 'completed';
+    template === 'booking_confirmation'
+      ? booking.status === 'confirmed' || booking.status === 'completed'
+      : template === 'pre_arrival'
+        ? booking.status === 'confirmed' && booking.checkIn >= todayIst()
+        : booking.status === 'completed';
 
   if (!allowed) {
     throw new Error(
-      template === 'pre_arrival'
-        ? 'The arrival email is only for a confirmed, upcoming stay.'
-        : 'The thank-you email goes only after check-out.',
+      template === 'booking_confirmation'
+        ? 'The confirmation email is only for a confirmed or completed stay.'
+        : template === 'pre_arrival'
+          ? 'The arrival email is only for a confirmed, upcoming stay.'
+          : 'The thank-you email goes only after check-out.',
     );
   }
 
@@ -493,4 +578,62 @@ export async function sendGuestEmailNow(
   if (outcome.status !== 'sent') {
     throw new Error(outcome.reason ?? 'Could not send the email.');
   }
+}
+
+/**
+ * Sends a booking confirmation email immediately after a manual booking is
+ * created. Logs to villa_message_log; never throws — a failed send is
+ * recorded and shown to staff on the booking page, who can resend manually.
+ *
+ * Skips silently when VILLA_EMAIL_FROM is not set or there is no guest email.
+ */
+export async function sendBookingConfirmation(
+  accountId: string,
+  propertyId: string,
+  booking: SiteBooking,
+): Promise<void> {
+  if (!senderAddress()) return;
+  if (!booking.guestEmail) return;
+
+  const admin = getSupabaseServerAdminClient();
+
+  // Check the account toggle.
+  const { data: settings } = await admin
+    .from('villa_account_settings')
+    .select('booking_confirmation_email')
+    .eq('account_id', accountId)
+    .maybeSingle();
+
+  if (settings?.booking_confirmation_email === false) return;
+
+  const ctx = await loadGuestEmailContext(accountId, propertyId);
+
+  const { data: row, error } = await admin
+    .from('villa_message_log')
+    .insert({
+      account_id: accountId,
+      property_id: propertyId,
+      site_booking_id: booking.id,
+      booking_code: booking.bookingCode,
+      template: 'booking_confirmation' as const,
+      manual: false,
+      status: 'sending',
+      to_email: booking.guestEmail,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    (await getLogger()).error(
+      { bookingId: booking.id, code: error.code },
+      'villa booking confirmation: log insert failed',
+    );
+    return;
+  }
+
+  await finish(
+    admin,
+    row.id,
+    await deliverGuestEmail(ctx, booking, 'booking_confirmation'),
+  );
 }

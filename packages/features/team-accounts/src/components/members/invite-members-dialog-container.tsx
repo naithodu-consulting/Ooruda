@@ -48,8 +48,8 @@ import { RolesDataProvider } from './roles-data-provider';
 type InviteModel = {
   phone: string;
   role: Role;
-  name?: string;
-  email?: string;
+  name: string;
+  email: string;
 };
 
 type Role = string;
@@ -311,7 +311,7 @@ function InviteMembersForm({
                         <FormControl>
                           <Input
                             {...field}
-                            placeholder={'Name (optional)'}
+                            placeholder={'Full name'}
                             maxLength={255}
                           />
                         </FormControl>
@@ -328,7 +328,7 @@ function InviteMembersForm({
                           <Input
                             {...field}
                             type={'email'}
-                            placeholder={'Email (optional)'}
+                            placeholder={'Email address'}
                           />
                         </FormControl>
                         <FormMessage />

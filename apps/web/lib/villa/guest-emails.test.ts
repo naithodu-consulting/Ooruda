@@ -105,3 +105,70 @@ describe('renderGuestEmail', () => {
     expect(html).not.toContain('Caretaker');
   });
 });
+
+describe('booking confirmation payment block', () => {
+  const money = {
+    villaName: 'Villa 19',
+    guestName: 'Asha Rao',
+    bookingCode: 'V19-7KQ-M4X',
+    checkIn: '2026-10-10',
+    checkOut: '2026-10-12',
+    checkInTime: '14:00',
+    checkOutTime: '11:00',
+    adults: 2,
+    baseAmountPaise: 4_600_000,
+    taxAmountPaise: 828_000,
+    totalAmountPaise: 5_428_000,
+    whatsApp: null,
+    contacts: [],
+  };
+
+  it('states the real deposit and the real balance', () => {
+    const { html } = renderGuestEmail('booking_confirmation', {
+      ...money,
+      paymentStatus: 'partially_paid',
+      amountPaidPaise: 2_000_000,
+    });
+
+    expect(html).toContain('Deposit received');
+    expect(html).toContain('20,000');
+    expect(html).toContain('Balance due');
+    expect(html).toContain('34,280');
+  });
+
+  it('a fully paid stay is never told a balance is due', () => {
+    const { html } = renderGuestEmail('booking_confirmation', {
+      ...money,
+      paymentStatus: 'paid',
+      amountPaidPaise: 5_428_000,
+    });
+
+    expect(html).toContain('paid in full');
+    expect(html).not.toContain('Balance due');
+    expect(html).not.toContain('balance is due at check-in');
+  });
+
+  it('invents no figure when a deposit was never receipted', () => {
+    const { html } = renderGuestEmail('booking_confirmation', {
+      ...money,
+      paymentStatus: 'partially_paid',
+      amountPaidPaise: 0,
+    });
+
+    expect(html).toContain('Deposit received');
+    expect(html).not.toContain('Balance due');
+    expect(html).toContain('balance is due at check-in');
+  });
+
+  it('unpaid owes the full amount at check-in', () => {
+    const { html } = renderGuestEmail('booking_confirmation', {
+      ...money,
+      paymentStatus: 'unpaid',
+      amountPaidPaise: 0,
+    });
+
+    expect(html).toContain('Balance due');
+    expect(html).toContain('54,280');
+    expect(html).toContain('Payment is due at check-in');
+  });
+});

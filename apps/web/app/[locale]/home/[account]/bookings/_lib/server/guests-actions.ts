@@ -11,6 +11,7 @@ import {
   AddGuestSchema,
   DeleteIdSchema,
   IdStatusSchema,
+  MarkDocVerifiedSchema,
   RecordIdSchema,
   RemoveGuestSchema,
 } from '../schemas/guests.schema';
@@ -52,7 +53,7 @@ export const recordIdSeenAction = authActionClient
       throw new Error('Attach the ID photo to store a copy.');
     }
 
-    const result = await service().recordId(parsedInput, null, ctx.user.id);
+    const result = await service().recordId(parsedInput, [], ctx.user.id);
     revalidateBooking();
     return result;
   });
@@ -65,11 +66,23 @@ export const setIdStatusAction = authActionClient
     revalidateBooking();
   });
 
-// Owner only: deleting a guest's ID before its retention date.
+// Deleting a guest's ID before its retention date. Open to managers as well
+// as admins: a manager who can already view and download the scans is the
+// person at the desk when a guest asks for them to be removed, and the
+// deletion is logged against them either way.
 export const deleteIdAction = authActionClient
   .inputSchema(DeleteIdSchema)
   .action(async ({ parsedInput, ctx }) => {
-    await requireVillaRole(parsedInput.accountId, ['villa_admin']);
+    await requireVillaRole(parsedInput.accountId, STAFF);
     await service().deleteId(parsedInput, ctx.user.id);
+    revalidateBooking();
+  });
+
+// Mark a single ID document as checked (staff verified it against the guest).
+export const markDocVerifiedAction = authActionClient
+  .inputSchema(MarkDocVerifiedSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    await requireVillaRole(parsedInput.accountId, STAFF);
+    await service().markDocVerified(parsedInput, ctx.user.id);
     revalidateBooking();
   });

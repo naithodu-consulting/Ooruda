@@ -41,6 +41,7 @@ import { toast } from '@kit/ui/sonner';
 import { Switch } from '@kit/ui/switch';
 import { Textarea } from '@kit/ui/textarea';
 
+import { RupeeInput } from '~/components/rupee-input';
 import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatDateReadable } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
@@ -51,6 +52,7 @@ import {
   OFFLINE_CHANNEL_VALUES,
   PAYMENT_STATUS_LABELS,
   channelLabel,
+  paymentModeLabel,
   paymentStatusLabel,
 } from '~/lib/villa/labels';
 
@@ -58,6 +60,7 @@ import {
   type NewBookingInput,
   NewBookingFormSchema,
 } from '../_lib/schemas/bookings.schema';
+import { PAYMENT_MODES } from '../_lib/schemas/payments.schema';
 import { createBookingAction } from '../_lib/server/bookings-actions';
 import type { QuoteView } from '../_lib/server/bookings.service';
 
@@ -114,15 +117,20 @@ function NewBookingForm(props: {
       guestEmail: '',
       channel: 'phone',
       paymentStatus: 'unpaid',
+      amountReceived: '',
+      paymentMode: 'upi',
+      paymentReference: '',
       specialRequests: '',
       isEvent: false,
     },
   });
 
-  const [checkIn, checkOut, adults, children] = useWatch({
+  const [checkIn, checkOut, adults, children, paymentStatus] = useWatch({
     control: form.control,
-    name: ['checkIn', 'checkOut', 'adults', 'children'],
+    name: ['checkIn', 'checkOut', 'adults', 'children', 'paymentStatus'],
   });
+
+  const partPaid = paymentStatus === 'partially_paid';
 
   const [quote, setQuote] = useState<QuoteState>({ status: 'idle' });
   const requestId = useRef(0);
@@ -368,7 +376,7 @@ function NewBookingForm(props: {
                 control={form.control}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email (optional)</FormLabel>
+                    <FormLabel>Email</FormLabel>
                     <FormControl
                       render={
                         <Input
@@ -378,6 +386,9 @@ function NewBookingForm(props: {
                         />
                       }
                     />
+                    <FormDescription>
+                      The booking confirmation goes here.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -454,6 +465,95 @@ function NewBookingForm(props: {
                   </FormItem>
                 )}
               />
+
+              {partPaid ? (
+                <>
+                  <FormField
+                    name="amountReceived"
+                    control={form.control}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Amount received</FormLabel>
+                        <FormControl
+                          render={
+                            <RupeeInput
+                              {...field}
+                              value={
+                                (field.value as string | number | undefined) ??
+                                ''
+                              }
+                              data-test={'villa-booking-amount-received'}
+                            />
+                          }
+                        />
+                        <FormDescription>
+                          Becomes a receipt on the booking, and the figure the
+                          guest sees in their confirmation.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    name="paymentMode"
+                    control={form.control}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Received by</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <FormControl>
+                            <SelectTrigger
+                              className="w-full"
+                              data-test={'villa-booking-payment-mode'}
+                            >
+                              <SelectValue>
+                                {(v: string) => paymentModeLabel(v)}
+                              </SelectValue>
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {PAYMENT_MODES.map((m) => (
+                              <SelectItem
+                                key={m}
+                                value={m}
+                                data-test={`villa-booking-payment-mode-${m}`}
+                              >
+                                {paymentModeLabel(m)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    name="paymentReference"
+                    control={form.control}
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel>Reference (optional)</FormLabel>
+                        <FormControl
+                          render={
+                            <Input
+                              {...field}
+                              autoComplete="off"
+                              placeholder="UPI reference, cheque number, and so on"
+                              data-test={'villa-booking-payment-reference'}
+                            />
+                          }
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              ) : null}
 
               <FormField
                 name="specialRequests"
