@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import Link from 'next/link';
 
-import { Ban, ChevronRight } from 'lucide-react';
+import { Ban, ChevronRight, Lock, Rss } from 'lucide-react';
 
 import { Card, CardContent } from '@kit/ui/card';
 import { cn } from '@kit/ui/utils';
@@ -24,11 +24,17 @@ const TONE = {
   booked: 'bg-primary/30 text-foreground border-primary/60',
   held: 'bg-warning/15 text-foreground border-warning border-dashed',
   blocked: 'bg-muted-foreground/15 text-foreground border-muted-foreground/40',
+  closed: 'bg-destructive/10 text-foreground border-destructive/30',
 } as const;
 
 /**
  * Month grid from 768px up, a date-ordered agenda below it. Bookings open
  * their booking page; blocks open the unblock dialog.
+ *
+ * Nights past the booking cutoff are drawn as closed and offer no actions:
+ * they are already unsellable on the guest site, so blocking or unblocking
+ * them changes nothing there. Channel-imported blocks are shown but not
+ * clickable — the channel owns them.
  */
 export function CalendarView(props: {
   accountId: string;
@@ -37,15 +43,24 @@ export function CalendarView(props: {
   weeks: CalendarDay[][];
   agenda: AgendaEntry[];
   blocks: ReleasableBlock[];
+  bookingCutoff: string | null;
 }) {
   const [releasing, setReleasing] = useState<ReleasableBlock | null>(null);
-  const openBlock = (id: string) =>
-    setReleasing(props.blocks.find((b) => b.id === id) ?? null);
+  const openBlock = (id: string) => {
+    const block = props.blocks.find((b) => b.id === id);
+
+    // Channel-owned: the next feed sync would put it straight back.
+    if (!block || block.source === 'ical') return;
+
+    setReleasing(block);
+  };
   const hrefFor = (id: string) => props.bookingHref.replace('[id]', id);
+  const blockSource = (id: string) =>
+    props.blocks.find((b) => b.id === id)?.source ?? 'manual';
 
   return (
     <>
-      <Legend />
+      <Legend showClosed={!!props.bookingCutoff} />
 
       <Card className="bg-card hidden overflow-hidden md:block">
         <div className="grid grid-cols-7 border-b" role="row" aria-hidden>
@@ -77,6 +92,7 @@ export function CalendarView(props: {
                   col={col}
                   hrefFor={hrefFor}
                   onBlock={openBlock}
+                  blockSource={blockSource}
                 />
               ))}
             </div>
@@ -85,7 +101,12 @@ export function CalendarView(props: {
       </Card>
 
       <div className="md:hidden">
-        <Agenda entries={props.agenda} hrefFor={hrefFor} onBlock={openBlock} />
+        <Agenda
+          entries={props.agenda}
+          hrefFor={hrefFor}
+          onBlock={openBlock}
+          blockSource={blockSource}
+        />
       </div>
 
       {releasing ? (
@@ -100,7 +121,7 @@ export function CalendarView(props: {
   );
 }
 
-function Legend() {
+function Legend(props: { showClosed: boolean }) {
   return (
     <ul
       className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs"
@@ -118,6 +139,12 @@ function Legend() {
         <span className={cn('h-3 w-3 rounded-sm border', TONE.blocked)} />
         Blocked
       </li>
+      {props.showClosed ? (
+        <li className="flex items-center gap-1.5">
+          <span className={cn('h-3 w-3 rounded-sm border', TONE.closed)} />
+          Closed for booking (past cutoff)
+        </li>
+      ) : null}
     </ul>
   );
 }
@@ -127,17 +154,24 @@ function DayCell(props: {
   col: number;
   hrefFor: (id: string) => string;
   onBlock: (id: string) => void;
+  blockSource: (id: string) => 'manual' | 'ical';
 }) {
   const { day } = props;
 
   return (
     <div
       role="gridcell"
-      aria-label={formatDateReadable(day.date)}
+      aria-label={
+        day.pastCutoff
+          ? `${formatDateReadable(day.date)} — closed for booking`
+          : formatDateReadable(day.date)
+      }
       data-test={`villa-calendar-day-${day.date}`}
+      data-past-cutoff={day.pastCutoff ? 'true' : undefined}
       className={cn(
         'flex min-h-24 flex-col gap-1 border-r p-1 last:border-r-0',
         !day.inMonth && 'bg-muted/30',
+        day.pastCutoff && 'bg-destructive/5',
       )}
     >
       <span
@@ -160,9 +194,23 @@ function DayCell(props: {
           showLabel={item.starts || props.col === 0 || day.day === 1}
           hrefFor={props.hrefFor}
           onBlock={props.onBlock}
+          blockSource={props.blockSource}
           dim={day.isPast}
         />
       ))}
+
+      {day.pastCutoff && day.items.length === 0 ? (
+        <span
+          className={cn(
+            'flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs',
+            TONE.closed,
+          )}
+          data-test={'villa-calendar-closed'}
+        >
+          <Lock className="h-3 w-3 shrink-0" aria-hidden />
+          <span className="truncate">Closed</span>
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -173,6 +221,7 @@ function NightChip(props: {
   dim: boolean;
   hrefFor: (id: string) => string;
   onBlock: (id: string) => void;
+  blockSource: (id: string) => 'manual' | 'ical';
 }) {
   const { item } = props;
   const shape = cn(
@@ -209,6 +258,28 @@ function NightChip(props: {
   }
 
   const label = blockReasonLabel(item.reason);
+  const channelOwned = props.blockSource(item.id) === 'ical';
+
+  // A channel's own calendar owns these nights: the importer replaces its rows
+  // on every sync, so unblocking here would be undone minutes later.
+  if (channelOwned) {
+    const title = `${label} — from a booking channel's calendar. Remove it on the channel.`;
+
+    return (
+      <span
+        className={cn(className, TONE.blocked, 'flex items-center gap-1')}
+        title={title}
+        data-test={'villa-calendar-block-channel'}
+      >
+        <Rss className="h-3 w-3 shrink-0" aria-hidden />
+        {props.showLabel ? (
+          <span className="truncate">{label}</span>
+        ) : (
+          <span className="sr-only">{title}</span>
+        )}
+      </span>
+    );
+  }
 
   return (
     <button
@@ -236,6 +307,7 @@ function Agenda(props: {
   entries: AgendaEntry[];
   hrefFor: (id: string) => string;
   onBlock: (id: string) => void;
+  blockSource: (id: string) => 'manual' | 'ical';
 }) {
   if (props.entries.length === 0) {
     return (
@@ -297,6 +369,41 @@ function Agenda(props: {
             );
           }
 
+          const channelOwned = props.blockSource(e.id) === 'ical';
+          const nightsLabel =
+            e.from === e.lastNight ? `Night of ${range}` : `Nights ${range}`;
+
+          // Channel-owned blocks are shown, never actionable.
+          if (channelOwned) {
+            return (
+              <li
+                key={`k-${e.id}`}
+                className="flex items-center gap-3 px-4 py-3"
+                data-test={'villa-calendar-agenda-block-channel'}
+              >
+                <span
+                  className={cn(
+                    'h-8 w-1.5 shrink-0 rounded-full border',
+                    TONE.blocked,
+                  )}
+                  aria-hidden
+                />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm font-medium">
+                    {blockReasonLabel(e.reason)}
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    {nightsLabel} · from a booking channel
+                  </span>
+                </span>
+                <Rss
+                  className="text-muted-foreground h-4 w-4 shrink-0"
+                  aria-hidden
+                />
+              </li>
+            );
+          }
+
           return (
             <li key={`k-${e.id}`}>
               <button
@@ -317,9 +424,7 @@ function Agenda(props: {
                     {blockReasonLabel(e.reason)}
                   </span>
                   <span className="text-muted-foreground text-xs">
-                    {e.from === e.lastNight
-                      ? `Night of ${range}`
-                      : `Nights ${range}`}
+                    {nightsLabel}
                   </span>
                 </span>
                 <ChevronRight

@@ -29,14 +29,16 @@ function revalidateBookings() {
 export const createBookingAction = authActionClient
   .inputSchema(NewBookingSchema)
   .action(async ({ parsedInput, ctx }) => {
-    await requireVillaRole(parsedInput.accountId, [
+    const role = await requireVillaRole(parsedInput.accountId, [
       'villa_admin',
       'villa_manager',
     ]);
 
+    // The role decides whether a cutoff override is allowed: the service
+    // honours it for villa_admin only.
     const booking = await createBookingsService(
       getSupabaseServerClient(),
-    ).create(parsedInput, ctx.user.id);
+    ).create(parsedInput, ctx.user.id, role);
 
     revalidateBookings();
 
@@ -102,7 +104,12 @@ export const sendGuestEmailAction = authActionClient
       'villa_manager',
     ]);
 
-    if (!manualGuestEmailsEnabled()) {
+    // booking_confirmation is always allowed by hand — the operator confirmed
+    // the dialog before sending. Other templates still require the flag.
+    if (
+      parsedInput.template !== 'booking_confirmation' &&
+      !manualGuestEmailsEnabled()
+    ) {
       throw new Error(
         'Sending guest emails by hand is switched off for now. Automatic emails are not affected.',
       );

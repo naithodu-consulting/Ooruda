@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { authActionClient } from '@kit/next/safe-action';
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { requireVillaRole } from '~/lib/villa/auth';
 
@@ -26,7 +27,10 @@ export const createBlockAction = authActionClient
       'villa_manager',
     ]);
 
-    const block = await createBlocksService().create(parsedInput, ctx.user.id);
+    const block = await createBlocksService(getSupabaseServerClient()).create(
+      parsedInput,
+      ctx.user.id,
+    );
 
     revalidateCalendar();
 
@@ -41,7 +45,10 @@ export const releaseBlockAction = authActionClient
       'villa_manager',
     ]);
 
-    await createBlocksService().release(parsedInput, ctx.user.id);
+    await createBlocksService(getSupabaseServerClient()).release(
+      parsedInput,
+      ctx.user.id,
+    );
 
     revalidateCalendar();
   });

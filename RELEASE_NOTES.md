@@ -4,6 +4,86 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa: Booking confirmation email improvements and UI fixes — 2026-10-26
+
+### Booking confirmation email now matches the villa-booking auto email
+The manual "Send now" flow (from the Booking detail → Guest emails section) now produces an email that matches the automatic email sent by the villa-booking site at the time of booking:
+
+- **Intro line** conditionally reads "Your booking is confirmed and payment has been received" when the booking is fully paid (not just "Your booking is confirmed").
+- **Details table** now includes two new rows: **Booked on** (formatted as "26 Oct 2026, 09:45 am IST") and **Email** (the guest's email address, linked).
+- **Security deposit note** updated to: "A refundable security deposit might be requested upon check-in. This is in addition to the online payment. Please contact the property in case of questions."
+- **What happens next** step 2 changed from a generic photo-ID reminder to a contextual **"Need anything before then?"** paragraph with a WhatsApp link (shown only when the property has a WhatsApp number configured).
+
+### "Could not send the email" bug fixed
+The "Send now" button was failing with "Could not send the email. Please try again." for the booking confirmation template. Root cause: the `villa_message_log.template` CHECK constraint (created in M7) only allowed `'pre_arrival'` and `'thank_you'`; M10 added the booking confirmation feature without widening the constraint, so every INSERT for `booking_confirmation` was rejected. Migration M11 (below) fixes this.
+
+### Add ID dialog description simplified
+The Add ID dialog's description was shortened from "One per adult guest. Only the last 4 digits of the ID number are saved." to **"One ID per adult guest."** The last-4-digits note still appears in the form itself as field hint text.
+
+### Migrations Changelog
+
+| Migration | Description |
+| --- | --- |
+| `20261026100551_villa_message_log_add_booking_confirmation_template.sql` | Widens the `villa_message_log.template` CHECK constraint to include `'booking_confirmation'`, fixing the "Could not send the email" error for that template type |
+
+---
+
+## Villa: iCal Sync Now, UX polish, and Blocked dates as a tab — 2026-10-26
+
+### Sync channels without waiting for the cron
+The calendar header now has a **Sync channels** button. Pressing it immediately runs the same fetch → parse → fingerprint → apply pipeline the hourly cron job uses, and shows a brief result: "Synced N events", "Already up to date", "N channels failed", or "No channels to sync". `villa_admin` and `villa_manager` can both press it; guests cannot reach the action.
+
+### Block dates: Check-in / Check-out terminology
+The Block dates dialog no longer uses "First night" and "Last night". The fields are now **Check-in** (first blocked night) and **Check-out** (the first free morning — the exclusive end). The night count and the "Free again from the morning of…" description update as the operator picks dates. The old `+1 day` offset in the service was removed; Check-out is stored directly as the exclusive end in the villa-booking DB. The server now also refuses blocks whose check-in starts past the booking cutoff.
+
+### New booking: Fully Paid payment status
+The New booking form's payment status dropdown now shows **Unpaid**, **Partial payment**, and **Fully paid** (was "Part paid" / "Paid"). An advance receipt is recorded for both partial and full payments on creation.
+
+### Direct enquiry block reason
+Operators can now select **Direct enquiry** as a block reason alongside Maintenance and Owner's own use. The reason is stored in the villa-booking DB and shown correctly in all block listings.
+
+### Blocked dates moved into the Bookings tab
+"Blocked dates" is no longer a separate sidebar item. It appears as the fifth tab inside the Bookings page (alongside Upcoming, In house, Past, Cancelled). Search and property filters are hidden on that tab since blocks are not searchable by guest name.
+
+### Migrations Changelog
+
+| Migration | Description |
+| --- | --- |
+| *(none)* | All changes are UI and business logic only; no Ooruda-side schema changes. Villa-booking DB changes (iCal feeds, `blocked_dates.source/feed_id`) were deployed in a prior release. |
+
+---
+
+## Villa: blocked dates get a home, and the cutoff stops lying — 2026-10-24
+
+### No place to see blocked dates
+Blocks existed only inside the Calendar's month grid: a block three months out was invisible until you paged to its month, and nothing said where it came from. There is now a **Blocked dates** screen (Operations → Blocked dates) listing every block in a window — upcoming, past or all — with its reason, nights, note, source and an Unblock action, filterable by period, source and reason.
+
+### Unblocking on Ooruda did not unblock on the guest site
+Three separate causes, all real:
+
+**1. The booking cutoff was invisible in Ooruda.** The cutoff (`villa_account_settings.booking_cutoff_date`, mirrored to the site) is checked inside the site's `check_availability()` *ahead of* the occupancy test, so every night past it reports `DATE_BLOCKED` whatever `blocked_dates` says. Ooruda's calendar was built only from bookings and blocks, so those nights looked free: an operator could block and unblock them to no effect anywhere. The calendar now draws them as **Closed for booking**, counts them in the month summary, explains the cutoff in a banner, and offers no block/unblock on them. The Block dates dialog caps its pickers at the cutoff, and the server refuses a block or unblock that starts past it with the reason.
+
+**2. Channel-imported blocks were editable, and came back.** `blocked_dates` rows with `source = 'ical'` are owned by the feed importer: every sync deletes the feed's rows and re-inserts the channel's current events. Ooruda listed them indistinguishably from its own and let them be released — which looked like it worked and was undone by the next sync. Worse, `releaseFromBlock` re-inserted the leftover pieces **without** `source`/`feed_id`, so an Airbnb-owned block silently became a manual one, orphaned from its feed and duplicated on the next import. Channel blocks are now shown with a "From a channel" marker, are not clickable, and are refused server-side (`CHANNEL_MANAGED`); leftover pieces carry their ownership across.
+
+**3. CDN staleness.** The guest site's calendar API is cached 60s at the edge (120s with stale-while-revalidate). Bounded, and left as it is — but it is why an unblock can take up to two minutes to show on the website.
+
+### Admins can record a booking past the cutoff
+The cutoff closes *public* sales; a stay agreed on the phone for next season still has to reach the books. `villa_admin` can now pick dates past it, tick an explicit "Record this booking past the cutoff" confirmation, and confirm once more in a dialog that spells out the dates. The booking's activity trail records that it was taken past the cutoff and by whom. `villa_manager` is refused with that reason.
+
+Verified by driving the real screens locally: the calendar banner and the per-night **Closed** cells appear from the day after the cutoff, a channel-imported block is inert while a manual one opens the unblock dialog, the override checkbox turns a refusal into a priced quote, and the booking lands with `Recorded past the booking cutoff (8 Dec 2026) by an admin` on its activity trail.
+
+The override skips the cutoff and nothing else: on the villa-booking side the cutoff test was split out of `check_availability()` into a new `check_occupancy()`, and `create_booking_atomic` consults it only when `p_ignore_cutoff` is passed. A night already sold or blocked is still refused, the past-date guard still applies, and the property advisory lock is unchanged. Verified against the local villa-booking database: cutoff refuses, override books, a second override booking of the same nights is refused `DATE_UNAVAILABLE`.
+
+### Migrations Changelog
+
+| Migration | Description |
+| --- | --- |
+| `villa-booking 00105_cutoff_override.sql` | Adds `check_occupancy()` (overlap only), makes `check_availability()` = cutoff + `check_occupancy()`, and replaces `create_booking_atomic` with an 18-param version taking `p_ignore_cutoff` (old 17-param signature dropped to avoid overload ambiguity; EXECUTE revoked from PUBLIC/anon/authenticated as 00097 did) |
+
+No Ooruda-side migration: the cutoff column and `villa_account_settings` already exist. `villa-db.types.ts` was regenerated — it was stale and missing `blocked_dates.source`, `feed_id` and `external_uid`.
+
+---
+
 ## Villa: guest ID review follow-ups — 2026-10-24
 
 ### Download all produced unopenable filenames

@@ -18,8 +18,16 @@ const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'Pick a date' });
 
 const guests = z.coerce.number().int().min(0).max(100);
 
+/**
+ * Set by a villa admin who has confirmed they want a booking recorded past the
+ * property's booking cutoff. The server honours it only for villa_admin, and
+ * it skips the cutoff alone — never the occupancy check.
+ */
+const overrideCutoff = z.boolean().default(false);
+
 const stayFields = {
   ...ids,
+  overrideCutoff,
   checkIn: ymd,
   checkOut: ymd,
   adults: z.coerce
@@ -38,11 +46,13 @@ const checkOutMessage = {
   path: ['checkOut'],
 };
 
-/** "Part paid" has to say how much, or the guest's email cannot state it. */
-const advanceWhenPartPaid = (v: {
+/** Partial or full payment at time of booking needs the amount recorded. */
+const advanceWhenHasPaid = (v: {
   paymentStatus: string;
   amountReceived: number;
-}) => v.paymentStatus !== 'partially_paid' || v.amountReceived > 0;
+}) =>
+  (v.paymentStatus !== 'partially_paid' && v.paymentStatus !== 'paid') ||
+  v.amountReceived > 0;
 
 const advanceMessage = {
   message: 'Enter the amount received',
@@ -102,7 +112,7 @@ const bookingFields = {
 export const NewBookingFormSchema = z
   .object(bookingFields)
   .refine(checkOutAfterCheckIn, checkOutMessage)
-  .refine(advanceWhenPartPaid, advanceMessage);
+  .refine(advanceWhenHasPaid, advanceMessage);
 
 export type NewBookingInput = z.input<typeof NewBookingFormSchema>;
 
@@ -114,7 +124,7 @@ export type NewBookingInput = z.input<typeof NewBookingFormSchema>;
 export const NewBookingSchema = z
   .object({ ...bookingFields, expectedTotalPaise: z.number().int().positive() })
   .refine(checkOutAfterCheckIn, checkOutMessage)
-  .refine(advanceWhenPartPaid, advanceMessage);
+  .refine(advanceWhenHasPaid, advanceMessage);
 
 export const CancelBookingSchema = z.object({
   ...ids,

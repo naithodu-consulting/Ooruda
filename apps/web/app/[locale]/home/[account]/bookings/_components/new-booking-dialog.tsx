@@ -10,7 +10,18 @@ import { useAction } from 'next-safe-action/hooks';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Alert, AlertDescription } from '@kit/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@kit/ui/alert-dialog';
 import { Button } from '@kit/ui/button';
+import { Checkbox } from '@kit/ui/checkbox';
 import { DatePicker } from '@kit/ui/date-picker';
 import {
   Dialog,
@@ -75,6 +86,8 @@ export function NewBookingDialog(props: {
   accountId: string;
   propertyId: string;
   bookingCutoffDate?: string | null;
+  /** villa_admin only: may record a stay past the cutoff, after confirming. */
+  canOverrideCutoff?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -97,10 +110,16 @@ function NewBookingForm(props: {
   accountId: string;
   propertyId: string;
   bookingCutoffDate?: string | null;
+  canOverrideCutoff?: boolean;
   onClose: () => void;
 }) {
   const router = useRouter();
   const today = todayInBillingZone();
+  const cutoff = props.bookingCutoffDate ?? null;
+  // An admin may pick dates past the cutoff; everyone else is capped at it.
+  const maxCheckIn = props.canOverrideCutoff
+    ? undefined
+    : (cutoff ?? undefined);
 
   const form = useForm<NewBookingInput>({
     resolver: zodResolver(NewBookingFormSchema),
@@ -122,15 +141,27 @@ function NewBookingForm(props: {
       paymentReference: '',
       specialRequests: '',
       isEvent: false,
+      overrideCutoff: false,
     },
   });
 
-  const [checkIn, checkOut, adults, children, paymentStatus] = useWatch({
-    control: form.control,
-    name: ['checkIn', 'checkOut', 'adults', 'children', 'paymentStatus'],
-  });
+  const [checkIn, checkOut, adults, children, paymentStatus, overrideCutoff] =
+    useWatch({
+      control: form.control,
+      name: [
+        'checkIn',
+        'checkOut',
+        'adults',
+        'children',
+        'paymentStatus',
+        'overrideCutoff',
+      ],
+    });
 
-  const partPaid = paymentStatus === 'partially_paid';
+  const hasPaid =
+    paymentStatus === 'partially_paid' || paymentStatus === 'paid';
+  // The chosen check-in is past the date the public site stops selling.
+  const checkInPastCutoff = !!cutoff && !!checkIn && checkIn > cutoff;
 
   const [quote, setQuote] = useState<QuoteState>({ status: 'idle' });
   const requestId = useRef(0);
@@ -160,6 +191,7 @@ function NewBookingForm(props: {
             checkOut,
             adults: a,
             children: c,
+            overrideCutoff: !!overrideCutoff,
           }),
         });
         const body = (await res.json().catch(() => null)) as
@@ -185,7 +217,15 @@ function NewBookingForm(props: {
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [checkIn, checkOut, adults, children, props.accountId, props.propertyId]);
+  }, [
+    checkIn,
+    checkOut,
+    adults,
+    children,
+    overrideCutoff,
+    props.accountId,
+    props.propertyId,
+  ]);
 
   const { execute, isPending } = useAction(createBookingAction, {
     onSuccess: ({ data }) => {
@@ -204,434 +244,553 @@ function NewBookingForm(props: {
   });
 
   const canSubmit = quote.status === 'done' && quote.quote.ok && !isPending;
+  const [pendingOverride, setPendingOverride] = useState<
+    (NewBookingInput & { expectedTotalPaise: number }) | null
+  >(null);
 
   return (
-    <Dialog open onOpenChange={(open) => (!open ? props.onClose() : undefined)}>
-      <DialogContent
-        className="max-h-[92vh] max-w-2xl overflow-y-auto"
-        data-test={'villa-booking-dialog'}
+    <>
+      <Dialog
+        // Hidden, not unmounted, while the override is being confirmed: the
+        // form keeps its values, and the confirmation is the only thing on
+        // screen rather than a second panel inside this one.
+        open={!pendingOverride}
+        onOpenChange={(open) => (!open ? props.onClose() : undefined)}
       >
-        <DialogHeader>
-          <DialogTitle>New booking</DialogTitle>
-          <DialogDescription>
-            For phone, WhatsApp and walk-in guests. It blocks the dates on the
-            booking site straight away.
-          </DialogDescription>
-        </DialogHeader>
+        <DialogContent
+          className="max-h-[92vh] max-w-2xl overflow-y-auto"
+          data-test={'villa-booking-dialog'}
+        >
+          <DialogHeader>
+            <DialogTitle>New booking</DialogTitle>
+            <DialogDescription>
+              For phone, WhatsApp and walk-in guests. It blocks the dates on the
+              booking site straight away.
+            </DialogDescription>
+          </DialogHeader>
 
-        <Form {...form}>
-          <form
-            className="flex flex-col gap-5"
-            onSubmit={form.handleSubmit((values) => {
-              if (quote.status !== 'done' || !quote.quote.ok) return;
-              // Priced again on the server; this only lets it detect a change.
-              execute({
-                ...values,
-                expectedTotalPaise: quote.quote.totalPaise,
-              });
-            })}
-          >
-            <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField
-                name="checkIn"
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Check-in</FormLabel>
-                    <FormControl>
-                      <DatePicker
-                        value={field.value}
-                        onChange={(value) => {
-                          field.onChange(value);
-                          const out = form.getValues('checkOut');
-                          if (value && (!out || out <= value)) {
-                            form.setValue('checkOut', addDays(value, 1), {
-                              shouldValidate: true,
-                            });
-                          }
-                        }}
-                        onBlur={field.onBlur}
-                        min={today}
-                        max={props.bookingCutoffDate ?? undefined}
-                        data-test={'villa-booking-checkin'}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <Form {...form}>
+            <form
+              className="flex flex-col gap-5"
+              onSubmit={form.handleSubmit((values) => {
+                if (quote.status !== 'done' || !quote.quote.ok) return;
 
-              <FormField
-                name="checkOut"
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Check-out</FormLabel>
-                    <FormControl>
-                      <DatePicker
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        min={checkIn ? addDays(checkIn, 1) : addDays(today, 1)}
-                        max={
-                          props.bookingCutoffDate
-                            ? addDays(props.bookingCutoffDate, 1)
-                            : undefined
-                        }
-                        data-test={'villa-booking-checkout'}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                // Priced again on the server; this only lets it detect a change.
+                const payload = {
+                  ...values,
+                  expectedTotalPaise: quote.quote.totalPaise,
+                };
 
-              {props.bookingCutoffDate ? (
-                <p className="text-muted-foreground text-xs sm:col-span-2">
-                  Bookings are available up to{' '}
-                  {formatDateReadable(props.bookingCutoffDate)}.
-                </p>
-              ) : null}
+                // Past the cutoff the tick is not the last word: the stay is one
+                // the website would have refused, so it is confirmed once more
+                // with the dates spelled out.
+                if (quote.quote.pastCutoff) {
+                  setPendingOverride(payload);
+                  return;
+                }
 
-              <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-3 sm:col-span-2">
-                {(
-                  [
-                    ['adults', 'Adults'],
-                    ['children', 'Children'],
-                    ['infants', 'Infants'],
-                  ] as const
-                ).map(([name, label]) => (
-                  <FormField
-                    key={name}
-                    name={name}
-                    control={form.control}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{label}</FormLabel>
-                        <FormControl
-                          render={
-                            <Input
-                              {...field}
-                              value={
-                                (field.value as number | string | undefined) ??
-                                ''
-                              }
-                              inputMode="numeric"
-                              data-test={`villa-booking-${name}`}
-                            />
-                          }
+                execute(payload);
+              })}
+            >
+              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField
+                  name="checkIn"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Check-in</FormLabel>
+                      <FormControl>
+                        <DatePicker
+                          value={field.value}
+                          onChange={(value) => {
+                            field.onChange(value);
+                            const out = form.getValues('checkOut');
+                            if (value && (!out || out <= value)) {
+                              form.setValue('checkOut', addDays(value, 1), {
+                                shouldValidate: true,
+                              });
+                            }
+                          }}
+                          onBlur={field.onBlur}
+                          min={today}
+                          max={maxCheckIn}
+                          data-test={'villa-booking-checkin'}
                         />
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                ))}
-              </div>
-            </section>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <QuotePanel state={quote} />
-
-            <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField
-                name="guestName"
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Guest name</FormLabel>
-                    <FormControl
-                      render={
-                        <Input {...field} data-test={'villa-booking-name'} />
-                      }
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                name="guestPhone"
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone</FormLabel>
-                    <FormControl
-                      render={
-                        <PhoneInput
-                          name={field.name}
-                          ref={field.ref}
+                <FormField
+                  name="checkOut"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Check-out</FormLabel>
+                      <FormControl>
+                        <DatePicker
                           value={field.value}
                           onChange={field.onChange}
                           onBlur={field.onBlur}
-                          data-test={'villa-booking-phone'}
-                        />
-                      }
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                name="guestEmail"
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl
-                      render={
-                        <Input
-                          {...field}
-                          type="email"
-                          data-test={'villa-booking-email'}
-                        />
-                      }
-                    />
-                    <FormDescription>
-                      The booking confirmation goes here.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                name="channel"
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Booked by</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger
-                          className="w-full"
-                          data-test={'villa-booking-channel'}
-                        >
-                          <SelectValue>
-                            {(v: string) => channelLabel(v)}
-                          </SelectValue>
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {OFFLINE_CHANNEL_VALUES.map((c) => (
-                          <SelectItem
-                            key={c}
-                            value={c}
-                            data-test={`villa-booking-channel-${c}`}
-                          >
-                            {BOOKING_CHANNEL_LABELS[c]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                name="paymentStatus"
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Payment so far</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger
-                          className="w-full"
-                          data-test={'villa-booking-payment'}
-                        >
-                          <SelectValue>
-                            {(v: string) => paymentStatusLabel(v)}
-                          </SelectValue>
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {NEW_BOOKING_PAYMENT_STATUSES.map((p) => (
-                          <SelectItem
-                            key={p}
-                            value={p}
-                            data-test={`villa-booking-payment-${p}`}
-                          >
-                            {PAYMENT_STATUS_LABELS[p]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      A fully paid booking is marked paid when the payment is
-                      recorded (the tax invoice is issued at check-out).
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {partPaid ? (
-                <>
-                  <FormField
-                    name="amountReceived"
-                    control={form.control}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Amount received</FormLabel>
-                        <FormControl
-                          render={
-                            <RupeeInput
-                              {...field}
-                              value={
-                                (field.value as string | number | undefined) ??
-                                ''
-                              }
-                              data-test={'villa-booking-amount-received'}
-                            />
+                          min={
+                            checkIn ? addDays(checkIn, 1) : addDays(today, 1)
                           }
+                          max={maxCheckIn ? addDays(maxCheckIn, 1) : undefined}
+                          data-test={'villa-booking-checkout'}
                         />
-                        <FormDescription>
-                          Becomes a receipt on the booking, and the figure the
-                          guest sees in their confirmation.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
+                {cutoff && !checkInPastCutoff ? (
+                  <p className="text-muted-foreground text-xs sm:col-span-2">
+                    The website takes bookings up to{' '}
+                    {formatDateReadable(cutoff)}.
+                    {props.canOverrideCutoff
+                      ? ' You can record one past that date yourself.'
+                      : ''}
+                  </p>
+                ) : null}
+
+                {/*
+                Past the cutoff the public site refuses this stay. An admin may
+                still record one agreed by phone, but only by ticking this: it
+                is what the server checks, and the booking's trail says it was
+                an override.
+              */}
+                {checkInPastCutoff && props.canOverrideCutoff ? (
                   <FormField
-                    name="paymentMode"
+                    name="overrideCutoff"
                     control={form.control}
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Received by</FormLabel>
-                        <Select
-                          value={field.value}
-                          onValueChange={field.onChange}
-                        >
-                          <FormControl>
-                            <SelectTrigger
-                              className="w-full"
-                              data-test={'villa-booking-payment-mode'}
-                            >
-                              <SelectValue>
-                                {(v: string) => paymentModeLabel(v)}
-                              </SelectValue>
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {PAYMENT_MODES.map((m) => (
-                              <SelectItem
-                                key={m}
-                                value={m}
-                                data-test={`villa-booking-payment-mode-${m}`}
-                              >
-                                {paymentModeLabel(m)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
+                      <FormItem className="border-destructive/40 bg-destructive/5 flex flex-row items-start gap-3 rounded-lg border p-3 sm:col-span-2">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={(checked) =>
+                              field.onChange(checked === true)
+                            }
+                            className="mt-0.5"
+                            data-test={'villa-booking-override-cutoff'}
+                          />
+                        </FormControl>
+                        <div className="flex flex-col gap-1">
+                          <FormLabel>
+                            Record this booking past the cutoff
+                          </FormLabel>
+                          <FormDescription>
+                            The website and booking channels stop selling after{' '}
+                            {formatDateReadable(cutoff!)}. This stay will be
+                            held on the calendar anyway, and your name is
+                            recorded against the decision.
+                          </FormDescription>
+                          <FormMessage />
+                        </div>
                       </FormItem>
                     )}
                   />
+                ) : null}
 
-                  <FormField
-                    name="paymentReference"
-                    control={form.control}
-                    render={({ field }) => (
-                      <FormItem className="sm:col-span-2">
-                        <FormLabel>Reference (optional)</FormLabel>
-                        <FormControl
-                          render={
-                            <Input
-                              {...field}
-                              autoComplete="off"
-                              placeholder="UPI reference, cheque number, and so on"
-                              data-test={'villa-booking-payment-reference'}
-                            />
-                          }
-                        />
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </>
-              ) : null}
+                {checkInPastCutoff && !props.canOverrideCutoff ? (
+                  <p className="text-destructive text-xs sm:col-span-2">
+                    Bookings are closed after {formatDateReadable(cutoff!)}.
+                    Only a villa admin can record a stay past that date.
+                  </p>
+                ) : null}
 
-              <FormField
-                name="specialRequests"
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Special requests (optional)</FormLabel>
-                    <FormControl
-                      render={
-                        <Textarea
-                          {...field}
-                          rows={2}
-                          data-test={'villa-booking-requests'}
-                        />
-                      }
+                <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-3 sm:col-span-2">
+                  {(
+                    [
+                      ['adults', 'Adults'],
+                      ['children', 'Children'],
+                      ['infants', 'Infants'],
+                    ] as const
+                  ).map(([name, label]) => (
+                    <FormField
+                      key={name}
+                      name={name}
+                      control={form.control}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{label}</FormLabel>
+                          <FormControl
+                            render={
+                              <Input
+                                {...field}
+                                value={
+                                  (field.value as
+                                    | number
+                                    | string
+                                    | undefined) ?? ''
+                                }
+                                inputMode="numeric"
+                                data-test={`villa-booking-${name}`}
+                              />
+                            }
+                          />
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                    <FormDescription>
-                      The guest can see this on their booking page.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                  ))}
+                </div>
+              </section>
 
-              <FormField
-                name="isEvent"
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3 sm:col-span-2">
-                    <div className="flex flex-col gap-1">
-                      <FormLabel>This is an event</FormLabel>
-                      <FormDescription>
-                        Wedding, party, shoot or other function.
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        data-test={'villa-booking-event'}
+              <QuotePanel state={quote} />
+
+              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField
+                  name="guestName"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Guest name</FormLabel>
+                      <FormControl
+                        render={
+                          <Input {...field} data-test={'villa-booking-name'} />
+                        }
                       />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </section>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={props.onClose}
-                disabled={isPending}
-                data-test={'villa-booking-cancel'}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={!canSubmit}
-                data-test={'villa-booking-submit'}
-              >
-                {isPending ? 'Booking…' : 'Confirm booking'}
-              </Button>
-            </div>
-            {!canSubmit && !isPending ? (
-              <p
-                className="text-muted-foreground -mt-3 text-right text-xs"
-                aria-live="polite"
-              >
-                Pick available dates and guests to confirm.
-              </p>
-            ) : null}
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+                <FormField
+                  name="guestPhone"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone</FormLabel>
+                      <FormControl
+                        render={
+                          <PhoneInput
+                            name={field.name}
+                            ref={field.ref}
+                            value={field.value}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            data-test={'villa-booking-phone'}
+                          />
+                        }
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  name="guestEmail"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl
+                        render={
+                          <Input
+                            {...field}
+                            type="email"
+                            data-test={'villa-booking-email'}
+                          />
+                        }
+                      />
+                      <FormDescription>
+                        The booking confirmation goes here.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  name="channel"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Booked by</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger
+                            className="w-full"
+                            data-test={'villa-booking-channel'}
+                          >
+                            <SelectValue>
+                              {(v: string) => channelLabel(v)}
+                            </SelectValue>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {OFFLINE_CHANNEL_VALUES.map((c) => (
+                            <SelectItem
+                              key={c}
+                              value={c}
+                              data-test={`villa-booking-channel-${c}`}
+                            >
+                              {BOOKING_CHANNEL_LABELS[c]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  name="paymentStatus"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Payment so far</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger
+                            className="w-full"
+                            data-test={'villa-booking-payment'}
+                          >
+                            <SelectValue>
+                              {(v: string) => paymentStatusLabel(v)}
+                            </SelectValue>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {NEW_BOOKING_PAYMENT_STATUSES.map((p) => (
+                            <SelectItem
+                              key={p}
+                              value={p}
+                              data-test={`villa-booking-payment-${p}`}
+                            >
+                              {PAYMENT_STATUS_LABELS[p]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {hasPaid ? (
+                  <>
+                    <FormField
+                      name="amountReceived"
+                      control={form.control}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Amount received</FormLabel>
+                          <FormControl
+                            render={
+                              <RupeeInput
+                                {...field}
+                                value={
+                                  (field.value as
+                                    | string
+                                    | number
+                                    | undefined) ?? ''
+                                }
+                                data-test={'villa-booking-amount-received'}
+                              />
+                            }
+                          />
+                          <FormDescription>
+                            Becomes a receipt on the booking, and the figure the
+                            guest sees in their confirmation.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      name="paymentMode"
+                      control={form.control}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Received by</FormLabel>
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger
+                                className="w-full"
+                                data-test={'villa-booking-payment-mode'}
+                              >
+                                <SelectValue>
+                                  {(v: string) => paymentModeLabel(v)}
+                                </SelectValue>
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {PAYMENT_MODES.map((m) => (
+                                <SelectItem
+                                  key={m}
+                                  value={m}
+                                  data-test={`villa-booking-payment-mode-${m}`}
+                                >
+                                  {paymentModeLabel(m)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      name="paymentReference"
+                      control={form.control}
+                      render={({ field }) => (
+                        <FormItem className="sm:col-span-2">
+                          <FormLabel>Reference (optional)</FormLabel>
+                          <FormControl
+                            render={
+                              <Input
+                                {...field}
+                                autoComplete="off"
+                                placeholder="UPI reference, cheque number, and so on"
+                                data-test={'villa-booking-payment-reference'}
+                              />
+                            }
+                          />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </>
+                ) : null}
+
+                <FormField
+                  name="specialRequests"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Special requests (optional)</FormLabel>
+                      <FormControl
+                        render={
+                          <Textarea
+                            {...field}
+                            rows={2}
+                            data-test={'villa-booking-requests'}
+                          />
+                        }
+                      />
+                      <FormDescription>
+                        The guest can see this on their booking page.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  name="isEvent"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3 sm:col-span-2">
+                      <div className="flex flex-col gap-1">
+                        <FormLabel>This is an event</FormLabel>
+                        <FormDescription>
+                          Wedding, party, shoot or other function.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-test={'villa-booking-event'}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </section>
+
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={props.onClose}
+                  disabled={isPending}
+                  data-test={'villa-booking-cancel'}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!canSubmit}
+                  data-test={'villa-booking-submit'}
+                >
+                  {isPending
+                    ? 'Booking…'
+                    : quote.status === 'done' &&
+                        quote.quote.ok &&
+                        quote.quote.pastCutoff
+                      ? 'Confirm past cutoff'
+                      : 'Confirm booking'}
+                </Button>
+              </div>
+              {!canSubmit && !isPending ? (
+                <p
+                  className="text-muted-foreground -mt-3 text-right text-xs"
+                  aria-live="polite"
+                >
+                  Pick available dates and guests to confirm.
+                </p>
+              ) : null}
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={!!pendingOverride}
+        onOpenChange={(next) => (!next ? setPendingOverride(null) : undefined)}
+      >
+        <AlertDialogContent data-test={'villa-booking-override-confirm'}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Record a booking past the cutoff?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {cutoff
+                ? `The website and booking channels take no check-in after ${formatDateReadable(cutoff)}.`
+                : ''}{' '}
+              {pendingOverride
+                ? `This stay checks in on ${formatDateReadable(pendingOverride.checkIn)}.`
+                : ''}{' '}
+              It will hold those nights on the calendar, and the booking&apos;s
+              history will show that you recorded it past the cutoff.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-test={'villa-booking-override-cancel'}>
+              Go back
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!pendingOverride) return;
+                execute(pendingOverride);
+                setPendingOverride(null);
+              }}
+              data-test={'villa-booking-override-proceed'}
+            >
+              Record the booking
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

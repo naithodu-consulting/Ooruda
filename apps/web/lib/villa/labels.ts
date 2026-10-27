@@ -87,8 +87,8 @@ export function channelLabel(channel: string | null): string {
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   unpaid: 'Unpaid',
-  partially_paid: 'Part paid',
-  paid: 'Paid',
+  partially_paid: 'Partial payment',
+  paid: 'Fully paid',
   refunded: 'Refunded',
 };
 
@@ -164,6 +164,7 @@ export function formatNights(n: number): string {
 export const BLOCK_REASON_LABELS: Record<string, string> = {
   maintenance: 'Maintenance',
   owner_hold: "Owner's own use",
+  direct_enquiry: 'Direct enquiry',
   offline_booking: 'Offline booking',
 };
 

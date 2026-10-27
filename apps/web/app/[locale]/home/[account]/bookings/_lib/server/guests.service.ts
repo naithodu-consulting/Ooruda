@@ -6,6 +6,7 @@ import type * as z from 'zod';
 import { getLogger } from '@kit/shared/logger';
 import { normalizePhoneNumber } from '@kit/shared/utils';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import type { Database } from '~/lib/database.types';
 import { getBooking, setIdStatus } from '~/lib/villa-db/bookings';
@@ -362,7 +363,9 @@ export function createGuestsService(client: Client) {
       const [booking, { data: property, error: propertyError }] =
         await Promise.all([
           liveBooking(site, input.bookingId),
-          admin
+          // Use server client (RLS) for the property read — admin client is
+          // reserved for writes and privileged lookups below.
+          getSupabaseServerClient()
             .from('villa_properties')
             .select('retention_days')
             .eq('id', input.propertyId)

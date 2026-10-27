@@ -26,6 +26,7 @@ export type BookingChannel = OfflineChannel | 'online';
 export const NEW_BOOKING_PAYMENT_STATUSES = [
   'unpaid',
   'partially_paid',
+  'paid',
 ] as const;
 
 export type BookingStatus =
@@ -48,6 +49,10 @@ export type BookingActivityAction =
  * 'offline_booking', but guests taken by phone are recorded as bookings (so
  * they count in revenue and occupancy), never as blocks.
  */
-export const OPERATOR_BLOCK_REASONS = ['maintenance', 'owner_hold'] as const;
+export const OPERATOR_BLOCK_REASONS = [
+  'maintenance',
+  'owner_hold',
+  'direct_enquiry',
+] as const;
 
 export type OperatorBlockReason = (typeof OPERATOR_BLOCK_REASONS)[number];

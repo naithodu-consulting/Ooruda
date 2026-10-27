@@ -4,6 +4,7 @@ import { cache } from 'react';
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import { VillaDbError, fromSiteError } from './errors';
 import type { Database as VillaDatabase } from './villa-db.types';
@@ -102,7 +103,12 @@ async function loadCredentials(
  */
 export const getVillaSite = cache(
   async (accountId: string, propertyId: string): Promise<VillaSite> => {
-    const { data: property, error } = await getSupabaseServerAdminClient()
+    // Use the regular server client (RLS-enforced) so this works with both
+    // the local Supabase (where SUPABASE_SECRET_KEY may not match the local
+    // JWT secret) and the remote project. RLS on villa_properties already
+    // limits rows to the caller's own account; we still verify account_id
+    // below as a belt-and-suspenders guard.
+    const { data: property, error } = await getSupabaseServerClient()
       .from('villa_properties')
       .select(
         'id, account_id, name, site_property_id, booking_code_prefix, status',

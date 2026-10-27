@@ -16,7 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "supabase": "supabase",
-    "supabase:start": "supabase status || supabase start",
+    "supabase:start": "supabase status || (supabase start && ../../scripts/fix-postgrest-jwks.sh)",
     "supabase:stop": "supabase stop",
     "supabase:reset": "supabase db reset",
     "supabase:status": "supabase status",

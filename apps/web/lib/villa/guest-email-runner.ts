@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import type { Database } from '~/lib/database.types';
 import {
@@ -111,6 +112,8 @@ function contextFor(
   return {
     villaName: ctx.name,
     guestName: b.guestName,
+    guestEmail: b.guestEmail || undefined,
+    bookedAt: b.createdAt || undefined,
     bookingCode: b.bookingCode,
     checkIn: b.checkIn,
     checkOut: b.checkOut,
@@ -411,7 +414,9 @@ export async function loadGuestEmailContext(
   propertyId: string,
 ) {
   const admin = getSupabaseServerAdminClient();
-  const { data: p, error } = await admin
+  // Use server client (RLS) for the property read; admin is passed to
+  // loadContext for privileged lookups (emergency contacts, etc.).
+  const { data: p, error } = await getSupabaseServerClient()
     .from('villa_properties')
     .select('id, account_id, name, whatsapp_number')
     .eq('id', propertyId)

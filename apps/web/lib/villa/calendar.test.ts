@@ -151,7 +151,53 @@ describe('monthOccupancy', () => {
           },
         ],
       ),
-    ).toEqual({ booked: 3, blocked: 2, nights: 28 });
+    ).toEqual({ booked: 3, blocked: 2, closed: 0, nights: 28 });
+  });
+
+  it('counts nights past the booking cutoff as closed, not open', () => {
+    // 2026-02-10 is the last check-in the site accepts, so 11-28 are closed.
+    expect(
+      monthOccupancy(
+        '2026-02',
+        [booking({ checkIn: '2026-02-01', checkOut: '2026-02-04' })],
+        [],
+        '2026-02-10',
+      ),
+    ).toEqual({ booked: 3, blocked: 0, closed: 18, nights: 28 });
+  });
+
+  it('does not count a night as both blocked and closed', () => {
+    expect(
+      monthOccupancy(
+        '2026-02',
+        [],
+        [
+          {
+            id: 'k',
+            startDate: '2026-02-20',
+            endDate: '2026-02-22',
+            reason: null,
+          },
+        ],
+        '2026-02-10',
+      ),
+    ).toEqual({ booked: 0, blocked: 2, closed: 16, nights: 28 });
+  });
+});
+
+describe('buildMonth cutoff', () => {
+  it('marks only nights after the cutoff', () => {
+    const weeks = buildMonth('2026-02', [], [], '2026-02-01', '2026-02-10');
+    const days = weeks.flat().filter((d) => d.inMonth);
+
+    expect(days.find((d) => d.date === '2026-02-10')?.pastCutoff).toBe(false);
+    expect(days.find((d) => d.date === '2026-02-11')?.pastCutoff).toBe(true);
+  });
+
+  it('marks nothing when there is no cutoff', () => {
+    const weeks = buildMonth('2026-02', [], [], '2026-02-01');
+
+    expect(weeks.flat().every((d) => !d.pastCutoff)).toBe(true);
   });
 });
 

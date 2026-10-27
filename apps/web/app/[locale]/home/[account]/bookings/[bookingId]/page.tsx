@@ -9,27 +9,19 @@ import { formatPhoneNumber } from '@kit/shared/utils';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
-import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import { PageBody } from '@kit/ui/page';
 import { Skeleton } from '@kit/ui/skeleton';
 
 import pathsConfig from '~/config/paths.config';
-import { formatDateReadable, formatTimestampDMY } from '~/lib/format-date';
+import { formatDateReadable } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 import { VILLA_ROLES, requireRole } from '~/lib/rbac';
 import { getBooking } from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
 import { isVillaDbError } from '~/lib/villa-db/errors';
-import {
-  activityLabel,
-  bookingStatusLabel,
-  channelLabel,
-  idStatusLabel,
-  paymentStatusLabel,
-} from '~/lib/villa/labels';
 import { fromPaise } from '~/lib/villa/money';
 import { selectVillaProperty } from '~/lib/villa/properties';
 
@@ -68,7 +60,7 @@ export default async function BookingPage({ params, searchParams }: Props) {
   const back = `${pathsConfig.app.accountVillaBookings.replace('[account]', account)}?property=${propertyId}`;
 
   // The site read and Ooruda's own reads are independent: run them together.
-  const [siteResult, activityResult, reasonsResult, settingsResult] =
+  const [siteResult, reasonsResult, settingsResult] =
     await Promise.all([
       getVillaSite(accountId, propertyId)
         .then((site) => getBooking(site, bookingId))
@@ -79,14 +71,6 @@ export default async function BookingPage({ params, searchParams }: Props) {
             return { booking: null, error: error.message };
           },
         ),
-      client
-        .from('villa_booking_activity')
-        .select(
-          'id, action, reason_code, note, created_at, villa_cancellation_reasons(label)',
-        )
-        .eq('property_id', propertyId)
-        .eq('site_booking_id', bookingId)
-        .order('created_at'),
       client
         .from('villa_cancellation_reasons')
         .select('code, label, initiated_by, note_required')
@@ -99,8 +83,7 @@ export default async function BookingPage({ params, searchParams }: Props) {
         .maybeSingle(),
     ]);
 
-  const queryError =
-    activityResult.error ?? reasonsResult.error ?? settingsResult.error;
+  const queryError = reasonsResult.error ?? settingsResult.error;
 
   if (queryError) {
     throw new Error(`booking page: load failed: ${queryError.message}`);
@@ -122,7 +105,6 @@ export default async function BookingPage({ params, searchParams }: Props) {
 
   if (!booking) notFound();
 
-  const activity = activityResult.data;
   const reasons = reasonsResult.data;
   const settings = settingsResult.data;
 
@@ -180,22 +162,6 @@ export default async function BookingPage({ params, searchParams }: Props) {
               />
             ) : null}
           </div>
-        </div>
-
-        <div
-          className="flex flex-wrap gap-2"
-          data-test={'villa-booking-badges'}
-        >
-          <Badge variant="outline" data-test={'villa-booking-status'}>
-            {bookingStatusLabel(booking.status)}
-          </Badge>
-          <Badge variant="outline" data-test={'villa-booking-payment-badge'}>
-            {paymentStatusLabel(booking.paymentStatus)}
-          </Badge>
-          <Badge variant="outline" data-test={'villa-booking-id-status'}>
-            {idStatusLabel(booking.idStatus)}
-          </Badge>
-          <Badge variant="outline">{channelLabel(booking.channel)}</Badge>
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -352,49 +318,6 @@ export default async function BookingPage({ params, searchParams }: Props) {
             />
           </Suspense>
 
-          <Card className="bg-card lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-base">Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {activity && activity.length > 0 ? (
-                <ol
-                  className="flex flex-col gap-3"
-                  data-test={'villa-booking-activity'}
-                >
-                  {activity.map((a) => {
-                    const reason = Array.isArray(a.villa_cancellation_reasons)
-                      ? a.villa_cancellation_reasons[0]
-                      : a.villa_cancellation_reasons;
-
-                    return (
-                      <li
-                        key={a.id}
-                        className="text-sm"
-                        data-test={'villa-booking-activity-item'}
-                      >
-                        <span className="font-medium">
-                          {activityLabel(a.action)}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {' '}
-                          · {formatTimestampDMY(a.created_at)}
-                        </span>
-                        {reason?.label ? <p>Reason: {reason.label}</p> : null}
-                        {a.note ? (
-                          <p className="text-muted-foreground">{a.note}</p>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ol>
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  Booked on the website. Changes made in Ooruda appear here.
-                </p>
-              )}
-            </CardContent>
-          </Card>
         </div>
       </div>
     </PageBody>

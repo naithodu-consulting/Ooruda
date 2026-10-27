@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto';
 export const BLOCK_REASONS = [
   'maintenance',
   'owner_hold',
+  'direct_enquiry',
   'offline_booking',
 ] as const;
 
@@ -30,7 +31,20 @@ export interface Block {
   endDate: string;
   reason: string | null;
   notes: string | null;
+  /**
+   * 'manual' = entered by a person in Ooruda. 'ical' = imported from a booking
+   * channel's calendar feed, and owned by that importer: every sync deletes
+   * the feed's rows and re-inserts the channel's current events
+   * (`apply_ical_feed`, villa-booking 00104). Releasing such a block here
+   * looks like it worked and is undone by the next sync, so the service
+   * refuses it and the UI shows it as managed elsewhere.
+   */
+  source: BlockSource;
+  /** The channel feed that owns this block, when `source` is 'ical'. */
+  feedId: string | null;
 }
+
+export type BlockSource = 'manual' | 'ical';
 
 // Stamped into notes (operator-only, never shown to guests) so a block
 // created by Ooruda can be traced back from the site.
@@ -38,12 +52,17 @@ function marker(): string {
   return `[ooruda:${randomUUID()}]`;
 }
 
+const BLOCK_COLUMNS =
+  'id, start_date, end_date, reason, notes, source, feed_id';
+
 function toBlock(row: {
   id: string;
   start_date: string;
   end_date: string;
   reason: string | null;
   notes: string | null;
+  source: string;
+  feed_id: string | null;
 }): Block {
   return {
     id: row.id,
@@ -51,7 +70,19 @@ function toBlock(row: {
     endDate: row.end_date,
     reason: row.reason,
     notes: row.notes,
+    source: row.source === 'ical' ? 'ical' : 'manual',
+    feedId: row.feed_id,
   };
+}
+
+/** Channel-owned blocks are read-only here: the importer replaces them. */
+function assertReleasable(block: Block): void {
+  if (block.source === 'ical') {
+    throw new VillaDbError(
+      'CHANNEL_MANAGED',
+      `block ${block.id} is owned by feed ${block.feedId}`,
+    );
+  }
 }
 
 /** Blocks overlapping [from, to). */
@@ -64,7 +95,7 @@ export async function listBlocks(
 
   const { data, error } = await site.client
     .from('blocked_dates')
-    .select('id, start_date, end_date, reason, notes')
+    .select(BLOCK_COLUMNS)
     .eq('property_id', site.sitePropertyId)
     .lt('start_date', to)
     .gt('end_date', from)
@@ -108,8 +139,9 @@ export async function createBlock(
         end_date: input.to,
         reason: input.reason,
         notes,
+        source: 'manual',
       })
-      .select('id, start_date, end_date, reason, notes')
+      .select(BLOCK_COLUMNS)
       .single();
 
     if (error) throw fromSiteWriteError(error);
@@ -142,18 +174,22 @@ export async function releaseFromBlock(
   nightsIn(range.from, range.to);
 
   return withSyncLog(site, 'block.release', actorUserId, async () => {
-    const { data: block, error } = await site.client
+    const { data: row, error } = await site.client
       .from('blocked_dates')
-      .select('id, start_date, end_date, reason, notes')
+      .select(BLOCK_COLUMNS)
       .eq('id', blockId)
       .eq('property_id', site.sitePropertyId)
       .maybeSingle();
 
     if (error) throw fromSiteError(error);
-    if (!block) throw new VillaDbError('NOT_FOUND', `block ${blockId}`);
+    if (!row) throw new VillaDbError('NOT_FOUND', `block ${blockId}`);
 
-    const from = range.from < block.start_date ? block.start_date : range.from;
-    const to = range.to > block.end_date ? block.end_date : range.to;
+    const block = toBlock(row);
+
+    assertReleasable(block);
+
+    const from = range.from < block.startDate ? block.startDate : range.from;
+    const to = range.to > block.endDate ? block.endDate : range.to;
 
     if (from >= to) {
       throw new VillaDbError(
@@ -164,8 +200,8 @@ export async function releaseFromBlock(
     }
 
     const pieces = [
-      { start: block.start_date, end: from },
-      { start: to, end: block.end_date },
+      { start: block.startDate, end: from },
+      { start: to, end: block.endDate },
     ].filter((p) => p.start < p.end);
 
     let remaining: Block[] = [];
@@ -174,15 +210,22 @@ export async function releaseFromBlock(
       const { data: inserted, error: insertError } = await site.client
         .from('blocked_dates')
         .insert(
+          // source and feed_id are carried over, not defaulted: an imported
+          // block whose leftover pieces came back as 'manual' would be
+          // orphaned from its feed and duplicated by the next sync. Only
+          // manual blocks reach here today (assertReleasable), so this is the
+          // invariant, not a live path.
           pieces.map((p) => ({
             property_id: site.sitePropertyId,
             start_date: p.start,
             end_date: p.end,
             reason: block.reason,
             notes: block.notes,
+            source: block.source,
+            feed_id: block.feedId,
           })),
         )
-        .select('id, start_date, end_date, reason, notes');
+        .select(BLOCK_COLUMNS);
 
       if (insertError) throw fromSiteWriteError(insertError);
       remaining = (inserted ?? []).map(toBlock);
@@ -229,13 +272,20 @@ export async function deleteBlock(
 ): Promise<void> {
   const { data: block, error } = await site.client
     .from('blocked_dates')
-    .select('start_date, end_date')
+    .select('start_date, end_date, source, feed_id')
     .eq('id', blockId)
     .eq('property_id', site.sitePropertyId)
     .maybeSingle();
 
   if (error) throw fromSiteError(error);
   if (!block) throw new VillaDbError('NOT_FOUND', `block ${blockId}`);
+
+  if (block.source === 'ical') {
+    throw new VillaDbError(
+      'CHANNEL_MANAGED',
+      `block ${blockId} is owned by feed ${block.feed_id}`,
+    );
+  }
 
   await releaseFromBlock(
     site,

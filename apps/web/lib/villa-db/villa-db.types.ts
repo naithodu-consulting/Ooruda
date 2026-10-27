@@ -118,31 +118,47 @@ export type Database = {
         Row: {
           created_at: string | null;
           end_date: string;
+          external_uid: string | null;
+          feed_id: string | null;
           id: string;
           notes: string | null;
           property_id: string;
           reason: string | null;
+          source: string;
           start_date: string;
         };
         Insert: {
           created_at?: string | null;
           end_date: string;
+          external_uid?: string | null;
+          feed_id?: string | null;
           id?: string;
           notes?: string | null;
           property_id: string;
           reason?: string | null;
+          source?: string;
           start_date: string;
         };
         Update: {
           created_at?: string | null;
           end_date?: string;
+          external_uid?: string | null;
+          feed_id?: string | null;
           id?: string;
           notes?: string | null;
           property_id?: string;
           reason?: string | null;
+          source?: string;
           start_date?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: 'blocked_dates_feed_id_fkey';
+            columns: ['feed_id'];
+            isOneToOne: false;
+            referencedRelation: 'ical_feeds';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'blocked_dates_property_id_fkey';
             columns: ['property_id'];
@@ -183,6 +199,7 @@ export type Database = {
           num_children: number | null;
           num_infants: number | null;
           num_nights: number;
+          origin_url: string | null;
           payment_status: string | null;
           property_id: string;
           reference_number: string;
@@ -223,6 +240,7 @@ export type Database = {
           num_children?: number | null;
           num_infants?: number | null;
           num_nights: number;
+          origin_url?: string | null;
           payment_status?: string | null;
           property_id: string;
           reference_number: string;
@@ -263,6 +281,7 @@ export type Database = {
           num_children?: number | null;
           num_infants?: number | null;
           num_nights?: number;
+          origin_url?: string | null;
           payment_status?: string | null;
           property_id?: string;
           reference_number?: string;
@@ -602,6 +621,104 @@ export type Database = {
           },
         ];
       };
+      ical_conflicts: {
+        Row: {
+          booking_id: string;
+          detected_at: string;
+          feed_end: string;
+          feed_id: string;
+          feed_start: string;
+          id: string;
+          notes: string | null;
+          resolved_at: string | null;
+        };
+        Insert: {
+          booking_id: string;
+          detected_at?: string;
+          feed_end: string;
+          feed_id: string;
+          feed_start: string;
+          id?: string;
+          notes?: string | null;
+          resolved_at?: string | null;
+        };
+        Update: {
+          booking_id?: string;
+          detected_at?: string;
+          feed_end?: string;
+          feed_id?: string;
+          feed_start?: string;
+          id?: string;
+          notes?: string | null;
+          resolved_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'ical_conflicts_booking_id_fkey';
+            columns: ['booking_id'];
+            isOneToOne: false;
+            referencedRelation: 'bookings';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'ical_conflicts_feed_id_fkey';
+            columns: ['feed_id'];
+            isOneToOne: false;
+            referencedRelation: 'ical_feeds';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      ical_feeds: {
+        Row: {
+          created_at: string;
+          events_applied: number | null;
+          id: string;
+          is_active: boolean;
+          last_error: string | null;
+          last_fingerprint: string | null;
+          last_status: string | null;
+          last_synced_at: string | null;
+          name: string;
+          property_id: string;
+          url: string;
+        };
+        Insert: {
+          created_at?: string;
+          events_applied?: number | null;
+          id?: string;
+          is_active?: boolean;
+          last_error?: string | null;
+          last_fingerprint?: string | null;
+          last_status?: string | null;
+          last_synced_at?: string | null;
+          name: string;
+          property_id: string;
+          url: string;
+        };
+        Update: {
+          created_at?: string;
+          events_applied?: number | null;
+          id?: string;
+          is_active?: boolean;
+          last_error?: string | null;
+          last_fingerprint?: string | null;
+          last_status?: string | null;
+          last_synced_at?: string | null;
+          name?: string;
+          property_id?: string;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'ical_feeds_property_id_fkey';
+            columns: ['property_id'];
+            isOneToOne: false;
+            referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       invoice_sequences: {
         Row: {
           financial_year: number;
@@ -879,6 +996,8 @@ export type Database = {
           booking_id: string;
           created_at: string | null;
           currency: string | null;
+          ga_client_id: string | null;
+          ga_session_id: string | null;
           id: string;
           raw_payload: Json | null;
           razorpay_order_id: string;
@@ -891,6 +1010,8 @@ export type Database = {
           booking_id: string;
           created_at?: string | null;
           currency?: string | null;
+          ga_client_id?: string | null;
+          ga_session_id?: string | null;
           id?: string;
           raw_payload?: Json | null;
           razorpay_order_id: string;
@@ -903,6 +1024,8 @@ export type Database = {
           booking_id?: string;
           created_at?: string | null;
           currency?: string | null;
+          ga_client_id?: string | null;
+          ga_session_id?: string | null;
           id?: string;
           raw_payload?: Json | null;
           razorpay_order_id?: string;
@@ -1004,6 +1127,7 @@ export type Database = {
           bathroom_count: number | null;
           bedroom_count: number | null;
           booking_code_prefix: string | null;
+          booking_cutoff_date: string | null;
           check_in_time: string | null;
           check_out_time: string | null;
           city: string | null;
@@ -1021,6 +1145,7 @@ export type Database = {
           id: string;
           ideal_occupancy: number;
           is_active: boolean | null;
+          long_description: string | null;
           max_occupancy: number;
           name: string;
           ota_links: Json | null;
@@ -1040,6 +1165,7 @@ export type Database = {
           bathroom_count?: number | null;
           bedroom_count?: number | null;
           booking_code_prefix?: string | null;
+          booking_cutoff_date?: string | null;
           check_in_time?: string | null;
           check_out_time?: string | null;
           city?: string | null;
@@ -1057,6 +1183,7 @@ export type Database = {
           id?: string;
           ideal_occupancy?: number;
           is_active?: boolean | null;
+          long_description?: string | null;
           max_occupancy?: number;
           name: string;
           ota_links?: Json | null;
@@ -1076,6 +1203,7 @@ export type Database = {
           bathroom_count?: number | null;
           bedroom_count?: number | null;
           booking_code_prefix?: string | null;
+          booking_cutoff_date?: string | null;
           check_in_time?: string | null;
           check_out_time?: string | null;
           city?: string | null;
@@ -1093,6 +1221,7 @@ export type Database = {
           id?: string;
           ideal_occupancy?: number;
           is_active?: boolean | null;
+          long_description?: string | null;
           max_occupancy?: number;
           name?: string;
           ota_links?: Json | null;
@@ -1162,7 +1291,9 @@ export type Database = {
           credit_url: string | null;
           display_order: number | null;
           height: number | null;
+          home_order: number | null;
           id: string;
+          is_room_cover: boolean;
           property_id: string;
           room_id: string | null;
           url: string;
@@ -1178,7 +1309,9 @@ export type Database = {
           credit_url?: string | null;
           display_order?: number | null;
           height?: number | null;
+          home_order?: number | null;
           id?: string;
+          is_room_cover?: boolean;
           property_id: string;
           room_id?: string | null;
           url: string;
@@ -1194,7 +1327,9 @@ export type Database = {
           credit_url?: string | null;
           display_order?: number | null;
           height?: number | null;
+          home_order?: number | null;
           id?: string;
+          is_room_cover?: boolean;
           property_id?: string;
           room_id?: string | null;
           url?: string;
@@ -1389,7 +1524,22 @@ export type Database = {
         Args: { p_date: string; p_property_id: string };
         Returns: string;
       };
+      apply_ical_feed: {
+        Args: { p_events: Json; p_feed_id: string; p_fingerprint?: string };
+        Returns: {
+          inserted: number;
+          removed: number;
+        }[];
+      };
       check_availability: {
+        Args: {
+          p_check_in: string;
+          p_check_out: string;
+          p_property_id: string;
+        };
+        Returns: string;
+      };
+      check_occupancy: {
         Args: {
           p_check_in: string;
           p_check_out: string;
@@ -1408,6 +1558,7 @@ export type Database = {
           p_guest_email: string;
           p_guest_name: string;
           p_guest_phone: string;
+          p_ignore_cutoff?: boolean;
           p_num_adults: number;
           p_num_children: number;
           p_num_infants: number;
@@ -1424,11 +1575,19 @@ export type Database = {
       };
       expire_stale_booking_holds: { Args: never; Returns: number };
       generate_booking_code: { Args: { p_prefix: string }; Returns: string };
+      get_export_blocked_nights: {
+        Args: { p_from: string; p_property_id: string; p_to: string };
+        Returns: string[];
+      };
       get_unavailable_nights: {
         Args: { p_from: string; p_property_id: string; p_to: string };
         Returns: string[];
       };
       new_booking_access_token: { Args: never; Returns: string };
+      record_ical_failure: {
+        Args: { p_error: string; p_feed_id: string; p_status: string };
+        Returns: undefined;
+      };
     };
     Enums: {
       [_ in never]: never;

@@ -52,6 +52,13 @@ export interface NewOfflineBooking {
   specialRequests?: string | null;
   channel: OfflineChannel;
   paymentStatus: PaymentStatus;
+  /**
+   * Record this stay even though its check-in is past the property's booking
+   * cutoff. The cutoff closes PUBLIC sales; the villa's own admin still has to
+   * be able to write down a stay agreed by phone. Occupancy is unaffected: the
+   * site refuses a night already sold or blocked either way.
+   */
+  ignoreCutoff?: boolean;
 }
 
 export interface SiteBooking {
@@ -82,10 +89,11 @@ export interface SiteBooking {
   idStatus: string;
   invoiceNumber: string | null;
   updatedAt: string | null;
+  createdAt: string | null;
 }
 
 const BOOKING_COLUMNS =
-  'id, booking_code, reference_number, status, payment_status, booking_channel, guest_name, guest_email, guest_phone, check_in, check_out, num_nights, num_adults, num_children, num_infants, base_amount, extra_guest_amount, tax_amount, total_amount, discount_amount, discount_code, id_status, invoice_number, updated_at';
+  'id, booking_code, reference_number, status, payment_status, booking_channel, guest_name, guest_email, guest_phone, check_in, check_out, num_nights, num_adults, num_children, num_infants, base_amount, extra_guest_amount, tax_amount, total_amount, discount_amount, discount_code, id_status, invoice_number, updated_at, created_at';
 
 type BookingRow = {
   id: string;
@@ -112,6 +120,7 @@ type BookingRow = {
   id_status: string | null;
   invoice_number: string | null;
   updated_at: string | null;
+  created_at: string | null;
 };
 
 function toBooking(row: BookingRow): SiteBooking {
@@ -140,6 +149,7 @@ function toBooking(row: BookingRow): SiteBooking {
     idStatus: row.id_status ?? 'pending',
     invoiceNumber: row.invoice_number,
     updatedAt: row.updated_at,
+    createdAt: row.created_at,
   };
 }
 
@@ -249,6 +259,7 @@ export async function createOfflineBooking(
         // The SQL parameter is nullable `text` (contract §5.1 passes null);
         // generated RPC arg types cannot express that.
         p_special_requests: (input.specialRequests?.trim() || null) as string,
+        p_ignore_cutoff: input.ignoreCutoff ?? false,
       },
     );
 

@@ -77,6 +77,9 @@ function normaliseTime(t: string | null): string {
 export interface GuestEmailContext {
   villaName: string;
   guestName: string;
+  guestEmail?: string | null;
+  /** ISO timestamp of when the booking was created (for "Booked on" row). */
+  bookedAt?: string | null;
   bookingCode: string | null;
   checkIn: string;
   checkOut: string;
@@ -134,6 +137,20 @@ const time12 = (t: string | null, fallback: string) => {
 };
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
+
+const bookedOnFmt = (iso: string): string | null => {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata',
+  });
+};
 
 /** Paise to "₹70,092". */
 const inrP = (paise: number) =>
@@ -410,7 +427,7 @@ export function renderGuestEmail(
 
     <p style="margin:0 0 14px;font-family:${SANS};font-size:15px;color:${INK};">Dear ${esc(fName)},</p>
     <p style="margin:0 0 24px;font-family:${SANS};font-size:15px;line-height:1.65;color:#5d5550;">
-      Your booking is confirmed. Please keep this email for your records.
+      Your booking is confirmed${paidInFull ? ' and payment has been received' : ''}. Please keep this email for your records.
     </p>
 
     ${
@@ -449,6 +466,8 @@ export function renderGuestEmail(
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:20px;">
       ${detailRow('Guests', esc(guestLine(ctx.adults, children)))}
       ${detailRow('Villa', esc(ctx.villaName))}
+      ${ctx.bookedAt && bookedOnFmt(ctx.bookedAt) ? detailRow('Booked on', esc(bookedOnFmt(ctx.bookedAt)!)) : ''}
+      ${ctx.guestEmail ? detailRow('Email', `<a href="mailto:${esc(ctx.guestEmail)}" style="color:${MAROON};">${esc(ctx.guestEmail)}</a>`) : ''}
       ${ctx.guestPhone ? detailRow('Mobile', `<a href="tel:${esc(ctx.guestPhone)}" style="color:${MAROON};">${esc(ctx.guestPhone)}</a>`) : ''}
     </table>
     <p style="margin:10px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};">
@@ -467,7 +486,7 @@ export function renderGuestEmail(
     ${paidInFullBadge}
     ${partialPayNote}
     <p style="margin:14px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;color:#5d5550;">
-      <strong style="color:${INK};">Note:</strong> A refundable security deposit is collected upon check-in. This is in addition to any amount shown above.
+      <strong style="color:${INK};">Note:</strong> A refundable security deposit might be requested upon check-in. This is in addition to the online payment. Please contact the property in case of questions.
     </p>
     ${emailRule()}`
         : ''
@@ -487,17 +506,17 @@ export function renderGuestEmail(
           <p style="margin:0;font-family:${SANS};font-size:14px;line-height:1.6;color:#5d5550;">Around 24 hours before check-in, we will share the exact address, directions and access instructions with you.</p>
         </td>
       </tr>
-      <tr>
+      ${ctx.whatsApp ? `<tr>
         <td style="padding:0 14px 20px 0;vertical-align:top;width:26px;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
             <td width="24" height="24" align="center" style="width:24px;height:24px;background:${CARD};border:1px solid ${RULE};border-radius:12px;font-family:${SANS};font-size:12px;font-weight:bold;color:${MUTED};line-height:24px;">2</td>
           </tr></table>
         </td>
         <td style="padding:0 0 20px;vertical-align:top;">
-          <p style="margin:0 0 5px;font-family:${SANS};font-size:15px;font-weight:bold;color:${INK};">Please carry valid photo IDs</p>
-          <p style="margin:0;font-family:${SANS};font-size:14px;line-height:1.6;color:#5d5550;">Aadhaar, passport or driving licence for each adult guest.</p>
+          <p style="margin:0 0 5px;font-family:${SANS};font-size:15px;font-weight:bold;color:${INK};">Need anything before then?</p>
+          <p style="margin:0;font-family:${SANS};font-size:14px;line-height:1.6;color:#5d5550;">Just <a href="https://wa.me/${ctx.whatsApp.replace(/\D/g, '')}" style="color:${MAROON};">WhatsApp</a> us. We&#39;re usually available during the day and aim to respond within an hour.</p>
         </td>
-      </tr>
+      </tr>` : ''}
     </table>
 
     ${emailRule()}

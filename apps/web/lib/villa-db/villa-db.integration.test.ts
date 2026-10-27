@@ -197,6 +197,162 @@ run('villa-db adapter against a local villa-booking database', () => {
     expect(await checkAvailability(site, d(0), d(3))).toBe('AVAILABLE');
   });
 
+  it('refuses to release a block a channel feed owns', async () => {
+    // Imported blocks are replaced wholesale by every sync (apply_ical_feed),
+    // so releasing one here would be undone minutes later. Written straight to
+    // the table because only the importer ever creates these.
+    const { data: feed, error: feedError } = await site.client
+      .from('ical_feeds')
+      .insert({
+        property_id: site.sitePropertyId,
+        name: 'Integration test feed',
+        url: 'https://example.com/test.ics',
+      })
+      .select('id')
+      .single();
+
+    if (feedError) throw feedError;
+
+    const { data: imported, error: blockError } = await site.client
+      .from('blocked_dates')
+      .insert({
+        property_id: site.sitePropertyId,
+        start_date: d(0),
+        end_date: d(2),
+        reason: 'offline_booking',
+        source: 'ical',
+        feed_id: feed.id,
+      })
+      .select('id')
+      .single();
+
+    if (blockError) throw blockError;
+
+    try {
+      const listed = await listBlocks(site, d(0), d(2));
+
+      expect(listed).toHaveLength(1);
+      expect(listed[0]).toMatchObject({ source: 'ical', feedId: feed.id });
+
+      await expect(
+        releaseFromBlock(site, imported.id, { from: d(0), to: d(1) }, null),
+      ).rejects.toMatchObject({ code: 'CHANNEL_MANAGED' });
+
+      await expect(deleteBlock(site, imported.id, null)).rejects.toMatchObject({
+        code: 'CHANNEL_MANAGED',
+      });
+
+      // Still there, and still owned by the feed.
+      expect(await listBlocks(site, d(0), d(2))).toHaveLength(1);
+    } finally {
+      // Deleting the feed cascades to its blocks.
+      await site.client.from('ical_feeds').delete().eq('id', feed.id);
+    }
+
+    expect(await listBlocks(site, d(0), d(2))).toEqual([]);
+  });
+
+  it('honours the booking cutoff, and lets the override past it', async () => {
+    const cutoff = d(1);
+
+    const { error: cutoffError } = await site.client
+      .from('properties')
+      .update({ booking_cutoff_date: cutoff })
+      .eq('id', site.sitePropertyId);
+
+    if (cutoffError) throw cutoffError;
+
+    try {
+      // A check-in after the cutoff is closed on the site…
+      expect(await checkAvailability(site, d(2), d(3))).toBe('DATE_BLOCKED');
+
+      // …but the nights themselves are free, which is what the override asks.
+      expect(
+        await checkAvailability(site, d(2), d(3), { ignoreCutoff: true }),
+      ).toBe('AVAILABLE');
+
+      // On or before the cutoff, nothing changes.
+      expect(await checkAvailability(site, d(1), d(2))).toBe('AVAILABLE');
+
+      const booking = await createOfflineBooking(
+        site,
+        {
+          guestName: 'Cutoff Override',
+          guestEmail: 'cutoff@example.com',
+          guestPhone: '+919000000001',
+          adults: 2,
+          checkIn: d(2),
+          checkOut: d(3),
+          baseAmount: '1000.00',
+          extraGuestAmount: '0.00',
+          taxAmount: '0.00',
+          totalAmount: '1000.00',
+          channel: 'phone',
+          paymentStatus: 'unpaid',
+          ignoreCutoff: true,
+        },
+        null,
+      );
+
+      try {
+        expect(booking.status).toBe('confirmed');
+
+        // The override skips the cutoff and nothing else: those nights are now
+        // taken, so a second booking of them is still refused.
+        await expect(
+          createOfflineBooking(
+            site,
+            {
+              guestName: 'Second',
+              guestEmail: 'second@example.com',
+              guestPhone: '+919000000002',
+              adults: 2,
+              checkIn: d(2),
+              checkOut: d(3),
+              baseAmount: '1000.00',
+              extraGuestAmount: '0.00',
+              taxAmount: '0.00',
+              totalAmount: '1000.00',
+              channel: 'phone',
+              paymentStatus: 'unpaid',
+              ignoreCutoff: true,
+            },
+            null,
+          ),
+        ).rejects.toMatchObject({ code: 'DATE_UNAVAILABLE' });
+
+        // Without the override the site refuses it as before.
+        await expect(
+          createOfflineBooking(
+            site,
+            {
+              guestName: 'No override',
+              guestEmail: 'no@example.com',
+              guestPhone: '+919000000003',
+              adults: 2,
+              checkIn: d(4),
+              checkOut: d(5),
+              baseAmount: '1000.00',
+              extraGuestAmount: '0.00',
+              taxAmount: '0.00',
+              totalAmount: '1000.00',
+              channel: 'phone',
+              paymentStatus: 'unpaid',
+            },
+            null,
+          ),
+        ).rejects.toMatchObject({ code: 'DATE_BLOCKED' });
+      } finally {
+        await cancelBooking(site, booking.id, null);
+      }
+    } finally {
+      await site.client
+        .from('properties')
+        .update({ booking_cutoff_date: null })
+        .eq('id', site.sitePropertyId);
+    }
+  });
+
   it('records an offline booking, sees it block the dates, and cancels it', async () => {
     const booking = await createOfflineBooking(
       site,

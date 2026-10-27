@@ -205,7 +205,19 @@ export async function GuestEmailsSection(props: {
                       {...ref}
                       template={t}
                       again={sentBefore}
-                      disabled={!manualSend}
+                      // booking_confirmation is always enabled — safety gate is
+                      // the confirmation dialog in the button itself.
+                      disabled={t !== 'booking_confirmation' && !manualSend}
+                      confirmationInfo={
+                        t === 'booking_confirmation'
+                          ? {
+                              guestName: booking.guestName,
+                              guestEmail: booking.guestEmail ?? '',
+                              checkIn: booking.checkIn,
+                              checkOut: booking.checkOut,
+                            }
+                          : undefined
+                      }
                     />
                   ) : null}
                 </li>

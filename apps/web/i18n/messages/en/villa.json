@@ -9,8 +9,10 @@
     "settings": "Villa Settings",
     "calendar": "Calendar",
     "bookings": "Bookings",
+    "blockedDates": "Blocked dates",
     "expenses": "Expenses",
-    "discounts": "Discount codes"
+    "discounts": "Discount codes",
+    "activity": "Activity Log"
   },
   "roles": {
     "villa_admin": "Villa Admin",

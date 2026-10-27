@@ -3,7 +3,9 @@
 import { useState } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { IdCard, Plus, X } from 'lucide-react';
+import { FileText, IdCard, Plus, X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
@@ -33,7 +35,6 @@ import {
   SelectValue,
 } from '@kit/ui/select';
 import { toast } from '@kit/ui/sonner';
-import { Switch } from '@kit/ui/switch';
 
 import {
   ID_DOC_TYPES,
@@ -53,6 +54,7 @@ const MAX_FILES = 4;
 interface FileEntry {
   file: File;
   error: string | null;
+  previewUrl: string | null;
 }
 
 export function AddIdDialog(props: {
@@ -115,6 +117,18 @@ function AddIdForm(
   const [globalFileError, setGlobalFileError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  // Revoke all object URLs when the dialog unmounts.
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  useEffect(
+    () => () => {
+      filesRef.current.forEach((f) => {
+        if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+      });
+    },
+    [],
+  );
+
   function addFile(raw: File | null) {
     if (!raw) return;
     setGlobalFileError(null);
@@ -129,14 +143,26 @@ function AddIdForm(
       return;
     }
 
-    setFiles((prev) => [...prev, { file: raw, error: null }]);
+    const isPdf = raw.type === 'application/pdf';
+    const previewUrl = isPdf ? null : URL.createObjectURL(raw);
+    setFiles((prev) => [...prev, { file: raw, error: null, previewUrl }]);
   }
 
   function removeFile(index: number) {
+    const entry = files[index];
+    if (entry?.previewUrl) URL.revokeObjectURL(entry.previewUrl);
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function upload(values: RecordIdInput) {
+    // Phone is required for the lead (first) guest.
+    if (first && !values.newGuestPhone?.trim()) {
+      form.setError('newGuestPhone', {
+        message: 'Phone is required for the lead guest',
+      });
+      return;
+    }
+
     if (files.length === 0) {
       setGlobalFileError('Attach at least one ID photo.');
       return;
@@ -182,10 +208,9 @@ function AddIdForm(
         data-test={'villa-add-id-dialog'}
       >
         <DialogHeader>
-          <DialogTitle>Add a guest ID</DialogTitle>
+          <DialogTitle>Add ID</DialogTitle>
           <DialogDescription>
-            One for each adult guest. Only the last 4 digits of the number are
-            kept.
+            One ID per adult guest.
           </DialogDescription>
         </DialogHeader>
 
@@ -272,7 +297,9 @@ function AddIdForm(
                   control={form.control}
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone (optional)</FormLabel>
+                      <FormLabel>
+                        Phone{first ? '' : ' (optional)'}
+                      </FormLabel>
                       <FormControl
                         render={
                           <PhoneInput
@@ -285,23 +312,6 @@ function AddIdForm(
                           />
                         }
                       />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  name="isAdult"
-                  control={form.control}
-                  render={({ field }) => (
-                    <FormItem className="flex items-center gap-3 sm:col-span-2">
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-test={'villa-add-id-adult'}
-                        />
-                      </FormControl>
-                      <FormLabel className="!mt-0">Adult (18+)</FormLabel>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -375,35 +385,46 @@ function AddIdForm(
             <div className="flex flex-col gap-2">
               <p className="text-sm font-medium">ID photos</p>
               <p className="text-muted-foreground text-xs">
-                Attach the front, and optionally the back, of the ID. JPEG, PNG,
-                WebP or PDF, up to 10 MB each.
+                Front and back of the ID. JPEG, PNG, WebP or PDF · max 10 MB
+                each.
               </p>
 
-              {/* Uploaded files list */}
+              {/* Thumbnail grid */}
               {files.length > 0 ? (
-                <ul className="flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2">
                   {files.map((entry, i) => (
-                    <li
+                    <div
                       key={i}
-                      className="bg-muted/40 flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+                      className="relative h-20 w-20 overflow-hidden rounded-lg border"
+                      data-test={`villa-add-id-file-thumb-${i}`}
                     >
-                      <span className="min-w-0 flex-1 truncate text-xs">
-                        {entry.file.name}
-                      </span>
-                      <Button
+                      {entry.previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={entry.previewUrl}
+                          alt={entry.file.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="bg-muted/40 flex h-full w-full flex-col items-center justify-center gap-1 p-2">
+                          <FileText className="text-muted-foreground h-7 w-7" />
+                          <span className="text-muted-foreground w-full truncate text-center text-[10px]">
+                            {entry.file.name}
+                          </span>
+                        </div>
+                      )}
+                      <button
                         type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 shrink-0 p-0"
                         onClick={() => removeFile(i)}
                         aria-label="Remove file"
+                        className="bg-background/80 absolute top-1 right-1 rounded-full p-0.5 shadow-sm"
                         data-test={`villa-add-id-file-remove-${i}`}
                       >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </li>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
                   ))}
-                </ul>
+                </div>
               ) : null}
 
               {/* Add file button */}
