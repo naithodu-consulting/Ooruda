@@ -4,7 +4,25 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
-## Villa: Disable automatic pre-arrival & thank-you emails by default + Villa Settings control & Dashboard overdue banner fix — 2026-10-27
+## Villa: Manual Airbnb iCal Sync Parity, Error/Run Logging & guest email settings — 2026-10-27
+
+### Manual "Sync Airbnb" button with full Hostinger cron parity & safe run logging
+- **Button & status on Calendar + Bookings → Blocked dates**:
+  - Renamed the manual channel sync button to **Sync Airbnb** (`SyncIcalButton`) and placed it in the page header of both the **Calendar** page (`/home/[account]/calendar`) and the **Bookings → Blocked** tab (`/home/[account]/bookings?view=blocked`).
+  - Available to both `villa_admin` and `villa_manager`.
+  - Displays a live **last synced timestamp / status indicator** beside the button (e.g., `Synced 27 Oct, 06:30 pm` in IST, or `Last sync failed` if the most recent run failed) read from `ical_feeds`.
+  - Automatically refreshes the Calendar and Blocked dates views (`router.refresh()` + `revalidatePath`) and purges the guest booking site cache (`revalidateBookingSite('ical-sync')`) whenever blocks change.
+- **Full parity with `villa-booking` `/api/cron/ical-sync`**:
+  - **IST date boundary**: Switched `classifyEvents` from UTC (`new Date().toISOString().slice(0, 10)`) to Indian Standard Time (`todayIst()`), matching `villa-booking` so stays ending yesterday are properly dropped between 00:00 and 05:30 IST.
+  - **Fetch hardening**: Enforces `https:` protocol, 10-second timeout, `1 MB` max response size (both `Content-Length` and byte length), and non-empty body validation (`fetchIcal`).
+  - **Double-booking conflict detection**: Checks confirmed bookings on the property for overlaps before applying feed blocks (`findConflicts`) and records any clashes in `ical_conflicts` (`recordConflicts`).
+- **Error & run logs without exposing raw errors in the UI**:
+  - Stripped raw error strings and feed URLs from the client-facing server action response (`FeedSyncResult`); the UI only shows friendly messages (`Airbnb calendar synced`, `Airbnb calendar is already up to date`, `Could not sync Airbnb calendar right now`).
+  - Redacts secret iCal feed URL query tokens (`redactFeedUrl`) before any logging.
+  - Records every manual sync run and failure in three places for operator/developer inspection:
+    1. `ical_feeds` (`last_synced_at`, `last_status`, `last_error`, `events_applied`) on the booking site DB (including `apply_ical_feed` errors via `record_ical_failure`).
+    2. `villa_sync_log` (`operation = 'ical.sync'`, `site_id = feed.name`, `outcome`, `actor_user_id`, and JSON run summary or redacted error detail) on Ooruda's DB.
+    3. Structured server logs (`logger.info` / `logger.warn` / `logger.error`) with timing (`ms`), counts (`applied`, `removed`, `nights`, `dropped`, `conflicts`), and redacted feed URL.
 
 ### Automatic pre-arrival and thank-you emails disabled by default + Villa Settings control
 - **Default switched off**: `villa_account_settings.pre_arrival_email` and `villa_account_settings.thank_you_email` now default to `false` (both in the database schema, existing rows, and TypeScript fallbacks across the guest email runner, booking detail view, and Villa Settings loader). Automatic booking confirmation emails remain enabled by default.

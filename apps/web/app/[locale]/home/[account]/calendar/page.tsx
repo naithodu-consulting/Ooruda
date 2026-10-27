@@ -27,6 +27,10 @@ import {
   parseMonth,
   shiftMonth,
 } from '~/lib/villa/calendar';
+import {
+  type IcalFeedStatusSummary,
+  getIcalFeedsStatus,
+} from '~/lib/villa/ical-sync';
 import { selectVillaProperty } from '~/lib/villa/properties';
 
 import { MonthNav } from '../_components/month-nav';
@@ -80,6 +84,10 @@ export default async function CalendarPage({ params, searchParams }: Props) {
 
   let bookings: SiteBooking[] = [];
   let blocks: Block[] = [];
+  let icalStatus: IcalFeedStatusSummary = {
+    lastSyncedAt: null,
+    lastStatus: null,
+  };
   let siteError: string | null = null;
 
   if (property) {
@@ -87,9 +95,10 @@ export default async function CalendarPage({ params, searchParams }: Props) {
       const site = await getVillaSite(accountId, property.id);
       const { from, to } = gridRange(month);
 
-      [bookings, blocks] = await Promise.all([
+      [bookings, blocks, icalStatus] = await Promise.all([
         listBookings(site, from, to),
         listBlocks(site, from, to),
+        getIcalFeedsStatus(site),
       ]);
     } catch (error) {
       if (!isVillaDbError(error)) throw error;
@@ -110,8 +119,13 @@ export default async function CalendarPage({ params, searchParams }: Props) {
         description={<AppBreadcrumbs />}
       >
         {property && !siteError ? (
-          <div className="flex flex-wrap gap-2">
-            <SyncIcalButton accountId={accountId} propertyId={property.id} />
+          <div className="flex flex-wrap items-center gap-2">
+            <SyncIcalButton
+              accountId={accountId}
+              propertyId={property.id}
+              lastSyncedAt={icalStatus.lastSyncedAt}
+              lastStatus={icalStatus.lastStatus}
+            />
             <BlockDatesDialog
               accountId={accountId}
               propertyId={property.id}

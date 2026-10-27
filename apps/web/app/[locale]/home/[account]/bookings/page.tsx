@@ -23,10 +23,15 @@ import { getVillaSite } from '~/lib/villa-db/client';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { isVillaDbError } from '~/lib/villa-db/errors';
 import { blockNoteForDisplay } from '~/lib/villa/calendar';
+import {
+  type IcalFeedStatusSummary,
+  getIcalFeedsStatus,
+} from '~/lib/villa/ical-sync';
 import { selectVillaProperty } from '~/lib/villa/properties';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import { BlockedDatesView } from '../blocked-dates/_components/blocked-dates-view';
+import { SyncIcalButton } from '../calendar/_components/sync-ical-button';
 import { BookingsList } from './_components/bookings-list';
 import { BookingsToolbar, type AllView } from './_components/bookings-toolbar';
 import { NewBookingDialog } from './_components/new-booking-dialog';
@@ -113,6 +118,10 @@ export default async function BookingsPage({ params, searchParams }: Props) {
 
   let bookings: SiteBooking[] = [];
   let blocks: Block[] = [];
+  let icalStatus: IcalFeedStatusSummary = {
+    lastSyncedAt: null,
+    lastStatus: null,
+  };
   let siteError: string | null = null;
   let jumpTo: string | null = null;
   const today = todayIst();
@@ -123,7 +132,10 @@ export default async function BookingsPage({ params, searchParams }: Props) {
 
       if (isBlocked) {
         const { from, to } = blockWindowFor(bview, today);
-        blocks = await listBlocks(site, from, to);
+        [blocks, icalStatus] = await Promise.all([
+          listBlocks(site, from, to),
+          getIcalFeedsStatus(site),
+        ]);
       } else {
         // A booking code (typed any way) opens that booking; any other text is
         // searched on the site across every status.
@@ -205,14 +217,23 @@ export default async function BookingsPage({ params, searchParams }: Props) {
         title={<Trans i18nKey={'villa.nav.bookings'} />}
         description={<AppBreadcrumbs />}
       >
-        {property && !siteError && !isBlocked ? (
-          <NewBookingDialog
-            accountId={accountId}
-            propertyId={property.id}
-            account={account}
-            bookingCutoffDate={bookingCutoffDate}
-            canOverrideCutoff={canOverrideCutoff}
-          />
+        {property && !siteError ? (
+          isBlocked ? (
+            <SyncIcalButton
+              accountId={accountId}
+              propertyId={property.id}
+              lastSyncedAt={icalStatus.lastSyncedAt}
+              lastStatus={icalStatus.lastStatus}
+            />
+          ) : (
+            <NewBookingDialog
+              accountId={accountId}
+              propertyId={property.id}
+              account={account}
+              bookingCutoffDate={bookingCutoffDate}
+              canOverrideCutoff={canOverrideCutoff}
+            />
+          )
         ) : null}
       </TeamAccountLayoutPageHeader>
 
