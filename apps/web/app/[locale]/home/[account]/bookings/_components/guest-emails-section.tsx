@@ -2,13 +2,13 @@ import { Mail } from 'lucide-react';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
+import { cn } from '@kit/ui/utils';
 
 import type { VillaRole } from '~/lib/roles';
 import type { SiteBooking } from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
 import { getBaseRates } from '~/lib/villa-db/rates';
-import { manualGuestEmailsEnabled } from '~/lib/villa/flags';
 import {
   GUEST_EMAIL_LABELS,
   type GuestEmailTemplate,
@@ -73,15 +73,14 @@ export async function GuestEmailsSection(props: {
   const on = {
     booking_confirmation:
       settingsResult.data?.booking_confirmation_email ?? true,
-    pre_arrival: settingsResult.data?.pre_arrival_email ?? true,
-    thank_you: settingsResult.data?.thank_you_email ?? true,
+    pre_arrival: settingsResult.data?.pre_arrival_email ?? false,
+    thank_you: settingsResult.data?.thank_you_email ?? false,
   };
   const checkedOutAt =
     lastResult.data?.action === 'completed'
       ? new Date(lastResult.data.created_at)
       : null;
   const isAdmin = props.role === 'villa_admin';
-  const manualSend = manualGuestEmailsEnabled();
   const canUndo =
     isAdmin &&
     booking.status === 'completed' &&
@@ -106,6 +105,7 @@ export async function GuestEmailsSection(props: {
 
     if (auto?.status === 'sent')
       return `Sent ${when(auto.updated_at)}.${extra}`;
+    if (!on[template]) return `Switched off in Villa Settings.${extra}`;
     if (auto?.status === 'skipped')
       return `Not sent: ${auto.reason ?? 'skipped'}.${extra}`;
     if (auto?.status === 'failed') {
@@ -116,7 +116,6 @@ export async function GuestEmailsSection(props: {
         ? `Delivery unknown (the send was interrupted). Check with the guest before using Send now.${extra}`
         : `Sending now.${extra}`;
     }
-    if (!on[template]) return `Switched off in Villa Settings.${extra}`;
 
     if (template === 'booking_confirmation') {
       return `Sent automatically when the booking was created.${extra}`;
@@ -170,7 +169,9 @@ export async function GuestEmailsSection(props: {
         <ul className="divide-border divide-y rounded-lg border">
           {(['booking_confirmation', 'pre_arrival', 'thank_you'] as const).map(
             (t) => {
+              const isEnabled = on[t];
               const sendable =
+                isEnabled &&
                 Boolean(booking.guestEmail) &&
                 (t === 'booking_confirmation'
                   ? booking.status === 'confirmed' ||
@@ -186,11 +187,19 @@ export async function GuestEmailsSection(props: {
               return (
                 <li
                   key={t}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3"
+                  className={cn(
+                    'flex flex-wrap items-center gap-x-3 gap-y-1 p-3 transition-opacity',
+                    !isEnabled && 'bg-muted/30 opacity-60',
+                  )}
                   data-test={`villa-guest-email-${t}`}
                 >
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-sm font-medium">
+                    <span
+                      className={cn(
+                        'text-sm font-medium',
+                        !isEnabled && 'text-muted-foreground',
+                      )}
+                    >
                       {GUEST_EMAIL_LABELS[t]}
                     </span>
                     <span
@@ -205,19 +214,12 @@ export async function GuestEmailsSection(props: {
                       {...ref}
                       template={t}
                       again={sentBefore}
-                      // booking_confirmation is always enabled — safety gate is
-                      // the confirmation dialog in the button itself.
-                      disabled={t !== 'booking_confirmation' && !manualSend}
-                      confirmationInfo={
-                        t === 'booking_confirmation'
-                          ? {
-                              guestName: booking.guestName,
-                              guestEmail: booking.guestEmail ?? '',
-                              checkIn: booking.checkIn,
-                              checkOut: booking.checkOut,
-                            }
-                          : undefined
-                      }
+                      confirmationInfo={{
+                        guestName: booking.guestName,
+                        guestEmail: booking.guestEmail ?? '',
+                        checkIn: booking.checkIn,
+                        checkOut: booking.checkOut,
+                      }}
                     />
                   ) : null}
                 </li>
@@ -225,16 +227,6 @@ export async function GuestEmailsSection(props: {
             },
           )}
         </ul>
-
-        {!manualSend ? (
-          <p
-            className="text-muted-foreground text-xs"
-            data-test={'villa-guest-emails-manual-off'}
-          >
-            Sending by hand is switched off for now. Automatic emails are not
-            affected.
-          </p>
-        ) : null}
       </CardContent>
     </Card>
   );

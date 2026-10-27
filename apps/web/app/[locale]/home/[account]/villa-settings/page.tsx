@@ -124,8 +124,8 @@ export default async function VillaSettingsPage({
         addons={addons}
         contacts={contacts}
         managersCanCancel={settings?.managers_can_cancel ?? false}
-        preArrivalEmail={settings?.pre_arrival_email ?? true}
-        thankYouEmail={settings?.thank_you_email ?? true}
+        preArrivalEmail={settings?.pre_arrival_email ?? false}
+        thankYouEmail={settings?.thank_you_email ?? false}
         bookingCutoffDate={settings?.booking_cutoff_date ?? null}
       />
     </PageBody>

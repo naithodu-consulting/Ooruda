@@ -17,6 +17,7 @@ import {
   DeleteAddonSchema,
   DeleteContactSchema,
   DeleteSeasonalRateSchema,
+  GuestEmailSettingsSchema,
   PoliciesSchema,
   SeasonalRateSchema,
 } from '../schemas/villa-settings.schema';
@@ -145,4 +146,33 @@ export const saveBookingCutoffAction = authActionClient
     revalidateSettings();
     revalidatePath('/[locale]/home/[account]/bookings', 'page');
     await revalidateBookingSite('booking-cutoff');
+  });
+
+export const saveGuestEmailSettingsAction = authActionClient
+  .inputSchema(GuestEmailSettingsSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    await requireVillaRole(parsedInput.accountId, ['villa_admin']);
+    const client = getSupabaseServerClient();
+
+    const { data, error } = await client
+      .from('villa_account_settings')
+      .upsert(
+        {
+          account_id: parsedInput.accountId,
+          pre_arrival_email: parsedInput.preArrivalEmail,
+          thank_you_email: parsedInput.thankYouEmail,
+          updated_by: ctx.user.id,
+        },
+        { onConflict: 'account_id' },
+      )
+      .select('account_id');
+
+    if (error || !data?.length) {
+      throw new Error(
+        `Could not save email settings${error ? `: ${error.message}` : '.'}`,
+      );
+    }
+
+    revalidateSettings();
+    revalidatePath('/[locale]/home/[account]/bookings', 'layout');
   });

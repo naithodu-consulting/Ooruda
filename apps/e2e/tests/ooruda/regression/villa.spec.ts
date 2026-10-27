@@ -310,6 +310,33 @@ test.describe.serial('villa product (M0)', () => {
     ).toContainText('each per night');
     await expect(page.locator('[data-test="villa-rates-save"]')).toBeDisabled();
 
+    // Automatic guest emails: off by default; toggling requires confirmation.
+    const preSwitch = page.locator(
+      '[data-test="villa-settings-pre-arrival-email"]',
+    );
+    const thankSwitch = page.locator(
+      '[data-test="villa-settings-thank-you-email"]',
+    );
+    await expect(preSwitch).toHaveAttribute('aria-checked', 'false');
+    await expect(thankSwitch).toHaveAttribute('aria-checked', 'false');
+
+    // Cancel confirmation leaves the switch off.
+    await preSwitch.click();
+    await expect(
+      page.locator('[data-test="villa-settings-email-confirm-dialog"]'),
+    ).toBeVisible();
+    await page.click('[data-test="villa-settings-email-confirm-cancel"]');
+    await expect(preSwitch).toHaveAttribute('aria-checked', 'false');
+
+    // Confirm enabling both automatic emails for the E2E suite.
+    await preSwitch.click();
+    await page.click('[data-test="villa-settings-email-confirm-submit"]');
+    await expect(preSwitch).toHaveAttribute('aria-checked', 'true');
+
+    await thankSwitch.click();
+    await page.click('[data-test="villa-settings-email-confirm-submit"]');
+    await expect(thankSwitch).toHaveAttribute('aria-checked', 'true');
+
     // Seasonal rates: add one far in the future, then remove it.
     await page.click('[data-test="villa-settings-tab-seasonal"]');
     await page.fill('[data-test="villa-seasonal-name"]', `E2E rate ${STAMP}`);
@@ -453,6 +480,12 @@ test.describe.serial('villa product (M0)', () => {
     ).toBeVisible();
     await expect(
       page.locator('[data-test="villa-rates-weekdayNightly"]'),
+    ).toBeDisabled();
+    await expect(
+      page.locator('[data-test="villa-settings-pre-arrival-email"]'),
+    ).toBeDisabled();
+    await expect(
+      page.locator('[data-test="villa-settings-thank-you-email"]'),
     ).toBeDisabled();
     await expect(page.locator('[data-test="villa-rates-save"]')).toHaveCount(0);
 
@@ -709,7 +742,7 @@ test.describe.serial('villa product (M0)', () => {
     await page.context().close();
   });
 
-  test('villa manager and the arrival email by hand (greyed out unless switched on)', async ({
+  test('villa manager and the arrival email by hand (enabled when switched on in villa settings)', async ({
     browser,
   }) => {
     test.skip(!VILLA_SITE.key || !bookingCode, 'no booking created');
@@ -737,23 +770,13 @@ test.describe.serial('villa product (M0)', () => {
     const send = card.locator(
       '[data-test="villa-guest-email-pre_arrival-send"]',
     );
+    await expect(send).toBeVisible();
 
-    // Sending by hand is switched off unless the app runs with
-    // VILLA_MANUAL_GUEST_EMAILS=true: greyed out for everyone, never sends.
-    if (process.env.VILLA_MANUAL_GUEST_EMAILS !== 'true') {
-      await expect(send).toBeDisabled();
-      await expect(
-        card.locator('[data-test="villa-guest-emails-manual-off"]'),
-      ).toBeVisible();
-      expect(issues.serverErrors).toEqual([]);
-      await page.context().close();
-
-      return;
-    }
-
-    await card
-      .locator('[data-test="villa-guest-email-pre_arrival-send"]')
-      .click();
+    await send.click();
+    await expect(
+      page.locator('[data-test="villa-guest-email-confirm-dialog"]'),
+    ).toBeVisible();
+    await page.click('[data-test="villa-guest-email-confirm-send"]');
     await expect(page.getByText('Email sent')).toBeVisible();
     await expect(pre).toContainText('Sent by hand once');
     // A hand-sent email never replaces the automatic one.

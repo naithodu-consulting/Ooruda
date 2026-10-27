@@ -92,7 +92,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- Settings
 INSERT INTO public.villa_account_settings (account_id, managers_can_cancel, pre_arrival_email, thank_you_email, guest_emails_checked_at)
-VALUES ('8bf674d4-1f32-4f98-a5f3-5ed839dc8eba', FALSE, TRUE, TRUE, '2026-10-19 12:29:29.401+00')
+VALUES ('8bf674d4-1f32-4f98-a5f3-5ed839dc8eba', FALSE, FALSE, FALSE, '2026-10-19 12:29:29.401+00')
 ON CONFLICT (account_id) DO UPDATE SET
     managers_can_cancel = EXCLUDED.managers_can_cancel,
     pre_arrival_email = EXCLUDED.pre_arrival_email,

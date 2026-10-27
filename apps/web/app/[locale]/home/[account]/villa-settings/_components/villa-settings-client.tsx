@@ -20,6 +20,7 @@ import type { SiteState } from '../_lib/types';
 import { AddonsSection, type AddonRow } from './addons-section';
 import { BookingCutoffCard } from './booking-cutoff-card';
 import { ContactsSection, type ContactRow } from './contacts-section';
+import { GuestEmailsCard } from './guest-emails-card';
 import { RatesForm } from './rates-form';
 import { SeasonalRates } from './seasonal-rates';
 
@@ -152,12 +153,20 @@ export function VillaSettingsClient(props: {
       ) : null}
 
       {props.property ? (
-        <BookingCutoffCard
-          accountId={props.accountId}
-          propertyId={props.property.id}
-          bookingCutoffDate={props.bookingCutoffDate}
-          canEdit={props.canEdit}
-        />
+        <>
+          <BookingCutoffCard
+            accountId={props.accountId}
+            propertyId={props.property.id}
+            bookingCutoffDate={props.bookingCutoffDate}
+            canEdit={props.canEdit}
+          />
+          <GuestEmailsCard
+            accountId={props.accountId}
+            preArrivalEmail={props.preArrivalEmail}
+            thankYouEmail={props.thankYouEmail}
+            canEdit={props.canEdit}
+          />
+        </>
       ) : null}
 
       <Tabs value={tab} onValueChange={changeTab} className="w-full">

@@ -72,7 +72,6 @@ export function GuestEmailButton(
         variant="outline"
         size="sm"
         disabled={isPending || disabled}
-        title={disabled ? 'Sending by hand is switched off for now' : undefined}
         onClick={() => execute(ref)}
         data-test={`villa-guest-email-${props.template}-send`}
       >
@@ -84,6 +83,13 @@ export function GuestEmailButton(
 
   const { guestName, guestEmail, checkIn, checkOut } = confirmationInfo;
 
+  const templateTitle =
+    props.template === 'pre_arrival'
+      ? 'pre-arrival email'
+      : props.template === 'thank_you'
+        ? 'thank-you email'
+        : 'booking confirmation';
+
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger
@@ -92,9 +98,6 @@ export function GuestEmailButton(
             variant="outline"
             size="sm"
             disabled={isPending || disabled}
-            title={
-              disabled ? 'Sending by hand is switched off for now' : undefined
-            }
             data-test={`villa-guest-email-${props.template}-send`}
           />
         }
@@ -106,25 +109,27 @@ export function GuestEmailButton(
       <AlertDialogContent data-test={'villa-guest-email-confirm-dialog'}>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {again ? 'Resend' : 'Send'} booking confirmation?
+            {again ? 'Resend' : 'Send'} {templateTitle}?
           </AlertDialogTitle>
-          <AlertDialogDescription render={<div className="flex flex-col gap-2" />}>
-              <dl className="bg-muted/40 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg px-4 py-3 text-sm">
-                <dt className="text-muted-foreground">Guest</dt>
-                <dd className="font-medium">{guestName}</dd>
-                <dt className="text-muted-foreground">Email</dt>
-                <dd className="break-all">{guestEmail}</dd>
-                <dt className="text-muted-foreground">Check-in</dt>
-                <dd>{formatDateReadable(checkIn)}</dd>
-                <dt className="text-muted-foreground">Check-out</dt>
-                <dd>{formatDateReadable(checkOut)}</dd>
-              </dl>
-              {again ? (
-                <p className="text-muted-foreground text-xs">
-                  The guest will receive this email again. Only send if they
-                  asked for it or the first one did not arrive.
-                </p>
-              ) : null}
+          <AlertDialogDescription
+            render={<div className="flex flex-col gap-2" />}
+          >
+            <dl className="bg-muted/40 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg px-4 py-3 text-sm">
+              <dt className="text-muted-foreground">Guest</dt>
+              <dd className="font-medium">{guestName}</dd>
+              <dt className="text-muted-foreground">Email</dt>
+              <dd className="break-all">{guestEmail}</dd>
+              <dt className="text-muted-foreground">Check-in</dt>
+              <dd>{formatDateReadable(checkIn)}</dd>
+              <dt className="text-muted-foreground">Check-out</dt>
+              <dd>{formatDateReadable(checkOut)}</dd>
+            </dl>
+            {again ? (
+              <p className="text-muted-foreground text-xs">
+                The guest will receive this email again. Only send if they asked
+                for it or the first one did not arrive.
+              </p>
+            ) : null}
           </AlertDialogDescription>
         </AlertDialogHeader>
 

@@ -4,6 +4,28 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa: Disable automatic pre-arrival & thank-you emails by default + Villa Settings control & Dashboard overdue banner fix — 2026-10-27
+
+### Automatic pre-arrival and thank-you emails disabled by default + Villa Settings control
+- **Default switched off**: `villa_account_settings.pre_arrival_email` and `villa_account_settings.thank_you_email` now default to `false` (both in the database schema, existing rows, and TypeScript fallbacks across the guest email runner, booking detail view, and Villa Settings loader). Automatic booking confirmation emails remain enabled by default.
+- **Villa Settings — Automatic guest emails card**: Added a dedicated **Automatic guest emails** card in Villa Settings (`GuestEmailsCard`) so `villa_admin` can explicitly enable or disable the **Pre-arrival welcome email** and **Post-checkout thank-you email** per villa account. `villa_manager` sees the switches in read-only mode.
+- **Confirmation popup on toggle**: Enabling or disabling either automatic email switch opens a confirmation dialog (`AlertDialog`) explaining the effect before saving via `saveGuestEmailSettingsAction` (enforced server-side with `requireVillaRole(accountId, ['villa_admin'])`).
+- **Booking detail — Guest emails section visual state & manual sending**:
+  - "Before arrival" and "Thank you (after check-out)" rows are now styled greyed out (`bg-muted/30 opacity-60` with muted label) when their respective option is disabled in Villa Settings.
+  - When enabled in Villa Settings, operators can also send "Before arrival" and "Thank you" emails manually using the **Send now / Send again** button (with confirmation dialog), matching the booking confirmation experience.
+  - Removed the static footer disclaimer *"Sending by hand is switched off for now. Automatic emails are not affected."*
+
+### Villa Dashboard: "Stays overdue for check-out" banner layout fix
+- Fixed a flex layout bug in `VillaToday` (`villa-today.tsx`) where `sm:flex-row` combined with `shrink-0` on the overdue guest pills container caused the left-hand title and description to be crushed to a 1-word-per-line vertical column and the pills to overlap across the text and overflow the card when multiple stays were overdue. The banner now stacks the header row cleanly above the wrapping guest pills at all viewport widths.
+
+### Migrations Changelog
+
+| Migration | Description |
+| --- | --- |
+| `20261027120000_villa_disable_auto_guest_emails_default.sql` | Sets `DEFAULT false` on `villa_account_settings.pre_arrival_email` and `thank_you_email` and updates existing rows to `false` |
+
+---
+
 ## Villa: Booking confirmation email improvements and UI fixes — 2026-10-26
 
 ### Booking confirmation email now matches the villa-booking auto email
@@ -4819,4 +4841,4 @@ Separated the single Supabase project into three distinct environments - local D
 | `20260804093956_reconcile_schema_drift.sql` | Drop orphaned functions, fix `account_image` storage policy, revoke anon grants |
 | `20260805000002_missing_fk_indexes.sql` | 8 missing FK indexes (CONCURRENTLY), GIN trigram indexes on `profiles.full_name` and `audit_logs.action`, new `get_unit_ledger_balances()` RPC for DB-side aggregation |
 
-_Last updated: 2026-10-20_
+_Last updated: 2026-10-27_

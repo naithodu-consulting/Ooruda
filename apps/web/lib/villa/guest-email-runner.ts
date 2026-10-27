@@ -504,8 +504,8 @@ export async function runDueGuestEmails(
     if (Date.now() - started > RUN_BUDGET_MS) break;
 
     const on = switches.get(p.account_id);
-    const preArrival = on?.pre_arrival_email ?? true;
-    const thankYou = on?.thank_you_email ?? true;
+    const preArrival = on?.pre_arrival_email ?? false;
+    const thankYou = on?.thank_you_email ?? false;
 
     if (!preArrival && !thankYou) continue;
 

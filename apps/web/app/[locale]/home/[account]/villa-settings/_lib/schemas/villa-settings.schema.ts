@@ -179,4 +179,12 @@ export const BookingCutoffSchema = z.object({
   cutoffDate: z.string().date().nullable(),
 });
 
+export const GuestEmailSettingsSchema = z.object({
+  accountId: z.string().uuid(),
+  preArrivalEmail: z.boolean(),
+  thankYouEmail: z.boolean(),
+});
+
+export type GuestEmailSettingsInput = z.input<typeof GuestEmailSettingsSchema>;
+
 export { ADDON_UNITS, CONTACT_CATEGORIES };

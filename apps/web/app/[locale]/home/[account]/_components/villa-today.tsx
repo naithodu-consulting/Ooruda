@@ -201,7 +201,7 @@ export async function VillaToday(props: {
 
         {overdue.length > 0 ? (
           <div
-            className="border-warning/30 bg-warning/5 flex flex-col gap-3 rounded-xl border p-3.5 sm:flex-row sm:items-center sm:justify-between"
+            className="border-warning/30 bg-warning/5 flex flex-col gap-3 rounded-xl border p-3.5"
             data-test={'villa-today-overdue'}
           >
             <div className="flex min-w-0 items-center gap-3">
@@ -221,7 +221,7 @@ export async function VillaToday(props: {
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-wrap items-center gap-2 pl-10 sm:pl-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:pl-10">
               {overdue.map((b) => (
                 <Link
                   key={b.id}
