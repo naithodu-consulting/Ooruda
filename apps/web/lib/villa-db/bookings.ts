@@ -758,6 +758,48 @@ export async function reopenStay(
   });
 }
 
+/**
+ * The guest's own confirmation page key on the booking site.
+ *
+ * Deliberately not part of SiteBooking: that object is handed to client
+ * components on the booking screen, and this token is the only credential
+ * that opens /booking/<token>. It is read on its own, server-side, by the one
+ * caller that puts it in an email to the guest it belongs to.
+ */
+export async function getBookingAccessToken(
+  site: VillaSite,
+  bookingId: string,
+): Promise<string | null> {
+  const { data, error } = await site.client
+    .from('bookings')
+    .select('access_token')
+    .eq('property_id', site.sitePropertyId)
+    .eq('id', bookingId)
+    .maybeSingle();
+
+  if (error) throw fromSiteError(error);
+
+  return data?.access_token ?? null;
+}
+
+/** "Mangalore, Karnataka" - the locality line under the villa's name. */
+export async function getPropertyLocation(
+  site: VillaSite,
+): Promise<string | null> {
+  const { data, error } = await site.client
+    .from('properties')
+    .select('city, state')
+    .eq('id', site.sitePropertyId)
+    .maybeSingle();
+
+  if (error) throw fromSiteError(error);
+  if (!data) return null;
+
+  const line = [data.city, data.state].filter(Boolean).join(', ');
+
+  return line || null;
+}
+
 /** The villa's postal address, as the booking site lists it. */
 export async function getPropertyAddress(
   site: VillaSite,

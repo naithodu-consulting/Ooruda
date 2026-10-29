@@ -38,24 +38,28 @@ function formatSyncedTime(iso: string | null | undefined): string | null {
 
 function summarizeSync(feeds: FeedSyncResult[]): {
   buttonLabel: string;
-  tone: 'success' | 'warning' | 'error';
+  tone: 'success' | 'info' | 'warning' | 'error';
   toastMessage: string;
 } {
   if (feeds.length === 0) {
     return {
-      buttonLabel: 'Synced',
+      buttonLabel: 'Up to date',
       tone: 'success',
-      toastMessage: 'Airbnb calendar synced.',
+      toastMessage: 'Airbnb calendar is up to date.',
     };
   }
 
   const first = feeds[0]!;
 
+  // Nothing was synced because there is nothing to sync from. A green tick
+  // beside that sentence read as "it worked", which is what confused people:
+  // this is a setup gap, so it is said plainly and points at the fix.
   if (first.status === 'no_feeds') {
     return {
-      buttonLabel: 'No feed configured',
-      tone: 'success',
-      toastMessage: 'No active Airbnb calendar feed is configured.',
+      buttonLabel: 'No calendar linked',
+      tone: 'info',
+      toastMessage:
+        'Nothing to sync yet - no Airbnb calendar is linked to this villa. Add the Airbnb calendar link in Villa Settings.',
     };
   }
 
@@ -69,10 +73,10 @@ function summarizeSync(feeds: FeedSyncResult[]): {
 
   if (held.length > 0) {
     return {
-      buttonLabel: 'Held for review',
+      buttonLabel: 'Needs a check',
       tone: 'error',
       toastMessage:
-        'Airbnb calendar has an unusually long block and was held for review.',
+        'Airbnb sent an unusually long block, so nothing was changed. Check your Airbnb calendar, then sync again.',
     };
   }
 
@@ -81,32 +85,44 @@ function summarizeSync(feeds: FeedSyncResult[]): {
       buttonLabel: 'Could not sync',
       tone: 'error',
       toastMessage:
-        'Could not sync Airbnb calendar right now. Please try again in a moment.',
+        'Could not reach the Airbnb calendar. Nothing was changed - please try again in a few minutes.',
     };
   }
 
   const totalConflicts = feeds.reduce((s, f) => s + f.conflictsCount, 0);
   if (totalConflicts > 0) {
+    const d = totalConflicts === 1 ? 'date' : 'dates';
     return {
-      buttonLabel: `${totalConflicts} conflict${totalConflicts !== 1 ? 's' : ''} found`,
+      buttonLabel: `${totalConflicts} clash${totalConflicts === 1 ? '' : 'es'}`,
       tone: 'warning',
-      toastMessage: `Airbnb blocked ${totalConflicts} stay${totalConflicts !== 1 ? 's' : ''} that clash with confirmed bookings. Please review immediately.`,
+      toastMessage: `Airbnb has blocked ${totalConflicts} ${d} you already have a confirmed booking for. Please check these ${d} now.`,
     };
   }
 
   if (ok.length > 0) {
-    const totalApplied = ok.reduce((s, f) => s + f.applied, 0);
-    const totalRemoved = ok.reduce((s, f) => s + f.removed, 0);
+    const applied = ok.reduce((s, f) => s + f.applied, 0);
+    const removed = ok.reduce((s, f) => s + f.removed, 0);
+
+    if (applied === 0 && removed === 0) {
+      return {
+        buttonLabel: 'Up to date',
+        tone: 'success',
+        toastMessage: 'Airbnb calendar is up to date. Nothing changed.',
+      };
+    }
+
+    const parts: string[] = [];
+    if (applied > 0) {
+      parts.push(`${applied} date${applied === 1 ? '' : 's'} blocked`);
+    }
+    if (removed > 0) {
+      parts.push(`${removed} date${removed === 1 ? '' : 's'} freed`);
+    }
+
     return {
-      buttonLabel:
-        totalApplied > 0
-          ? `Synced (${totalApplied} block${totalApplied !== 1 ? 's' : ''})`
-          : 'Synced',
+      buttonLabel: 'Calendar updated',
       tone: 'success',
-      toastMessage:
-        totalApplied > 0 || totalRemoved > 0
-          ? `Airbnb calendar synced (${totalApplied} active block${totalApplied !== 1 ? 's' : ''}).`
-          : 'Airbnb calendar synced.',
+      toastMessage: `Airbnb calendar synced - ${parts.join(', ')}.`,
     };
   }
 
@@ -114,14 +130,14 @@ function summarizeSync(feeds: FeedSyncResult[]): {
     return {
       buttonLabel: 'Up to date',
       tone: 'success',
-      toastMessage: 'Airbnb calendar is already up to date.',
+      toastMessage: 'Airbnb calendar is up to date. Nothing changed.',
     };
   }
 
   return {
-    buttonLabel: 'Synced',
+    buttonLabel: 'Up to date',
     tone: 'success',
-    toastMessage: 'Airbnb calendar synced.',
+    toastMessage: 'Airbnb calendar is up to date.',
   };
 }
 
@@ -163,6 +179,10 @@ export function SyncIcalButton({
           setStatus('error');
           setSyncedAt(null);
           toast.error(summary.toastMessage);
+        } else if (summary.tone === 'info') {
+          // No feed to read: the villa's last sync state is unchanged, so
+          // neither a tick nor a failure is claimed here.
+          toast.info(summary.toastMessage);
         } else if (summary.tone === 'warning') {
           setSyncedAt(data.syncedAt);
           setStatus('ok');
@@ -182,7 +202,7 @@ export function SyncIcalButton({
       setStatus('error');
       setSyncedAt(null);
       toast.error(
-        'Could not sync Airbnb calendar right now. Please try again in a moment.',
+        'Could not reach the Airbnb calendar. Nothing was changed - please try again in a few minutes.',
       );
       resetLabelAfter(4000);
     },

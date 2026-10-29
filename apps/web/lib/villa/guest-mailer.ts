@@ -20,11 +20,22 @@ export async function sendVillaEmail(args: {
   from: string;
   subject: string;
   html: string;
+  /**
+   * The plain-text alternative. A transactional message without one reads as
+   * bulk mail to the filters that decide whether a confirmation lands in the
+   * inbox, so it is sent whenever the template provides one.
+   */
+  text?: string;
 }): Promise<{ providerId?: string }> {
   const key = process.env.VILLA_RESEND_API_KEY?.trim();
 
   if (!key) {
-    const result = await (await getMailer()).sendEmail(args);
+    // The shared mailer's config is a union of {text} | {html} and its Resend
+    // provider picks ONE of them - handed both, it sends the plain-text part
+    // and drops the HTML entirely. So the text alternative only goes out on
+    // the direct call below, which controls the whole payload.
+    const { text: _text, ...rest } = args;
+    const result = await (await getMailer()).sendEmail(rest);
 
     return {
       providerId:
@@ -45,6 +56,7 @@ export async function sendVillaEmail(args: {
       to: [args.to],
       subject: args.subject,
       html: args.html,
+      ...(args.text ? { text: args.text } : {}),
     }),
   });
 

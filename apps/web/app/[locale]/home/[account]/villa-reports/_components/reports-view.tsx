@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
@@ -39,6 +39,8 @@ import {
 } from '@kit/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@kit/ui/popover';
 import { Skeleton } from '@kit/ui/skeleton';
+import { toast } from '@kit/ui/sonner';
+import { Spinner } from '@kit/ui/spinner';
 import {
   Table,
   TableBody,
@@ -67,6 +69,7 @@ import {
 } from '~/lib/villa/reports';
 
 import { EXPENSE_CATEGORY_LABELS } from '../../villa-expenses/_lib/schemas/villa-expenses.schema';
+import { downloadVillaReportPdfAction } from '../_lib/server/report-pdf-action';
 
 export type ReportTab =
   | 'overview'
@@ -356,6 +359,10 @@ export function ReportsView(props: {
   today: string;
   propertyName: string;
   propertyId: string | null;
+  /** The villa account, for the server-rendered PDF export. */
+  accountId: string;
+  /** Always the real property id; propertyId is only for link building. */
+  exportPropertyId: string;
   syncedAt: string | null;
   overview: Overview;
   expenses?: ReportExpense[];
@@ -563,6 +570,49 @@ export function ReportsView(props: {
     );
   }
 
+  const [pdfPending, startPdf] = useTransition();
+
+  /**
+   * The PDF is built on the server from the same loader the page reads, not
+   * printed from this screen: a browser print sheet carried the charts, the
+   * filter pills and only the rows this tab had paged into view.
+   */
+  function exportPdf() {
+    startPdf(async () => {
+      const result = await downloadVillaReportPdfAction(
+        props.accountId,
+        props.exportPropertyId,
+        props.tab,
+        props.range.from,
+        props.range.to,
+      );
+
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+
+      const binary = atob(result.base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const url = URL.createObjectURL(
+        new Blob([bytes], { type: 'application/pdf' }),
+      );
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+
+      setTimeout(() => {
+        a.remove();
+        URL.revokeObjectURL(url);
+      }, 0);
+    });
+  }
+
   return (
     <div className="flex flex-col gap-6 print:max-w-none">
       <style>{`@media print {
@@ -731,12 +781,19 @@ export function ReportsView(props: {
           <div className="flex shrink-0 justify-end">
             <DropdownMenu>
               <DropdownMenuTrigger
+                disabled={pdfPending}
                 data-test={'villa-reports-export'}
-                className="border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-8 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium shadow-xs transition-colors"
+                className="border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-8 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium shadow-xs transition-colors disabled:pointer-events-none disabled:opacity-50"
               >
-                <Download className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Download</span>
-                <span className="sm:hidden">Export</span>
+                {pdfPending ? (
+                  <Spinner className="h-3.5 w-3.5" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                <span className="hidden sm:inline">
+                  {pdfPending ? 'Generating PDF…' : 'Download'}
+                </span>
+                <span className="sm:hidden">{pdfPending ? '…' : 'Export'}</span>
               </DropdownMenuTrigger>
 
               <DropdownMenuContent align="end" className="min-w-[240px]">
@@ -755,21 +812,22 @@ export function ReportsView(props: {
                     <div className="flex flex-col">
                       <span className="font-medium">Download CSV</span>
                       <span className="text-muted-foreground text-xs">
-                        Current tab · spreadsheet format
+                        Current tab · all rows in the period
                       </span>
                     </div>
                   </DropdownMenuItem>
 
                   <DropdownMenuItem
-                    onClick={() => window.print()}
-                    data-test={'villa-reports-print'}
+                    onClick={exportPdf}
+                    disabled={pdfPending}
+                    data-test={'villa-reports-pdf'}
                     className="flex items-start gap-3 py-2.5"
                   >
                     <FileText className="text-info mt-0.5 h-4 w-4 shrink-0" />
                     <div className="flex flex-col">
-                      <span className="font-medium">Download / Print PDF</span>
+                      <span className="font-medium">Download PDF</span>
                       <span className="text-muted-foreground text-xs">
-                        Current tab · printable layout
+                        Current tab · all rows in the period
                       </span>
                     </div>
                   </DropdownMenuItem>

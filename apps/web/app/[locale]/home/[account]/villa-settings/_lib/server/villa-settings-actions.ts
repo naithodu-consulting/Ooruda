@@ -13,6 +13,7 @@ import {
   AddonSchema,
   BaseRatesSchema,
   BookingCutoffSchema,
+  BusinessDetailsSchema,
   ContactSchema,
   DeleteAddonSchema,
   DeleteContactSchema,
@@ -101,6 +102,16 @@ export const deleteContactAction = authActionClient
     const service = await ownerService(parsedInput.accountId);
     await service.deleteContact(parsedInput);
     revalidateSettings();
+  });
+
+export const saveBusinessDetailsAction = authActionClient
+  .inputSchema(BusinessDetailsSchema)
+  .action(async ({ parsedInput }) => {
+    const service = await ownerService(parsedInput.accountId);
+    await service.saveBusinessDetails(parsedInput);
+    // The booking site prints the same company on its own receipts, so it is
+    // refreshed alongside this page.
+    await revalidateSettingsAndSite('policies');
   });
 
 export const savePoliciesAction = authActionClient

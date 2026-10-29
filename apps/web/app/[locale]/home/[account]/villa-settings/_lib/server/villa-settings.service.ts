@@ -19,6 +19,7 @@ import type {
   AddonSchema,
   BaseRatesSchema,
   ContactSchema,
+  BusinessDetailsSchema,
   PoliciesSchema,
   SeasonalRateSchema,
 } from '../schemas/villa-settings.schema';
@@ -183,6 +184,25 @@ export function createVillaSettingsService(client: Client) {
 
       if (error) throw new Error('Could not remove the contact.');
       assertChanged(data);
+    },
+
+    async saveBusinessDetails(input: z.output<typeof BusinessDetailsSchema>) {
+      const { data, error } = await client
+        .from('villa_properties')
+        .update({
+          legal_name: input.legalName || null,
+          gstin: input.gstin || null,
+          legal_address: input.legalAddress || null,
+          cin: input.cin || null,
+          support_email: input.supportEmail || null,
+        })
+        .eq('id', input.propertyId)
+        .eq('account_id', input.accountId)
+        .select('id');
+
+      if (error) throw new Error('Could not save the business details.');
+
+      assertChanged(data, 'Could not save the business details.');
     },
 
     async savePolicies(input: z.output<typeof PoliciesSchema>, actor: string) {

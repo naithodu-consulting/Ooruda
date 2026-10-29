@@ -4,6 +4,128 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa: Booking Actions, Guest IDs, Report Exports, Sync Messaging & Confirmation Email — 2026-10-29
+
+### Booking detail actions no longer float away from the page
+- `Check out` and `Cancel booking` were rendered into `TeamAccountLayoutPageHeader`, which spans the full width while the booking content sits in a `max-w-4xl` column — the buttons landed far right of where the page ends and read as app chrome rather than as this booking's actions.
+- Both actions now sit in a `bg-card` status bar inside the content column, sharing a row with the Confirmed / payment / ID badges. On phones the bar stacks and the actions go full width.
+
+### Add ID dialog: the "New guest" picker is gone on the first ID
+- On a booking with no guests on file, the Guest select offered exactly one option — "New guest" — and showed it as the selected value, which read as if the dialog had lost the guest's name.
+- The picker is now rendered only when there is a guest to pick. With guests on file the "add someone new" entry reads **Someone else**, and the field carries a description ("Pick a guest already on this booking, or add someone else").
+
+### Reports PDF is a generated document, not a browser printout
+- `Download / Print PDF` called `window.print()`, so the file carried the charts, the filter pills and only the rows the tab had paged into view.
+- New generic `VillaReportDocument` (`@kit/pdf-templates`) + `renderVillaReportPdf()`: A4, repeating table headers, KPI tiles, totals rows, page numbers and a "Generated … by …" footer.
+- New `downloadVillaReportPdfAction` renders server-side through `loadPdfRenderer()` (warm-up overlapped with the queries), re-resolves the date range, checks the villa role and reads the report author from `profiles` rather than the browser.
+- Report loading moved out of `villa-reports/page.tsx` into `_lib/server/load-report.ts`, so the page and the export read the same figures and cannot disagree. Every tab exports all rows in the period, not the current page.
+
+### Report PDF export: measured and tuned
+
+Checked end to end against every tab, with the rendered pages read back rather
+than assumed.
+
+- **Three serial round trips became one wave.** The export awaited the role
+  check, then the property list and profile, then the report queries. The role
+  check is defence in depth - the report queries run on the RLS-enforced
+  client, which is what actually decides what this caller may read - so all of
+  them now start together. On the dev database the five calls go out in one
+  wave of ~105-150 ms instead of three waves.
+- **The renderer warms on page load, not on the first click.** The first PDF in
+  a process pays ~150 ms to register fonts plus the first render's JIT; the
+  reports page now calls `loadPdfRenderer()` without awaiting it, so that is
+  spent while the reader is still looking at the screen. Measured before:
+  1,453 ms for the first export, 514 ms for the second. After: 850-944 ms warm,
+  including the render.
+- **Render cost measured per tab** (A4, 40 stays / 25 expenses / 30 payments):
+  76-302 ms warm, 14.6-21.1 KB per file, one-off warm-up 142 ms.
+- `buildPdfData` moved out of the `'use server'` action into
+  `report-pdf-data.ts` so it can be tested directly, with tests covering every
+  tab: that each row has exactly as many cells as its header, that the totals
+  row matches its KPI tile, and that channels, payment modes and expense
+  categories print as labels rather than as database codes.
+- **Fixed:** an unrecognised tab fell through to the overview tables but keyed
+  its title straight off the tab, so the document was titled `undefined`.
+- Not adopted from the bills/receipts path: their content-addressed Storage
+  cache. A report is recomputed from the bookings mirror, which is refreshed on
+  every page view, so a cached PDF would usually miss and cost an upload.
+- Known limit: the export carries every row in the period, and the loader's
+  own ceiling is 100,000 rows. A villa anywhere near that would exhaust the
+  function's memory or wall clock and the user would see only "Could not
+  generate the PDF." A legible row cap is worth adding before any villa gets
+  close.
+
+### Airbnb sync messages rewritten for end users
+- A sync with no calendar linked showed a **green success** toast reading "No active Airbnb calendar feed is configured." It now shows an info toast: "Nothing to sync yet - no Airbnb calendar is linked to this villa. Add the Airbnb calendar link in Villa Settings.", with the button reading "No calendar linked".
+- Every other outcome says what changed in plain language: "Airbnb calendar synced - 3 dates blocked, 1 date freed", "Airbnb calendar is up to date. Nothing changed.", "Could not reach the Airbnb calendar. Nothing was changed - please try again in a few minutes.", and the clash warning names the dates to check.
+
+### Booking confirmation email brought to parity with the booking site
+
+The confirmation Ooruda sends for a hand-entered booking was missing most of
+what the booking site's own confirmation carries. Added:
+
+- **Cancellations & refund section.** The dated refund ladder, the
+  non-refundable and partially-refundable banners, and the "email us with your
+  reference, refunds in 5 to 7 working days" line. `lib/villa/cancellation.ts`
+  mirrors the booking site's tiers (100% above 14 days, 50% from 7 to 14, none
+  under 7) and filters them against when the booking was actually made, so a
+  guest booking close in is never shown a deadline that passed before they paid.
+  **A tier change on the booking site must be repeated in that file.**
+- **Policy links** (Privacy, Terms, Cancellation) off `VILLA_SITE_URL`, and a
+  **"View your booking"** button. The booking's `access_token` is read on its
+  own, server-side, and never travels with the booking object the booking
+  screen hands to client components.
+- **Legal footer** — company name, registered address, CIN, GSTIN and the
+  "you are receiving this because you booked a stay" line. Every line is
+  optional; a villa with no company details gets no footer rather than a blank
+  one.
+- **The refund ladder is a percentage of what the guest has actually paid**,
+  never of the contract total. The booking site can pass its total safely
+  because a stay exists there only once Razorpay has settled it in full;
+  Ooruda sends this same confirmation for hand-entered bookings, where unpaid
+  and part-paid are ordinary. Ported as-is, it would have told an unpaid
+  ₹54,280 booking that ₹54,280 "will be refunded", in writing, under the
+  company's CIN. Nothing received, or an amount that was never receipted,
+  prints no ladder at all; the policy links still go out.
+- **The paid line is dated from the receipt, not the booking.** A hand-entered
+  booking is commonly receipted days later, so dating it from `bookedAt` would
+  contradict the villa's own ledger beside a correct payment method.
+- **A plain-text alternative.** The email went out as HTML only, which reads as
+  bulk mail to the filters that decide whether a confirmation reaches an inbox.
+  Note: the shared mailer's config is a union of `{text} | {html}` and its
+  Resend provider sends only one of them, so the text part goes out on the
+  direct `VILLA_RESEND_API_KEY` path, and the fallback path still sends HTML.
+- Villa locality under the villa's name, the extra-guest count in its label
+  ("Extra guests, 2"), "Paid 13 Oct 2026 · Razorpay" in place of a bare "Paid",
+  the ask to correct a wrong email or mobile, and every phone number through
+  `formatPhoneNumber`.
+
+### Villa Settings: a Business details tab
+
+`PoliciesForm` has not been rendered since the settings re-architecture, so the
+business fields it owned (legal name, GSTIN) had no UI at all. A fifth tab,
+**Business details**, now owns them along with the three new ones, with its own
+schema and action. `villa_properties` is granted column by column, so the
+migration also grants `update` on the new columns - the RLS policy alone leaves
+them read-only and the save fails with no rows changed.
+
+### Migrations
+
+| Migration | Purpose |
+| --- | --- |
+| `20261029114330_villa_property_legal_details` | Adds nullable `legal_address`, `cin` and `support_email` to `villa_properties` (with format checks), and grants `update` on them to `authenticated`. |
+
+**Apply this migration BEFORE deploying the code.** The migration is additive
+and safe on its own, but the code is not deploy-order tolerant: Villa Settings
+and `guest-email-runner` both `select` the three new columns, so on an
+environment where the migration has not run, PostgREST fails the whole request
+with `42703`. That takes out the entire Villa Settings screen (not just the new
+tab) and the whole scheduled guest-email run — pre-arrival, thank-you and
+manual booking confirmations — for every villa, until the migration lands.
+Applied to dev on 2026-10-29; production needs it before `main` deploys.
+
+---
+
 ## Villa: UI/UX Modernization, Performance & Settings Re-architecture — 2026-10-29
 
 ### Settings Page Re-architecture & Deprecation

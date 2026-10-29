@@ -3794,10 +3794,12 @@ export type Database = {
         Row: {
           account_id: string
           booking_code_prefix: string | null
+          cin: string | null
           created_at: string
           gstin: string | null
           id: string
           is_test: boolean
+          legal_address: string | null
           legal_name: string | null
           name: string
           ota_buffer_nights: number
@@ -3806,16 +3808,19 @@ export type Database = {
           site_project_ref: string | null
           site_property_id: string | null
           status: string
+          support_email: string | null
           updated_at: string
           whatsapp_number: string | null
         }
         Insert: {
           account_id: string
           booking_code_prefix?: string | null
+          cin?: string | null
           created_at?: string
           gstin?: string | null
           id?: string
           is_test?: boolean
+          legal_address?: string | null
           legal_name?: string | null
           name: string
           ota_buffer_nights?: number
@@ -3824,16 +3829,19 @@ export type Database = {
           site_project_ref?: string | null
           site_property_id?: string | null
           status?: string
+          support_email?: string | null
           updated_at?: string
           whatsapp_number?: string | null
         }
         Update: {
           account_id?: string
           booking_code_prefix?: string | null
+          cin?: string | null
           created_at?: string
           gstin?: string | null
           id?: string
           is_test?: boolean
+          legal_address?: string | null
           legal_name?: string | null
           name?: string
           ota_buffer_nights?: number
@@ -3842,6 +3850,7 @@ export type Database = {
           site_project_ref?: string | null
           site_property_id?: string | null
           status?: string
+          support_email?: string | null
           updated_at?: string
           whatsapp_number?: string | null
         }
@@ -4847,6 +4856,7 @@ export type Database = {
         }
         Returns: Json
       }
+      villa_account_ids: { Args: { p_roles?: string[] }; Returns: string[] }
       villa_role: { Args: { p_account_id: string }; Returns: string }
       void_bill: {
         Args: { p_bill_id: string; p_reason: string }

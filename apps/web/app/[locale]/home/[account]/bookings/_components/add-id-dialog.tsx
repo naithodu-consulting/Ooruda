@@ -216,56 +216,67 @@ function AddIdForm(
             className="flex min-h-0 flex-col gap-4 overflow-y-auto"
             onSubmit={form.handleSubmit((values) => upload(values))}
           >
-            {/* Guest picker */}
-            <FormField
-              name="guestId"
-              control={form.control}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Guest</FormLabel>
-                  <Select
-                    value={field.value || NEW_GUEST}
-                    onValueChange={(v) =>
-                      field.onChange(v === NEW_GUEST ? '' : v)
-                    }
-                  >
-                    <FormControl>
-                      <SelectTrigger
-                        className="w-full"
-                        data-test={'villa-add-id-guest'}
-                      >
-                        <SelectValue>
-                          {(v: string) =>
-                            v === NEW_GUEST
-                              ? 'New guest'
-                              : (props.guests.find((g) => g.id === v)?.name ??
-                                'Guest')
-                          }
-                        </SelectValue>
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {props.guests.map((g) => (
-                        <SelectItem
-                          key={g.id}
-                          value={g.id}
-                          data-test={'villa-add-id-guest-option'}
+            {/*
+              The picker only earns its place once this booking has a guest to
+              pick. On the first ID there is nobody on file, so a select whose
+              only entry is "New guest" asked a question with one answer and
+              made the dialog look like it had lost the guest's name. With no
+              guests, the name and phone fields are the whole answer.
+            */}
+            {first ? null : (
+              <FormField
+                name="guestId"
+                control={form.control}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Guest</FormLabel>
+                    <Select
+                      value={field.value || NEW_GUEST}
+                      onValueChange={(v) =>
+                        field.onChange(v === NEW_GUEST ? '' : v)
+                      }
+                    >
+                      <FormControl>
+                        <SelectTrigger
+                          className="w-full"
+                          data-test={'villa-add-id-guest'}
                         >
-                          {g.name}
+                          <SelectValue>
+                            {(v: string) =>
+                              v === NEW_GUEST
+                                ? 'Someone else'
+                                : (props.guests.find((g) => g.id === v)?.name ??
+                                  'Select a guest')
+                            }
+                          </SelectValue>
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {props.guests.map((g) => (
+                          <SelectItem
+                            key={g.id}
+                            value={g.id}
+                            data-test={'villa-add-id-guest-option'}
+                          >
+                            {g.name}
+                          </SelectItem>
+                        ))}
+                        <SelectItem
+                          value={NEW_GUEST}
+                          data-test={'villa-add-id-guest-new'}
+                        >
+                          Someone else
                         </SelectItem>
-                      ))}
-                      <SelectItem
-                        value={NEW_GUEST}
-                        data-test={'villa-add-id-guest-new'}
-                      >
-                        New guest
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Pick a guest already on this booking, or add someone else.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             {/* New guest fields */}
             {guestId === '' ? (

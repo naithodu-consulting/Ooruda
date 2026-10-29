@@ -36,6 +36,10 @@ import {
   StatementDocument,
   type StatementPdfData,
 } from './documents/statement-document';
+import {
+  VillaReportDocument,
+  type VillaReportPdfData,
+} from './documents/villa-report-document';
 
 export type { AdvanceApplicationPdfData } from './documents/advance-application-document';
 export type {
@@ -67,6 +71,12 @@ export type {
   ExpensesExportPdfData,
   ExpenseExportRow,
 } from './documents/expenses-export-document';
+export type {
+  VillaReportPdfData,
+  VillaReportSection,
+  VillaReportColumn,
+  VillaReportKpi,
+} from './documents/villa-report-document';
 
 export async function renderAdvanceApplicationPdf(
   data: AdvanceApplicationPdfData,
@@ -102,6 +112,13 @@ export async function renderBillsExportPdf(
 ): Promise<Buffer> {
   registerPdfFonts();
   return renderToBuffer(<BillsExportDocument data={data} />);
+}
+
+export async function renderVillaReportPdf(
+  data: VillaReportPdfData,
+): Promise<Buffer> {
+  registerPdfFonts();
+  return renderToBuffer(<VillaReportDocument data={data} />);
 }
 
 export async function renderStatementPdf(

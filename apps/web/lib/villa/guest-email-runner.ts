@@ -9,6 +9,8 @@ import type { Database } from '~/lib/database.types';
 import {
   type SiteBooking,
   getBooking,
+  getBookingAccessToken,
+  getPropertyLocation,
   listBookings,
   listSitePayments,
 } from '~/lib/villa-db/bookings';
@@ -29,7 +31,7 @@ import {
   THANK_YOU_WINDOW_DAYS,
 } from './guest-emails';
 import { sendVillaEmail } from './guest-mailer';
-import { contactCategoryLabel } from './labels';
+import { contactCategoryLabel, paymentModeLabel } from './labels';
 import { type LedgerStatus, summariseLedger } from './ledger';
 
 /**
@@ -59,16 +61,49 @@ interface PropertyContext {
   checkInTime: string | null;
   checkOutTime: string | null;
   contacts: GuestEmailContext['contacts'];
+  /** "Mangalore, Karnataka", from the booking site's own property record. */
+  location: string | null;
+  /** Guests included in the nightly rate: what "extra guests" counts above. */
+  includedGuests: number;
+  /** The company behind the villa, for the email's legal footer. */
+  legalName: string | null;
+  legalAddress: string | null;
+  cin: string | null;
+  gstin: string | null;
+  supportEmail: string | null;
+}
+
+/** The property columns the email needs beyond the ones the caller passes. */
+type PropertyRow = {
+  id: string;
+  account_id: string;
+  name: string;
+  whatsapp_number: string | null;
+  legal_name?: string | null;
+  legal_address?: string | null;
+  cin?: string | null;
+  gstin?: string | null;
+  support_email?: string | null;
+};
+
+export const EMAIL_PROPERTY_COLUMNS =
+  'id, account_id, name, whatsapp_number, legal_name, legal_address, cin, gstin, support_email';
+
+/**
+ * The booking site's public origin, for the three policy links and the
+ * guest's own booking page. Unset in a deployment that has no site URL
+ * configured, and every block that needs it is then skipped rather than
+ * linking nowhere.
+ */
+function siteBaseUrl(): string | null {
+  const url = process.env.VILLA_SITE_URL?.trim();
+
+  return url ? url.replace(/\/+$/, '') : null;
 }
 
 async function loadContext(
   admin: Admin,
-  p: {
-    id: string;
-    account_id: string;
-    name: string;
-    whatsapp_number: string | null;
-  },
+  p: PropertyRow,
   options: { system?: boolean } = {},
 ): Promise<PropertyContext> {
   // The scheduled run has no user session, so the RLS-enforced property
@@ -80,8 +115,12 @@ async function loadContext(
   const site = options.system
     ? await getVillaSiteAsSystem(p.account_id, p.id)
     : await getVillaSite(p.account_id, p.id);
-  const [rates, { data: contacts, error }] = await Promise.all([
+  const [rates, location, { data: contacts, error }] = await Promise.all([
     getBaseRates(site),
+    // The locality line is cosmetic: a villa whose site record has no city
+    // simply loses that one sub-line, so a failure here must not stop the
+    // email from going out.
+    getPropertyLocation(site).catch(() => null),
     admin
       .from('villa_emergency_contacts')
       .select('name, category, phone')
@@ -105,13 +144,38 @@ async function loadContext(
       role: contactCategoryLabel(c.category),
       phone: c.phone,
     })),
+    location,
+    includedGuests: rates.includedGuests,
+    legalName: p.legal_name ?? null,
+    legalAddress: p.legal_address ?? null,
+    cin: p.cin ?? null,
+    gstin: p.gstin ?? null,
+    // Falls back to the configured sender, which is the address the guest
+    // would reply to anyway, rather than to nothing.
+    supportEmail: p.support_email ?? replyToAddress(),
   };
+}
+
+/** The bare address out of VILLA_EMAIL_FROM ("Name <a@b.com>" or "a@b.com"). */
+function replyToAddress(): string | null {
+  const from = senderAddress();
+
+  if (!from) return null;
+
+  return (
+    /<([^>]+)>/.exec(from)?.[1]?.trim() ?? (from.includes('@') ? from : null)
+  );
 }
 
 function contextFor(
   ctx: PropertyContext,
   b: SiteBooking,
   ledger?: { netPaidPaise: number; status: LedgerStatus },
+  extra?: {
+    bookingUrl?: string | null;
+    paymentMethod?: string | null;
+    paymentDate?: string | null;
+  },
 ): GuestEmailContext {
   // The site's payment_status is not the truth for this: sitePaymentStatus()
   // pins a fully paid villa booking to 'partially_paid' so the site does not
@@ -149,6 +213,23 @@ function contextFor(
     paymentStatus: known ? ledger.status : b.paymentStatus,
     whatsApp: ctx.whatsApp,
     contacts: ctx.contacts,
+    propertyLocation: ctx.location,
+    // The booking row keeps the extra-guest amount but not the head count the
+    // pricing engine worked it out from, so it is derived here. Infants never
+    // count towards occupancy.
+    extraGuests:
+      b.extraGuestAmountPaise > 0
+        ? Math.max(0, b.adults + b.children - ctx.includedGuests)
+        : null,
+    paymentMethod: extra?.paymentMethod ?? null,
+    paymentDate: extra?.paymentDate ?? null,
+    bookingUrl: extra?.bookingUrl ?? null,
+    siteBaseUrl: siteBaseUrl(),
+    legalName: ctx.legalName,
+    legalAddress: ctx.legalAddress,
+    cin: ctx.cin,
+    gstin: ctx.gstin,
+    supportEmail: ctx.supportEmail,
   };
 }
 
@@ -289,6 +370,46 @@ async function ledgerFor(
   return { netPaidPaise: summary.netPaidPaise, status: summary.status };
 }
 
+/**
+ * How the guest actually paid, for the line beside the amount. A website
+ * booking is settled through the payment gateway; a booking staff entered is
+ * whatever they receipted it as. Null when nothing has been received, so the
+ * line stays a bare "Paid <date>" rather than naming a method we are guessing.
+ */
+async function paymentMethodFor(
+  ctx: PropertyContext,
+  b: SiteBooking,
+): Promise<{ method: string | null; paidOn: string | null }> {
+  const online = await listSitePayments(ctx.site, b.id, { verified: true });
+
+  if (online.length > 0) {
+    // Latest settled payment: the one the email's paid line refers to.
+    const latest = online.reduce<string | null>(
+      (newest, p) =>
+        p.createdAt && (!newest || p.createdAt > newest) ? p.createdAt : newest,
+      null,
+    );
+
+    return { method: 'Razorpay', paidOn: latest };
+  }
+
+  const { data } = await getSupabaseServerAdminClient()
+    .from('villa_booking_payments')
+    .select('mode, paid_on')
+    .eq('property_id', ctx.propertyId)
+    .eq('site_booking_id', b.id)
+    .is('voided_at', null)
+    .order('paid_on', { ascending: false })
+    .limit(1);
+
+  const row = data?.[0];
+
+  return {
+    method: row?.mode ? paymentModeLabel(row.mode) : null,
+    paidOn: row?.paid_on ?? null,
+  };
+}
+
 /** Sends one email to the booking's guest. Never throws. */
 export async function deliverGuestEmail(
   ctx: PropertyContext,
@@ -315,9 +436,28 @@ export async function deliverGuestEmail(
       ? await ledgerFor(ctx, b).catch(() => undefined)
       : undefined;
 
-  const { subject, html } = renderGuestEmail(
+  // Only the confirmation carries the "View your booking" button, and the
+  // token is read on its own so it never travels with the booking object.
+  // Neither lookup is allowed to stop the email: without them the button and
+  // the payment method are simply left out.
+  const site = siteBaseUrl();
+  const [token, payment] =
+    template === 'booking_confirmation'
+      ? await Promise.all([
+          site
+            ? getBookingAccessToken(ctx.site, b.id).catch(() => null)
+            : Promise.resolve(null),
+          paymentMethodFor(ctx, b).catch(() => null),
+        ])
+      : [null, null];
+
+  const { subject, html, text } = renderGuestEmail(
     template,
-    contextFor(ctx, b, ledger),
+    contextFor(ctx, b, ledger, {
+      bookingUrl: site && token ? `${site}/booking/${token}` : null,
+      paymentMethod: payment?.method ?? null,
+      paymentDate: payment?.paidOn ?? null,
+    }),
   );
 
   try {
@@ -326,6 +466,7 @@ export async function deliverGuestEmail(
       from,
       subject,
       html,
+      text,
     });
 
     return { status: 'sent', providerId };
@@ -432,7 +573,7 @@ export async function loadGuestEmailContext(
   // loadContext for privileged lookups (emergency contacts, etc.).
   const { data: p, error } = await getSupabaseServerClient()
     .from('villa_properties')
-    .select('id, account_id, name, whatsapp_number')
+    .select(EMAIL_PROPERTY_COLUMNS)
     .eq('id', propertyId)
     .eq('account_id', accountId)
     .single();
@@ -486,7 +627,7 @@ export async function runDueGuestEmails(
 
   let query = admin
     .from('villa_properties')
-    .select('id, account_id, name, whatsapp_number')
+    .select(EMAIL_PROPERTY_COLUMNS)
     .eq('status', 'active')
     .not('site_property_id', 'is', null);
   let settingsQuery = admin

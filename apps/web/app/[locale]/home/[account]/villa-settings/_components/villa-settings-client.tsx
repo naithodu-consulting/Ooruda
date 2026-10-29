@@ -18,11 +18,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@kit/ui/tabs';
 
 import type { SiteState } from '../_lib/types';
 import { BookingCutoffCard } from './booking-cutoff-card';
+import { BusinessDetailsCard } from './business-details-card';
 import { GuestEmailsCard } from './guest-emails-card';
 import { RatesForm } from './rates-form';
 import { SeasonalRates } from './seasonal-rates';
 
-const TABS = ['rates', 'seasonal', 'cutoff', 'emails'] as const;
+const TABS = ['rates', 'seasonal', 'cutoff', 'emails', 'business'] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
@@ -30,6 +31,7 @@ const TAB_LABELS: Record<Tab, string> = {
   seasonal: 'Seasonal rates',
   cutoff: 'Booking cutoff',
   emails: 'Guest emails',
+  business: 'Business details',
 };
 
 export interface PropertySummary {
@@ -39,6 +41,9 @@ export interface PropertySummary {
   whatsappNumber: string | null;
   legalName: string | null;
   gstin: string | null;
+  legalAddress: string | null;
+  cin: string | null;
+  supportEmail: string | null;
   retentionDays: number;
 }
 
@@ -205,6 +210,19 @@ export function VillaSettingsClient(props: {
             preArrivalEmail={props.preArrivalEmail}
             thankYouEmail={props.thankYouEmail}
             canEdit={props.canEdit}
+          />
+        </TabsContent>
+
+        <TabsContent value="business" className="mt-0">
+          <BusinessDetailsCard
+            accountId={props.accountId}
+            propertyId={props.property.id}
+            canEdit={props.canEdit}
+            legalName={props.property.legalName}
+            gstin={props.property.gstin}
+            legalAddress={props.property.legalAddress}
+            cin={props.property.cin}
+            supportEmail={props.property.supportEmail}
           />
         </TabsContent>
       </Tabs>

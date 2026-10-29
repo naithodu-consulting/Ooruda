@@ -142,37 +142,25 @@ export default async function BookingPage({ params, searchParams }: Props) {
         account={account}
         title={bookingTitle}
         description={<AppBreadcrumbs values={{ [bookingId]: bookingTitle }} />}
-      >
-        {canCheckOut ? (
-          <CompleteStayButton
-            accountId={accountId}
-            propertyId={propertyId}
-            bookingId={booking.id}
-            guestName={booking.guestName}
-          />
-        ) : null}
-        {canCancel ? (
-          <CancelBookingDialog
-            accountId={accountId}
-            propertyId={propertyId}
-            bookingId={booking.id}
-            bookingCode={booking.bookingCode}
-            reasons={reasons ?? []}
-          />
-        ) : null}
-      </TeamAccountLayoutPageHeader>
+      />
 
       <div className="flex max-w-4xl flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link
-            href={back}
-            className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1.5 text-sm font-medium transition-colors"
-            data-test={'villa-booking-back'}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            All bookings
-          </Link>
+        <Link
+          href={back}
+          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1.5 text-sm font-medium transition-colors"
+          data-test={'villa-booking-back'}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          All bookings
+        </Link>
 
+        {/*
+          The status badges and the two actions share one bar inside the
+          content column. Keeping the actions in the page header left them
+          floating against the far right edge, past where the column ends,
+          so they read as chrome rather than as this booking's actions.
+        */}
+        <div className="bg-card flex flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-xl border p-3">
           <div className="flex flex-wrap items-center gap-2">
             <Badge
               variant="outline"
@@ -214,6 +202,31 @@ export default async function BookingPage({ params, searchParams }: Props) {
               {idStatusLabel(booking.idStatus)}
             </Badge>
           </div>
+
+          {canCheckOut || canCancel ? (
+            <div
+              className="flex flex-wrap items-center gap-2 max-sm:w-full max-sm:[&>*]:flex-1"
+              data-test={'villa-booking-actions'}
+            >
+              {canCheckOut ? (
+                <CompleteStayButton
+                  accountId={accountId}
+                  propertyId={propertyId}
+                  bookingId={booking.id}
+                  guestName={booking.guestName}
+                />
+              ) : null}
+              {canCancel ? (
+                <CancelBookingDialog
+                  accountId={accountId}
+                  propertyId={propertyId}
+                  bookingId={booking.id}
+                  bookingCode={booking.bookingCode}
+                  reasons={reasons ?? []}
+                />
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
