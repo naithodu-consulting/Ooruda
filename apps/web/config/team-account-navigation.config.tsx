@@ -190,6 +190,14 @@ const getVillaRoutes = (account: string) => [
         Icon: <Users className={iconClasses} />,
       },
       {
+        label: 'villa.nav.activity',
+        path: pathsConfig.app.accountVillaActivity.replace(
+          '[account]',
+          account,
+        ),
+        Icon: <ClipboardList className={iconClasses} />,
+      },
+      {
         label: 'villa.nav.settings',
         path: pathsConfig.app.accountVillaSettings.replace(
           '[account]',
@@ -276,6 +284,7 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
     'villa.nav.expenses',
     'villa.nav.discounts',
     'villa.nav.members',
+    'villa.nav.activity',
     'villa.nav.settings',
   ],
   // Managers see settings read-only (rates, contacts they need on shift).
@@ -286,6 +295,7 @@ const ROLE_NAV_ALLOWLIST: Record<string, readonly string[]> = {
     'villa.nav.calendar',
     'villa.nav.bookings',
     'villa.nav.expenses',
+    'villa.nav.activity',
     'villa.nav.settings',
   ],
 };

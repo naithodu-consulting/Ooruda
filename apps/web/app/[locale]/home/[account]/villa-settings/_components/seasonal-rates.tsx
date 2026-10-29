@@ -219,7 +219,15 @@ function AddSeasonalRateForm(props: { accountId: string; propertyId: string }) {
                   <FormControl>
                     <DatePicker
                       value={field.value}
-                      onChange={field.onChange}
+                      onChange={(value) => {
+                        field.onChange(value);
+                        const last = form.getValues('lastNight');
+                        if (value && (!last || last < value)) {
+                          form.setValue('lastNight', value, {
+                            shouldValidate: true,
+                          });
+                        }
+                      }}
                       onBlur={field.onBlur}
                       min={today}
                       data-test={'villa-seasonal-first'}

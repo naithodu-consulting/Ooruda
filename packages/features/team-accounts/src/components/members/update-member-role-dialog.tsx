@@ -72,9 +72,12 @@ export function UpdateMemberRoleDialog({
 
         <RolesDataProvider maxRoleHierarchy={userRoleHierarchy}>
           {(data) => {
-            const filteredRoles = isSuperAdmin
-              ? data
-              : data.filter((role) => ['prop_owner', 'tenant'].includes(role));
+            const filteredRoles =
+              isSuperAdmin || data.some((role) => role.startsWith('villa_'))
+                ? data
+                : data.filter((role) =>
+                    ['prop_owner', 'tenant'].includes(role),
+                  );
 
             return (
               <UpdateMemberForm

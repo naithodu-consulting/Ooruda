@@ -8,7 +8,6 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { getBooking } from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { requireVillaRole } from '~/lib/villa/auth';
-import { manualGuestEmailsEnabled } from '~/lib/villa/flags';
 import { sendGuestEmailNow } from '~/lib/villa/guest-email-runner';
 
 import {
@@ -29,14 +28,16 @@ function revalidateBookings() {
 export const createBookingAction = authActionClient
   .inputSchema(NewBookingSchema)
   .action(async ({ parsedInput, ctx }) => {
-    await requireVillaRole(parsedInput.accountId, [
+    const role = await requireVillaRole(parsedInput.accountId, [
       'villa_admin',
       'villa_manager',
     ]);
 
+    // The role decides whether a cutoff override is allowed: the service
+    // honours it for villa_admin only.
     const booking = await createBookingsService(
       getSupabaseServerClient(),
-    ).create(parsedInput, ctx.user.id);
+    ).create(parsedInput, ctx.user.id, role);
 
     revalidateBookings();
 
@@ -102,10 +103,28 @@ export const sendGuestEmailAction = authActionClient
       'villa_manager',
     ]);
 
-    if (!manualGuestEmailsEnabled()) {
-      throw new Error(
-        'Sending guest emails by hand is switched off for now. Automatic emails are not affected.',
-      );
+    const client = getSupabaseServerClient();
+
+    // Verify whether this email template is enabled in account settings.
+    const { data: settings, error: settingsError } = await client
+      .from('villa_account_settings')
+      .select('booking_confirmation_email, pre_arrival_email, thank_you_email')
+      .eq('account_id', parsedInput.accountId)
+      .maybeSingle();
+
+    if (settingsError) {
+      throw new Error('Could not verify email settings. Please try again.');
+    }
+
+    const enabled =
+      parsedInput.template === 'booking_confirmation'
+        ? (settings?.booking_confirmation_email ?? true)
+        : parsedInput.template === 'pre_arrival'
+          ? (settings?.pre_arrival_email ?? false)
+          : (settings?.thank_you_email ?? false);
+
+    if (!enabled) {
+      throw new Error('This guest email is switched off in Villa Settings.');
     }
 
     const site = await getVillaSite(

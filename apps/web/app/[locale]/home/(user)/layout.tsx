@@ -39,7 +39,12 @@ async function SidebarLayout({ children }: React.PropsWithChildren) {
   // The super-admin check runs alongside the workspace load: this layout is
   // the post-login landing, and usually only redirects onward.
   const [workspace, state, superAdmin] = await Promise.all([
-    loadUserWorkspace().catch(() => null),
+    loadUserWorkspace().catch((e: unknown) => {
+      // Re-throw Next.js redirect/notFound exceptions so they propagate
+      // correctly instead of collapsing into a null → redirect('/').
+      if (e instanceof Error && 'digest' in e) throw e;
+      return null;
+    }),
     getLayoutState(),
     isSuperAdmin(getSupabaseServerClient()),
   ]);

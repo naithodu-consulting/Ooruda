@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   type ReportStay,
   buildChannels,
+  buildGstReport,
   buildGuests,
   buildOverview,
+  buildPaymentsReport,
   resolveReportRange,
   toCsv,
 } from './reports';
@@ -38,6 +40,16 @@ describe('resolveReportRange', () => {
     expect(resolveReportRange({ preset: 'last_month' }, today)).toMatchObject({
       from: '2026-08-01',
       to: '2026-08-31',
+    });
+    expect(resolveReportRange({ preset: '3m' }, today)).toMatchObject({
+      preset: '3m',
+      from: '2026-07-01',
+      to: '2026-09-30',
+    });
+    expect(resolveReportRange({ preset: '6m' }, today)).toMatchObject({
+      preset: '6m',
+      from: '2026-04-01',
+      to: '2026-09-30',
     });
     expect(resolveReportRange({ preset: 'this_fy' }, today)).toMatchObject({
       from: '2026-04-01',
@@ -295,5 +307,107 @@ describe('a redeemed discount reduces revenue', () => {
     expect(o.bookedNights).toBe(1);
     // (22000 - 2000) / 2 nights = 10000 for the night inside October.
     expect(o.revenue).toBe(10000);
+  });
+});
+
+describe('buildPaymentsReport & buildGstReport', () => {
+  const oct = { from: '2026-10-01', to: '2026-10-31' };
+
+  it('aggregates offline payments and refunds by mode and month', () => {
+    const p = buildPaymentsReport(
+      oct,
+      [
+        {
+          id: 'p1',
+          paid_on: '2026-10-05',
+          amount: 10000,
+          mode: 'upi',
+          reference: 'UTR-1',
+          payer_name: 'Asha',
+          booking_code: 'V19-AAA',
+        },
+        {
+          id: 'p2',
+          paid_on: '2026-10-12',
+          amount: 5000,
+          mode: 'cash',
+          reference: null,
+          payer_name: 'Ravi',
+          booking_code: 'V19-BBB',
+        },
+      ],
+      [
+        {
+          id: 'r1',
+          refunded_on: '2026-10-15',
+          amount: 2000,
+          mode: 'upi',
+          reason: 'Partial refund',
+        },
+      ],
+    );
+
+    expect(p.totalReceived).toBe(15000);
+    expect(p.totalRefunded).toBe(2000);
+    expect(p.netCollected).toBe(13000);
+    expect(p.paymentCount).toBe(2);
+    expect(p.refundCount).toBe(1);
+    expect(p.topMode).toBe('upi');
+    expect(p.byMode).toEqual([
+      { mode: 'upi', count: 1, amount: 10000, sharePct: 66.7 },
+      { mode: 'cash', count: 1, amount: 5000, sharePct: 33.3 },
+    ]);
+  });
+
+  it('computes monthly taxable revenue, output GST, input GST, and net GST', () => {
+    const g = buildGstReport(
+      oct,
+      [stay()],
+      [
+        {
+          spent_on: '2026-10-10',
+          category: 'pool',
+          amount: 1180,
+          gst_amount: 180,
+        },
+      ],
+    );
+
+    expect(g).toMatchObject({
+      stays: 1,
+      nights: 2,
+      taxableRevenue: 22000,
+      outputGst: 3960,
+      totalWithGst: 25960,
+      expenseAmount: 1180,
+      inputGst: 180,
+      netGstPayable: 3780,
+    });
+    expect(g.months).toHaveLength(1);
+    expect(g.months[0]).toMatchObject({
+      month: '2026-10',
+      stays: 1,
+      nights: 2,
+      taxableRevenue: 22000,
+      outputGst: 3960,
+      inputGst: 180,
+      netGstPayable: 3780,
+    });
+  });
+
+  it('counts a stay spanning two months once in the period total', () => {
+    const g = buildGstReport(
+      { from: '2026-10-01', to: '2026-11-30' },
+      [stay({ check_in: '2026-10-30', check_out: '2026-11-02' })],
+      [],
+    );
+
+    expect(g.months).toHaveLength(2);
+    // Both month rows see the stay, so summing the rows would say 2.
+    expect(g.months.reduce((sum, m) => sum + m.stays, 0)).toBe(2);
+    expect(g.stays).toBe(1);
+    // Nights, unlike stays, are sliced, so they do add up.
+    expect(g.nights).toBe(3);
+    expect(g.nights).toBe(g.months.reduce((sum, m) => sum + m.nights, 0));
   });
 });

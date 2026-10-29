@@ -10,6 +10,7 @@ export type VillaDbErrorCode =
   | 'INACTIVE' // the property is switched off in Ooruda
   | 'DATE_UNAVAILABLE' // a booking (or a guest mid-checkout) holds those nights
   | 'DATE_BLOCKED' // an existing block covers those nights
+  | 'CHANNEL_MANAGED' // the block belongs to a channel feed, not to Ooruda
   | 'HOLD_LAPSED' // the 15-minute hold expired before we confirmed
   | 'INVALID_INPUT' // bad dates, zero-night range, negative amounts…
   | 'OVERLAP' // a pricing rule already covers some of those nights
@@ -27,6 +28,8 @@ const MESSAGES: Record<VillaDbErrorCode, string> = {
   DATE_UNAVAILABLE:
     'Some of those nights are already booked, or a guest is checking out right now. Refresh the calendar and pick other dates.',
   DATE_BLOCKED: 'Some of those nights are already blocked.',
+  CHANNEL_MANAGED:
+    'These nights come from a booking channel’s calendar, so they cannot be unblocked here. Remove the booking on the channel instead — the next sync clears it.',
   HOLD_LAPSED:
     'The dates were released before the booking was confirmed. Please try again.',
   INVALID_INPUT: 'Some details are not valid. Check the dates and amounts.',
@@ -53,6 +56,7 @@ export class VillaDbError extends Error {
 export const REJECTION_CODES: readonly VillaDbErrorCode[] = [
   'DATE_UNAVAILABLE',
   'DATE_BLOCKED',
+  'CHANNEL_MANAGED',
   'OVERLAP',
   'INVALID_INPUT',
   'HOLD_LAPSED',

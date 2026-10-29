@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+
 import { notFound } from 'next/navigation';
 
 import { CircleAlert } from 'lucide-react';
@@ -8,13 +10,17 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { PageBody } from '@kit/ui/page';
+import { Skeleton } from '@kit/ui/skeleton';
 import { Trans } from '@kit/ui/trans';
 
 import { VILLA_ROLES, requireRole } from '~/lib/rbac';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { villaDiscountsEnabled } from '~/lib/villa/discount-flag';
 import { refreshMirrorForRead } from '~/lib/villa/mirror';
-import { selectVillaProperty } from '~/lib/villa/properties';
+import {
+  type VillaPropertySummary,
+  selectVillaProperty,
+} from '~/lib/villa/properties';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import { VillaSwitcher } from '../_components/villa-switcher';
@@ -66,13 +72,71 @@ export default async function VillaDiscountsPage({
     );
   }
 
-  // The redemption figures below come from the mirrored bookings, so refresh
-  // the copy BEFORE reading it: otherwise a code used minutes ago still shows
+  return (
+    <PageBody>
+      {header}
+      <div className="mb-4 max-w-5xl">
+        <VillaSwitcher
+          properties={properties.map((p) => ({ id: p.id, name: p.name }))}
+          current={property.id}
+        />
+      </div>
+
+      {/*
+        The redemption figures come from the bookings mirror, refreshed from
+        the booking site before it is read. That refresh is bounded but can
+        take a couple of seconds, so the codes stream in rather than holding
+        the page: the header and the villa switcher paint at once.
+      */}
+      <Suspense fallback={<DiscountsSkeleton />}>
+        <DiscountsBody
+          accountId={accountId}
+          property={property}
+          canEdit={role === 'villa_admin'}
+          canApprove={superAdmin}
+        />
+      </Suspense>
+    </PageBody>
+  );
+}
+
+function DiscountsSkeleton() {
+  return (
+    <div
+      className="flex max-w-5xl flex-col gap-3"
+      data-test={'villa-discounts-loading'}
+    >
+      {Array.from({ length: 3 }).map((_, i) => (
+        <Skeleton key={i} className="h-24 rounded-xl" />
+      ))}
+    </div>
+  );
+}
+
+async function DiscountsBody({
+  accountId,
+  property,
+  canEdit,
+  canApprove,
+}: {
+  accountId: string;
+  property: VillaPropertySummary;
+  canEdit: boolean;
+  canApprove: boolean;
+}) {
+  const client = getSupabaseServerClient();
+
+  // The redemption figures come from the mirrored bookings, so the mirror is
+  // refreshed BEFORE it is read: otherwise a code used minutes ago still shows
   // "Not used yet" until the dashboard, reports or the cron sync runs.
   // Bounded: see refreshMirrorForRead.
-  await refreshMirrorForRead(accountId, property.id);
-
-  const [codesResult, auditResult, usageResult] = await Promise.all([
+  //
+  // The codes and their audit trail do not come from the mirror, so they are
+  // awaited alongside the refresh rather than after it. They are in the same
+  // Promise.all so a failing refresh cannot leave them as unhandled
+  // rejections.
+  const [, codesResult, auditResult] = await Promise.all([
+    refreshMirrorForRead(accountId, property.id),
     client
       .from('villa_discount_codes')
       .select(
@@ -86,13 +150,15 @@ export default async function VillaDiscountsPage({
       .eq('account_id', accountId)
       .order('created_at', { ascending: false })
       .limit(500),
-    client
-      .from('villa_bookings_mirror')
-      .select('discount_code, discount_amount, guest_name, check_in')
-      .eq('property_id', property.id)
-      .not('discount_code', 'is', null)
-      .in('status', ['confirmed', 'completed']),
   ]);
+
+  // Only this one has to wait for the refresh to have finished.
+  const usageResult = await client
+    .from('villa_bookings_mirror')
+    .select('discount_code, discount_amount, guest_name, check_in')
+    .eq('property_id', property.id)
+    .not('discount_code', 'is', null)
+    .in('status', ['confirmed', 'completed']);
 
   const error = codesResult.error ?? auditResult.error ?? usageResult.error;
 
@@ -194,23 +260,13 @@ export default async function VillaDiscountsPage({
   }));
 
   return (
-    <PageBody>
-      {header}
-      <div className="mb-4 max-w-5xl">
-        <VillaSwitcher
-          properties={properties.map((p) => ({ id: p.id, name: p.name }))}
-          current={property.id}
-        />
-      </div>
-
-      <DiscountsView
-        accountId={accountId}
-        propertyId={property.id}
-        canEdit={role === 'villa_admin'}
-        canApprove={superAdmin}
-        today={today}
-        codes={codes}
-      />
-    </PageBody>
+    <DiscountsView
+      accountId={accountId}
+      propertyId={property.id}
+      canEdit={canEdit}
+      canApprove={canApprove}
+      today={today}
+      codes={codes}
+    />
   );
 }

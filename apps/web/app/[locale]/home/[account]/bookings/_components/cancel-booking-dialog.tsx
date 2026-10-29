@@ -93,7 +93,7 @@ export function CancelBookingDialog(props: {
       <Button
         variant="outline"
         onClick={() => setOpen(true)}
-        className="text-destructive"
+        className="border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
         data-test={'villa-booking-cancel-open'}
       >
         Cancel booking

@@ -6,15 +6,18 @@ import type * as z from 'zod';
 import { getLogger } from '@kit/shared/logger';
 import { normalizePhoneNumber } from '@kit/shared/utils';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import type { Database } from '~/lib/database.types';
 import { getBooking, setIdStatus } from '~/lib/villa-db/bookings';
 import { type VillaSite, getVillaSite } from '~/lib/villa-db/client';
 import { VillaDbError } from '~/lib/villa-db/errors';
+import { recordBookingActivity } from '~/lib/villa/activity';
 import { guestIdUploadsEnabled } from '~/lib/villa/flags';
 import { GUEST_DOCS_BUCKET, recordIdAccess } from '~/lib/villa/guest-id-access';
 import {
   ID_FILE_MAX_BYTES,
+  idDocTypeLabel,
   idPurgeDate,
   maskIdNumber,
   sniffIdFileType,
@@ -25,6 +28,7 @@ import type {
   AddGuestSchema,
   DeleteIdSchema,
   IdStatusSchema,
+  MarkDocVerifiedSchema,
   RecordIdSchema,
   RemoveGuestSchema,
 } from '../schemas/guests.schema';
@@ -34,8 +38,28 @@ type Client = SupabaseClient<Database>;
 /** Signed links to an ID file live this long. */
 const SIGNED_URL_SECONDS = 60;
 
+/** Storage paths carry no extension, so the stored MIME type names the file. */
+export function extFromMime(mime: string | null): string {
+  switch (mime) {
+    case 'image/png':
+      return 'png';
+    case 'image/webp':
+      return 'webp';
+    case 'application/pdf':
+      return 'pdf';
+    default:
+      return 'jpg';
+  }
+}
+
 /** A refusal written for the user; anything else is shown generically. */
 export class GuestIdError extends Error {}
+
+/** One parsed file from the multipart upload. */
+export interface UploadedFile {
+  file: File;
+  label: string | null; // 'front' | 'back' | null
+}
 
 /**
  * Guests on a booking and their ID documents. Callers authorise the villa
@@ -205,18 +229,70 @@ export function createGuestsService(client: Client) {
     }
   }
 
+  /**
+   * Validates and reads up to 4 files from the multipart form.
+   * Files come as `file_0`, `file_1`, … with optional `label_0`, `label_1`, …
+   */
+  async function parseUploadedFiles(
+    form: FormData,
+    maxFiles = 4,
+  ): Promise<UploadedFile[]> {
+    if (!guestIdUploadsEnabled()) {
+      throw new GuestIdError(
+        'Storing ID files is not switched on yet. Record the ID as seen in person.',
+      );
+    }
+
+    const files: UploadedFile[] = [];
+
+    for (let i = 0; i < maxFiles; i++) {
+      const raw = form.get(`file_${i}`);
+      if (!(raw instanceof File) || raw.size === 0) break;
+
+      if (raw.size > ID_FILE_MAX_BYTES) {
+        throw new GuestIdError(`File ${i + 1} is larger than 10 MB.`);
+      }
+
+      const labelRaw = form.get(`label_${i}`);
+      const label =
+        labelRaw === 'front' || labelRaw === 'back' ? labelRaw : null;
+
+      files.push({ file: raw, label });
+    }
+
+    if (files.length === 0) {
+      throw new GuestIdError('Attach at least one ID photo.');
+    }
+
+    return files;
+  }
+
   return {
     async addGuest(input: z.output<typeof AddGuestSchema>, actor: string) {
       const site = await getVillaSite(input.accountId, input.propertyId);
-      await liveBooking(site, input.bookingId);
+      const booking = await liveBooking(site, input.bookingId);
 
       const guestId = await resolveGuest(input.accountId, input, actor);
       await linkGuest(input, guestId);
 
+      await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking: { id: booking.id, bookingCode: booking.bookingCode },
+          action: 'guest_added',
+          note: `Guest added: ${input.newGuestName || 'from directory'}`,
+        },
+        actor,
+      );
+
       return { guestId };
     },
 
-    async removeGuest(input: z.output<typeof RemoveGuestSchema>) {
+    async removeGuest(
+      input: z.output<typeof RemoveGuestSchema>,
+      actor?: string,
+    ) {
       const { count, error: docsError } = await db
         .from('villa_guest_documents')
         .select('id', { count: 'exact', head: true })
@@ -246,22 +322,40 @@ export function createGuestsService(client: Client) {
       if (error) throw new GuestIdError('Could not remove the guest.');
       if (!data?.length)
         throw new GuestIdError('That guest is not on this booking.');
+
+      await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking: { id: input.bookingId },
+          action: 'guest_removed',
+          note: 'Guest removed from booking',
+        },
+        actor,
+      );
     },
 
     /**
-     * Records an ID: with a file (`soft_copy`, only while uploads are
-     * enabled) or as seen in person at the villa (no file).
+     * Records an ID: with one or more files (`soft_copy`, only while uploads
+     * are enabled) or as seen in person at the villa (no file).
+     * `uploadedFiles` comes from parseUploadedFiles() and must be non-empty
+     * when stage === 'soft_copy'.
      */
     async recordId(
       input: z.output<typeof RecordIdSchema>,
-      file: File | null,
+      uploadedFiles: UploadedFile[] | null,
       actor: string,
     ) {
       const masked = maskIdNumber(input.docType, input.idNumber);
       if (!masked.ok) throw new GuestIdError(masked.message);
 
-      let bytes: Uint8Array | null = null;
-      let contentType: ReturnType<typeof sniffIdFileType> = null;
+      interface ParsedFile {
+        bytes: Uint8Array;
+        contentType: NonNullable<ReturnType<typeof sniffIdFileType>>;
+        label: string | null;
+      }
+
+      let parsedFiles: ParsedFile[] = [];
 
       if (input.stage === 'soft_copy') {
         if (!guestIdUploadsEnabled()) {
@@ -270,17 +364,23 @@ export function createGuestsService(client: Client) {
           );
         }
 
-        if (!file || file.size === 0)
+        if (!uploadedFiles || uploadedFiles.length === 0) {
           throw new GuestIdError('Attach the ID photo.');
-        if (file.size > ID_FILE_MAX_BYTES) {
-          throw new GuestIdError('The file is larger than 10 MB.');
         }
 
-        bytes = new Uint8Array(await file.arrayBuffer());
-        contentType = sniffIdFileType(bytes.subarray(0, 16));
+        for (const { file, label } of uploadedFiles) {
+          if (file.size > ID_FILE_MAX_BYTES) {
+            throw new GuestIdError('A file is larger than 10 MB.');
+          }
 
-        if (!contentType) {
-          throw new GuestIdError('Use a JPEG, PNG or WebP photo, or a PDF.');
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const contentType = sniffIdFileType(bytes.subarray(0, 16));
+
+          if (!contentType) {
+            throw new GuestIdError('Use a JPEG, PNG or WebP photo, or a PDF.');
+          }
+
+          parsedFiles.push({ bytes, contentType, label });
         }
       }
 
@@ -290,7 +390,9 @@ export function createGuestsService(client: Client) {
       const [booking, { data: property, error: propertyError }] =
         await Promise.all([
           liveBooking(site, input.bookingId),
-          admin
+          // Use server client (RLS) for the property read — admin client is
+          // reserved for writes and privileged lookups below.
+          getSupabaseServerClient()
             .from('villa_properties')
             .select('retention_days')
             .eq('id', input.propertyId)
@@ -304,26 +406,9 @@ export function createGuestsService(client: Client) {
       await linkGuest(input, guestId);
 
       const documentId = crypto.randomUUID();
-      const path = bytes
-        ? `${input.accountId}/${input.propertyId}/${input.bookingId}/${documentId}`
-        : null;
+      const purgeDate = idPurgeDate(booking.checkOut, property.retention_days);
 
-      if (bytes && path && contentType) {
-        const { error: uploadError } = await admin.storage
-          .from(GUEST_DOCS_BUCKET)
-          .upload(path, bytes, { contentType, upsert: false });
-
-        if (uploadError) {
-          (await getLogger()).error(
-            { bookingId: input.bookingId, error: uploadError.message },
-            'villa guest id upload failed',
-          );
-          throw new GuestIdError(
-            'Could not save the ID photo. Please try again.',
-          );
-        }
-      }
-
+      // Insert the document row first (files FK to it).
       const { error: insertError } = await admin
         .from('villa_guest_documents')
         .insert({
@@ -335,27 +420,11 @@ export function createGuestsService(client: Client) {
           doc_type: input.docType,
           masked_number: masked.masked,
           stage: input.stage,
-          storage_path: path,
-          content_type: contentType,
           captured_by: actor,
-          purge_after: idPurgeDate(booking.checkOut, property.retention_days),
+          purge_after: purgeDate,
         });
 
       if (insertError) {
-        // Never leave an untracked ID file in storage.
-        if (path) {
-          const { error: cleanupError } = await admin.storage
-            .from(GUEST_DOCS_BUCKET)
-            .remove([path]);
-
-          if (cleanupError) {
-            (await getLogger()).error(
-              { path, error: cleanupError.message },
-              'villa guest id orphan file: cleanup failed, remove by hand',
-            );
-          }
-        }
-
         (await getLogger()).error(
           { bookingId: input.bookingId, code: insertError.code },
           'villa guest id record failed',
@@ -363,15 +432,97 @@ export function createGuestsService(client: Client) {
         throw new GuestIdError('Could not save the ID. Please try again.');
       }
 
+      // Upload each file and create a file row.
+      const uploadedPaths: string[] = [];
+
+      for (let i = 0; i < parsedFiles.length; i++) {
+        const { bytes, contentType, label } = parsedFiles[i]!;
+        const fileId = crypto.randomUUID();
+        const path = `${input.accountId}/${input.propertyId}/${input.bookingId}/${documentId}/${fileId}`;
+
+        const { error: uploadError } = await admin.storage
+          .from(GUEST_DOCS_BUCKET)
+          .upload(path, bytes, { contentType, upsert: false });
+
+        if (uploadError) {
+          (await getLogger()).error(
+            {
+              bookingId: input.bookingId,
+              fileIndex: i,
+              error: uploadError.message,
+            },
+            'villa guest id file upload failed',
+          );
+          // Roll back already-uploaded files and the document row.
+          if (uploadedPaths.length) {
+            await admin.storage.from(GUEST_DOCS_BUCKET).remove(uploadedPaths);
+          }
+          await admin
+            .from('villa_guest_documents')
+            .delete()
+            .eq('id', documentId);
+          throw new GuestIdError(
+            'Could not save the ID photo. Please try again.',
+          );
+        }
+
+        const { error: fileInsertError } = await admin
+          .from('villa_guest_document_files')
+          .insert({
+            document_id: documentId,
+            account_id: input.accountId,
+            file_order: i + 1,
+            label,
+            storage_path: path,
+            content_type: contentType,
+            purge_after: purgeDate,
+            captured_by: actor,
+          });
+
+        if (fileInsertError) {
+          // Roll back this file from storage.
+          await admin.storage.from(GUEST_DOCS_BUCKET).remove([path]);
+          if (uploadedPaths.length) {
+            await admin.storage.from(GUEST_DOCS_BUCKET).remove(uploadedPaths);
+          }
+          await admin
+            .from('villa_guest_documents')
+            .delete()
+            .eq('id', documentId);
+          (await getLogger()).error(
+            { bookingId: input.bookingId, code: fileInsertError.code },
+            'villa guest id file row failed',
+          );
+          throw new GuestIdError('Could not save the ID. Please try again.');
+        }
+
+        uploadedPaths.push(path);
+      }
+
       await recordIdAccess([
         {
           accountId: input.accountId,
           documentId,
-          action: path ? 'uploaded' : 'recorded',
+          action: parsedFiles.length > 0 ? 'uploaded' : 'recorded',
           actor,
         },
       ]);
       await markReceived(site, input.bookingId, actor);
+
+      const typeLabel = idDocTypeLabel(input.docType);
+      const stageText =
+        input.stage === 'seen_in_person' ? 'seen in person' : 'photo uploaded';
+      const numText = masked.masked ? ` (${masked.masked})` : '';
+      await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking: { id: booking.id, bookingCode: booking.bookingCode },
+          action: 'id_recorded',
+          note: `${typeLabel}${numText} recorded for guest (${stageText})`,
+        },
+        actor,
+      );
 
       return { documentId };
     },
@@ -413,18 +564,113 @@ export function createGuestsService(client: Client) {
             actor,
           })),
         );
+
+        await recordBookingActivity(
+          {
+            accountId: input.accountId,
+            propertyId: input.propertyId,
+            booking: { id: booking.id, bookingCode: booking.bookingCode },
+            action: 'id_verified',
+            note: 'All IDs marked verified',
+          },
+          actor,
+        );
       }
 
       return booking;
     },
 
-    /** Owner only (checked by the caller): removes the file now. */
+    /**
+     * Marks a single document as checked (verified) by the current actor.
+     * If this was the last unverified document on the booking and all adults
+     * have an ID, the booking id_status is advanced to 'verified' automatically.
+     */
+    async markDocVerified(
+      input: z.output<typeof MarkDocVerifiedSchema>,
+      actor: string,
+    ) {
+      const admin = getSupabaseServerAdminClient();
+
+      const now = new Date().toISOString();
+
+      const { data: doc, error: docError } = await admin
+        .from('villa_guest_documents')
+        .update({ verified_by: actor, verified_at: now })
+        .eq('id', input.documentId)
+        .eq('account_id', input.accountId)
+        .eq('property_id', input.propertyId)
+        .eq('site_booking_id', input.bookingId)
+        .is('verified_at', null)
+        .is('purged_at', null)
+        .select('id')
+        .maybeSingle();
+
+      if (docError) {
+        throw new GuestIdError('Could not mark the ID as checked.');
+      }
+
+      if (!doc) {
+        // Already verified or purged — not an error.
+        return;
+      }
+
+      await recordIdAccess([
+        {
+          accountId: input.accountId,
+          documentId: doc.id,
+          action: 'verified',
+          actor,
+        },
+      ]);
+
+      await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking: { id: input.bookingId },
+          action: 'id_verified',
+          note: 'ID marked verified',
+        },
+        actor,
+      );
+
+      // Check if all adult guests' docs are now verified; if so, auto-advance
+      // the booking id_status to 'verified'.
+      try {
+        const { count: unverified } = await admin
+          .from('villa_guest_documents')
+          .select('id', { count: 'exact', head: true })
+          .eq('account_id', input.accountId)
+          .eq('property_id', input.propertyId)
+          .eq('site_booking_id', input.bookingId)
+          .is('verified_at', null)
+          .is('purged_at', null);
+
+        if (unverified === 0) {
+          const site = await getVillaSite(input.accountId, input.propertyId);
+          const booking = await setIdStatus(
+            site,
+            input.bookingId,
+            'verified',
+            actor,
+          );
+          await mirrorBooking(site, booking);
+        }
+      } catch (e) {
+        (await getLogger()).warn(
+          { bookingId: input.bookingId, error: String(e) },
+          'villa per-doc verify: auto id_status advance failed',
+        );
+      }
+    },
+
+    /** Owner only (checked by the caller): removes all files for a document. */
     async deleteId(input: z.output<typeof DeleteIdSchema>, actor: string) {
       const admin = getSupabaseServerAdminClient();
 
       const { data: doc, error } = await admin
         .from('villa_guest_documents')
-        .select('id, storage_path, stage, purged_at')
+        .select('id, stage, property_id, site_booking_id, purged_at')
         .eq('id', input.documentId)
         .eq('account_id', input.accountId)
         .maybeSingle();
@@ -433,20 +679,47 @@ export function createGuestsService(client: Client) {
       if (!doc || doc.purged_at)
         throw new GuestIdError('That ID is already deleted.');
 
-      if (doc.storage_path) {
+      // Find all live files for this document.
+      const { data: files, error: filesError } = await admin
+        .from('villa_guest_document_files')
+        .select('id, storage_path')
+        .eq('document_id', doc.id)
+        .is('purged_at', null);
+
+      if (filesError) throw new GuestIdError('Could not load the ID files.');
+
+      // Remove all storage objects.
+      const paths = (files ?? [])
+        .map((f) => f.storage_path)
+        .filter(Boolean) as string[];
+
+      if (paths.length) {
         const { error: removeError } = await admin.storage
           .from(GUEST_DOCS_BUCKET)
-          .remove([doc.storage_path]);
+          .remove(paths);
 
         if (removeError)
-          throw new GuestIdError('Could not delete the ID photo.');
+          throw new GuestIdError('Could not delete the ID photos.');
       }
 
-      // Tombstone: the record of what was held (type, masked number, who,
-      // when) stays; the file is gone.
+      // Tombstone each file row.
+      const now = new Date().toISOString();
+
+      if ((files ?? []).length > 0) {
+        const { error: updateFilesError } = await admin
+          .from('villa_guest_document_files')
+          .update({ purged_at: now })
+          .eq('document_id', doc.id)
+          .is('purged_at', null);
+
+        if (updateFilesError)
+          throw new GuestIdError('Could not delete the ID.');
+      }
+
+      // Tombstone the document row.
       const { error: updateError } = await admin
         .from('villa_guest_documents')
-        .update({ storage_path: null, purged_at: new Date().toISOString() })
+        .update({ purged_at: now })
         .eq('id', doc.id);
 
       if (updateError) throw new GuestIdError('Could not delete the ID.');
@@ -459,33 +732,58 @@ export function createGuestsService(client: Client) {
           actor,
         },
       ]);
+
+      if (doc.property_id && doc.site_booking_id) {
+        await recordBookingActivity(
+          {
+            accountId: input.accountId,
+            propertyId: doc.property_id,
+            booking: { id: doc.site_booking_id },
+            action: 'id_deleted',
+            note: 'Guest ID document deleted',
+          },
+          actor,
+        );
+      }
     },
 
     /**
-     * A 60-second link to an ID file, after the caller authorised the role.
-     * The member's own client proves they can see the record (RLS); the
-     * admin client then signs, because members have no storage access.
+     * A 60-second signed link to a specific ID file.
+     * `fileId` is `villa_guest_document_files.id`.
      */
-    async viewUrl(
+    async fileUrl(
       accountId: string,
-      documentId: string,
+      fileId: string,
       actor: string,
+      download: boolean,
     ): Promise<string> {
-      const { data: doc, error } = await client
-        .from('villa_guest_documents')
-        .select('id, account_id, storage_path, purged_at')
-        .eq('id', documentId)
+      // RLS check via member client: member must be able to read the document.
+      const { data: file, error } = await client
+        .from('villa_guest_document_files')
+        .select(
+          'id, document_id, account_id, storage_path, content_type, purged_at, villa_guest_documents(id, account_id)',
+        )
+        .eq('id', fileId)
         .eq('account_id', accountId)
         .maybeSingle();
 
-      if (error) throw new GuestIdError('Could not load the ID.');
-      if (!doc || !doc.storage_path || doc.purged_at) {
-        throw new VillaDbError('NOT_FOUND', `document ${documentId}`);
+      if (error || !file || !file.storage_path || file.purged_at) {
+        throw new VillaDbError('NOT_FOUND', `file ${fileId}`);
       }
 
-      // No record, no view.
+      // Find the document ID for the access log.
+      const docArr = Array.isArray(file.villa_guest_documents)
+        ? file.villa_guest_documents
+        : [file.villa_guest_documents];
+      const documentId = docArr[0]?.id ?? file.document_id;
+
       const recorded = await recordIdAccess([
-        { accountId, documentId: doc.id, action: 'viewed', actor },
+        {
+          accountId,
+          documentId,
+          action: download ? 'downloaded' : 'viewed',
+          actor,
+        },
       ]);
 
       if (!recorded)
@@ -493,7 +791,15 @@ export function createGuestsService(client: Client) {
 
       const { data, error: signError } = await getSupabaseServerAdminClient()
         .storage.from(GUEST_DOCS_BUCKET)
-        .createSignedUrl(doc.storage_path, SIGNED_URL_SECONDS);
+        .createSignedUrl(
+          file.storage_path,
+          SIGNED_URL_SECONDS,
+          download
+            ? {
+                download: `id-${fileId.slice(0, 8)}.${extFromMime(file.content_type)}`,
+              }
+            : undefined,
+        );
 
       if (signError || !data?.signedUrl) {
         throw new GuestIdError('Could not open the ID.');
@@ -501,5 +807,123 @@ export function createGuestsService(client: Client) {
 
       return data.signedUrl;
     },
+
+    /**
+     * Returns signed URLs for all live files of a booking, for zipping.
+     * Each entry carries the file's metadata.
+     */
+    async allFileUrls(
+      accountId: string,
+      bookingId: string,
+      actor: string,
+    ): Promise<
+      {
+        fileId: string;
+        documentId: string;
+        path: string;
+        label: string | null;
+        fileOrder: number;
+        docType: string;
+        contentType: string | null;
+        signedUrl: string;
+      }[]
+    > {
+      // This booking's documents first, so the file query can be narrowed to
+      // them. Selecting every file on the account and filtering in memory
+      // pulls the whole table in for one booking's download.
+      const { data: bookingDocs } = await client
+        .from('villa_guest_documents')
+        .select('id')
+        .eq('account_id', accountId)
+        .eq('site_booking_id', bookingId)
+        .is('purged_at', null);
+
+      const docIds = (bookingDocs ?? []).map((d) => d.id);
+
+      if (docIds.length === 0) return [];
+
+      const { data: files, error } = await client
+        .from('villa_guest_document_files')
+        .select(
+          'id, document_id, storage_path, content_type, label, file_order, purged_at, villa_guest_documents(doc_type)',
+        )
+        .eq('account_id', accountId)
+        .in('document_id', docIds)
+        .is('purged_at', null);
+
+      if (error) throw new GuestIdError('Could not load the ID files.');
+
+      const relevant = (files ?? []).filter((f) => f.storage_path);
+
+      if (relevant.length === 0) return [];
+
+      // Sign all URLs.
+      const admin = getSupabaseServerAdminClient();
+      const paths = relevant.map((f) => f.storage_path!);
+
+      const { data: signed, error: signError } = await admin.storage
+        .from(GUEST_DOCS_BUCKET)
+        .createSignedUrls(paths, SIGNED_URL_SECONDS);
+
+      if (signError || !signed) {
+        throw new GuestIdError('Could not prepare the download.');
+      }
+
+      const urlMap = new Map(signed.map((s) => [s.path, s.signedUrl]));
+
+      await recordIdAccess(
+        relevant.map((f) => ({
+          accountId,
+          documentId: f.document_id,
+          action: 'downloaded' as const,
+          actor,
+        })),
+      );
+
+      return relevant.map((f) => {
+        const docArr = Array.isArray(f.villa_guest_documents)
+          ? f.villa_guest_documents
+          : [f.villa_guest_documents];
+        return {
+          fileId: f.id,
+          documentId: f.document_id,
+          path: f.storage_path!,
+          label: f.label,
+          fileOrder: f.file_order,
+          docType:
+            (docArr[0] as { doc_type?: string } | null)?.doc_type ?? 'id',
+          contentType: f.content_type,
+          signedUrl: urlMap.get(f.storage_path!) ?? '',
+        };
+      });
+    },
+
+    /**
+     * @deprecated Use fileUrl() instead. Kept for backward compatibility:
+     * old `[documentId]` links are redirected to the first live file.
+     */
+    async viewUrl(
+      accountId: string,
+      documentId: string,
+      actor: string,
+    ): Promise<string> {
+      const { data: file, error } = await client
+        .from('villa_guest_document_files')
+        .select('id')
+        .eq('account_id', accountId)
+        .eq('document_id', documentId)
+        .is('purged_at', null)
+        .order('file_order')
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !file) {
+        throw new VillaDbError('NOT_FOUND', `document ${documentId}`);
+      }
+
+      return this.fileUrl(accountId, file.id, actor, false);
+    },
+
+    parseUploadedFiles,
   };
 }

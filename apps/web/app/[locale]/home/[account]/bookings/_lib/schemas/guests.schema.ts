@@ -66,6 +66,11 @@ export const DeleteIdSchema = z.object({
   documentId: z.string().uuid(),
 });
 
+export const MarkDocVerifiedSchema = z.object({
+  ...bookingRef,
+  documentId: z.string().uuid(),
+});
+
 export const RemoveGuestSchema = z.object({
   ...bookingRef,
   guestId: z.string().uuid(),

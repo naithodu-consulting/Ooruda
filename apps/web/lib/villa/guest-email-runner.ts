@@ -1,29 +1,43 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { getMailer } from '@kit/mailers';
 import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
 import type { Database } from '~/lib/database.types';
 import {
   type SiteBooking,
   getBooking,
+  getBookingAccessToken,
+  getPropertyLocation,
   listBookings,
+  listSitePayments,
 } from '~/lib/villa-db/bookings';
-import { type VillaSite, getVillaSite } from '~/lib/villa-db/client';
+import {
+  type VillaSite,
+  getVillaSite,
+  getVillaSiteAsSystem,
+} from '~/lib/villa-db/client';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { getBaseRates } from '~/lib/villa-db/rates';
 
+import { recordBookingActivity } from './activity';
 import {
+  DEFAULT_VILLA_ENTITY,
+  DEFAULT_VILLA_SITE_URL,
   type GuestEmailContext,
   type GuestEmailTemplate,
+  formatSenderAddress,
+  GUEST_EMAIL_LABELS,
   isPreArrivalDue,
   isThankYouDue,
   renderGuestEmail,
   THANK_YOU_WINDOW_DAYS,
 } from './guest-emails';
-import { contactCategoryLabel } from './labels';
+import { sendVillaEmail } from './guest-mailer';
+import { contactCategoryLabel, paymentModeLabel } from './labels';
+import { type LedgerStatus, summariseLedger } from './ledger';
 
 /**
  * Sends the automatic guest emails that are due (guest-emails.ts has the
@@ -35,10 +49,19 @@ import { contactCategoryLabel } from './labels';
  * Runs from the scheduled route and on villa dashboard visits.
  */
 
-/** The booking site's sender (plan decision): set per deployment. */
-function senderAddress(): string | null {
-  const from = process.env.VILLA_EMAIL_FROM?.trim();
-  return from ? from : null;
+/**
+ * The booking site's sender (plan decision): set per deployment.
+ *
+ * Falls back to the company's own reservations address rather than to
+ * nothing, so guest mail still leaves a deployment that has not set
+ * VILLA_EMAIL_FROM. EMAIL_SENDER is deliberately NOT a fallback: that is
+ * Ooruda's own ooruda.com sender, and Resend rejects a `from:` whose domain
+ * is not verified in the key's account, so it would 403 rather than send.
+ */
+function senderAddress(): string {
+  return (
+    process.env.VILLA_EMAIL_FROM?.trim() || DEFAULT_VILLA_ENTITY.supportEmail
+  );
 }
 
 type Admin = SupabaseClient<Database>;
@@ -52,20 +75,66 @@ interface PropertyContext {
   checkInTime: string | null;
   checkOutTime: string | null;
   contacts: GuestEmailContext['contacts'];
+  /** "Mangalore, Karnataka", from the booking site's own property record. */
+  location: string | null;
+  /** Guests included in the nightly rate: what "extra guests" counts above. */
+  includedGuests: number;
+  /** The company behind the villa, for the email's legal footer. */
+  legalName: string | null;
+  legalAddress: string | null;
+  cin: string | null;
+  gstin: string | null;
+  supportEmail: string | null;
+}
+
+/** The property columns the email needs beyond the ones the caller passes. */
+type PropertyRow = {
+  id: string;
+  account_id: string;
+  name: string;
+  whatsapp_number: string | null;
+  legal_name?: string | null;
+  legal_address?: string | null;
+  cin?: string | null;
+  gstin?: string | null;
+  support_email?: string | null;
+};
+
+export const EMAIL_PROPERTY_COLUMNS =
+  'id, account_id, name, whatsapp_number, legal_name, legal_address, cin, gstin, support_email';
+
+/**
+ * The booking site's public origin, for the three policy links and the
+ * guest's own booking page. Unset in a deployment that has no site URL
+ * configured, and every block that needs it is then skipped rather than
+ * linking nowhere.
+ */
+function siteBaseUrl(): string {
+  const url = process.env.VILLA_SITE_URL?.trim();
+
+  return (url ? url : DEFAULT_VILLA_SITE_URL).replace(/\/+$/, '');
 }
 
 async function loadContext(
   admin: Admin,
-  p: {
-    id: string;
-    account_id: string;
-    name: string;
-    whatsapp_number: string | null;
-  },
+  p: PropertyRow,
+  options: { system?: boolean } = {},
 ): Promise<PropertyContext> {
-  const site = await getVillaSite(p.account_id, p.id);
-  const [rates, { data: contacts, error }] = await Promise.all([
+  // The scheduled run has no user session, so the RLS-enforced property
+  // lookup refuses it for every villa and no email would ever go out — the
+  // same cause that stopped the scheduled mirror sync. The manual "Send now"
+  // path keeps the RLS lookup: it runs under the member's own session, which
+  // bookings-actions has already checked with requireVillaRole and its own
+  // getVillaSite.
+  const site = options.system
+    ? await getVillaSiteAsSystem(p.account_id, p.id)
+    : await getVillaSite(p.account_id, p.id);
+  const [rates, location, { data: contacts, error }] = await Promise.all([
     getBaseRates(site),
+    // The locality line is cosmetic: a villa whose site record has no city
+    // simply loses that one sub-line, so a failure here must not stop the
+    // email from going out.
+    getPropertyLocation(site).catch(() => null),
     admin
       .from('villa_emergency_contacts')
       .select('name, category, phone')
@@ -80,7 +149,7 @@ async function loadContext(
     accountId: p.account_id,
     propertyId: p.id,
     name: p.name,
-    whatsApp: p.whatsapp_number,
+    whatsApp: p.whatsapp_number || DEFAULT_VILLA_ENTITY.whatsApp,
     site,
     checkInTime: rates.checkInTime,
     checkOutTime: rates.checkOutTime,
@@ -89,21 +158,94 @@ async function loadContext(
       role: contactCategoryLabel(c.category),
       phone: c.phone,
     })),
+    location,
+    includedGuests: rates.includedGuests,
+    legalName: p.legal_name || DEFAULT_VILLA_ENTITY.legalName,
+    legalAddress: p.legal_address || DEFAULT_VILLA_ENTITY.legalAddress,
+    cin: p.cin || DEFAULT_VILLA_ENTITY.cin,
+    // A GSTIN is a per-state registration, so there is no company-wide
+    // default to fall back to: the line is skipped until this villa has one.
+    gstin: p.gstin ?? null,
+    // Falls back to the configured sender or default support email
+    supportEmail:
+      p.support_email || replyToAddress() || DEFAULT_VILLA_ENTITY.supportEmail,
   };
 }
 
-function contextFor(ctx: PropertyContext, b: SiteBooking): GuestEmailContext {
+/** The bare address out of VILLA_EMAIL_FROM ("Name <a@b.com>" or "a@b.com"). */
+function replyToAddress(): string | null {
+  const from = senderAddress();
+
+  if (!from) return null;
+
+  return (
+    /<([^>]+)>/.exec(from)?.[1]?.trim() ?? (from.includes('@') ? from : null)
+  );
+}
+
+function contextFor(
+  ctx: PropertyContext,
+  b: SiteBooking,
+  ledger?: { netPaidPaise: number; status: LedgerStatus },
+  extra?: {
+    bookingUrl?: string | null;
+    paymentMethod?: string | null;
+    paymentDate?: string | null;
+  },
+): GuestEmailContext {
+  // The site's payment_status is not the truth for this: sitePaymentStatus()
+  // pins a fully paid villa booking to 'partially_paid' so the site does not
+  // issue its GST invoice before check-out. Quoting it would tell a guest who
+  // has paid in full that a balance is due. Ooruda's ledger is the exact
+  // record, so it wins wherever it has seen money. With no receipts the site
+  // value stands, which keeps bookings taken before advances were captured
+  // reading as "a deposit was received" rather than as unpaid.
+  const known = ledger !== undefined && ledger.netPaidPaise > 0;
+
   return {
     villaName: ctx.name,
     guestName: b.guestName,
+    guestEmail: b.guestEmail || undefined,
+    bookedAt: b.createdAt || undefined,
     bookingCode: b.bookingCode,
     checkIn: b.checkIn,
     checkOut: b.checkOut,
     checkInTime: ctx.checkInTime,
     checkOutTime: ctx.checkOutTime,
     adults: b.adults,
+    children: b.children,
+    guestPhone: b.guestPhone || undefined,
+    baseAmountPaise: b.baseAmountPaise,
+    extraGuestAmountPaise: b.extraGuestAmountPaise,
+    discountAmountPaise: b.discountAmountPaise,
+    discountCode: b.discountCode,
+    taxAmountPaise: b.taxAmountPaise,
+    totalAmountPaise: b.totalAmountPaise,
+    amountPaidPaise: known
+      ? ledger.netPaidPaise
+      : b.paymentStatus === 'paid'
+        ? b.totalAmountPaise
+        : 0,
+    paymentStatus: known ? ledger.status : b.paymentStatus,
     whatsApp: ctx.whatsApp,
     contacts: ctx.contacts,
+    propertyLocation: ctx.location,
+    // The booking row keeps the extra-guest amount but not the head count the
+    // pricing engine worked it out from, so it is derived here. Infants never
+    // count towards occupancy.
+    extraGuests:
+      b.extraGuestAmountPaise > 0
+        ? Math.max(0, b.adults + b.children - ctx.includedGuests)
+        : null,
+    paymentMethod: extra?.paymentMethod ?? null,
+    paymentDate: extra?.paymentDate ?? null,
+    bookingUrl: extra?.bookingUrl ?? null,
+    siteBaseUrl: siteBaseUrl(),
+    legalName: ctx.legalName,
+    legalAddress: ctx.legalAddress,
+    cin: ctx.cin,
+    gstin: ctx.gstin,
+    supportEmail: ctx.supportEmail,
   };
 }
 
@@ -194,6 +336,96 @@ async function finish(
   }
 }
 
+/**
+ * What the guest has actually paid, from Ooruda's own ledger (website
+ * payments plus offline receipts, less refunds), with the status that follows
+ * from it. netPaidPaise is 0 when nothing is receipted against the booking.
+ */
+async function ledgerFor(
+  ctx: PropertyContext,
+  b: SiteBooking,
+): Promise<{ netPaidPaise: number; status: LedgerStatus }> {
+  const admin = getSupabaseServerAdminClient();
+
+  const [online, offline, refunds] = await Promise.all([
+    // `b` came from this property's own booking list, so it is already scoped.
+    listSitePayments(ctx.site, b.id, { verified: true }),
+    admin
+      .from('villa_booking_payments')
+      .select('amount, voided_at')
+      .eq('property_id', ctx.propertyId)
+      .eq('site_booking_id', b.id),
+    admin
+      .from('villa_refunds')
+      .select('amount, status')
+      .eq('property_id', ctx.propertyId)
+      .eq('site_booking_id', b.id),
+  ]);
+
+  if (offline.error || refunds.error) {
+    return { netPaidPaise: 0, status: 'unpaid' };
+  }
+
+  const summary = summariseLedger({
+    totalPaise: b.totalAmountPaise,
+    bookingStatus: b.status,
+    online: online.map((p) => ({
+      amountPaise: p.amountPaise,
+      status: p.status,
+    })),
+    offline: (offline.data ?? []).map((p) => ({
+      amount: Number(p.amount),
+      voided: Boolean(p.voided_at),
+    })),
+    refunds: (refunds.data ?? []).map((r) => ({
+      amount: Number(r.amount),
+      status: r.status,
+    })),
+  });
+
+  return { netPaidPaise: summary.netPaidPaise, status: summary.status };
+}
+
+/**
+ * How the guest actually paid, for the line beside the amount. A website
+ * booking is settled through the payment gateway; a booking staff entered is
+ * whatever they receipted it as. Null when nothing has been received, so the
+ * line stays a bare "Paid <date>" rather than naming a method we are guessing.
+ */
+async function paymentMethodFor(
+  ctx: PropertyContext,
+  b: SiteBooking,
+): Promise<{ method: string | null; paidOn: string | null }> {
+  const online = await listSitePayments(ctx.site, b.id, { verified: true });
+
+  if (online.length > 0) {
+    // Latest settled payment: the one the email's paid line refers to.
+    const latest = online.reduce<string | null>(
+      (newest, p) =>
+        p.createdAt && (!newest || p.createdAt > newest) ? p.createdAt : newest,
+      null,
+    );
+
+    return { method: 'Razorpay', paidOn: latest };
+  }
+
+  const { data } = await getSupabaseServerAdminClient()
+    .from('villa_booking_payments')
+    .select('mode, paid_on')
+    .eq('property_id', ctx.propertyId)
+    .eq('site_booking_id', b.id)
+    .is('voided_at', null)
+    .order('paid_on', { ascending: false })
+    .limit(1);
+
+  const row = data?.[0];
+
+  return {
+    method: row?.mode ? paymentModeLabel(row.mode) : null,
+    paidOn: row?.paid_on ?? null,
+  };
+}
+
 /** Sends one email to the booking's guest. Never throws. */
 export async function deliverGuestEmail(
   ctx: PropertyContext,
@@ -204,31 +436,53 @@ export async function deliverGuestEmail(
   reason?: string;
   providerId?: string;
 }> {
-  const from = senderAddress();
+  const rawFrom = senderAddress();
 
-  if (!from)
-    return {
-      status: 'failed',
-      reason: 'No sender address set (VILLA_EMAIL_FROM).',
-    };
   if (!b.guestEmail)
     return { status: 'skipped', reason: 'The booking has no guest email.' };
 
-  const { subject, html } = renderGuestEmail(template, contextFor(ctx, b));
+  const from = formatSenderAddress(ctx.name, rawFrom);
+  const replyTo = ctx.supportEmail ?? replyToAddress() ?? undefined;
+
+  // Only the confirmation prints a payment breakdown.
+  const ledger =
+    template === 'booking_confirmation'
+      ? await ledgerFor(ctx, b).catch(() => undefined)
+      : undefined;
+
+  // Only the confirmation carries the "View your booking" button, and the
+  // token is read on its own so it never travels with the booking object.
+  // Neither lookup is allowed to stop the email: without them the button and
+  // the payment method are simply left out.
+  const site = siteBaseUrl();
+  const [token, payment] =
+    template === 'booking_confirmation'
+      ? await Promise.all([
+          site
+            ? getBookingAccessToken(ctx.site, b.id).catch(() => null)
+            : Promise.resolve(null),
+          paymentMethodFor(ctx, b).catch(() => null),
+        ])
+      : [null, null];
+
+  const { subject, html, text } = renderGuestEmail(
+    template,
+    contextFor(ctx, b, ledger, {
+      bookingUrl: site && token ? `${site}/booking/${token}` : null,
+      paymentMethod: payment?.method ?? null,
+      paymentDate: payment?.paidOn ?? null,
+    }),
+  );
 
   try {
-    const result = await (
-      await getMailer()
-    ).sendEmail({
+    const { providerId } = await sendVillaEmail({
       to: b.guestEmail,
       from,
+      replyTo,
       subject,
       html,
+      text,
     });
-    const providerId =
-      result && typeof result === 'object' && 'id' in result
-        ? String((result as { id: unknown }).id)
-        : undefined;
 
     return { status: 'sent', providerId };
   } catch (error) {
@@ -330,9 +584,11 @@ export async function loadGuestEmailContext(
   propertyId: string,
 ) {
   const admin = getSupabaseServerAdminClient();
-  const { data: p, error } = await admin
+  // Use server client (RLS) for the property read; admin is passed to
+  // loadContext for privileged lookups (emergency contacts, etc.).
+  const { data: p, error } = await getSupabaseServerClient()
     .from('villa_properties')
-    .select('id, account_id, name, whatsapp_number')
+    .select(EMAIL_PROPERTY_COLUMNS)
     .eq('id', propertyId)
     .eq('account_id', accountId)
     .single();
@@ -386,7 +642,7 @@ export async function runDueGuestEmails(
 
   let query = admin
     .from('villa_properties')
-    .select('id, account_id, name, whatsapp_number')
+    .select(EMAIL_PROPERTY_COLUMNS)
     .eq('status', 'active')
     .not('site_property_id', 'is', null);
   let settingsQuery = admin
@@ -418,13 +674,13 @@ export async function runDueGuestEmails(
     if (Date.now() - started > RUN_BUDGET_MS) break;
 
     const on = switches.get(p.account_id);
-    const preArrival = on?.pre_arrival_email ?? true;
-    const thankYou = on?.thank_you_email ?? true;
+    const preArrival = on?.pre_arrival_email ?? false;
+    const thankYou = on?.thank_you_email ?? false;
 
     if (!preArrival && !thankYou) continue;
 
     try {
-      const ctx = await loadContext(admin, p);
+      const ctx = await loadContext(admin, p, { system: true });
       if (preArrival) await runPreArrival(admin, ctx, now);
       if (thankYou) await runThankYou(admin, ctx, now);
     } catch (e) {
@@ -452,15 +708,19 @@ export async function sendGuestEmailNow(
   actor: string,
 ) {
   const allowed =
-    template === 'pre_arrival'
-      ? booking.status === 'confirmed' && booking.checkIn >= todayIst()
-      : booking.status === 'completed';
+    template === 'booking_confirmation'
+      ? booking.status === 'confirmed' || booking.status === 'completed'
+      : template === 'pre_arrival'
+        ? booking.status === 'confirmed' && booking.checkIn >= todayIst()
+        : booking.status === 'completed';
 
   if (!allowed) {
     throw new Error(
-      template === 'pre_arrival'
-        ? 'The arrival email is only for a confirmed, upcoming stay.'
-        : 'The thank-you email goes only after check-out.',
+      template === 'booking_confirmation'
+        ? 'The confirmation email is only for a confirmed or completed stay.'
+        : template === 'pre_arrival'
+          ? 'The arrival email is only for a confirmed, upcoming stay.'
+          : 'The thank-you email goes only after check-out.',
     );
   }
 
@@ -492,5 +752,85 @@ export async function sendGuestEmailNow(
 
   if (outcome.status !== 'sent') {
     throw new Error(outcome.reason ?? 'Could not send the email.');
+  }
+
+  const templateLabel = GUEST_EMAIL_LABELS[template] ?? template;
+  await recordBookingActivity(
+    {
+      accountId,
+      propertyId,
+      booking: { id: booking.id, bookingCode: booking.bookingCode },
+      action: 'email_sent',
+      note: `${templateLabel} email sent manually to ${booking.guestEmail}`,
+    },
+    actor,
+  );
+}
+
+/**
+ * Sends a booking confirmation email immediately after a manual booking is
+ * created. Logs to villa_message_log; never throws — a failed send is
+ * recorded and shown to staff on the booking page, who can resend manually.
+ *
+ * Skips silently when the booking has no guest email.
+ */
+export async function sendBookingConfirmation(
+  accountId: string,
+  propertyId: string,
+  booking: SiteBooking,
+): Promise<void> {
+  if (!senderAddress()) return;
+  if (!booking.guestEmail) return;
+
+  const admin = getSupabaseServerAdminClient();
+
+  // Check the account toggle.
+  const { data: settings } = await admin
+    .from('villa_account_settings')
+    .select('booking_confirmation_email')
+    .eq('account_id', accountId)
+    .maybeSingle();
+
+  if (settings?.booking_confirmation_email === false) return;
+
+  const ctx = await loadGuestEmailContext(accountId, propertyId);
+
+  const { data: row, error } = await admin
+    .from('villa_message_log')
+    .insert({
+      account_id: accountId,
+      property_id: propertyId,
+      site_booking_id: booking.id,
+      booking_code: booking.bookingCode,
+      template: 'booking_confirmation' as const,
+      manual: false,
+      status: 'sending',
+      to_email: booking.guestEmail,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    (await getLogger()).error(
+      { bookingId: booking.id, code: error.code },
+      'villa booking confirmation: log insert failed',
+    );
+    return;
+  }
+
+  const outcome = await deliverGuestEmail(ctx, booking, 'booking_confirmation');
+  await finish(admin, row.id, outcome);
+
+  if (outcome.status === 'sent') {
+    await recordBookingActivity(
+      {
+        accountId,
+        propertyId,
+        booking: { id: booking.id, bookingCode: booking.bookingCode },
+        action: 'email_sent',
+        note: `Booking confirmation email sent automatically to ${booking.guestEmail}`,
+      },
+      null,
+    );
   }
 }

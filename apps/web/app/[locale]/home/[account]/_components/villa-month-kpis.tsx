@@ -88,25 +88,25 @@ export async function VillaMonthKpis(props: {
   const tiles = [
     {
       key: 'occupancy',
-      label: `Occupancy, ${monthName}`,
+      label: `${monthName} Occupancy`,
       value: `${k.occupancyPct}%`,
       hint: `${k.bookedNights} of ${k.nightsInMonth} nights booked`,
     },
     {
       key: 'revenue',
-      label: `Revenue, ${monthName}`,
+      label: `${monthName} Revenue`,
       value: formatINR(k.revenue),
       hint: `Before GST, ${k.stays} stay${k.stays === 1 ? '' : 's'}`,
     },
     {
       key: 'adr',
-      label: 'Average per night',
+      label: 'Avg. Booked Night',
       value: formatINR(k.averageNightly),
       hint: 'Revenue per booked night',
     },
     {
       key: 'revpar',
-      label: 'Revenue per available night',
+      label: 'Avg. Available Night',
       value: formatINR(k.revenuePerNight),
       hint: 'Across every night of the month',
     },
@@ -124,9 +124,11 @@ export async function VillaMonthKpis(props: {
             className="bg-card"
             data-test={`villa-kpi-${t.key}`}
           >
-            <CardContent className="flex flex-col gap-1 px-4 py-3 sm:px-6 sm:py-4">
-              <span className="text-muted-foreground text-xs">{t.label}</span>
-              <span className="text-lg font-semibold tabular-nums sm:text-xl">
+            <CardContent className="flex flex-col gap-1 px-4 py-3 sm:px-5 sm:py-4">
+              <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                {t.label}
+              </span>
+              <span className="text-xl font-bold tabular-nums sm:text-2xl">
                 {t.value}
               </span>
               <span className="text-muted-foreground text-xs">{t.hint}</span>

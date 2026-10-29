@@ -4,6 +4,577 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa: Booking Actions, Guest IDs, Report Exports, Sync Messaging & Confirmation Email — 2026-10-29
+
+### Booking confirmation email sender header, policy links, and contact/footer parity
+- **Sender display name in inbox**: The `From` header is now formatted with the property's name (`formatSenderAddress(ctx.name, rawFrom)`), ensuring mail clients like Gmail display the villa name (e.g. `Villa 19`) in the inbox instead of falling back to the mailbox name `reservations`. Also passes `reply_to` explicitly to Resend, and supports `RESEND_API_KEY` directly.
+- **Policy links parity**: Privacy Policy, Terms of Service, and Cancellation Policy links now safely fall back to the live domain `https://villa19.in` (`DEFAULT_VILLA_SITE_URL`) when `VILLA_SITE_URL` is unset in the environment, guaranteeing that the mandatory policy sentence and links are rendered in both HTML and plain-text booking vouchers.
+- **"If you need us" WhatsApp row and company footer**: Added canonical `DEFAULT_VILLA_ENTITY` fallback in `loadContext` so that confirmation emails carry the full WhatsApp contact row (`+91 80504 84123` with "The fastest way to reach us." subtext) and the registered company legal footer (`HABBAA SOLUTIONS PVT LTD`, address, CIN) matching the booking site's confirmation voucher even before manual settings entry.
+- **GSTIN is deliberately not in that default.** A GSTIN is a per-state registration — the leading digits are the state code (`29` = Karnataka) — so it belongs to the property, not to the company. It is read from `villa_properties.gstin` and the footer line is skipped when unset, so a villa registered in another state can never inherit Karnataka's number on a tax document.
+- **WhatsApp number added to Villa Settings > Business details**: Added `whatsappNumber` to `BusinessDetailsSchema`, `BusinessDetailsCard`, and `saveBusinessDetails` service. Staff can now configure and update the property's WhatsApp number directly from Villa Settings.
+- **Sender fallbacks narrowed**: `senderAddress()` falls back to `VILLA_EMAIL_FROM` and then to the company reservations address only. `EMAIL_SENDER` is deliberately *not* a fallback — that is Ooruda's own `ooruda.com` sender, and Resend rejects a `from:` whose domain is not verified in the key's account, so it would return 403 rather than send.
+
+### Comprehensive Activity Logging for All Important User Actions
+- **Database constraint widening (`20261029221000_villa_widen_booking_activity_actions.sql`)**: Widened `villa_booking_activity_action_check` from the original 5 actions (`created`, `cancelled`, `completed`, `reopened`, `note`) to include:
+  - `payment_recorded`: Offline advance or stay payment recorded (logs amount, mode, receipt number, reference).
+  - `payment_voided`: Payment receipt voided by admin (logs reason).
+  - `refund_recorded`: Refund recorded by admin (logs amount, mode, refund number, reason).
+  - `id_recorded`: Guest ID captured in person or uploaded (logs document type, masked ID number, stage).
+  - `id_verified`: Guest ID document verified by staff.
+  - `id_deleted`: Guest ID document deleted before retention expiry.
+  - `email_sent`: Guest email dispatched manually or automatically (logs template, recipient).
+  - `guest_added` & `guest_removed`: Guests added to or removed from a stay.
+- **Shared helper `recordBookingActivity` (`lib/villa/activity.ts`)**: Encapsulates privileged service-role activity log writes so business transactions complete reliably with failure logging.
+- **Activity log table enhancements (`activity-log-table.tsx` & `labels.ts`)**: Distinct icons (`CreditCard`, `Ban`, `RotateCcw`, `FileCheck`, `ShieldCheck`, `Trash2`, `Mail`, `UserPlus`, `UserMinus`) and readable labels for all actions on `/home/[account]/villa-activity`.
+
+### Booking detail actions no longer float away from the page
+- `Check out` and `Cancel booking` were rendered into `TeamAccountLayoutPageHeader`, which spans the full width while the booking content sits in a `max-w-4xl` column — the buttons landed far right of where the page ends and read as app chrome rather than as this booking's actions.
+- Both actions now sit in a `bg-card` status bar inside the content column, sharing a row with the Confirmed / payment / ID badges. On phones the bar stacks and the actions go full width.
+
+### Add ID dialog: the "New guest" picker is gone on the first ID
+- On a booking with no guests on file, the Guest select offered exactly one option — "New guest" — and showed it as the selected value, which read as if the dialog had lost the guest's name.
+- The picker is now rendered only when there is a guest to pick. With guests on file the "add someone new" entry reads **Someone else**, and the field carries a description ("Pick a guest already on this booking, or add someone else").
+
+### Reports PDF is a generated document, not a browser printout
+- `Download / Print PDF` called `window.print()`, so the file carried the charts, the filter pills and only the rows the tab had paged into view.
+- New generic `VillaReportDocument` (`@kit/pdf-templates`) + `renderVillaReportPdf()`: A4, repeating table headers, KPI tiles, totals rows, page numbers and a "Generated … by …" footer.
+- New `downloadVillaReportPdfAction` renders server-side through `loadPdfRenderer()` (warm-up overlapped with the queries), re-resolves the date range, checks the villa role and reads the report author from `profiles` rather than the browser.
+- Report loading moved out of `villa-reports/page.tsx` into `_lib/server/load-report.ts`, so the page and the export read the same figures and cannot disagree. Every tab exports all rows in the period, not the current page.
+
+### Report PDF export: measured and tuned
+
+Checked end to end against every tab, with the rendered pages read back rather
+than assumed.
+
+- **Three serial round trips became one wave.** The export awaited the role
+  check, then the property list and profile, then the report queries. The role
+  check is defence in depth - the report queries run on the RLS-enforced
+  client, which is what actually decides what this caller may read - so all of
+  them now start together. On the dev database the five calls go out in one
+  wave of ~105-150 ms instead of three waves.
+- **The renderer warms on page load, not on the first click.** The first PDF in
+  a process pays ~150 ms to register fonts plus the first render's JIT; the
+  reports page now calls `loadPdfRenderer()` without awaiting it, so that is
+  spent while the reader is still looking at the screen. Measured before:
+  1,453 ms for the first export, 514 ms for the second. After: 850-944 ms warm,
+  including the render.
+- **Render cost measured per tab** (A4, 40 stays / 25 expenses / 30 payments):
+  76-302 ms warm, 14.6-21.1 KB per file, one-off warm-up 142 ms.
+- `buildPdfData` moved out of the `'use server'` action into
+  `report-pdf-data.ts` so it can be tested directly, with tests covering every
+  tab: that each row has exactly as many cells as its header, that the totals
+  row matches its KPI tile, and that channels, payment modes and expense
+  categories print as labels rather than as database codes.
+- **Fixed:** an unrecognised tab fell through to the overview tables but keyed
+  its title straight off the tab, so the document was titled `undefined`.
+- Not adopted from the bills/receipts path: their content-addressed Storage
+  cache. A report is recomputed from the bookings mirror, which is refreshed on
+  every page view, so a cached PDF would usually miss and cost an upload.
+- Known limit: the export carries every row in the period, and the loader's
+  own ceiling is 100,000 rows. A villa anywhere near that would exhaust the
+  function's memory or wall clock and the user would see only "Could not
+  generate the PDF." A legible row cap is worth adding before any villa gets
+  close.
+
+### Airbnb sync messages rewritten for end users
+- A sync with no calendar linked showed a **green success** toast reading "No active Airbnb calendar feed is configured." It now shows an info toast: "Nothing to sync yet - no Airbnb calendar is linked to this villa. Ooruda support can link it for you.", with the button reading "No calendar linked". It deliberately does not name a screen: the feed lives in `ical_feeds` on the booking site's database and nothing in Ooruda writes that table, so pointing a villa owner at Villa Settings would be the same kind of confidently wrong message this replaced.
+- Every other outcome says what changed in plain language: "Airbnb calendar synced - 3 dates blocked, 1 date freed", "Airbnb calendar is up to date. Nothing changed.", "Could not reach the Airbnb calendar. Nothing was changed - please try again in a few minutes.", and the clash warning names the dates to check.
+
+### Booking confirmation email brought to parity with the booking site
+
+The confirmation Ooruda sends for a hand-entered booking was missing most of
+what the booking site's own confirmation carries. Added:
+
+- **Cancellations & refund section.** The dated refund ladder, the
+  non-refundable and partially-refundable banners, and the "email us with your
+  reference, refunds in 5 to 7 working days" line. `lib/villa/cancellation.ts`
+  mirrors the booking site's tiers (100% above 14 days, 50% from 7 to 14, none
+  under 7) and filters them against when the booking was actually made, so a
+  guest booking close in is never shown a deadline that passed before they paid.
+  **A tier change on the booking site must be repeated in that file.**
+- **Policy links** (Privacy, Terms, Cancellation) off `VILLA_SITE_URL`, and a
+  **"View your booking"** button. The booking's `access_token` is read on its
+  own, server-side, and never travels with the booking object the booking
+  screen hands to client components.
+- **Legal footer** — company name, registered address, CIN, GSTIN and the
+  "you are receiving this because you booked a stay" line. Every line is
+  optional; a villa with no company details gets no footer rather than a blank
+  one.
+- **The refund ladder is a percentage of what the guest has actually paid**,
+  never of the contract total. The booking site can pass its total safely
+  because a stay exists there only once Razorpay has settled it in full;
+  Ooruda sends this same confirmation for hand-entered bookings, where unpaid
+  and part-paid are ordinary. Ported as-is, it would have told an unpaid
+  ₹54,280 booking that ₹54,280 "will be refunded", in writing, under the
+  company's CIN. Nothing received, or an amount that was never receipted,
+  prints no ladder at all; the policy links still go out.
+- **The paid line is dated from the receipt, not the booking.** A hand-entered
+  booking is commonly receipted days later, so dating it from `bookedAt` would
+  contradict the villa's own ledger beside a correct payment method.
+- **A plain-text alternative.** The email went out as HTML only, which reads as
+  bulk mail to the filters that decide whether a confirmation reaches an inbox.
+  Note: the shared mailer's config is a union of `{text} | {html}` and its
+  Resend provider sends only one of them, so the text part goes out on the
+  direct `VILLA_RESEND_API_KEY` path, and the fallback path still sends HTML.
+- Villa locality under the villa's name, the extra-guest count in its label
+  ("Extra guests, 2"), "Paid 13 Oct 2026 · Razorpay" in place of a bare "Paid",
+  the ask to correct a wrong email or mobile, and every phone number through
+  `formatPhoneNumber`.
+
+### Villa Settings: a Business details tab
+
+`PoliciesForm` has not been rendered since the settings re-architecture, so the
+business fields it owned (legal name, GSTIN) had no UI at all. A fifth tab,
+**Business details**, now owns them along with the three new ones, with its own
+schema and action. `villa_properties` is granted column by column, so the
+migration also grants `update` on the new columns - the RLS policy alone leaves
+them read-only and the save fails with no rows changed.
+
+### Migrations
+
+| Migration | Purpose |
+| --- | --- |
+| `20261029114330_villa_property_legal_details` | Adds nullable `legal_address`, `cin` and `support_email` to `villa_properties` (with format checks), and grants `update` on them to `authenticated`. |
+| `20261029161500_villa_populate_villa19_business_details` | Seeds the Villa 19 row with the operating company details, support email, GSTIN and WhatsApp number. Matched on `booking_code_prefix = 'V19'` rather than on the display name: `villa_properties.id` is `uuid_generate_v4()` and so differs per environment, and an exact prefix match cannot catch an unrelated future property with "Habbaa" in its name. Every column uses `coalesce(nullif(trim(...), ''))`, so a value already entered in Villa Settings is never overwritten. Data-only; no schema change. |
+| `20261029221000_villa_widen_booking_activity_actions` | Widens `villa_booking_activity_action_check` from 5 to 14 values, adding `payment_recorded`, `payment_voided`, `refund_recorded`, `id_recorded`, `id_verified`, `id_deleted`, `email_sent`, `guest_added`, `guest_removed`. A strict superset of the original 5, so existing rows all still satisfy it. |
+
+**Apply this migration BEFORE deploying the code.** The migration is additive
+and safe on its own, but the code is not deploy-order tolerant: Villa Settings
+and `guest-email-runner` both `select` the three new columns, so on an
+environment where the migration has not run, PostgREST fails the whole request
+with `42703`. That takes out the entire Villa Settings screen (not just the new
+tab) and the whole scheduled guest-email run — pre-arrival, thank-you and
+manual booking confirmations — for every villa, until the migration lands.
+Applied to dev on 2026-10-29; production needs it before `main` deploys.
+
+---
+
+## Villa: UI/UX Modernization, Performance & Settings Re-architecture — 2026-10-29
+
+### Settings Page Re-architecture & Deprecation
+- **Removed Deprecated Tabs & Queries**: Completely removed `Add-ons` and `Emergency contacts` tabs and unmounted their respective client components (`addons-section.tsx`, `contacts-section.tsx`). Removed the two corresponding SQL queries (`villa_addons`, `villa_emergency_contacts`) from `villa-settings/page.tsx` on every page load, reducing page load latency and network round-trips.
+- **Fixed Layout Hierarchy Inversion**: Previously, `Booking cutoff date` and `Automatic guest emails` were rendered statically above the tabs, taking up substantial viewport height on every tab switch. Moved both sections inside their own dedicated, semantic tabs:
+  - **`Booking cutoff` tab (`cutoff`)**: Contains the `BookingCutoffCard` (date picker with clearable support and operational description).
+  - **`Guest emails` tab (`emails`)**: Contains the `GuestEmailsCard` (automated pre-arrival welcome email and post-checkout thank-you email switches with confirmation dialogs).
+- **Streamlined 4-Tab Navigation**: Villa Settings now features a clean, unified tab bar:
+  `[ Rates & guests | Seasonal rates | Booking cutoff | Guest emails ]`
+- **Contextual Deep Linking**: Connected the Calendar booking cutoff alert ("Closed for booking after [date]. Change the date in Settings") directly to `villa-settings?tab=cutoff`.
+
+### UI/UX & Performance Improvements Across Villa Pages
+- **Reports Page Date Range Picker (`villa-reports`)**:
+  - Removed awkward secondary line below the date range pills containing redundant "includes future bookings" and "synced ..." metadata.
+  - Aligned with Ooruda Association Reports pattern: active preset pills clearly reflect current period; Custom Range popover displays formatted date range ("Range: [from] – [to]").
+  - Preserved `data-test="villa-reports-period"` attribute on the Date Range Picker container for E2E testing compatibility.
+- **Invite Members Dialog Performance & Role Scoping (`/home/[account]/members`)**:
+  - Eliminated the slow loading spinner ("Loading. Please wait...") when opening the Invite Members dialog by bypassing redundant client-side preflight HTTP requests and fetching roles synchronously from server-provided `allowedRoles`.
+  - Fixed role selector initializing with `Property Owner` on Villa workspaces: default role now defaults to `Villa Manager` (`villa_manager`).
+  - Scoped role selector to Villa-only roles (`villa_admin`, `villa_manager`) when inviting or editing members on Villa accounts.
+  - Dynamically updated dialog title to "Invite Members to your Villa" for Villa workspaces.
+- **Month Navigation (`MonthNav`) Redesign**:
+  - Redesigned `MonthNav` into a cohesive segmented control (`bg-card inline-flex h-9 items-center overflow-hidden rounded-lg border shadow-2xs`) with integrated previous month arrow, date picker popover trigger, and next month arrow.
+  - Replaced standalone "Jump to today" link with an integrated companion button featuring a `RotateCcw` icon, rendered only when viewing a non-current month ("Current month" on Expenses, "Today" on Calendar).
+  - Eliminated sticky yellow `:focus-visible` rings on arrow clicks.
+- **Expenses Page Toolbar & KPI Grid (`villa-expenses`)**:
+  - Moved `VillaSwitcher` into `TeamAccountLayoutPageHeader` (consistent with Reports and Discounts).
+  - Aligned top action toolbar row: `MonthNav` on the left and `+ Add expense` button on the right.
+  - Reorganized `SPENT` and `GST PAID` into a balanced 2-column KPI card grid (`grid-cols-2 gap-3`), eliminating the empty 3rd slot.
+- **Calendar Page Toolbar, Occupancy Summary & Legend (`calendar`)**:
+  - Replaced raw floating text ("1 of 30 nights booked, 5 blocked") with a structured Occupancy Summary Pill Bar (`bg-card inline-flex min-h-9 flex-wrap items-center gap-2.5 rounded-lg border px-3.5 py-1.5 text-xs shadow-2xs`) featuring color-coded status indicator dots and bold tabular counts.
+  - Integrated the color Legend directly inside the Calendar card's bottom bar (`border-t bg-muted/20 px-4 py-2.5`), consolidating multiple loose rows into a single clean toolbar row above the calendar grid.
+- **Dropdown Menu Overflow**:
+  - Fixed category dropdown option clipping in `@kit/ui/select` (`packages/ui/src/makerkit/select.tsx`) by setting `min-w-(--anchor-width) w-auto`.
+
+---
+
+## Villa: Performance — Page Load, API Round Trips & Query Cost — 2026-10-29
+
+A comprehensive performance pass over every Ooruda Villa page, API route and
+query. Nothing about what the screens show changes; what changes is how much
+work a page does before it can show it.
+
+### Scheduled mirror sync was never running (the headline fix)
+- **`/api/villa/sync` failed for every property.** `getVillaSite()` resolved the villa property with the cookie-based, RLS-enforced Supabase client. The scheduler has no user session, so that client is the anon role, which is refused outright on `villa_properties` (`permission denied for schema public`) — every scheduled run raised `NOT_FOUND` and synced nothing.
+- **Consequence:** the bookings mirror was *always* stale, so Dashboard, Reports and Discount codes ran the inline catch-up sync (`refreshMirrorForRead`) on virtually every visit and paid its full 2.5 s budget each time.
+- **Scheduled guest emails were broken by the same cause.** `runDueGuestEmails()` runs in the same cron request and resolves each villa through the same RLS-bound lookup, so every villa failed. It was invisible locally because the loop does `if (!preArrival && !thankYou) continue` and the test account had no settings row — with the pre-arrival switch on, the route reported `emailRunsFailed: 1`. So scheduled pre-arrival and thank-you emails have never gone out either.
+- **Fix:** added `getVillaSiteAsSystem()` / `loadVillaPropertiesAsSystem()`, which resolve the property with the service role, and used them from the two scheduled paths only — `syncPropertyMirror(..., { system: true })` and `loadContext(..., { system: true })`. Page requests and the manual "Send now" button still go through the RLS-enforced lookup, unchanged (the manual path is additionally gated by `requireVillaRole` and its own `getVillaSite`). Verified: the cron route now returns `{"synced":1,"failed":[]}`, stamps `last_synced_at`, and reports `emailRunsFailed: 0` with the pre-arrival switch on.
+
+### RLS was re-evaluated once per row
+- Every villa policy read `villa_role(account_id) ...`. `villa_role()` is `SECURITY DEFINER`, so Postgres cannot inline it, and the `account_id` column reference means it cannot hoist it either — it ran **once per row**, and the cost grew linearly with a villa's booking count.
+- Added `public.villa_account_ids(p_roles text[])`, a set-returning helper that takes no column, and rewrote all 33 villa policies to `account_id in (select public.villa_account_ids(...))` plus `(select public.is_super_admin())`. The planner now evaluates each once per statement (hashed SubPlan / InitPlan).
+- **The authorization rules are unchanged** — only how they are evaluated. `public.villa_role()` and `public.is_super_admin()` are untouched. Measured on the Reports query against a 2,982-row `villa_bookings_mirror`, warm: **1,086 ms → 252 ms** (RLS overhead ~975 ms → ~140 ms; the no-RLS floor is 110 ms).
+
+### Fewer round trips per page
+- **Booking-site credentials** were resolved from Supabase Vault on *every* request. Now cached in-process per property with a 5-minute TTL (server-only, never logged or serialised) — one remote round trip off every villa page. The cache is self-healing: a booking site that rejects the key (401/403) evicts it, so rotating a villa's service key costs one failed request rather than five minutes of broken screens. Unlinking or switching a villa off still takes effect immediately, because the property row is re-read per request and checked before credentials are touched.
+- **`getVillaSite()` no longer re-queries `villa_properties`**; it reuses the request-cached list the page has already loaded.
+- **New request-cached `loadVillaAccountSettings()`** replaces up to three separate `villa_account_settings` reads in a single request (Bookings cutoff, booking page `managers_can_cancel`, guest-emails card switches).
+- **`getBaseRates()` / `getPricingInputs()` are request-cached**, so the booking page's guest-emails card, the quote endpoint and Villa Settings share one read instead of one each.
+- **Parallelised serial awaits** on Bookings, Calendar and the booking detail page: the property lookup, the account settings and the cancellation reasons depend only on the account id, so they now start together instead of in sequence.
+- **Removed a duplicate booking read**: `listSitePayments()` re-fetched the booking from the booking site purely to scope the payments, even when the caller already held it. Callers that have it pass `{ verified: true }`.
+
+### Page load: streaming instead of blocking
+- **Reports** and **Discount codes** awaited `refreshMirrorForRead()` before rendering anything. Both now render the header and villa switcher immediately and stream the figures in behind `<Suspense>` with a matching skeleton, so a slow booking site no longer holds up the whole page. (The Dashboard already streamed.)
+- On Discount codes, the codes and audit-trail reads now run *during* the mirror refresh rather than after it.
+
+### Bundle: Recharts off the Reports critical path
+- `reports-view.tsx` imported Recharts statically, so the whole chart library shipped and parsed on the Reports page even on the four tabs that draw no chart.
+- Extracted all five graphs into `report-charts.tsx` (the three donuts collapsed into one shared `DonutChart`) and load it with `next/dynamic` (`ssr: false`) behind a skeleton. Verified in a production build: the Reports UI chunk no longer contains Recharts.
+
+### Indexes
+- Added the indexes the villa screens were missing: `villa_booking_guests (property_id, site_booking_id)` (a sequential scan on every booking page), `villa_discount_codes (property_id, created_at desc)`, `villa_booking_payments (property_id, paid_on desc)`, `villa_refunds (property_id, refunded_on desc)`, and `villa_bookings_mirror (property_id, status, check_in, check_out)` for the dashboard/report reads.
+
+### Tests
+- Added `apps/e2e/tests/ooruda/regression/villa-perf.spec.ts`, an opt-in page walk (`VILLA_PAGE_WALK=1`) that renders all 14 villa screens and reports per-page timings. Skipped by default.
+
+### Safety notes on the above
+- `loadVillaAccountSettings()` degrades to safe defaults and logs on a read error rather than throwing, so a transient blip on a small settings row cannot 500 the Bookings and Calendar pages. Every default fails closed (no cutoff banner, managers cannot cancel, optional emails off), and the booking cutoff is still enforced server-side when a stay is saved.
+- The migration ends with a self-check that aborts it unless every villa table has exactly one SELECT policy and no villa policy still calls `villa_role()` per row — so a policy named off-pattern cannot silently end up as a second, permissive policy OR'd in beside the old one.
+
+### Known issues found but not changed
+- `supabase/tests/database/villa-m4-guest-ids.test.sql` (6 assertions) fails against the current schema: it asserts `villa_guest_documents.storage_path` / `content_type`, which no longer exist. Pre-existing, unrelated to this work.
+- `villa-m7-guest-emails.test.sql` (1 assertion) fails locally only because migration `20261027120000_villa_disable_auto_guest_emails_default.sql` is **not applied to the local database** — it is the one pending local migration. Worth confirming it has been applied to dev and production, since until it is, a new villa gets pre-arrival and thank-you emails switched ON by default.
+
+### Review pass fixes
+
+- **GST report counted spanning stays twice.** The monthly GST breakdown counts a stay in every month it overlaps (correct per row), but the Total row summed those rows, so a stay crossing a month boundary was counted twice. `buildGstReport` now returns period-wide `stays` / `nights` computed over the whole range, and the footer uses them. Nights are sliced per month, so those still add up; stays do not. Covered by a new unit test.
+- **Report pagination could drop or duplicate rows.** `fetchAll()` pages with `.range()`, and the expenses / payments / refunds reads were ordered only by a non-unique date column, so rows could shift between pages. Added `.order('id')` as a tiebreaker to all three.
+- **Role filter failed open.** The members page filtered invitable roles with `ROLE_HIERARCHY_LEVEL_BY_ROLE[role] ?? 99`, which let a role the app does not know pass the seniority check. Unknown roles are now rejected.
+- **CSV export failed in Firefox and Safari.** The download anchor was never attached to the document and the blob URL was revoked in the same tick as the click. The anchor is now appended and the URL revoked on a later tick.
+- **Duplicate dashboard KPI labels.** The ADR and RevPAR tiles both read "Average Revenue". They now read "Avg. Booked Night" and "Avg. Available Night" with distinct hints.
+- **Regression suite could not start.** `auth.setup.ts` never passed the early-access gate, so `/auth/sign-in` redirected to `/access` and every role's sign-in timed out — the whole suite failed at its setup project. It now calls `passAccessGate()` before the first navigation. Two hard breaks in `villa.spec.ts` left by the settings re-architecture (an undeclared `owner` and `BLOCK_AFTER`) were also fixed; `apps/e2e` has no `typecheck` task, so neither was caught by `pnpm typecheck`.
+
+### Migrations Changelog
+
+| Migration | Description |
+| --- | --- |
+| `20261029050746_villa_perf_rls_and_indexes.sql` | Adds `public.villa_account_ids(text[])`; rewrites all villa RLS policies to evaluate their helpers once per statement instead of once per row (same rules); adds five missing indexes. |
+| `20261029161500_villa_populate_villa19_business_details.sql` | Populates legal business details (HABBAA SOLUTIONS PVT LTD, registered address, CIN, GSTIN, support email, WhatsApp number) for existing Villa 19 property rows. |
+| `20261029221000_villa_widen_booking_activity_actions.sql` | Widens `villa_booking_activity_action_check` to include `payment_recorded`, `payment_voided`, `refund_recorded`, `id_recorded`, `id_verified`, `id_deleted`, `email_sent`, `guest_added`, `guest_removed`. |
+
+---
+
+## Villa: Typography & Colour Consistency, Component Modernization & UI Fixes — 2026-10-28
+
+### Typography, Font Size & Brand Colour Consistency (Ooruda v2.3 Design System Alignment)
+- **Readable brand-gold text & interactive states (`text-brand-ink`)**:
+  - Replaced illegible `text-primary` (`#fcd469`, 1.4:1 contrast on white) and `hover:text-primary` on non-button elements across Ooruda Villa with `text-brand-ink` (`#7a5c0a`, 6.1:1 contrast) or semantic tokens:
+    - `bookings/[bookingId]/page.tsx`: Changed the Discount amount `<dd>` from `text-primary` to `text-success font-medium` and updated guest phone/email links to `text-brand-ink font-medium`.
+    - `villa-today.tsx`: Changed guest name hover links from `hover:text-primary` to `hover:text-brand-ink`.
+    - `villa-workspace-card.tsx`: Updated the `<Home />` icon badge from `bg-primary/10 text-primary` to `bg-primary/20 text-brand-ink`.
+    - `villa-settings/_components/contacts-section.tsx` & `villa-activity/_components/activity-log-table.tsx`: Updated phone links and booking links to `text-brand-ink font-medium`.
+- **Semantic status colours (`success`, `warning`, `info`) on Villa Today**:
+  - Replaced raw Tailwind `emerald`, `amber`, and `blue` classes (and unused `dark:` modifiers) in `villa-today.tsx` ("Arriving today", "Staying over", "Leaving today") with Ooruda's semantic design tokens (`bg-success/10 text-success`, `bg-warning/10 text-warning`, `bg-info/10 text-info`).
+- **12px (`text-xs`) minimum font size & weight ceiling enforcement**:
+  - Upgraded all sub-12px `text-[10px]` labels to `text-xs` (12px) across `villa-today.tsx` ("ID" badge, "Due" badge, overdue "Check out" link), `month-nav.tsx` ("Now" badge), and `bookings/_components/add-id-dialog.tsx` (PDF filename preview).
+  - Updated Recharts `XAxis` and `YAxis` tick labels in `villa-reports/_components/reports-view.tsx` from `fontSize: 11` to `fontSize: 12`.
+  - Replaced `font-black` (weight 900, reserved exclusively for the Ooruda wordmark) on the VOID watermark in `bookings/[bookingId]/voucher/[kind]/[id]/page.tsx` with `font-bold`.
+- **Uniform KPI card & table header typography**:
+  - Standardized KPI labels (`text-muted-foreground text-xs font-medium tracking-wide uppercase`) and values (`text-xl font-bold tabular-nums sm:text-2xl` / `text-lg font-bold tabular-nums`) across `villa-month-kpis.tsx`, `villa-expenses/_components/expenses-view.tsx`, `villa-reports/_components/reports-view.tsx`, and `bookings/_components/payments-panel.tsx`.
+  - Standardized table headers in `villa-reports/_components/reports-view.tsx` to `text-xs font-semibold tracking-wide uppercase`.
+  - Removed em dashes (`—`) from user-visible copy in `calendar/page.tsx`, `calendar/_components/calendar-view.tsx`, and `villa-settings/_components/booking-cutoff-card.tsx`.
+
+### Component Modernization (Parity with Ooruda v2.3 Primitives)
+- **Interactive `MonthNav` popover picker (`month-nav.tsx`)**:
+  - Upgraded `MonthNav` from a static month label with prev/next arrows into an interactive month/year picker popover (`Popover`) featuring year navigation, a 12-month grid, and a "Jump to current month" shortcut (used on Dashboard, Calendar, and Expenses).
+- **Property Switcher (`VillaSwitcher`) on Calendar & Expenses toolbar**:
+  - Replaced the hand-rolled pill `<nav>` on the Calendar page (`calendar/page.tsx`) with the shared `<VillaSwitcher />` component (`SearchableSelect` for multi-property accounts).
+  - Aligned the Expenses page (`villa-expenses/page.tsx`) toolbar with Calendar (`MonthNav` + "Jump to today" button + `VillaSwitcher`).
+- **`SearchableSelect` for Check-in / Check-out times (`rates-form.tsx`)**:
+  - Upgraded the 48-slot (30-minute interval) Check-in time and Check-out time dropdowns in Villa Settings from basic `<Select>` to `<SearchableSelect>` so operators can type to filter times (e.g., `"2:00 PM"`).
+- **Built-in `DatePicker` clear action & date range auto-advance**:
+  - Simplified `booking-cutoff-card.tsx` to use `<DatePicker clearable />` instead of a separate external Clear button.
+  - Added `min` date constraints and automatic end-date advancement when the start date moves past the end date in `villa-settings/_components/seasonal-rates.tsx` and `villa-discounts/_components/discounts-view.tsx` (discount validity window and blackout dates).
+- **Activity Log (`villa-activity/page.tsx` & `activity-log-table.tsx`)**:
+  - Aligned `TeamAccountLayoutPageHeader` to render `<AppBreadcrumbs />` in the header description and moved the event count summary into the table toolbar alongside the search input.
+  - Upgraded `SearchBar` to use `@kit/ui/input` with 300ms debounced client-side navigation (`router.push`), and expanded server-side search to match across `action`, `note`, and `booking_code`.
+  - Upgraded booking links and pagination controls from raw `<a>` tags (full page reloads) to Next.js `<Link>` components, displaying `bookingCode` in `font-mono` when present.
+
+### General UI & Functional Fixes
+- **Booking Detail page (`bookings/[bookingId]/page.tsx`)**:
+  - **Back button typography & header action hierarchy**: Standardized the `All bookings` back link (and `Back to booking` on the voucher page) to Ooruda's 14px (`text-sm font-medium text-muted-foreground hover:text-foreground`) back-link pattern. Moved primary actions (`Check out` / `Undo check-out` and `Cancel booking`) into the `TeamAccountLayoutPageHeader` right-hand action slot so they are separated from the sub-bar containing `← All bookings` on the left and status badges (`Confirmed`, `Fully paid` / `Part paid` / `Unpaid`, `ID pending`) on the right.
+  - **Removed invoice number from bookings**: Removed `booking.invoiceNumber` from the Stay card on the booking detail page (invoices are not generated before checkout).
+  - **Revamped Amount card**: Replaced the minimal 3-line list with a comprehensive financial breakdown card featuring KPI summary tiles (`Taxable amount`, optional `Discount`, `GST`, and `Total payable`) and an itemized breakdown table (`Stay tariff` with nights × per-night rate, `Extra guest charges`, `Discount applied` with coupon badge, `Taxable subtotal (before GST)`, `GST`, and `Total`).
+  - **Removed History section**: Removed the booking activity History card (`villa-booking-activity`) and its query from the booking detail page.
+- **Offline Payments (`bookings/_components/payments-panel.tsx`)**:
+  - Removed receipt numbers (`receiptNo`), refund voucher numbers (`refundNo`), and voucher links from offline payment and refund rows, and updated payment/refund recording toasts to plain `'Payment recorded'` / `'Refund recorded'` messages.
+- **Select Dropdown Content Cutoff Fix (`@kit/ui/select`)**:
+  - Updated `SelectContent` (`packages/ui/src/makerkit/select.tsx`) to set `min-w-(--anchor-width) w-auto` so dropdown popups maintain at least the trigger's width but expand dynamically to fit longer option labels (e.g., *"Commissions (OTA, agents)"* in the Add Expense category dropdown) without text truncation or cutoff.
+- **Villa Reports Complete Revamp (`villa-reports/page.tsx`, `villa-reports/_components/reports-view.tsx`, `lib/villa/reports.ts`)**:
+  - Redesigned Ooruda Villa Reports to match Ooruda Association Reports:
+    - **Segmented Date Range Bar**: Horizontal preset pills (`This Month`, `Last Month`, `Last 3 Months`, `Last 6 Months`, `This FY`, `Last FY`) + `Custom range` popover (`From` / `To` `DatePicker`s + `Apply range`) + period & sync metadata pills.
+    - **Two-Level Report Hierarchy + Unified Download Menu**: Level 1 segmented group bar (**Financial** vs **Analytics**) paired with a **Download** dropdown menu (`Download CSV` and `Download / Print PDF`); Level 2 connected underline tab bar (`role="tablist"`, `-mb-px border-b-2`).
+    - **Expanded Report Tabs**:
+      - **Financial**: `Revenue & Occupancy` (KPI tiles, Monthly Revenue vs. Expenses bar chart, Occupancy Trend line chart, Monthly Performance table with footer totals & pagination, Expenses by Category), `Expenses` (KPI tiles, Spend by Category donut chart, Category Share bars, category filter pills, paginated Expense Ledger table), `Payments & Refunds` (`buildPaymentsReport` with KPI tiles, Collection by Mode donut chart, Payment Mode Summary table, mode filter pills, paginated Offline Payments ledger), and `GST Summary` (`buildGstReport` with Taxable Stay Revenue, Output GST, Input GST, Net GST Position KPIs, and Monthly GST Breakdown table).
+      - **Analytics**: `Booking Channels` (KPI tiles, Revenue Share donut chart, channel cards, and paginated Channel Breakdown table) and `Guest Directory` (Unique / First-Time / Returning Guest KPIs, `Returning` / `All Guests` / `First-Time` filter pills, and paginated Guest History table).
+
+### Migrations Changelog
+
+| Migration | Description |
+| --- | --- |
+| *(none)* | UI, typography, component, and test updates only; no database schema changes. |
+
+---
+
+## Villa: Manual Airbnb iCal Sync Parity, Error/Run Logging & guest email settings — 2026-10-27
+
+### Manual "Sync Airbnb" button with full Hostinger cron parity & safe run logging
+- **Button & status on Calendar + Bookings → Blocked dates**:
+  - Renamed the manual channel sync button to **Sync Airbnb** (`SyncIcalButton`) and placed it in the page header of both the **Calendar** page (`/home/[account]/calendar`) and the **Bookings → Blocked** tab (`/home/[account]/bookings?view=blocked`).
+  - Available to both `villa_admin` and `villa_manager`.
+  - Displays a live **last synced timestamp / status indicator** beside the button (e.g., `Synced 27 Oct, 06:30 pm` in IST, or `Last sync failed` if the most recent run failed) read from `ical_feeds`.
+  - Automatically refreshes the Calendar and Blocked dates views (`router.refresh()` + `revalidatePath`) and purges the guest booking site cache (`revalidateBookingSite('ical-sync')`) whenever blocks change.
+- **Full parity with `villa-booking` `/api/cron/ical-sync`**:
+  - **IST date boundary**: Switched `classifyEvents` from UTC (`new Date().toISOString().slice(0, 10)`) to Indian Standard Time (`todayIst()`), matching `villa-booking` so stays ending yesterday are properly dropped between 00:00 and 05:30 IST.
+  - **Fetch hardening**: Enforces `https:` protocol, 10-second timeout, `1 MB` max response size (both `Content-Length` and byte length), and non-empty body validation (`fetchIcal`).
+  - **Double-booking conflict detection**: Checks confirmed bookings on the property for overlaps before applying feed blocks (`findConflicts`) and records any clashes in `ical_conflicts` (`recordConflicts`).
+- **Error & run logs without exposing raw errors in the UI**:
+  - Stripped raw error strings and feed URLs from the client-facing server action response (`FeedSyncResult`); the UI only shows friendly messages (`Airbnb calendar synced`, `Airbnb calendar is already up to date`, `Could not sync Airbnb calendar right now`).
+  - Redacts secret iCal feed URL query tokens (`redactFeedUrl`) before any logging.
+  - Records every manual sync run and failure in three places for operator/developer inspection:
+    1. `ical_feeds` (`last_synced_at`, `last_status`, `last_error`, `events_applied`) on the booking site DB (including `apply_ical_feed` errors via `record_ical_failure`).
+    2. `villa_sync_log` (`operation = 'ical.sync'`, `site_id = feed.name`, `outcome`, `actor_user_id`, and JSON run summary or redacted error detail) on Ooruda's DB.
+    3. Structured server logs (`logger.info` / `logger.warn` / `logger.error`) with timing (`ms`), counts (`applied`, `removed`, `nights`, `dropped`, `conflicts`), and redacted feed URL.
+
+### Automatic pre-arrival and thank-you emails disabled by default + Villa Settings control
+- **Default switched off**: `villa_account_settings.pre_arrival_email` and `villa_account_settings.thank_you_email` now default to `false` (both in the database schema, existing rows, and TypeScript fallbacks across the guest email runner, booking detail view, and Villa Settings loader). Automatic booking confirmation emails remain enabled by default.
+- **Villa Settings — Automatic guest emails card**: Added a dedicated **Automatic guest emails** card in Villa Settings (`GuestEmailsCard`) so `villa_admin` can explicitly enable or disable the **Pre-arrival welcome email** and **Post-checkout thank-you email** per villa account. `villa_manager` sees the switches in read-only mode.
+- **Confirmation popup on toggle**: Enabling or disabling either automatic email switch opens a confirmation dialog (`AlertDialog`) explaining the effect before saving via `saveGuestEmailSettingsAction` (enforced server-side with `requireVillaRole(accountId, ['villa_admin'])`).
+- **Booking detail — Guest emails section visual state & manual sending**:
+  - "Before arrival" and "Thank you (after check-out)" rows are now styled greyed out (`bg-muted/30 opacity-60` with muted label) when their respective option is disabled in Villa Settings.
+  - When enabled in Villa Settings, operators can also send "Before arrival" and "Thank you" emails manually using the **Send now / Send again** button (with confirmation dialog), matching the booking confirmation experience.
+  - Removed the static footer disclaimer *"Sending by hand is switched off for now. Automatic emails are not affected."*
+
+### Villa Dashboard: "Stays overdue for check-out" banner layout fix
+- Fixed a flex layout bug in `VillaToday` (`villa-today.tsx`) where `sm:flex-row` combined with `shrink-0` on the overdue guest pills container caused the left-hand title and description to be crushed to a 1-word-per-line vertical column and the pills to overlap across the text and overflow the card when multiple stays were overdue. The banner now stacks the header row cleanly above the wrapping guest pills at all viewport widths.
+
+### Migrations Changelog
+
+| Migration | Description |
+| --- | --- |
+| `20261027120000_villa_disable_auto_guest_emails_default.sql` | Sets `DEFAULT false` on `villa_account_settings.pre_arrival_email` and `thank_you_email` and updates existing rows to `false` |
+
+---
+
+## Villa: Booking confirmation email improvements and UI fixes — 2026-10-26
+
+### Booking confirmation email now matches the villa-booking auto email
+The manual "Send now" flow (from the Booking detail → Guest emails section) now produces an email that matches the automatic email sent by the villa-booking site at the time of booking:
+
+- **Intro line** conditionally reads "Your booking is confirmed and payment has been received" when the booking is fully paid (not just "Your booking is confirmed").
+- **Details table** now includes two new rows: **Booked on** (formatted as "26 Oct 2026, 09:45 am IST") and **Email** (the guest's email address, linked).
+- **Security deposit note** updated to: "A refundable security deposit might be requested upon check-in. This is in addition to the online payment. Please contact the property in case of questions."
+- **What happens next** step 2 changed from a generic photo-ID reminder to a contextual **"Need anything before then?"** paragraph with a WhatsApp link (shown only when the property has a WhatsApp number configured).
+
+### "Could not send the email" bug fixed
+The "Send now" button was failing with "Could not send the email. Please try again." for the booking confirmation template. Root cause: the `villa_message_log.template` CHECK constraint (created in M7) only allowed `'pre_arrival'` and `'thank_you'`; M10 added the booking confirmation feature without widening the constraint, so every INSERT for `booking_confirmation` was rejected. Migration M11 (below) fixes this.
+
+### Add ID dialog description simplified
+The Add ID dialog's description was shortened from "One per adult guest. Only the last 4 digits of the ID number are saved." to **"One ID per adult guest."** The last-4-digits note still appears in the form itself as field hint text.
+
+### Migrations Changelog
+
+| Migration | Description |
+| --- | --- |
+| `20261026100551_villa_message_log_add_booking_confirmation_template.sql` | Widens the `villa_message_log.template` CHECK constraint to include `'booking_confirmation'`, fixing the "Could not send the email" error for that template type |
+
+---
+
+## Villa: iCal Sync Now, UX polish, and Blocked dates as a tab — 2026-10-26
+
+### Sync channels without waiting for the cron
+The calendar header now has a **Sync channels** button. Pressing it immediately runs the same fetch → parse → fingerprint → apply pipeline the hourly cron job uses, and shows a brief result: "Synced N events", "Already up to date", "N channels failed", or "No channels to sync". `villa_admin` and `villa_manager` can both press it; guests cannot reach the action.
+
+### Block dates: Check-in / Check-out terminology
+The Block dates dialog no longer uses "First night" and "Last night". The fields are now **Check-in** (first blocked night) and **Check-out** (the first free morning — the exclusive end). The night count and the "Free again from the morning of…" description update as the operator picks dates. The old `+1 day` offset in the service was removed; Check-out is stored directly as the exclusive end in the villa-booking DB. The server now also refuses blocks whose check-in starts past the booking cutoff.
+
+### New booking: Fully Paid payment status
+The New booking form's payment status dropdown now shows **Unpaid**, **Partial payment**, and **Fully paid** (was "Part paid" / "Paid"). An advance receipt is recorded for both partial and full payments on creation.
+
+### Direct enquiry block reason
+Operators can now select **Direct enquiry** as a block reason alongside Maintenance and Owner's own use. The reason is stored in the villa-booking DB and shown correctly in all block listings.
+
+### Blocked dates moved into the Bookings tab
+"Blocked dates" is no longer a separate sidebar item. It appears as the fifth tab inside the Bookings page (alongside Upcoming, In house, Past, Cancelled). Search and property filters are hidden on that tab since blocks are not searchable by guest name.
+
+### Migrations Changelog
+
+| Migration | Description |
+| --- | --- |
+| *(none)* | All changes are UI and business logic only; no Ooruda-side schema changes. Villa-booking DB changes (iCal feeds, `blocked_dates.source/feed_id`) were deployed in a prior release. |
+
+---
+
+## Villa: blocked dates get a home, and the cutoff stops lying — 2026-10-24
+
+### No place to see blocked dates
+Blocks existed only inside the Calendar's month grid: a block three months out was invisible until you paged to its month, and nothing said where it came from. There is now a **Blocked dates** screen (Operations → Blocked dates) listing every block in a window — upcoming, past or all — with its reason, nights, note, source and an Unblock action, filterable by period, source and reason.
+
+### Unblocking on Ooruda did not unblock on the guest site
+Three separate causes, all real:
+
+**1. The booking cutoff was invisible in Ooruda.** The cutoff (`villa_account_settings.booking_cutoff_date`, mirrored to the site) is checked inside the site's `check_availability()` *ahead of* the occupancy test, so every night past it reports `DATE_BLOCKED` whatever `blocked_dates` says. Ooruda's calendar was built only from bookings and blocks, so those nights looked free: an operator could block and unblock them to no effect anywhere. The calendar now draws them as **Closed for booking**, counts them in the month summary, explains the cutoff in a banner, and offers no block/unblock on them. The Block dates dialog caps its pickers at the cutoff, and the server refuses a block or unblock that starts past it with the reason.
+
+**2. Channel-imported blocks were editable, and came back.** `blocked_dates` rows with `source = 'ical'` are owned by the feed importer: every sync deletes the feed's rows and re-inserts the channel's current events. Ooruda listed them indistinguishably from its own and let them be released — which looked like it worked and was undone by the next sync. Worse, `releaseFromBlock` re-inserted the leftover pieces **without** `source`/`feed_id`, so an Airbnb-owned block silently became a manual one, orphaned from its feed and duplicated on the next import. Channel blocks are now shown with a "From a channel" marker, are not clickable, and are refused server-side (`CHANNEL_MANAGED`); leftover pieces carry their ownership across.
+
+**3. CDN staleness.** The guest site's calendar API is cached 60s at the edge (120s with stale-while-revalidate). Bounded, and left as it is — but it is why an unblock can take up to two minutes to show on the website.
+
+### Admins can record a booking past the cutoff
+The cutoff closes *public* sales; a stay agreed on the phone for next season still has to reach the books. `villa_admin` can now pick dates past it, tick an explicit "Record this booking past the cutoff" confirmation, and confirm once more in a dialog that spells out the dates. The booking's activity trail records that it was taken past the cutoff and by whom. `villa_manager` is refused with that reason.
+
+Verified by driving the real screens locally: the calendar banner and the per-night **Closed** cells appear from the day after the cutoff, a channel-imported block is inert while a manual one opens the unblock dialog, the override checkbox turns a refusal into a priced quote, and the booking lands with `Recorded past the booking cutoff (8 Dec 2026) by an admin` on its activity trail.
+
+The override skips the cutoff and nothing else: on the villa-booking side the cutoff test was split out of `check_availability()` into a new `check_occupancy()`, and `create_booking_atomic` consults it only when `p_ignore_cutoff` is passed. A night already sold or blocked is still refused, the past-date guard still applies, and the property advisory lock is unchanged. Verified against the local villa-booking database: cutoff refuses, override books, a second override booking of the same nights is refused `DATE_UNAVAILABLE`.
+
+### Migrations Changelog
+
+| Migration | Description |
+| --- | --- |
+| `villa-booking 00105_cutoff_override.sql` | Adds `check_occupancy()` (overlap only), makes `check_availability()` = cutoff + `check_occupancy()`, and replaces `create_booking_atomic` with an 18-param version taking `p_ignore_cutoff` (old 17-param signature dropped to avoid overload ambiguity; EXECUTE revoked from PUBLIC/anon/authenticated as 00097 did) |
+
+No Ooruda-side migration: the cutoff column and `villa_account_settings` already exist. `villa-db.types.ts` was regenerated — it was stale and missing `blocked_dates.source`, `feed_id` and `external_uid`.
+
+---
+
+## Villa: guest ID review follow-ups — 2026-10-24
+
+### Download all produced unopenable filenames
+The zip packed every file as `aadhaar-3ba77d0e-9623-4c49-843a-b1ccc6828497`. The storage path carries no extension, so taking the text after the last dot yielded the file's UUID. It now derives the extension from the stored content type, matching the single-file download.
+
+### Download all read the whole account's ID files
+`allFileUrls` selected every ID file row on the account and filtered to the booking in memory. It now resolves the booking's documents first and queries only those files.
+
+### Guest ID purge: fewer queries, and self-healing
+The retention job ran one count query per document per batch — up to 100 round trips a round, 20 rounds a run. Parent documents are now tombstoned with a single query for the whole batch.
+
+The file tombstone and the document tombstone are separate writes, so a process that died between them left a document with no live files still marked live — and it could never be picked up again, because its files were already purged. Each run now ends with a sweep for those stranded documents. A document recorded as *seen in person*, which never had a photo, is deliberately left alone.
+
+### Managers can delete guest IDs
+Deleting an ID before its retention date was restricted to `villa_admin` while `villa_manager` could already view and download the same scans. A manager is the person at the desk when a guest asks for their ID to be removed, so both roles can now delete; the deletion is logged against whoever did it either way. Enforced server-side in `deleteIdAction`, not just in the UI.
+
+### Guest ID migration hardened before it reaches production
+`villa_guest_documents.content_type` is nullable, but the new files table requires it, so the migration defaulted unknown rows to `image/jpeg` — which would have renamed PDFs and PNGs to `.jpg`. It now recovers the true type from the storage object's recorded mimetype, accepting only the four types the table allows, and falls back to JPEG only for files already deleted. Tested against the local bucket: with every `content_type` forced to null, the join recovered one PDF and two PNGs, and nothing fell through to the default.
+
+The migration also drops `storage_path` and `content_type` irreversibly. It now counts the copied rows against the source and aborts rather than dropping if they disagree — verified to raise on a deliberately short copy. Insert, check and drop are one transaction, so a failure leaves the source columns untouched.
+
+---
+
+## Members: invited name and email no longer lost — 2026-10-24
+
+### Invitee email was silently discarded on first sign-in
+A member invited by phone could end up in the members list with **no name and no email**, showing as a bare phone number.
+
+Two causes, one already half-fixed:
+
+1. **Name and email were optional on the invite form**, so an invite sent without them left nothing to show.
+2. **The email was thrown away even when supplied.** When a brand-new user signs in for the first time, `create_profile_on_signup()` claims their pending invitations and then deletes those rows. `20260709000000_fix_claim_invite_full_name.sql` added a backfill so the invitee's **name** survived that delete — but not the **email**, which was lost with the deleted invitation. An *existing* user invited by phone was unaffected: `invite_to_association_by_phone` copies both onto their profile.
+
+The backfill now carries the email across as well. Verified against the local database by claiming an invite before and after the change: the pre-fix function produced `Test Invitee / (no email)`, the fixed one produces `Test Invitee / invitee@example.com`. Neither value overwrites anything the sign-up itself supplied.
+
+### Name and email are now required when inviting
+Both fields are mandatory on the Invite Members form, so a member has an identity from the moment they are added instead of appearing as a phone number until they fill in a profile. Placeholders changed from "Name (optional)" / "Email (optional)" to "Full name" / "Email address".
+
+### Create User dialog no longer clipped
+The super-admin **Create New User** dialog inherited the default `max-w-sm` (384px) width, which cut off the Association field and the Create User button on narrower windows, with no way to scroll to them. It now uses a `max-w-lg` shell that holds the header fixed and scrolls the form body within the viewport, and drops `AlertDialogFooter` whose `bg-muted` band two-tones against the dialog surface.
+
+| Migration | Description |
+|-----------|-------------|
+| `20261024055901_fix_claim_invite_email.sql` | `create_profile_on_signup()` also backfills `profiles.email` from `invitations.email` before claimed invites are deleted |
+
+---
+
+## Villa: Confirmation email delivery fixes + guest ID polish — 2026-10-24
+
+### Villa email now sends from the villa's own Resend account
+Villa guest email leaves from `habbaa.com` (`VILLA_EMAIL_FROM`) while Ooruda's auth, invite and contact email leaves from `ooruda.com`. Resend only accepts a `from:` address whose domain is verified in the sending account, and the shared `getMailer()` binds a single `RESEND_API_KEY` at module load — so villa mail sent on Ooruda's key was rejected with a 403.
+
+Villa email now goes through a dedicated sender (`lib/villa/guest-mailer.ts`) using `VILLA_RESEND_API_KEY`. When that variable is unset it falls back to the shared mailer, so a deployment keeping both domains in one Resend account still works.
+
+**New environment variables:**
+
+| Variable | Purpose |
+|----------|---------|
+| `VILLA_EMAIL_FROM` | Villa guest-email sender, e.g. `Villa 19 by Habbaa <reservations@habbaa.com>`. Without it no villa email sends at all. |
+| `VILLA_RESEND_API_KEY` | The villa Resend account key. Optional — falls back to `RESEND_API_KEY`. |
+
+### Confirmation send no longer dropped on Vercel
+The send was an unawaited promise, which a serverless function can discard the moment it returns the response — meaning the email could silently never go out in production. It now runs inside Next's `after()`, which keeps the invocation alive until the send finishes.
+
+### Guest email is required on manual bookings
+The confirmation email is the guest's only record of a booking taken by phone or message, and a booking saved without an email sent nothing while the booking page still claimed *"Sent automatically when the booking was created."* Email is now a required field on the new-booking form, with helper text explaining where the confirmation goes.
+
+### Advance payment is captured when the booking is taken
+Staff could mark a booking "part paid" but had nowhere to say **how much** — the form held only a status dropdown and wrote no receipt. So every manual booking reached the guest's email with no figure at all.
+
+Choosing "Part paid" on the new-booking form now reveals **Amount received**, **Received by** (cash / UPI / bank / card / other) and an optional **Reference**. The amount is written as a receipt against the booking, so it lands in the ledger, appears in the Payments panel, and is the figure the guest sees in their confirmation. The amount is refused if it exceeds the booking total, and a receipt that fails to write is logged rather than rolling back a booking the guest has already been promised.
+
+### Confirmation email reads the ledger, not the site's payment status
+A villa booking that is fully paid still carries `payment_status = 'partially_paid'` on the booking site — `sitePaymentStatus()` pins it there deliberately so the site does not issue its GST invoice before check-out. The email was quoting that field, so a guest who had paid in full was told a balance was due, and the "paid in full" badge could never appear on any villa booking.
+
+The email now takes its payment figures and label from Ooruda's own ledger (website payments + offline receipts − refunds) wherever the ledger has seen money, and falls back to the site status otherwise — which keeps bookings taken before this change reading as "a deposit was received" rather than as unpaid. Four cases are covered by regression tests in `guest-emails.test.ts`:
+
+| Case | Guest sees |
+|------|-----------|
+| Advance captured | Deposit received ₹20,000 · Balance due ₹34,280 |
+| Paid in full | "Amount is paid in full" badge, no balance row |
+| Part paid, never receipted (pre-existing bookings) | "Deposit received —", balance due at check-in, no figure |
+| Unpaid | Balance due in full, payable at check-in |
+
+### Guest ID section polish
+- **Front/Back labels removed** from the Add ID dialog — staff attach photos without classifying each one.
+- **Add ID dialog scrolling fixed** — the dialog body scrolls within the viewport instead of overflowing and clipping the save buttons.
+- **"ID photos (2 of 4)"** counter dropped; the heading is now just "ID photos".
+- **Download filenames fixed** — files saved as `id-<short-id>.jpg/.png/.webp/.pdf` from the stored content type, instead of a URL-encoded storage path.
+- **"Photo 1: / Photo 2:"** ordinal labels removed; each photo is its own row of View / Download actions.
+- **Delete ID dialog** retitled "Delete Guest IDs" with clearer copy, a Cancel action, and more spacing between "Mark checked" and the delete control.
+
+---
+
+## Villa: Booking confirmation email — 2026-10-21
+
+### Automatic confirmation on booking creation
+When staff create a manual booking (phone/WhatsApp/in-person) through Ooruda, a confirmation email is now sent automatically to the guest's email address the moment the booking is saved. The email includes:
+- Check-in and check-out dates with times
+- Number of nights and booking reference code
+- Payment status: "paid in full", "deposit received — balance due at check-in", or "due at check-in"
+- Villa WhatsApp and emergency contacts (same as the pre-arrival email)
+
+The send runs after the response and never fails the booking — a failed or skipped send is logged in `villa_message_log` and surfaced on the booking page so staff can resend manually.
+
+### Resend from the booking page
+The **Guest emails** section now shows a "Booking confirmation" row above the existing pre-arrival and thank-you rows. Staff can use "Send again" on any confirmed or completed booking if the original send failed.
+
+### Per-account toggle
+A `booking_confirmation_email` column in `villa_account_settings` (default `true`) lets owners switch off the automatic confirmation if needed (e.g. they send their own branded email through another tool).
+
+| Migration | Description |
+|-----------|-------------|
+| `20261021120000_villa_m10_booking_confirmation_email.sql` | Adds `booking_confirmation_email` boolean to `villa_account_settings` (default `true`) |
+
+---
+
+## Villa: Guest ID improvements — 2026-10-21
+
+### Download IDs
+- **Per-file Download** button alongside each View button on every guest ID document. Routes through the existing signed-URL infrastructure with `?download=1`, adding `Content-Disposition: attachment` so the browser saves the file.
+- **Download all** button in the panel header (visible when any IDs are on the booking) — sends a zip of all live files to the browser via `/api/villa/guest-documents/download-all`.
+- Access log records downloads as `downloaded` (distinct from `viewed`).
+
+### Multiple photos per ID (front + back)
+New `villa_guest_document_files` child table: one ID document row, N file rows. The Add ID dialog now lets staff attach multiple photos in one submission, optionally labelling each **Front** or **Back**. The UI shows each file's View/Download buttons grouped under the document.
+
+Existing single-file documents are migrated automatically (1 file row per existing `storage_path`). Purge and retention logic (retention.ts, booking-cancel shortcut) updated to operate on the files table.
+
+### Mark IDs checked — per-ID + gated bulk
+- **Per-ID "Mark checked"** button on each document row. Stamps `verified_at` on that document and auto-advances the booking `id_status` to `verified` when all docs on the booking are checked.
+- **"Mark all IDs checked"** bulk button retained, but now only shown when there are IDs recorded (previously showed even with zero IDs), and carries a tooltip: *"Confirm you've compared each ID photo against the guest at check-in."*
+- Both buttons are hidden once `id_status = 'verified'`.
+- Verified documents show a green "Checked" badge.
+
+| Migration | Description |
+|-----------|-------------|
+| `20261021045954_villa_m9_guest_doc_files.sql` | New `villa_guest_document_files` table; drops `storage_path`/`content_type` from `villa_guest_documents`; adds `downloaded` to access-log action enum; migrates existing file rows |
+
+---
+
 ## Production promotion - Villa v1.0 + release (v2.1 -> v2.3) merged to main - 2026-10-20
 
 Promotion of the `release` branch to `main` (dev -> production). Includes all villa v1.0 work (M0-M8 + fixes) and v2.1-v2.3 association features.
@@ -4598,4 +5169,4 @@ Separated the single Supabase project into three distinct environments - local D
 | `20260804093956_reconcile_schema_drift.sql` | Drop orphaned functions, fix `account_image` storage policy, revoke anon grants |
 | `20260805000002_missing_fk_indexes.sql` | 8 missing FK indexes (CONCURRENTLY), GIN trigram indexes on `profiles.full_name` and `audit_logs.action`, new `get_unit_ledger_balances()` RPC for DB-side aggregation |
 
-_Last updated: 2026-10-20_
+_Last updated: 2026-10-29_

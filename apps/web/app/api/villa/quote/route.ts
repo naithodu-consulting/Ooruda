@@ -46,7 +46,7 @@ export const POST = enhanceRouteHandler(
     try {
       const quote = await createBookingsService(
         getSupabaseServerClient(),
-      ).quote(parsed.data);
+      ).quote(parsed.data, role);
 
       return NextResponse.json(quote);
     } catch (error) {

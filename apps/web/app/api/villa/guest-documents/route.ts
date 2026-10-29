@@ -15,18 +15,26 @@ import { guestIdUploadsEnabled } from '~/lib/villa/flags';
 import { ID_FILE_MAX_BYTES } from '~/lib/villa/guest-ids';
 
 /**
- * Uploads a guest ID photo (multipart: the form's fields as `data` JSON, the
- * file as `file`). A route, not a server action: ID scans exceed the 1 MB
- * action body limit. Same schema and service as the no-file action.
+ * Uploads guest ID photos (multipart). The form carries:
+ *   `data`    – JSON matching RecordIdSchema
+ *   `file_0`  – first image/PDF (required)
+ *   `file_N`  – further images/PDFs, up to 4, contiguous from 0
+ *
+ * `label_N` ('front' | 'back') is still accepted for rows created before the
+ * labels were dropped from the form; the dialog no longer sends it.
+ *
+ * A route (not a server action): ID scans exceed the 1 MB action body limit.
+ * Same schema and service as the no-file action.
  */
 export const POST = enhanceRouteHandler(
   async function ({ request, user }) {
     // Refuse oversized bodies before reading them into memory.
+    // Allow up to 4 × 10 MB files + headers overhead.
     const length = Number(request.headers.get('content-length') ?? 0);
 
-    if (!length || length > ID_FILE_MAX_BYTES + 64 * 1024) {
+    if (!length || length > 4 * ID_FILE_MAX_BYTES + 128 * 1024) {
       return NextResponse.json(
-        { ok: false, message: 'The file is larger than 10 MB.' },
+        { ok: false, message: 'The total upload is too large.' },
         { status: 413 },
       );
     }
@@ -44,7 +52,6 @@ export const POST = enhanceRouteHandler(
 
     const form = await request.formData().catch(() => null);
     const raw = form?.get('data');
-    const file = form?.get('file');
 
     let fields: unknown = null;
 
@@ -73,9 +80,9 @@ export const POST = enhanceRouteHandler(
     }
 
     try {
-      const result = await createGuestsService(
-        getSupabaseServerClient(),
-      ).recordId(parsed.data, file instanceof File ? file : null, user.id);
+      const svc = createGuestsService(getSupabaseServerClient());
+      const uploadedFiles = await svc.parseUploadedFiles(form!);
+      const result = await svc.recordId(parsed.data, uploadedFiles, user.id);
 
       return NextResponse.json({ ok: true, ...result });
     } catch (error) {

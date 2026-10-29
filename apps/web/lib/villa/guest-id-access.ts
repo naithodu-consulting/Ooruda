@@ -8,6 +8,7 @@ export type IdDocAction =
   | 'uploaded'
   | 'recorded'
   | 'viewed'
+  | 'downloaded'
   | 'verified'
   | 'deleted'
   | 'purged';

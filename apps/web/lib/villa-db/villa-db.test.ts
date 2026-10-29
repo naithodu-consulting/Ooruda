@@ -10,10 +10,14 @@ import { toSitePhone } from './bookings';
 import { addDays, isYmd, nightsIn, nightsList } from './dates';
 import { VillaDbError, fromSiteError, fromSiteWriteError } from './errors';
 
-// ── getVillaSite: admin client mocked (no database) ──────────────────────────
+// ── getVillaSite: server & admin clients mocked (no database) ─────────────────
 
 const adminFrom = vi.fn();
 const adminRpc = vi.fn();
+
+vi.mock('@kit/supabase/server-client', () => ({
+  getSupabaseServerClient: () => ({ from: adminFrom, rpc: adminRpc }),
+}));
 
 vi.mock('@kit/supabase/server-admin-client', () => ({
   getSupabaseServerAdminClient: () => ({ from: adminFrom, rpc: adminRpc }),
@@ -24,6 +28,7 @@ function propertyRow(row: Record<string, unknown> | null) {
     select: () => ({
       eq: () => ({
         maybeSingle: () => Promise.resolve({ data: row, error: null }),
+        order: () => Promise.resolve({ data: row ? [row] : [], error: null }),
       }),
     }),
   });

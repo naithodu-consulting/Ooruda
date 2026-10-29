@@ -15,19 +15,30 @@ export type Availability = 'AVAILABLE' | 'DATE_UNAVAILABLE' | 'DATE_BLOCKED';
 /** The site API caps a calendar window at 186 nights. */
 export const MAX_WINDOW_NIGHTS = 186;
 
-/** Can the stay [checkIn, checkOut) be booked right now? */
+/**
+ * Can the stay [checkIn, checkOut) be booked right now?
+ *
+ * `ignoreCutoff` asks the site's check_occupancy() instead, which applies the
+ * same overlap rule but takes no view on the property's booking cutoff. That
+ * is the operator override: the villa's own admin recording a stay the public
+ * site is closed for. It can never open a night that is sold or blocked.
+ */
 export async function checkAvailability(
   site: VillaSite,
   checkIn: string,
   checkOut: string,
+  options?: { ignoreCutoff?: boolean },
 ): Promise<Availability> {
   nightsIn(checkIn, checkOut);
 
-  const { data, error } = await site.client.rpc('check_availability', {
-    p_property_id: site.sitePropertyId,
-    p_check_in: checkIn,
-    p_check_out: checkOut,
-  });
+  const { data, error } = await site.client.rpc(
+    options?.ignoreCutoff ? 'check_occupancy' : 'check_availability',
+    {
+      p_property_id: site.sitePropertyId,
+      p_check_in: checkIn,
+      p_check_out: checkOut,
+    },
+  );
 
   if (error) throw fromSiteError(error);
 

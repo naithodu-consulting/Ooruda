@@ -97,7 +97,7 @@
   "teamLogoInputSubheading": "Upload or replace your association's logo.",
   "updateTeamSubmitLabel": "Save Changes",
   "inviteMembersHeading": "Invite Members to your Association",
-  "inviteMembersDescription": "Invite members by entering their phone number and role. If they already have an account they are added right away; otherwise they'll join automatically the first time they sign in.",
+  "inviteMembersDescription": "Invite members by entering their name, phone number and role. They will join automatically the first time they sign in.",
   "emailPlaceholder": "member@email.com",
   "phoneLabel": "Phone",
   "phonePlaceholder": "+91 98765 43210",

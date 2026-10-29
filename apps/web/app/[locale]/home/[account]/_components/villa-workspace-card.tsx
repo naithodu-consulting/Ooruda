@@ -43,7 +43,7 @@ export function VillaWorkspaceCard({
   return (
     <Card className="bg-card" data-test={'villa-dashboard-setup'}>
       <CardHeader>
-        <div className="bg-primary/10 text-primary mb-2 flex h-10 w-10 items-center justify-center rounded-full">
+        <div className="bg-primary/20 text-brand-ink mb-2 flex h-10 w-10 items-center justify-center rounded-full">
           <Home className="h-5 w-5" />
         </div>
 

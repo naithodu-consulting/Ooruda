@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { IdCard } from 'lucide-react';
+import { FileText, IdCard, Plus, X } from 'lucide-react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
@@ -33,7 +34,6 @@ import {
   SelectValue,
 } from '@kit/ui/select';
 import { toast } from '@kit/ui/sonner';
-import { Switch } from '@kit/ui/switch';
 
 import {
   ID_DOC_TYPES,
@@ -48,6 +48,13 @@ import {
 import type { GuestRow } from './guest-ids-panel';
 
 const NEW_GUEST = '__new__';
+const MAX_FILES = 4;
+
+interface FileEntry {
+  file: File;
+  error: string | null;
+  previewUrl: string | null;
+}
 
 export function AddIdDialog(props: {
   accountId: string;
@@ -103,18 +110,60 @@ function AddIdForm(
     },
   });
 
-  const guestId = useWatch({
-    control: form.control,
-    name: 'guestId',
-  });
+  const guestId = useWatch({ control: form.control, name: 'guestId' });
 
-  const [file, setFile] = useState<File | null>(null);
-  const [fileError, setFileError] = useState<string | null>(null);
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [globalFileError, setGlobalFileError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  // Revoke all object URLs when the dialog unmounts.
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  useEffect(
+    () => () => {
+      filesRef.current.forEach((f) => {
+        if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+      });
+    },
+    [],
+  );
+
+  function addFile(raw: File | null) {
+    if (!raw) return;
+    setGlobalFileError(null);
+
+    if (files.length >= MAX_FILES) {
+      setGlobalFileError(`You can attach up to ${MAX_FILES} photos.`);
+      return;
+    }
+
+    if (raw.size > ID_FILE_MAX_BYTES) {
+      setGlobalFileError('That file is larger than 10 MB.');
+      return;
+    }
+
+    const isPdf = raw.type === 'application/pdf';
+    const previewUrl = isPdf ? null : URL.createObjectURL(raw);
+    setFiles((prev) => [...prev, { file: raw, error: null, previewUrl }]);
+  }
+
+  function removeFile(index: number) {
+    const entry = files[index];
+    if (entry?.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function upload(values: RecordIdInput) {
-    if (!file) {
-      setFileError('Attach the ID photo.');
+    // Phone is required for the lead (first) guest.
+    if (first && !values.newGuestPhone?.trim()) {
+      form.setError('newGuestPhone', {
+        message: 'Phone is required for the lead guest',
+      });
+      return;
+    }
+
+    if (files.length === 0) {
+      setGlobalFileError('Attach at least one ID photo.');
       return;
     }
 
@@ -123,7 +172,10 @@ function AddIdForm(
     try {
       const body = new FormData();
       body.set('data', JSON.stringify(values));
-      body.set('file', file);
+
+      files.forEach(({ file }, i) => {
+        body.set(`file_${i}`, file);
+      });
 
       const response = await fetch('/api/villa/guest-documents', {
         method: 'POST',
@@ -148,77 +200,85 @@ function AddIdForm(
     }
   }
 
-  const busy = uploading;
-
   return (
     <Dialog open onOpenChange={(o) => (!o ? props.onClose() : undefined)}>
       <DialogContent
-        className="max-h-[92vh] max-w-lg overflow-y-auto"
+        className="flex max-h-[90dvh] max-w-lg flex-col overflow-hidden"
         data-test={'villa-add-id-dialog'}
       >
         <DialogHeader>
-          <DialogTitle>Add a guest ID</DialogTitle>
-          <DialogDescription>
-            One for each adult guest. Only the last 4 digits of the number are
-            kept.
-          </DialogDescription>
+          <DialogTitle>Add ID</DialogTitle>
+          <DialogDescription>One ID per adult guest.</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
           <form
-            className="flex flex-col gap-4"
+            className="flex min-h-0 flex-col gap-4 overflow-y-auto"
             onSubmit={form.handleSubmit((values) => upload(values))}
           >
-            <FormField
-              name="guestId"
-              control={form.control}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Guest</FormLabel>
-                  <Select
-                    value={field.value || NEW_GUEST}
-                    onValueChange={(v) =>
-                      field.onChange(v === NEW_GUEST ? '' : v)
-                    }
-                  >
-                    <FormControl>
-                      <SelectTrigger
-                        className="w-full"
-                        data-test={'villa-add-id-guest'}
-                      >
-                        <SelectValue>
-                          {(v: string) =>
-                            v === NEW_GUEST
-                              ? 'New guest'
-                              : (props.guests.find((g) => g.id === v)?.name ??
-                                'Guest')
-                          }
-                        </SelectValue>
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {props.guests.map((g) => (
-                        <SelectItem
-                          key={g.id}
-                          value={g.id}
-                          data-test={'villa-add-id-guest-option'}
+            {/*
+              The picker only earns its place once this booking has a guest to
+              pick. On the first ID there is nobody on file, so a select whose
+              only entry is "New guest" asked a question with one answer and
+              made the dialog look like it had lost the guest's name. With no
+              guests, the name and phone fields are the whole answer.
+            */}
+            {first ? null : (
+              <FormField
+                name="guestId"
+                control={form.control}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Guest</FormLabel>
+                    <Select
+                      value={field.value || NEW_GUEST}
+                      onValueChange={(v) =>
+                        field.onChange(v === NEW_GUEST ? '' : v)
+                      }
+                    >
+                      <FormControl>
+                        <SelectTrigger
+                          className="w-full"
+                          data-test={'villa-add-id-guest'}
                         >
-                          {g.name}
+                          <SelectValue>
+                            {(v: string) =>
+                              v === NEW_GUEST
+                                ? 'Someone else'
+                                : (props.guests.find((g) => g.id === v)?.name ??
+                                  'Select a guest')
+                            }
+                          </SelectValue>
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {props.guests.map((g) => (
+                          <SelectItem
+                            key={g.id}
+                            value={g.id}
+                            data-test={'villa-add-id-guest-option'}
+                          >
+                            {g.name}
+                          </SelectItem>
+                        ))}
+                        <SelectItem
+                          value={NEW_GUEST}
+                          data-test={'villa-add-id-guest-new'}
+                        >
+                          Someone else
                         </SelectItem>
-                      ))}
-                      <SelectItem
-                        value={NEW_GUEST}
-                        data-test={'villa-add-id-guest-new'}
-                      >
-                        New guest
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Pick a guest already on this booking, or add someone else.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
+            {/* New guest fields */}
             {guestId === '' ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormField
@@ -245,7 +305,7 @@ function AddIdForm(
                   control={form.control}
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone (optional)</FormLabel>
+                      <FormLabel>Phone{first ? '' : ' (optional)'}</FormLabel>
                       <FormControl
                         render={
                           <PhoneInput
@@ -262,26 +322,10 @@ function AddIdForm(
                     </FormItem>
                   )}
                 />
-                <FormField
-                  name="isAdult"
-                  control={form.control}
-                  render={({ field }) => (
-                    <FormItem className="flex items-center gap-3 sm:col-span-2">
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-test={'villa-add-id-adult'}
-                        />
-                      </FormControl>
-                      <FormLabel className="!mt-0">Adult (18+)</FormLabel>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
             ) : null}
 
+            {/* ID type + number */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField
                 name="docType"
@@ -329,7 +373,7 @@ function AddIdForm(
                           {...field}
                           autoComplete="off"
                           spellCheck={false}
-                          placeholder="Last 4 digits is enough"
+                          placeholder="Last 4 digits"
                           data-test={'villa-add-id-number'}
                         />
                       }
@@ -343,36 +387,94 @@ function AddIdForm(
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="villa-id-file" className="text-sm font-medium">
-                ID photo
-              </label>
-              <Input
-                id="villa-id-file"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,application/pdf"
-                capture="environment"
-                onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  setFileError(
-                    f && f.size > ID_FILE_MAX_BYTES
-                      ? 'The file is larger than 10 MB.'
-                      : null,
-                  );
-                  setFile(f && f.size <= ID_FILE_MAX_BYTES ? f : null);
-                }}
-                data-test={'villa-add-id-file'}
-              />
+            {/* Multi-file upload */}
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium">ID photos</p>
               <p className="text-muted-foreground text-xs">
-                JPEG, PNG, WebP or PDF, up to 10 MB.
+                Front and back of the ID. Accepted Formats: JPEG, PNG, WebP and
+                PDF.
               </p>
-              {fileError ? (
+
+              {/* Thumbnail grid */}
+              {files.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {files.map((entry, i) => (
+                    <div
+                      key={i}
+                      className="relative h-20 w-20 overflow-hidden rounded-lg border"
+                      data-test={`villa-add-id-file-thumb-${i}`}
+                    >
+                      {entry.previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={entry.previewUrl}
+                          alt={entry.file.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="bg-muted/40 flex h-full w-full flex-col items-center justify-center gap-1 p-2">
+                          <FileText className="text-muted-foreground h-7 w-7" />
+                          <span className="text-muted-foreground w-full truncate text-center text-xs">
+                            {entry.file.name}
+                          </span>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeFile(i)}
+                        aria-label="Remove file"
+                        className="bg-background/80 absolute top-1 right-1 rounded-full p-0.5 shadow-sm"
+                        data-test={`villa-add-id-file-remove-${i}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {/* Add file button */}
+              {files.length < MAX_FILES ? (
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    nativeButton={false}
+                    render={
+                      <label
+                        htmlFor="villa-id-file-add"
+                        className="cursor-pointer"
+                      />
+                    }
+                    data-test={'villa-add-id-file-btn'}
+                  >
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    {files.length === 0 ? 'Attach photo' : 'Add another photo'}
+                  </Button>
+                  <Input
+                    id="villa-id-file-add"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    capture="environment"
+                    className="sr-only"
+                    onChange={(e) => {
+                      addFile(e.target.files?.[0] ?? null);
+                      // Reset so the same file can be re-added after removal.
+                      e.target.value = '';
+                    }}
+                    data-test={'villa-add-id-file'}
+                  />
+                </div>
+              ) : null}
+
+              {globalFileError ? (
                 <p
                   className="text-destructive text-sm"
                   role="alert"
                   data-test={'villa-add-id-file-error'}
                 >
-                  {fileError}
+                  {globalFileError}
                 </p>
               ) : null}
             </div>
@@ -389,10 +491,10 @@ function AddIdForm(
               </Button>
               <Button
                 type="submit"
-                disabled={busy}
+                disabled={uploading}
                 data-test={'villa-add-id-submit'}
               >
-                {busy ? 'Saving…' : 'Save ID'}
+                {uploading ? 'Saving…' : 'Save ID'}
               </Button>
             </div>
           </form>

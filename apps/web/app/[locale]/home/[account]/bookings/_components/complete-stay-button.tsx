@@ -41,8 +41,7 @@ export function CompleteStayButton(props: {
         <AlertDialogHeader>
           <AlertDialogTitle>Check out {props.guestName}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Marks the stay as completed. This is when the tax invoice is issued
-            and the thank-you email goes out.
+            Are you sure you want to check out {props.guestName}?
           </AlertDialogDescription>
         </AlertDialogHeader>
         {/* Not AlertDialogFooter: its bg-muted band clashes with the dialog. */}

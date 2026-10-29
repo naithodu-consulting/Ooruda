@@ -19,7 +19,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -35,11 +34,11 @@ import {
 import { toast } from '@kit/ui/sonner';
 import { Textarea } from '@kit/ui/textarea';
 
-import { daysBetweenYmd, todayInBillingZone } from '~/lib/billing-dates';
+import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatDateReadable } from '~/lib/format-date';
 import { addDays } from '~/lib/villa-db/dates';
 import { OPERATOR_BLOCK_REASONS } from '~/lib/villa/constants';
-import { blockReasonLabel, formatNights } from '~/lib/villa/labels';
+import { blockReasonLabel } from '~/lib/villa/labels';
 
 import {
   type CreateBlockInput,
@@ -50,6 +49,8 @@ import { createBlockAction } from '../_lib/server/blocks-actions';
 export function BlockDatesDialog(props: {
   accountId: string;
   propertyId: string;
+  /** Nights past this date are already closed for sale: nothing to block. */
+  bookingCutoffDate?: string | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -74,31 +75,28 @@ export function BlockDatesDialog(props: {
 function BlockDatesForm(props: {
   accountId: string;
   propertyId: string;
+  bookingCutoffDate?: string | null;
   onClose: () => void;
 }) {
   const today = todayInBillingZone();
+  const cutoff = props.bookingCutoffDate ?? undefined;
 
   const form = useForm<CreateBlockInput>({
     resolver: zodResolver(CreateBlockSchema),
     defaultValues: {
       accountId: props.accountId,
       propertyId: props.propertyId,
-      firstNight: '',
-      lastNight: '',
+      checkIn: '',
+      checkOut: '',
       reason: 'maintenance',
       notes: '',
     },
   });
 
-  const [firstNight, lastNight] = useWatch({
+  const [checkIn] = useWatch({
     control: form.control,
-    name: ['firstNight', 'lastNight'],
+    name: ['checkIn'],
   });
-
-  const nights =
-    firstNight && lastNight && lastNight >= firstNight
-      ? daysBetweenYmd(firstNight, lastNight) + 1
-      : 0;
 
   const { execute, isPending } = useAction(createBlockAction, {
     onSuccess: () => {
@@ -118,9 +116,10 @@ function BlockDatesForm(props: {
         <DialogHeader>
           <DialogTitle>Block dates</DialogTitle>
           <DialogDescription>
-            Stops the website and booking channels selling these nights. For a
-            guest who booked by phone, add a booking instead so it counts in
-            revenue.
+            Prevents bookings on these nights.
+            {cutoff
+              ? ` Cutoff date is ${formatDateReadable(cutoff)}, after which, property is closed for bookings.`
+              : ''}
           </DialogDescription>
         </DialogHeader>
 
@@ -131,26 +130,27 @@ function BlockDatesForm(props: {
           >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField
-                name="firstNight"
+                name="checkIn"
                 control={form.control}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>First night</FormLabel>
+                    <FormLabel>Start Date</FormLabel>
                     <FormControl>
                       <DatePicker
                         value={field.value}
                         onChange={(value) => {
                           field.onChange(value);
-                          const last = form.getValues('lastNight');
-                          if (value && (!last || last < value)) {
-                            form.setValue('lastNight', value, {
+                          const out = form.getValues('checkOut');
+                          if (value && (!out || out <= value)) {
+                            form.setValue('checkOut', addDays(value, 1), {
                               shouldValidate: true,
                             });
                           }
                         }}
                         onBlur={field.onBlur}
                         min={today}
-                        data-test={'villa-block-first-night'}
+                        max={cutoff}
+                        data-test={'villa-block-checkin'}
                       />
                     </FormControl>
                     <FormMessage />
@@ -159,25 +159,21 @@ function BlockDatesForm(props: {
               />
 
               <FormField
-                name="lastNight"
+                name="checkOut"
                 control={form.control}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Last night</FormLabel>
+                    <FormLabel>End Date</FormLabel>
                     <FormControl>
                       <DatePicker
                         value={field.value}
                         onChange={field.onChange}
                         onBlur={field.onBlur}
-                        min={firstNight || today}
-                        data-test={'villa-block-last-night'}
+                        min={checkIn ? addDays(checkIn, 1) : addDays(today, 1)}
+                        max={cutoff ? addDays(cutoff, 1) : undefined}
+                        data-test={'villa-block-checkout'}
                       />
                     </FormControl>
-                    <FormDescription>
-                      {nights
-                        ? `${formatNights(nights)}. Free again from the morning of ${formatDateReadable(addDays(lastNight, 1))}.`
-                        : 'The last night that cannot be booked.'}
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -234,9 +230,6 @@ function BlockDatesForm(props: {
                       />
                     }
                   />
-                  <FormDescription>
-                    Only your team sees this; guests never do.
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

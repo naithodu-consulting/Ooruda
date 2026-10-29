@@ -145,6 +145,62 @@ export type ContactInput = z.input<typeof ContactSchema>;
 
 export const DeleteContactSchema = z.object({ ...ids, id: z.string().uuid() });
 
+/**
+ * The company behind the villa: what the guest booking confirmation prints in
+ * its footer, and what the receipt voucher prints as the supplier. Every field
+ * is optional - a villa that fills in none of them gets no footer rather than
+ * an empty one.
+ */
+export const BusinessDetailsSchema = z.object({
+  ...ids,
+  legalName: z.string().trim().max(150),
+  gstin: z
+    .string()
+    .trim()
+    .transform((v) => v.toUpperCase())
+    .refine(
+      (v) =>
+        v === '' || /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(v),
+      { message: 'A GSTIN is 15 characters, e.g. 29ABCDE1234F1Z5' },
+    ),
+  // Mirrors villa_properties_legal_address_check. Without the lower bound a
+  // 1-4 character address passed the form and was refused by Postgres, which
+  // surfaces as the service's blanket "Could not save" with no field named.
+  legalAddress: z
+    .string()
+    .trim()
+    .max(300)
+    .refine((v) => v === '' || v.length >= 5, {
+      message: 'Enter the full registered address, or leave it empty',
+    }),
+  cin: z
+    .string()
+    .trim()
+    .transform((v) => v.toUpperCase())
+    .refine(
+      (v) =>
+        v === '' || /^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/.test(v),
+      { message: 'A CIN is 21 characters, e.g. U47711KA2025PTC207750' },
+    ),
+  // .max mirrors villa_properties_support_email_check.
+  supportEmail: z
+    .string()
+    .trim()
+    .max(254)
+    .refine((v) => v === '' || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), {
+      message: 'Enter a valid email address, or leave it empty',
+    }),
+  // Where guests send their IDs and reach the property on WhatsApp.
+  whatsappNumber: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || normalizePhoneNumber(v) !== null, {
+      message: 'Enter a valid WhatsApp number or leave it empty',
+    }),
+});
+
+export type BusinessDetailsInput = z.input<typeof BusinessDetailsSchema>;
+
 export const PoliciesSchema = z.object({
   ...ids,
   managersCanCancel: z.boolean(),
@@ -178,5 +234,13 @@ export const BookingCutoffSchema = z.object({
   propertyId: z.string().uuid(),
   cutoffDate: z.string().date().nullable(),
 });
+
+export const GuestEmailSettingsSchema = z.object({
+  accountId: z.string().uuid(),
+  preArrivalEmail: z.boolean(),
+  thankYouEmail: z.boolean(),
+});
+
+export type GuestEmailSettingsInput = z.input<typeof GuestEmailSettingsSchema>;
 
 export { ADDON_UNITS, CONTACT_CATEGORIES };

@@ -41,6 +41,8 @@ export interface ReleasableBlock {
   endDate: string;
   reason: string | null;
   notes: string | null;
+  /** 'ical' blocks belong to a channel feed; the calendar never opens these. */
+  source: 'manual' | 'ical';
 }
 
 /**

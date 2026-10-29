@@ -10,7 +10,11 @@ import {
   type SiteBooking,
   listBookingsForSync,
 } from '~/lib/villa-db/bookings';
-import { type VillaSite, getVillaSite } from '~/lib/villa-db/client';
+import {
+  type VillaSite,
+  getVillaSite,
+  getVillaSiteAsSystem,
+} from '~/lib/villa-db/client';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { isVillaDbError } from '~/lib/villa-db/errors';
 
@@ -177,7 +181,7 @@ async function logged(
 export async function syncPropertyMirror(
   accountId: string,
   propertyId: string,
-  options: { full?: boolean } = {},
+  options: { full?: boolean; system?: boolean } = {},
 ): Promise<MirrorSyncResult> {
   const admin = getSupabaseServerAdminClient();
   const lease = await takeLease(accountId, propertyId);
@@ -187,7 +191,11 @@ export async function syncPropertyMirror(
   const startedAt = new Date().toISOString();
 
   try {
-    const site = await getVillaSite(accountId, propertyId);
+    // The scheduled run has no user session, so the RLS-enforced property
+    // lookup would refuse it for every villa and nothing would ever sync.
+    const site = options.system
+      ? await getVillaSiteAsSystem(accountId, propertyId)
+      : await getVillaSite(accountId, propertyId);
     const full =
       Boolean(options.full) ||
       !lease.last_full_at ||
@@ -359,7 +367,9 @@ export async function syncAllMirrors(): Promise<{
     if (Date.now() - started > SYNC_ALL_BUDGET_MS) break;
 
     try {
-      synced.push(await syncPropertyMirror(p.account_id, p.id));
+      synced.push(
+        await syncPropertyMirror(p.account_id, p.id, { system: true }),
+      );
     } catch (e) {
       failed.push({
         propertyId: p.id,

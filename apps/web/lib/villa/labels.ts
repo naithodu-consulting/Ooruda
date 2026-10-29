@@ -87,13 +87,25 @@ export function channelLabel(channel: string | null): string {
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   unpaid: 'Unpaid',
-  partially_paid: 'Part paid',
-  paid: 'Paid',
+  partially_paid: 'Partial payment',
+  paid: 'Fully paid',
   refunded: 'Refunded',
 };
 
 export function paymentStatusLabel(status: string): string {
   return PAYMENT_STATUS_LABELS[status as PaymentStatus] ?? status;
+}
+
+export const PAYMENT_MODE_LABELS: Record<string, string> = {
+  cash: 'Cash',
+  upi: 'UPI',
+  bank: 'Bank transfer',
+  card: 'Card (at the villa)',
+  other: 'Other',
+};
+
+export function paymentModeLabel(mode: string): string {
+  return PAYMENT_MODE_LABELS[mode] ?? mode;
 }
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
@@ -124,6 +136,15 @@ export const ACTIVITY_LABELS: Record<BookingActivityAction, string> = {
   completed: 'Checked out',
   reopened: 'Check-out undone',
   note: 'Note',
+  payment_recorded: 'Payment recorded',
+  payment_voided: 'Payment voided',
+  refund_recorded: 'Refund recorded',
+  id_recorded: 'ID recorded',
+  id_verified: 'ID verified',
+  id_deleted: 'ID deleted',
+  email_sent: 'Email sent',
+  guest_added: 'Guest added',
+  guest_removed: 'Guest removed',
 };
 
 export function activityLabel(action: string): string {
@@ -152,6 +173,7 @@ export function formatNights(n: number): string {
 export const BLOCK_REASON_LABELS: Record<string, string> = {
   maintenance: 'Maintenance',
   owner_hold: "Owner's own use",
+  direct_enquiry: 'Direct enquiry',
   offline_booking: 'Offline booking',
 };
 

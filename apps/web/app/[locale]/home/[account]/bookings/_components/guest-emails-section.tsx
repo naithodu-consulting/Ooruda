@@ -2,19 +2,20 @@ import { Mail } from 'lucide-react';
 
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
+import { cn } from '@kit/ui/utils';
 
 import type { VillaRole } from '~/lib/roles';
 import type { SiteBooking } from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
 import { getBaseRates } from '~/lib/villa-db/rates';
-import { manualGuestEmailsEnabled } from '~/lib/villa/flags';
 import {
   GUEST_EMAIL_LABELS,
   type GuestEmailTemplate,
   THANK_YOU_DELAY_HOURS,
   preArrivalWindow,
 } from '~/lib/villa/guest-emails';
+import { loadVillaAccountSettings } from '~/lib/villa/settings';
 
 import { GuestEmailButton, UndoCheckoutButton } from './guest-email-buttons';
 
@@ -40,7 +41,7 @@ export async function GuestEmailsSection(props: {
   const client = getSupabaseServerClient();
   const { booking } = props;
 
-  const [rates, logResult, settingsResult, lastResult] = await Promise.all([
+  const [rates, logResult, settings, lastResult] = await Promise.all([
     getVillaSite(props.accountId, props.propertyId).then(getBaseRates),
     client
       .from('villa_message_log')
@@ -50,11 +51,8 @@ export async function GuestEmailsSection(props: {
       .eq('property_id', props.propertyId)
       .eq('site_booking_id', booking.id)
       .order('created_at'),
-    client
-      .from('villa_account_settings')
-      .select('pre_arrival_email, thank_you_email')
-      .eq('account_id', props.accountId)
-      .maybeSingle(),
+    // Request-cached, so this is free: the booking page above already read it.
+    loadVillaAccountSettings(props.accountId),
     client
       .from('villa_booking_activity')
       .select('action, created_at')
@@ -66,20 +64,20 @@ export async function GuestEmailsSection(props: {
       .maybeSingle(),
   ]);
 
-  const error = logResult.error ?? settingsResult.error ?? lastResult.error;
+  const error = logResult.error ?? lastResult.error;
   if (error) throw new Error('Could not load the guest emails.');
 
   const log = logResult.data ?? [];
   const on = {
-    pre_arrival: settingsResult.data?.pre_arrival_email ?? true,
-    thank_you: settingsResult.data?.thank_you_email ?? true,
+    booking_confirmation: settings.bookingConfirmationEmail,
+    pre_arrival: settings.preArrivalEmail,
+    thank_you: settings.thankYouEmail,
   };
   const checkedOutAt =
     lastResult.data?.action === 'completed'
       ? new Date(lastResult.data.created_at)
       : null;
   const isAdmin = props.role === 'villa_admin';
-  const manualSend = manualGuestEmailsEnabled();
   const canUndo =
     isAdmin &&
     booking.status === 'completed' &&
@@ -104,6 +102,7 @@ export async function GuestEmailsSection(props: {
 
     if (auto?.status === 'sent')
       return `Sent ${when(auto.updated_at)}.${extra}`;
+    if (!on[template]) return `Switched off in Villa Settings.${extra}`;
     if (auto?.status === 'skipped')
       return `Not sent: ${auto.reason ?? 'skipped'}.${extra}`;
     if (auto?.status === 'failed') {
@@ -114,7 +113,10 @@ export async function GuestEmailsSection(props: {
         ? `Delivery unknown (the send was interrupted). Check with the guest before using Send now.${extra}`
         : `Sending now.${extra}`;
     }
-    if (!on[template]) return `Switched off in Villa Settings.${extra}`;
+
+    if (template === 'booking_confirmation') {
+      return `Sent automatically when the booking was created.${extra}`;
+    }
 
     if (template === 'pre_arrival') {
       if (booking.status !== 'confirmed')
@@ -162,56 +164,66 @@ export async function GuestEmailsSection(props: {
         ) : null}
 
         <ul className="divide-border divide-y rounded-lg border">
-          {(['pre_arrival', 'thank_you'] as const).map((t) => {
-            const sendable =
-              Boolean(booking.guestEmail) &&
-              (t === 'pre_arrival'
-                ? booking.status === 'confirmed' &&
-                  booking.checkIn >= todayIst()
-                : booking.status === 'completed');
-            const sentBefore = log.some(
-              (l) => l.template === t && l.status === 'sent',
-            );
+          {(['booking_confirmation', 'pre_arrival', 'thank_you'] as const).map(
+            (t) => {
+              const isEnabled = on[t];
+              const sendable =
+                isEnabled &&
+                Boolean(booking.guestEmail) &&
+                (t === 'booking_confirmation'
+                  ? booking.status === 'confirmed' ||
+                    booking.status === 'completed'
+                  : t === 'pre_arrival'
+                    ? booking.status === 'confirmed' &&
+                      booking.checkIn >= todayIst()
+                    : booking.status === 'completed');
+              const sentBefore = log.some(
+                (l) => l.template === t && l.status === 'sent',
+              );
 
-            return (
-              <li
-                key={t}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3"
-                data-test={`villa-guest-email-${t}`}
-              >
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-sm font-medium">
-                    {GUEST_EMAIL_LABELS[t]}
-                  </span>
-                  <span
-                    className="text-muted-foreground text-xs"
-                    data-test={`villa-guest-email-${t}-status`}
-                  >
-                    {status(t)}
-                  </span>
-                </div>
-                {sendable ? (
-                  <GuestEmailButton
-                    {...ref}
-                    template={t}
-                    again={sentBefore}
-                    disabled={!manualSend}
-                  />
-                ) : null}
-              </li>
-            );
-          })}
+              return (
+                <li
+                  key={t}
+                  className={cn(
+                    'flex flex-wrap items-center gap-x-3 gap-y-1 p-3 transition-opacity',
+                    !isEnabled && 'bg-muted/30 opacity-60',
+                  )}
+                  data-test={`villa-guest-email-${t}`}
+                >
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span
+                      className={cn(
+                        'text-sm font-medium',
+                        !isEnabled && 'text-muted-foreground',
+                      )}
+                    >
+                      {GUEST_EMAIL_LABELS[t]}
+                    </span>
+                    <span
+                      className="text-muted-foreground text-xs"
+                      data-test={`villa-guest-email-${t}-status`}
+                    >
+                      {status(t)}
+                    </span>
+                  </div>
+                  {sendable ? (
+                    <GuestEmailButton
+                      {...ref}
+                      template={t}
+                      again={sentBefore}
+                      confirmationInfo={{
+                        guestName: booking.guestName,
+                        guestEmail: booking.guestEmail ?? '',
+                        checkIn: booking.checkIn,
+                        checkOut: booking.checkOut,
+                      }}
+                    />
+                  ) : null}
+                </li>
+              );
+            },
+          )}
         </ul>
-
-        {!manualSend ? (
-          <p
-            className="text-muted-foreground text-xs"
-            data-test={'villa-guest-emails-manual-off'}
-          >
-            Sending by hand is switched off for now. Automatic emails are not
-            affected.
-          </p>
-        ) : null}
       </CardContent>
     </Card>
   );

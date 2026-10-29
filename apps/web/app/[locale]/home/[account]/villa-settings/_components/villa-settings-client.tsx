@@ -17,20 +17,21 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@kit/ui/tabs';
 
 import type { SiteState } from '../_lib/types';
-import { AddonsSection, type AddonRow } from './addons-section';
 import { BookingCutoffCard } from './booking-cutoff-card';
-import { ContactsSection, type ContactRow } from './contacts-section';
+import { BusinessDetailsCard } from './business-details-card';
+import { GuestEmailsCard } from './guest-emails-card';
 import { RatesForm } from './rates-form';
 import { SeasonalRates } from './seasonal-rates';
 
-const TABS = ['rates', 'seasonal', 'addons', 'contacts'] as const;
+const TABS = ['rates', 'seasonal', 'cutoff', 'emails', 'business'] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
   rates: 'Rates & guests',
   seasonal: 'Seasonal rates',
-  addons: 'Add-ons',
-  contacts: 'Emergency contacts',
+  cutoff: 'Booking cutoff',
+  emails: 'Guest emails',
+  business: 'Business details',
 };
 
 export interface PropertySummary {
@@ -40,6 +41,9 @@ export interface PropertySummary {
   whatsappNumber: string | null;
   legalName: string | null;
   gstin: string | null;
+  legalAddress: string | null;
+  cin: string | null;
+  supportEmail: string | null;
   retentionDays: number;
 }
 
@@ -51,8 +55,6 @@ export function VillaSettingsClient(props: {
   properties: { id: string; name: string }[];
   property: PropertySummary | null;
   site: SiteState;
-  addons: AddonRow[];
-  contacts: ContactRow[];
   managersCanCancel: boolean;
   preArrivalEmail: boolean;
   thankYouEmail: boolean;
@@ -151,15 +153,6 @@ export function VillaSettingsClient(props: {
         </div>
       ) : null}
 
-      {props.property ? (
-        <BookingCutoffCard
-          accountId={props.accountId}
-          propertyId={props.property.id}
-          bookingCutoffDate={props.bookingCutoffDate}
-          canEdit={props.canEdit}
-        />
-      ) : null}
-
       <Tabs value={tab} onValueChange={changeTab} className="w-full">
         <div
           ref={tabStrip}
@@ -202,19 +195,35 @@ export function VillaSettingsClient(props: {
           </SiteGate>
         </TabsContent>
 
-        <TabsContent value="addons" className="mt-0">
-          <AddonsSection
-            {...ids}
+        <TabsContent value="cutoff" className="mt-0">
+          <BookingCutoffCard
+            accountId={props.accountId}
+            propertyId={props.property.id}
+            bookingCutoffDate={props.bookingCutoffDate}
             canEdit={props.canEdit}
-            addons={props.addons}
           />
         </TabsContent>
 
-        <TabsContent value="contacts" className="mt-0">
-          <ContactsSection
-            {...ids}
+        <TabsContent value="emails" className="mt-0">
+          <GuestEmailsCard
+            accountId={props.accountId}
+            preArrivalEmail={props.preArrivalEmail}
+            thankYouEmail={props.thankYouEmail}
             canEdit={props.canEdit}
-            contacts={props.contacts}
+          />
+        </TabsContent>
+
+        <TabsContent value="business" className="mt-0">
+          <BusinessDetailsCard
+            accountId={props.accountId}
+            propertyId={props.property.id}
+            canEdit={props.canEdit}
+            legalName={props.property.legalName}
+            gstin={props.property.gstin}
+            legalAddress={props.property.legalAddress}
+            cin={props.property.cin}
+            supportEmail={props.property.supportEmail}
+            whatsappNumber={props.property.whatsappNumber}
           />
         </TabsContent>
       </Tabs>

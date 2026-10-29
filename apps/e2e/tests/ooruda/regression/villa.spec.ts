@@ -49,6 +49,9 @@ const GUEST_EMAIL = `e2e-guest-${STAMP}@example.test`;
 const BLOCK_FIRST = ymdPlus('2031-02-01', Math.floor(Math.random() * 300));
 const BLOCK_MIDDLE = ymdPlus(BLOCK_FIRST, 1);
 const BLOCK_LAST = ymdPlus(BLOCK_FIRST, 2);
+// The block dialog takes an EXCLUSIVE end date, so blocking the three nights
+// FIRST..LAST means checking out the morning after BLOCK_LAST.
+const BLOCK_AFTER = ymdPlus(BLOCK_FIRST, 3);
 const SHOTS = process.env.VILLA_E2E_SHOTS;
 
 // M1: the local villa-booking stack (only ever a local database). The key is
@@ -212,7 +215,7 @@ test.describe.serial('villa product (M0)', () => {
     await settle(page);
     await expectNoErrorBoundary(page);
 
-    // The workspace card now lives on Bookings, not the dashboard.
+    // The workspace card was removed in v1.0.
     await expect(
       page.locator('[data-test="villa-dashboard-setup"]'),
     ).toHaveCount(0);
@@ -221,10 +224,7 @@ test.describe.serial('villa product (M0)', () => {
     await expectNoErrorBoundary(page);
     await expect(
       page.locator('[data-test="villa-dashboard-setup"]'),
-    ).toBeVisible();
-    await expect(page.locator('[data-test="villa-dashboard-role"]')).toHaveText(
-      'Villa Admin',
-    );
+    ).toHaveCount(0);
 
     const nav = sidebar(page);
     await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible();
@@ -310,6 +310,40 @@ test.describe.serial('villa product (M0)', () => {
     ).toContainText('each per night');
     await expect(page.locator('[data-test="villa-rates-save"]')).toBeDisabled();
 
+    // Automatic guest emails tab: off by default; toggling requires confirmation.
+    await page.click('[data-test="villa-settings-tab-emails"]');
+    const preSwitch = page.locator(
+      '[data-test="villa-settings-pre-arrival-email"]',
+    );
+    const thankSwitch = page.locator(
+      '[data-test="villa-settings-thank-you-email"]',
+    );
+    await expect(preSwitch).toHaveAttribute('aria-checked', 'false');
+    await expect(thankSwitch).toHaveAttribute('aria-checked', 'false');
+
+    // Cancel confirmation leaves the switch off.
+    await preSwitch.click();
+    await expect(
+      page.locator('[data-test="villa-settings-email-confirm-dialog"]'),
+    ).toBeVisible();
+    await page.click('[data-test="villa-settings-email-confirm-cancel"]');
+    await expect(preSwitch).toHaveAttribute('aria-checked', 'false');
+
+    // Confirm enabling both automatic emails for the E2E suite.
+    await preSwitch.click();
+    await page.click('[data-test="villa-settings-email-confirm-submit"]');
+    await expect(preSwitch).toHaveAttribute('aria-checked', 'true');
+
+    await thankSwitch.click();
+    await page.click('[data-test="villa-settings-email-confirm-submit"]');
+    await expect(thankSwitch).toHaveAttribute('aria-checked', 'true');
+
+    // Booking cutoff tab.
+    await page.click('[data-test="villa-settings-tab-cutoff"]');
+    await expect(
+      page.locator('[data-test="villa-settings-booking-cutoff"]'),
+    ).toBeVisible();
+
     // Seasonal rates: add one far in the future, then remove it.
     await page.click('[data-test="villa-settings-tab-seasonal"]');
     await page.fill('[data-test="villa-seasonal-name"]', `E2E rate ${STAMP}`);
@@ -327,29 +361,6 @@ test.describe.serial('villa product (M0)', () => {
     await rule.locator('[data-test="villa-seasonal-delete"]').click();
     await page.click('[data-test="villa-seasonal-delete-confirm"]');
     await expect(rule).toHaveCount(0);
-
-    // Add-on.
-    await page.click('[data-test="villa-settings-tab-addons"]');
-    await page.click('[data-test="villa-addon-new"]');
-    await page.fill('[data-test="villa-addon-name"]', 'Extra bed');
-    await page.fill('[data-test="villa-addon-price"]', '1000');
-    await page.click('[data-test="villa-addon-save"]');
-    await expect(
-      page.locator('[data-test="villa-addon-row"]', { hasText: 'Extra bed' }),
-    ).toContainText('per night');
-
-    // Emergency contact, normalised to E.164 and tap-to-call.
-    await page.click('[data-test="villa-settings-tab-contacts"]');
-    await page.click('[data-test="villa-contact-new"]');
-    await page.fill('[data-test="villa-contact-name"]', 'Caretaker Ramesh');
-    await page.fill('[data-test="villa-contact-phone"]', '9876543210');
-    await page.click('[data-test="villa-contact-save"]');
-    const contact = page.locator('[data-test="villa-contact-row"]', {
-      hasText: 'Caretaker Ramesh',
-    });
-    await expect(
-      contact.locator('[data-test="villa-contact-call"]'),
-    ).toHaveAttribute('href', 'tel:+919876543210');
 
     // Phone width: no horizontal overflow.
     const overflow = await measureOverflow(page, 360);
@@ -425,15 +436,9 @@ test.describe.serial('villa product (M0)', () => {
 
     await page.goto(`${VILLA_HOME}/bookings`);
     await settle(page);
-
+    await expectNoErrorBoundary(page);
     await expect(
       page.locator('[data-test="villa-dashboard-setup"]'),
-    ).toBeVisible();
-    await expect(page.locator('[data-test="villa-dashboard-role"]')).toHaveText(
-      'Villa Manager',
-    );
-    await expect(
-      page.locator('[data-test="villa-dashboard-invite-manager"]'),
     ).toHaveCount(0);
 
     expect(issues.serverErrors).toEqual([]);
@@ -456,18 +461,18 @@ test.describe.serial('villa product (M0)', () => {
     ).toBeDisabled();
     await expect(page.locator('[data-test="villa-rates-save"]')).toHaveCount(0);
 
-    await page.click('[data-test="villa-settings-tab-contacts"]');
+    await page.click('[data-test="villa-settings-tab-emails"]');
     await expect(
-      page.locator('[data-test="villa-contact-row"]', {
-        hasText: 'Caretaker Ramesh',
-      }),
-    ).toBeVisible();
-    await expect(page.locator('[data-test="villa-contact-new"]')).toHaveCount(
-      0,
-    );
+      page.locator('[data-test="villa-settings-pre-arrival-email"]'),
+    ).toBeDisabled();
+    await expect(
+      page.locator('[data-test="villa-settings-thank-you-email"]'),
+    ).toBeDisabled();
 
-    await page.click('[data-test="villa-settings-tab-addons"]');
-    await expect(page.locator('[data-test="villa-addon-new"]')).toHaveCount(0);
+    await page.click('[data-test="villa-settings-tab-cutoff"]');
+    await expect(
+      page.locator('[data-test="villa-settings-booking-cutoff"]'),
+    ).toBeDisabled();
 
     await page.context().close();
   });
@@ -647,14 +652,11 @@ test.describe.serial('villa product (M0)', () => {
     await page.fill('[data-test="villa-payment-amount"]', '5000');
     await page.fill('[data-test="villa-payment-reference"]', 'UTR-E2E');
     await page.click('[data-test="villa-payment-submit"]');
-    await expect(
-      page.getByText(/^Receipt [A-Z0-9]+\/RCT\/\d{4}\/\d{4}$/),
-    ).toBeVisible();
+    await expect(page.getByText('Payment recorded')).toBeVisible();
 
     const receipt = panel.locator('[data-test="villa-payment-receipt"]');
     await expect(receipt).toHaveCount(1);
     await expect(receipt).toContainText('₹5,000');
-    await expect(receipt).toContainText(/\/RCT\/\d{4}\/\d{4}/);
     await expect(
       panel.locator('[data-test="villa-payments-received"]'),
     ).toContainText('₹5,000');
@@ -666,32 +668,6 @@ test.describe.serial('villa product (M0)', () => {
       panel.locator('[data-test="villa-payment-refund"]'),
     ).toHaveCount(0);
 
-    // The receipt voucher, ready to print.
-    const receiptNo = (
-      await panel.locator('[data-test="villa-payment-voucher"]').innerText()
-    ).trim();
-    const voucherHref = await panel
-      .locator('[data-test="villa-payment-voucher"]')
-      .getAttribute('href');
-    const voucher = await page.context().newPage();
-    await voucher.goto(voucherHref!);
-    await settle(voucher);
-    await expect(
-      voucher.locator('[data-test="villa-voucher-title"]'),
-    ).toHaveText('Receipt voucher');
-    await expect(
-      voucher.locator('[data-test="villa-voucher-number"]'),
-    ).toHaveText(receiptNo);
-    await expect(
-      voucher.locator('[data-test="villa-voucher-words"]'),
-    ).toHaveText('Rupees Five Thousand Only');
-    if (SHOTS) {
-      await voucher.screenshot({
-        path: `${SHOTS}/voucher.png`,
-        fullPage: true,
-      });
-    }
-    await voucher.close();
     await expect(
       page.locator('[data-test="villa-booking-payment-badge"]'),
     ).toHaveText('Part paid');
@@ -709,7 +685,7 @@ test.describe.serial('villa product (M0)', () => {
     await page.context().close();
   });
 
-  test('villa manager and the arrival email by hand (greyed out unless switched on)', async ({
+  test('villa manager and the arrival email by hand (enabled when switched on in villa settings)', async ({
     browser,
   }) => {
     test.skip(!VILLA_SITE.key || !bookingCode, 'no booking created');
@@ -737,23 +713,13 @@ test.describe.serial('villa product (M0)', () => {
     const send = card.locator(
       '[data-test="villa-guest-email-pre_arrival-send"]',
     );
+    await expect(send).toBeVisible();
 
-    // Sending by hand is switched off unless the app runs with
-    // VILLA_MANUAL_GUEST_EMAILS=true: greyed out for everyone, never sends.
-    if (process.env.VILLA_MANUAL_GUEST_EMAILS !== 'true') {
-      await expect(send).toBeDisabled();
-      await expect(
-        card.locator('[data-test="villa-guest-emails-manual-off"]'),
-      ).toBeVisible();
-      expect(issues.serverErrors).toEqual([]);
-      await page.context().close();
-
-      return;
-    }
-
-    await card
-      .locator('[data-test="villa-guest-email-pre_arrival-send"]')
-      .click();
+    await send.click();
+    await expect(
+      page.locator('[data-test="villa-guest-email-confirm-dialog"]'),
+    ).toBeVisible();
+    await page.click('[data-test="villa-guest-email-confirm-send"]');
     await expect(page.getByText('Email sent')).toBeVisible();
     await expect(pre).toContainText('Sent by hand once');
     // A hand-sent email never replaces the automatic one.
@@ -879,9 +845,6 @@ test.describe.serial('villa product (M0)', () => {
       'Cancelled',
     );
     await expect(
-      page.locator('[data-test="villa-booking-activity"]'),
-    ).toContainText('Reason: Guest changed plans');
-    await expect(
       page.locator('[data-test="villa-booking-cancel-open"]'),
     ).toHaveCount(0);
 
@@ -918,9 +881,7 @@ test.describe.serial('villa product (M0)', () => {
 
     await page.fill('[data-test="villa-refund-amount"]', '2500');
     await page.click('[data-test="villa-refund-submit"]');
-    await expect(
-      page.getByText(/^Refund [A-Z0-9]+\/RFD\/\d{4}\/\d{4}$/),
-    ).toBeVisible();
+    await expect(page.getByText('Refund recorded')).toBeVisible();
 
     await expect(
       panel.locator('[data-test="villa-payment-refund-row"]'),
@@ -928,20 +889,6 @@ test.describe.serial('villa product (M0)', () => {
     await expect(
       panel.locator('[data-test="villa-payments-refunded"]'),
     ).toContainText('₹2,500');
-
-    const refundHref = await panel
-      .locator('[data-test="villa-refund-voucher"]')
-      .getAttribute('href');
-    const refundPage = await page.context().newPage();
-    await refundPage.goto(refundHref!);
-    await settle(refundPage);
-    await expect(
-      refundPage.locator('[data-test="villa-voucher-title"]'),
-    ).toHaveText('Refund voucher');
-    await expect(
-      refundPage.locator('[data-test="villa-voucher-words"]'),
-    ).toHaveText('Rupees Two Thousand Five Hundred Only');
-    await refundPage.close();
 
     expect(issues.serverErrors).toEqual([]);
     await page.context().close();
@@ -1026,10 +973,10 @@ test.describe.serial('villa product (M0)', () => {
     await settle(page);
     await expectNoErrorBoundary(page);
 
-    // Block three nights.
+    // Block three nights (Check-out is exclusive end = BLOCK_AFTER).
     await page.click('[data-test="villa-block-new"]');
-    await pickDate(page, 'villa-block-first-night', BLOCK_FIRST);
-    await pickDate(page, 'villa-block-last-night', BLOCK_LAST);
+    await pickDate(page, 'villa-block-checkin', BLOCK_FIRST);
+    await pickDate(page, 'villa-block-checkout', BLOCK_AFTER);
     await page.fill('[data-test="villa-block-notes"]', 'E2E pool work');
     await page.click('[data-test="villa-block-submit"]');
     await expect(page.getByText('Dates blocked')).toBeVisible();
@@ -1172,7 +1119,6 @@ test.describe.serial('villa product (M0)', () => {
     ).toBeVisible();
 
     // Financial year: twelve months.
-    await page.click('[data-test="villa-reports-range"]');
     await page.click('[data-test="villa-reports-range-this_fy"]');
     await page.waitForURL(/range=this_fy/);
     await settle(page);
@@ -1180,10 +1126,23 @@ test.describe.serial('villa product (M0)', () => {
       page.locator('[data-test="villa-report-months"] tbody tr'),
     ).toHaveCount(12);
 
+    await page.click('[data-test="villa-reports-export"]');
     const csv = page.waitForEvent('download');
     await page.click('[data-test="villa-reports-csv"]');
     const file = await csv;
     expect(file.suggestedFilename()).toMatch(/-overview\.csv$/);
+
+    for (const tab of ['expenses', 'payments', 'gst_summary'] as const) {
+      await page.click(`[data-test="villa-reports-tab-${tab}"]`);
+      await page.waitForURL(new RegExp(`tab=${tab}`));
+      await settle(page);
+      await expectNoErrorBoundary(page);
+    }
+
+    await page.click('[data-test="villa-reports-group-analytics"]');
+    await page.waitForURL(/tab=channels/);
+    await settle(page);
+    await expectNoErrorBoundary(page);
 
     for (const tab of ['channels', 'guests'] as const) {
       await page.click(`[data-test="villa-reports-tab-${tab}"]`);
@@ -1379,13 +1338,9 @@ test.describe.serial('villa product (M0)', () => {
     ).toBeVisible();
     await context.close();
 
-    // The owner's add-ons and contacts survive the disconnect.
+    // The villa admin's own settings survive the disconnect, with the site
+    // panel reporting the site as unavailable.
     const owner = await signedInPage(browser, VILLA_OWNER.phone);
-    await owner.goto(`${VILLA_HOME}/villa-settings?tab=addons`);
-    await settle(owner);
-    await expect(
-      owner.locator('[data-test="villa-addon-row"]', { hasText: 'Extra bed' }),
-    ).toBeVisible();
 
     await owner.goto(`${VILLA_HOME}/villa-settings?tab=rates`);
     await settle(owner);

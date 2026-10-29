@@ -14,6 +14,8 @@ import {
 } from '~/lib/villa-db/bookings';
 import { type VillaSite, getVillaSite } from '~/lib/villa-db/client';
 import { VillaDbError } from '~/lib/villa-db/errors';
+import { recordBookingActivity } from '~/lib/villa/activity';
+import { paymentModeLabel } from '~/lib/villa/labels';
 import { sitePaymentStatus, summariseLedger } from '~/lib/villa/ledger';
 import { mirrorBooking } from '~/lib/villa/mirror';
 
@@ -55,7 +57,9 @@ export async function loadLedger(
   booking: SiteBooking,
 ) {
   const [online, payments, refunds] = await Promise.all([
-    listSitePayments(site, booking.id),
+    // The caller read this booking from the site already, so it needs no
+    // second lookup to prove it belongs to this property.
+    listSitePayments(site, booking.id, { verified: true }),
     client
       .from('villa_booking_payments')
       .select(
@@ -219,6 +223,17 @@ export function createPaymentsService(client: Client) {
 
       await syncStatus(site, booking.id, actor);
 
+      await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking: { id: booking.id, bookingCode: booking.bookingCode },
+          action: 'payment_recorded',
+          note: `₹${Number(input.amount).toLocaleString('en-IN')} via ${paymentModeLabel(input.mode)} (Receipt ${data.receipt_no})${input.reference ? ` · Ref: ${input.reference}` : ''}`,
+        },
+        actor,
+      );
+
       return { receiptNo: data.receipt_no };
     },
 
@@ -240,6 +255,17 @@ export function createPaymentsService(client: Client) {
       if (error) throw fromDbError(error);
 
       await syncStatus(site, booking.id, actor);
+
+      await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking: { id: booking.id, bookingCode: booking.bookingCode },
+          action: 'payment_voided',
+          note: `Payment receipt voided: ${input.reason}`,
+        },
+        actor,
+      );
     },
 
     async refund(input: z.output<typeof RecordRefundSchema>, actor: string) {
@@ -265,6 +291,17 @@ export function createPaymentsService(client: Client) {
       if (error) throw fromDbError(error);
 
       await syncStatus(site, booking.id, actor);
+
+      await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking: { id: booking.id, bookingCode: booking.bookingCode },
+          action: 'refund_recorded',
+          note: `₹${Number(input.amount).toLocaleString('en-IN')} via ${paymentModeLabel(input.mode)} (Refund ${data.refund_no}) · ${input.reason}`,
+        },
+        actor,
+      );
 
       return { refundNo: data.refund_no };
     },

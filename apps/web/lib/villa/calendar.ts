@@ -20,6 +20,8 @@ export interface CalendarBlock {
   startDate: string;
   endDate: string;
   reason: string | null;
+  /** 'ical' blocks are owned by a channel feed and read-only in Ooruda. */
+  source?: 'manual' | 'ical';
 }
 
 export type NightItem =
@@ -49,6 +51,14 @@ export interface CalendarDay {
   inMonth: boolean;
   isToday: boolean;
   isPast: boolean;
+  /**
+   * Past the villa's booking cutoff: the guest site and every channel refuse a
+   * check-in here, whatever `items` says. Shown because the site's
+   * check_availability() reports these nights as DATE_BLOCKED while Ooruda's
+   * own blocks table knows nothing about them — an operator who cannot see
+   * the cutoff blocks and unblocks nights to no effect.
+   */
+  pastCutoff: boolean;
   items: NightItem[];
 }
 
@@ -103,6 +113,8 @@ export function buildMonth(
   bookings: CalendarBooking[],
   blocks: CalendarBlock[],
   today: string,
+  /** Last check-in the site accepts; nights after it are closed for sale. */
+  bookingCutoff?: string | null,
 ): CalendarDay[][] {
   const { from, to } = monthRange(month);
   const { from: start, to: end } = gridRange(month);
@@ -148,6 +160,7 @@ export function buildMonth(
       inMonth: date >= from && date < to,
       isToday: date === today,
       isPast: date < today,
+      pastCutoff: !!bookingCutoff && date > bookingCutoff,
       items,
     });
 
@@ -238,10 +251,12 @@ export function monthOccupancy(
   month: string,
   bookings: CalendarBooking[],
   blocks: CalendarBlock[],
-): { booked: number; blocked: number; nights: number } {
+  bookingCutoff?: string | null,
+): { booked: number; blocked: number; closed: number; nights: number } {
   const { from, to } = monthRange(month);
   let booked = 0;
   let blocked = 0;
+  let closed = 0;
   let nights = 0;
 
   for (let date = from; date < to; date = addDays(date, 1)) {
@@ -256,8 +271,11 @@ export function monthOccupancy(
     if (isBooked) booked++;
     else if (blocks.some((k) => k.startDate <= date && date < k.endDate)) {
       blocked++;
+    } else if (bookingCutoff && date > bookingCutoff) {
+      // Not blocked and not booked, but not for sale either.
+      closed++;
     }
   }
 
-  return { booked, blocked, nights };
+  return { booked, blocked, closed, nights };
 }

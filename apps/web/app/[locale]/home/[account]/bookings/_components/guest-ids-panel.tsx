@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 
-import { BadgeCheck, Eye, ShieldCheck, Trash2 } from 'lucide-react';
+import { BadgeCheck, Download, Eye, ShieldCheck, Trash2 } from 'lucide-react';
 import { useAction } from 'next-safe-action/hooks';
 
 import {
@@ -18,6 +18,12 @@ import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import { toast } from '@kit/ui/sonner';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@kit/ui/tooltip';
 
 import { formatDateReadable } from '~/lib/format-date';
 import { idDocTypeLabel } from '~/lib/villa/guest-ids';
@@ -25,6 +31,7 @@ import { idStatusLabel } from '~/lib/villa/labels';
 
 import {
   deleteIdAction,
+  markDocVerifiedAction,
   removeGuestAction,
   setIdStatusAction,
 } from '../_lib/server/guests-actions';
@@ -38,13 +45,20 @@ export interface GuestRow {
   isAdult: boolean;
 }
 
+export interface GuestDocFile {
+  id: string;
+  label: string | null;
+  fileOrder: number;
+}
+
 export interface GuestDoc {
   id: string;
   guestId: string;
   docType: string;
   maskedNumber: string | null;
   stage: 'soft_copy' | 'seen_in_person';
-  hasFile: boolean;
+  /** Non-purged files for this document. */
+  files: GuestDocFile[];
   purgedAt: string | null;
   purgeAfter: string;
   capturedAt: string;
@@ -60,7 +74,6 @@ export function GuestIdsPanel(props: {
   adults: number;
   idStatus: string;
   editable: boolean;
-  isOwner: boolean;
   uploadsEnabled: boolean;
   guests: GuestRow[];
   docs: GuestDoc[];
@@ -87,6 +100,12 @@ export function GuestIdsPanel(props: {
     (g) => g.isAdult && withId.has(g.id),
   ).length;
 
+  const hasAnyDoc = props.docs.length > 0;
+  const allVerified =
+    hasAnyDoc && props.docs.every((d) => d.verified || d.purgedAt);
+
+  const downloadAllHref = `/api/villa/guest-documents/download-all?booking=${props.bookingId}&account=${props.accountId}`;
+
   return (
     <Card className="bg-card lg:col-span-2" data-test={'villa-guest-ids'}>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
@@ -94,9 +113,28 @@ export function GuestIdsPanel(props: {
           <ShieldCheck className="text-muted-foreground h-4 w-4" />
           Guests and IDs
         </CardTitle>
-        <Badge variant="outline" data-test={'villa-guest-ids-status'}>
-          {idStatusLabel(props.idStatus)}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {hasAnyDoc ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              nativeButton={false}
+              render={
+                <a
+                  href={downloadAllHref}
+                  download
+                  data-test={'villa-guest-ids-download-all'}
+                />
+              }
+            >
+              <Download className="mr-1.5 h-4 w-4" />
+              Download all
+            </Button>
+          ) : null}
+          <Badge variant="outline" data-test={'villa-guest-ids-status'}>
+            {idStatusLabel(props.idStatus)}
+          </Badge>
+        </div>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
@@ -116,16 +154,30 @@ export function GuestIdsPanel(props: {
               onSaved={() => router.refresh()}
             />
 
-            {props.idStatus !== 'verified' ? (
-              <Button
-                variant="outline"
-                disabled={status.isPending}
-                onClick={() => status.execute({ ...ref, status: 'verified' })}
-                data-test={'villa-guest-ids-mark-verified'}
-              >
-                <BadgeCheck className="mr-1.5 h-4 w-4" />
-                Mark IDs checked
-              </Button>
+            {hasAnyDoc && props.idStatus !== 'verified' ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        disabled={status.isPending || allVerified}
+                        onClick={() =>
+                          status.execute({ ...ref, status: 'verified' })
+                        }
+                        data-test={'villa-guest-ids-mark-verified'}
+                      >
+                        <BadgeCheck className="mr-1.5 h-4 w-4" />
+                        Mark all IDs checked
+                      </Button>
+                    }
+                  />
+                  <TooltipContent side="bottom" className="max-w-60 text-xs">
+                    Confirm you've compared each ID photo against the guest at
+                    check-in.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             ) : null}
           </div>
         ) : null}
@@ -148,13 +200,11 @@ export function GuestIdsPanel(props: {
                 propertyId={props.propertyId}
                 bookingId={props.bookingId}
                 editable={props.editable}
-                isOwner={props.isOwner}
                 onChanged={() => router.refresh()}
               />
             ))}
           </ul>
         )}
-
       </CardContent>
     </Card>
   );
@@ -167,7 +217,6 @@ function GuestItem(props: {
   propertyId: string;
   bookingId: string;
   editable: boolean;
-  isOwner: boolean;
   onChanged: () => void;
 }) {
   const { guest } = props;
@@ -219,7 +268,10 @@ function GuestItem(props: {
               key={d.id}
               doc={d}
               accountId={props.accountId}
-              canDelete={props.isOwner && !d.purgedAt}
+              propertyId={props.propertyId}
+              bookingId={props.bookingId}
+              canDelete={props.editable && !d.purgedAt}
+              canVerify={props.editable && !d.verified && !d.purgedAt}
               onChanged={props.onChanged}
             />
           ))}
@@ -232,7 +284,10 @@ function GuestItem(props: {
 function DocItem(props: {
   doc: GuestDoc;
   accountId: string;
+  propertyId: string;
+  bookingId: string;
   canDelete: boolean;
+  canVerify: boolean;
   onChanged: () => void;
 }) {
   const { doc } = props;
@@ -246,95 +301,173 @@ function DocItem(props: {
       toast.error(error.serverError ?? 'Could not delete the ID.'),
   });
 
+  const verify = useAction(markDocVerifiedAction, {
+    onSuccess: () => {
+      toast.success('ID marked as checked');
+      props.onChanged();
+    },
+    onError: ({ error }) =>
+      toast.error(error.serverError ?? 'Could not mark the ID as checked.'),
+  });
+
   const how =
     doc.stage === 'seen_in_person'
       ? 'Seen in person'
       : doc.purgedAt
         ? `Photo deleted ${formatDateReadable(doc.purgedAt.slice(0, 10))}`
-        : 'Photo stored';
+        : doc.files.length > 0
+          ? null
+          : 'Photo stored';
 
   return (
-    <li
-      className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"
-      data-test={'villa-guest-doc'}
-    >
-      <span className="font-medium">{idDocTypeLabel(doc.docType)}</span>
-      {doc.maskedNumber ? (
-        <span className="text-muted-foreground font-mono text-xs">
-          {doc.maskedNumber}
-        </span>
-      ) : null}
-      <span className="text-muted-foreground text-xs">{how}</span>
-      {doc.verified ? (
-        <Badge variant="outline" className="border-success/40 text-success">
-          Checked
-        </Badge>
-      ) : null}
-
-      <span className="ml-auto flex gap-1">
-        {doc.hasFile ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            nativeButton={false}
-            render={
-              <a
-                href={`/api/villa/guest-documents/${doc.id}?account=${props.accountId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              />
-            }
-            data-test={'villa-guest-doc-view'}
-          >
-            <Eye className="mr-1 h-3.5 w-3.5" />
-            View
-          </Button>
+    <li className="flex flex-col gap-1.5 text-sm" data-test={'villa-guest-doc'}>
+      {/* Doc header row */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="font-medium">{idDocTypeLabel(doc.docType)}</span>
+        {doc.maskedNumber ? (
+          <span className="text-muted-foreground font-mono text-xs">
+            {doc.maskedNumber}
+          </span>
+        ) : null}
+        {how ? (
+          <span className="text-muted-foreground text-xs">{how}</span>
+        ) : null}
+        {doc.verified ? (
+          <Badge variant="outline" className="border-success/40 text-success">
+            Checked
+          </Badge>
         ) : null}
 
-        {props.canDelete ? (
-          <AlertDialog>
-            <AlertDialogTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Delete ID"
-                  data-test={'villa-guest-doc-delete'}
-                />
-              }
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this ID now?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  The photo is removed straight away. A note that an ID was held
-                  (type and last 4 digits) stays in the record.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <AlertDialogCancel data-test={'villa-guest-doc-delete-cancel'}>
-                  Keep
-                </AlertDialogCancel>
-                <Button
-                  variant="destructive"
-                  disabled={del.isPending}
-                  onClick={() =>
-                    del.execute({
-                      accountId: props.accountId,
-                      documentId: doc.id,
-                    })
+        <span className="ml-auto flex gap-3">
+          {props.canVerify ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={verify.isPending}
+                      onClick={() =>
+                        verify.execute({
+                          accountId: props.accountId,
+                          propertyId: props.propertyId,
+                          bookingId: props.bookingId,
+                          documentId: doc.id,
+                        })
+                      }
+                      data-test={'villa-guest-doc-verify'}
+                    >
+                      <BadgeCheck className="mr-1 h-3.5 w-3.5" />
+                      Mark checked
+                    </Button>
                   }
-                  data-test={'villa-guest-doc-delete-confirm'}
-                >
-                  Delete
-                </Button>
-              </div>
-            </AlertDialogContent>
-          </AlertDialog>
-        ) : null}
-      </span>
+                />
+                <TooltipContent side="left" className="max-w-52 text-xs">
+                  Confirm you've compared this ID against the guest in person.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : null}
+
+          {props.canDelete ? (
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Delete ID"
+                    data-test={'villa-guest-doc-delete'}
+                  />
+                }
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Guest IDs</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will delete all the stored IDs of this user in our
+                    system. Do you want to proceed?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <AlertDialogCancel
+                    data-test={'villa-guest-doc-delete-cancel'}
+                  >
+                    Cancel
+                  </AlertDialogCancel>
+                  <Button
+                    variant="destructive"
+                    disabled={del.isPending}
+                    onClick={() =>
+                      del.execute({
+                        accountId: props.accountId,
+                        documentId: doc.id,
+                      })
+                    }
+                    data-test={'villa-guest-doc-delete-confirm'}
+                  >
+                    {del.isPending ? 'Deleting…' : 'Delete'}
+                  </Button>
+                </div>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : null}
+        </span>
+      </div>
+
+      {/* Per-file view/download links */}
+      {doc.files.length > 0 ? (
+        <ul className="ml-1 flex flex-col gap-0.5">
+          {doc.files.map((f) => (
+            <FileButtons key={f.id} file={f} accountId={props.accountId} />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
+function FileButtons(props: { file: GuestDocFile; accountId: string }) {
+  const { file } = props;
+
+  const fileBase = `/api/villa/guest-documents/files/${file.id}?account=${props.accountId}`;
+
+  return (
+    <li className="flex items-center gap-1">
+      <Button
+        variant="ghost"
+        size="sm"
+        nativeButton={false}
+        render={
+          <a
+            href={fileBase}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-test={'villa-guest-doc-view'}
+          />
+        }
+      >
+        <Eye className="mr-1 h-3.5 w-3.5" />
+        View
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        nativeButton={false}
+        render={
+          <a
+            href={`${fileBase}&download=1`}
+            download
+            data-test={'villa-guest-doc-download'}
+          />
+        }
+      >
+        <Download className="mr-1 h-3.5 w-3.5" />
+        Download
+      </Button>
     </li>
   );
 }

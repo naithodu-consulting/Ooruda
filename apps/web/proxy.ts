@@ -26,6 +26,8 @@ const EMAIL_GATE_EXEMPT_PHONES = new Set([
   '919911000004',
   '919911000005',
   '919911000006',
+  '919900000001', // villa_admin test
+  '919900000002', // villa_manager test
 ]);
 
 export const config = {
@@ -160,17 +162,16 @@ export default async function proxy(request: NextRequest) {
   // this helps us log and trace requests
   setRequestId(request);
 
-  // handle patterns for specific routes
-  const handlePattern = await matchUrlPattern(request);
+  // Run all matching pattern handlers as a pipeline.
+  // Each handler may return a Response to short-circuit or undefined to continue.
+  const handlers = await matchUrlPatterns(request);
 
-  // if a pattern handler exists, call it
-  if (handlePattern) {
-    const patternHandlerResponse = await handlePattern(
+  for (const handler of handlers) {
+    const patternHandlerResponse = await handler(
       request,
       secureHeadersResponse,
     );
 
-    // if a pattern handler returns a response, return it
     if (patternHandlerResponse) {
       return patternHandlerResponse;
     }
@@ -369,19 +370,22 @@ async function buildPatterns() {
 
 /**
  * Match URL patterns to specific handlers.
- * @param request
+ * Returns all matching handlers in order so they can be run as a pipeline:
+ * each handler can return a Response to short-circuit or undefined to continue.
  */
-async function matchUrlPattern(request: NextRequest) {
+async function matchUrlPatterns(
+  request: NextRequest,
+): Promise<
+  Array<
+    (req: NextRequest, res: NextResponse) => Promise<NextResponse | undefined>
+  >
+> {
   const patterns = await getPatterns();
   const input = getNormalizedPathname(request.nextUrl.pathname);
 
-  for (const pattern of patterns) {
-    const patternResult = pattern.pattern.exec(input, request.nextUrl.origin);
-
-    if (patternResult !== null && 'pathname' in patternResult) {
-      return pattern.handler;
-    }
-  }
+  return patterns
+    .filter((p) => p.pattern.exec(input, request.nextUrl.origin) !== null)
+    .map((p) => p.handler);
 }
 
 function getNormalizedPathname(pathname: string) {

@@ -1,4 +1,6 @@
 import 'server-only';
+import { after } from 'next/server';
+
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type * as z from 'zod';
@@ -8,6 +10,7 @@ import { normalizePhoneNumber } from '@kit/shared/utils';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 
 import type { Database } from '~/lib/database.types';
+import { formatDateReadable } from '~/lib/format-date';
 import type { VillaRole } from '~/lib/roles';
 import { checkAvailability } from '~/lib/villa-db/availability';
 import {
@@ -21,6 +24,8 @@ import { getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
 import { VillaDbError } from '~/lib/villa-db/errors';
 import { getPricingInputs } from '~/lib/villa-db/rates';
+import { recordBookingActivity } from '~/lib/villa/activity';
+import { sendBookingConfirmation } from '~/lib/villa/guest-email-runner';
 import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
 import { mirrorBooking } from '~/lib/villa/mirror';
 import { fromPaise, fromPaiseToString } from '~/lib/villa/money';
@@ -50,6 +55,11 @@ export type QuoteView =
       total: number;
       /** Sent back on confirm so the server can detect a price change. */
       totalPaise: number;
+      /**
+       * Priced under the admin's cutoff override: the public site would refuse
+       * this check-in. The form asks for a confirmation before saving.
+       */
+      pastCutoff: boolean;
       nightly: {
         date: string;
         rate: number;
@@ -84,10 +94,13 @@ export function createBookingsService(client: Client) {
     return data?.booking_cutoff_date ?? null;
   }
 
-  async function priceStay(input: z.output<typeof StaySchema>) {
+  async function priceStay(
+    input: z.output<typeof StaySchema>,
+    options?: { ignoreCutoff?: boolean },
+  ) {
     const site = await getVillaSite(input.accountId, input.propertyId);
     const [availability, pricing] = await Promise.all([
-      checkAvailability(site, input.checkIn, input.checkOut),
+      checkAvailability(site, input.checkIn, input.checkOut, options),
       getPricingInputs(site),
     ]);
 
@@ -115,30 +128,7 @@ export function createBookingsService(client: Client) {
     },
     actor: string,
   ) {
-    // The site change has already happened; a failed trail entry must not
-    // turn it into an error for the user. It is logged instead.
-    // Service role only: members cannot write history directly (a hand-made
-    // "cancelled" row would forge it). The caller has already authorised the
-    // action and made the change on the booking site.
-    const { error } = await getSupabaseServerAdminClient()
-      .from('villa_booking_activity')
-      .insert({
-        account_id: entry.accountId,
-        property_id: entry.propertyId,
-        site_booking_id: entry.booking.id,
-        booking_code: entry.booking.bookingCode,
-        action: entry.action,
-        reason_code: entry.reasonCode ?? null,
-        note: entry.note || null,
-        actor_user_id: actor,
-      });
-
-    if (error) {
-      (await getLogger()).error(
-        { bookingId: entry.booking.id, action: entry.action, code: error.code },
-        'villa booking activity write failed',
-      );
-    }
+    await recordBookingActivity(entry, actor);
   }
 
   /**
@@ -151,13 +141,18 @@ export function createBookingsService(client: Client) {
     propertyId: string,
     bookingId: string,
   ) {
-    const { error } = await getSupabaseServerAdminClient()
+    const admin = getSupabaseServerAdminClient();
+    const today = todayIst();
+
+    // Update purge_after on the document rows (kept for query convenience).
+    const { error, data: docs } = await admin
       .from('villa_guest_documents')
-      .update({ purge_after: todayIst() })
+      .update({ purge_after: today })
       .eq('account_id', accountId)
       .eq('property_id', propertyId)
       .eq('site_booking_id', bookingId)
-      .is('purged_at', null);
+      .is('purged_at', null)
+      .select('id');
 
     if (error) {
       (await getLogger()).error(
@@ -165,6 +160,18 @@ export function createBookingsService(client: Client) {
         'villa cancel: guest id purge date update failed',
       );
       return;
+    }
+
+    // Also bring forward the files table so the purge job can find them.
+    if ((docs ?? []).length > 0) {
+      await admin
+        .from('villa_guest_document_files')
+        .update({ purge_after: today })
+        .in(
+          'document_id',
+          (docs ?? []).map((d) => d.id),
+        )
+        .is('purged_at', null);
     }
 
     await purgeExpiredGuestIds(accountId).catch(async (e: unknown) =>
@@ -175,21 +182,62 @@ export function createBookingsService(client: Client) {
     );
   }
 
+  /**
+   * How the booking cutoff applies to this request.
+   *
+   * The cutoff closes PUBLIC sales. An admin may still record a stay past it,
+   * but only deliberately: `overrideCutoff` is set by a confirmation step in
+   * the form, and only villa_admin is allowed to set it. A manager, and an
+   * admin who has not confirmed, are refused with the reason.
+   */
+  async function cutoffDecision(
+    input: { accountId: string; checkIn: string; overrideCutoff: boolean },
+    role: VillaRole,
+  ): Promise<
+    | { kind: 'within' }
+    | { kind: 'override'; cutoff: string }
+    | { kind: 'refused'; cutoff: string; message: string }
+  > {
+    const cutoff = await getBookingCutoffDate(input.accountId);
+
+    if (!cutoff || input.checkIn <= cutoff) return { kind: 'within' };
+
+    if (input.overrideCutoff && role === 'villa_admin') {
+      return { kind: 'override', cutoff };
+    }
+
+    const readable = formatDateReadable(cutoff);
+
+    return {
+      kind: 'refused',
+      cutoff,
+      message:
+        role === 'villa_admin'
+          ? `Bookings are closed after ${readable}. Confirm the override to record this stay anyway.`
+          : `Bookings are closed after ${readable}. Only a villa admin can record a stay past that date.`,
+    };
+  }
+
   return {
     getBookingCutoffDate,
 
-    async quote(input: z.output<typeof StaySchema>): Promise<QuoteView> {
-      const cutoff = await getBookingCutoffDate(input.accountId);
+    async quote(
+      input: z.output<typeof StaySchema>,
+      role: VillaRole,
+    ): Promise<QuoteView> {
+      const cutoff = await cutoffDecision(input, role);
 
-      if (cutoff && input.checkIn > cutoff) {
+      if (cutoff.kind === 'refused') {
         return {
           ok: false,
           reason: 'DATE_BLOCKED',
-          message: `Bookings are not available beyond ${cutoff}.`,
+          message: cutoff.message,
         };
       }
 
-      const { availability, result } = await priceStay(input);
+      const { availability, result } = await priceStay(input, {
+        ignoreCutoff: cutoff.kind === 'override',
+      });
 
       if (availability !== 'AVAILABLE') {
         return {
@@ -224,6 +272,7 @@ export function createBookingsService(client: Client) {
         })),
         total: fromPaise(q.totalPaise),
         totalPaise: q.totalPaise,
+        pastCutoff: cutoff.kind === 'override',
         nightly: q.nights.map((n) => ({
           date: n.date,
           rate: fromPaise(n.ratePaise),
@@ -233,18 +282,24 @@ export function createBookingsService(client: Client) {
       };
     },
 
-    async create(input: z.output<typeof NewBookingSchema>, actor: string) {
-      const cutoff = await getBookingCutoffDate(input.accountId);
+    async create(
+      input: z.output<typeof NewBookingSchema>,
+      actor: string,
+      role: VillaRole,
+    ) {
+      const cutoff = await cutoffDecision(input, role);
 
-      if (cutoff && input.checkIn > cutoff) {
+      if (cutoff.kind === 'refused') {
         throw new VillaDbError(
           'DATE_BLOCKED',
-          `check-in ${input.checkIn} is beyond cutoff ${cutoff}`,
-          `Bookings are not available beyond ${cutoff}.`,
+          `check-in ${input.checkIn} is beyond cutoff ${cutoff.cutoff}`,
+          cutoff.message,
         );
       }
 
-      const { site, availability, result } = await priceStay(input);
+      const { site, availability, result } = await priceStay(input, {
+        ignoreCutoff: cutoff.kind === 'override',
+      });
 
       if (availability !== 'AVAILABLE') {
         throw new VillaDbError(
@@ -294,9 +349,19 @@ export function createBookingsService(client: Client) {
           specialRequests: input.specialRequests,
           channel: input.channel,
           paymentStatus: input.paymentStatus,
+          ignoreCutoff: cutoff.kind === 'override',
         },
         actor,
       );
+
+      // The override is recorded on the booking's own trail: a stay the public
+      // site would have refused should say who decided to take it.
+      const notes = [
+        input.isEvent ? 'Event booking' : null,
+        cutoff.kind === 'override'
+          ? `Recorded past the booking cutoff (${formatDateReadable(cutoff.cutoff)}) by an admin`
+          : null,
+      ].filter(Boolean);
 
       await record(
         {
@@ -304,11 +369,67 @@ export function createBookingsService(client: Client) {
           propertyId: input.propertyId,
           booking,
           action: 'created',
-          note: input.isEvent ? 'Event booking' : null,
+          note: notes.length > 0 ? notes.join('. ') : null,
         },
         actor,
       );
       await mirrorBooking(site, booking, input.isEvent ? 'event' : 'stay');
+
+      // The advance taken when the booking was agreed becomes a receipt, so
+      // the ledger — and the confirmation email that reads it — states a real
+      // figure instead of "a deposit was received". Written before the email
+      // is queued below. A receipt that fails must not undo a booking the
+      // guest has been promised, so it is logged for staff to add by hand.
+      if (
+        (input.paymentStatus === 'partially_paid' ||
+          input.paymentStatus === 'paid') &&
+        input.amountReceived > 0
+      ) {
+        if (input.amountReceived > fromPaise(q.totalPaise)) {
+          throw new VillaDbError(
+            'INVALID_INPUT',
+            `advance ${input.amountReceived} over total ${q.totalPaise}`,
+            'The amount received is more than the booking total.',
+          );
+        }
+
+        const { error } = await client.rpc('record_villa_payment', {
+          p_property_id: input.propertyId,
+          p_site_booking_id: booking.id,
+          p_request_id: crypto.randomUUID(),
+          p_mode: input.paymentMode,
+          p_amount: input.amountReceived,
+          p_paid_on: todayIst(),
+          p_reference: input.paymentReference,
+          p_payer_name: input.guestName,
+          p_note: 'Advance taken when the booking was made',
+        });
+
+        if (error) {
+          (await getLogger()).error(
+            { bookingId: booking.id, code: error.code },
+            'villa booking advance receipt failed',
+          );
+        }
+      }
+
+      // Runs after the response: never fails the booking if the email fails,
+      // but after() keeps the invocation alive so the send is not dropped
+      // when the function would otherwise freeze on returning.
+      after(async () => {
+        try {
+          await sendBookingConfirmation(
+            input.accountId,
+            input.propertyId,
+            booking,
+          );
+        } catch (e) {
+          (await getLogger()).error(
+            { bookingId: booking.id, error: String(e) },
+            'villa booking confirmation send failed',
+          );
+        }
+      });
 
       return booking;
     },

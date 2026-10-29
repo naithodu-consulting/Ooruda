@@ -13,13 +13,15 @@ const InviteSchema = z.object({
     // Store the normalized E.164 value downstream.
     .transform((value) => normalizePhoneNumber(value) as string),
   role: z.string().min(1).max(100),
-  name: z.string().trim().max(255).optional(),
+  // Name and email are required: both are captured here so the member has an
+  // identity from the moment they are added, rather than appearing as a bare
+  // phone number until they fill in a profile themselves.
+  name: z.string().trim().min(1, 'Enter the member name').max(255),
   email: z
     .string()
     .trim()
-    .email('Enter a valid email address')
-    .optional()
-    .or(z.literal('')),
+    .min(1, 'Enter the member email')
+    .email('Enter a valid email address'),
 });
 
 export const InviteMembersSchema = z

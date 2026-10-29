@@ -130,8 +130,8 @@ select is(
      from information_schema.columns
     where table_schema = 'public' and table_name = 'villa_account_settings'
       and column_name in ('pre_arrival_email', 'thank_you_email')),
-  'true,true',
-  'both emails are on by default'
+  'false,false',
+  'pre-arrival and thank-you emails are off by default'
 );
 
 select tests.authenticate_as('m7_other');

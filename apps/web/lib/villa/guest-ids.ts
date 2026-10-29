@@ -11,7 +11,6 @@ export const ID_DOC_TYPES = [
   'passport',
   'driving_licence',
   'voter_id',
-  'other',
 ] as const;
 
 export type IdDocType = (typeof ID_DOC_TYPES)[number];
@@ -21,7 +20,6 @@ export const ID_DOC_TYPE_LABELS: Record<IdDocType, string> = {
   passport: 'Passport',
   driving_licence: 'Driving licence',
   voter_id: 'Voter ID',
-  other: 'Other ID',
 };
 
 export function idDocTypeLabel(type: string): string {
@@ -38,7 +36,6 @@ const FULL: Record<IdDocType, RegExp> = {
   passport: /^[A-Z0-9]{6,12}$/,
   driving_licence: /^[A-Z0-9]{8,20}$/,
   voter_id: /^[A-Z0-9]{8,12}$/,
-  other: /^[A-Z0-9]{4,30}$/,
 };
 
 const HINT: Record<IdDocType, string> = {
@@ -46,7 +43,6 @@ const HINT: Record<IdDocType, string> = {
   passport: 'Enter the passport number, or just its last 4 characters.',
   driving_licence: 'Enter the licence number, or just its last 4 characters.',
   voter_id: 'Enter the voter ID number, or just its last 4 characters.',
-  other: 'Enter the ID number, or just its last 4 characters.',
 };
 
 /**

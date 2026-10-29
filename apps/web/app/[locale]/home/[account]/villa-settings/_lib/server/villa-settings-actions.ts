@@ -13,10 +13,12 @@ import {
   AddonSchema,
   BaseRatesSchema,
   BookingCutoffSchema,
+  BusinessDetailsSchema,
   ContactSchema,
   DeleteAddonSchema,
   DeleteContactSchema,
   DeleteSeasonalRateSchema,
+  GuestEmailSettingsSchema,
   PoliciesSchema,
   SeasonalRateSchema,
 } from '../schemas/villa-settings.schema';
@@ -102,6 +104,16 @@ export const deleteContactAction = authActionClient
     revalidateSettings();
   });
 
+export const saveBusinessDetailsAction = authActionClient
+  .inputSchema(BusinessDetailsSchema)
+  .action(async ({ parsedInput }) => {
+    const service = await ownerService(parsedInput.accountId);
+    await service.saveBusinessDetails(parsedInput);
+    // The booking site prints the same company on its own receipts, so it is
+    // refreshed alongside this page.
+    await revalidateSettingsAndSite('policies');
+  });
+
 export const savePoliciesAction = authActionClient
   .inputSchema(PoliciesSchema)
   .action(async ({ parsedInput, ctx }) => {
@@ -125,7 +137,10 @@ export const saveBookingCutoffAction = authActionClient
     if (error) throw new Error(`Could not save cutoff: ${error.message}`);
 
     // 2. Write to the villa-booking DB so the guest site respects it too.
-    const site = await getVillaSite(parsedInput.accountId, parsedInput.propertyId);
+    const site = await getVillaSite(
+      parsedInput.accountId,
+      parsedInput.propertyId,
+    );
     // The column is added by villa-booking migration 00097. The villa-booking
     // DB types in this repo lag behind, so we cast to bypass the type check.
     const { error: siteError } = await site.client
@@ -134,10 +149,41 @@ export const saveBookingCutoffAction = authActionClient
       .eq('id', site.sitePropertyId);
 
     if (siteError) {
-      throw new Error(`Saved locally but could not sync to booking site: ${siteError.message}`);
+      throw new Error(
+        `Saved locally but could not sync to booking site: ${siteError.message}`,
+      );
     }
 
     revalidateSettings();
     revalidatePath('/[locale]/home/[account]/bookings', 'page');
     await revalidateBookingSite('booking-cutoff');
+  });
+
+export const saveGuestEmailSettingsAction = authActionClient
+  .inputSchema(GuestEmailSettingsSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    await requireVillaRole(parsedInput.accountId, ['villa_admin']);
+    const client = getSupabaseServerClient();
+
+    const { data, error } = await client
+      .from('villa_account_settings')
+      .upsert(
+        {
+          account_id: parsedInput.accountId,
+          pre_arrival_email: parsedInput.preArrivalEmail,
+          thank_you_email: parsedInput.thankYouEmail,
+          updated_by: ctx.user.id,
+        },
+        { onConflict: 'account_id' },
+      )
+      .select('account_id');
+
+    if (error || !data?.length) {
+      throw new Error(
+        `Could not save email settings${error ? `: ${error.message}` : '.'}`,
+      );
+    }
+
+    revalidateSettings();
+    revalidatePath('/[locale]/home/[account]/bookings', 'layout');
   });

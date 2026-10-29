@@ -52,6 +52,13 @@ export interface NewOfflineBooking {
   specialRequests?: string | null;
   channel: OfflineChannel;
   paymentStatus: PaymentStatus;
+  /**
+   * Record this stay even though its check-in is past the property's booking
+   * cutoff. The cutoff closes PUBLIC sales; the villa's own admin still has to
+   * be able to write down a stay agreed by phone. Occupancy is unaffected: the
+   * site refuses a night already sold or blocked either way.
+   */
+  ignoreCutoff?: boolean;
 }
 
 export interface SiteBooking {
@@ -82,10 +89,11 @@ export interface SiteBooking {
   idStatus: string;
   invoiceNumber: string | null;
   updatedAt: string | null;
+  createdAt: string | null;
 }
 
 const BOOKING_COLUMNS =
-  'id, booking_code, reference_number, status, payment_status, booking_channel, guest_name, guest_email, guest_phone, check_in, check_out, num_nights, num_adults, num_children, num_infants, base_amount, extra_guest_amount, tax_amount, total_amount, discount_amount, discount_code, id_status, invoice_number, updated_at';
+  'id, booking_code, reference_number, status, payment_status, booking_channel, guest_name, guest_email, guest_phone, check_in, check_out, num_nights, num_adults, num_children, num_infants, base_amount, extra_guest_amount, tax_amount, total_amount, discount_amount, discount_code, id_status, invoice_number, updated_at, created_at';
 
 type BookingRow = {
   id: string;
@@ -112,6 +120,7 @@ type BookingRow = {
   id_status: string | null;
   invoice_number: string | null;
   updated_at: string | null;
+  created_at: string | null;
 };
 
 function toBooking(row: BookingRow): SiteBooking {
@@ -140,6 +149,7 @@ function toBooking(row: BookingRow): SiteBooking {
     idStatus: row.id_status ?? 'pending',
     invoiceNumber: row.invoice_number,
     updatedAt: row.updated_at,
+    createdAt: row.created_at,
   };
 }
 
@@ -249,6 +259,7 @@ export async function createOfflineBooking(
         // The SQL parameter is nullable `text` (contract §5.1 passes null);
         // generated RPC arg types cannot express that.
         p_special_requests: (input.specialRequests?.trim() || null) as string,
+        p_ignore_cutoff: input.ignoreCutoff ?? false,
       },
     );
 
@@ -633,20 +644,29 @@ export interface SitePayment {
   createdAt: string | null;
 }
 
-/** Website (Razorpay) payments for one booking of this property. */
+/**
+ * Website (Razorpay) payments for one booking of this property.
+ *
+ * Payments carry no property_id, so the booking is what scopes them to this
+ * villa. Callers that already hold the booking (the booking page does) pass
+ * `verified: true` to say so, which saves re-reading the same row from the
+ * booking site; anyone passing a bare id still gets it checked here.
+ */
 export async function listSitePayments(
   site: VillaSite,
   bookingId: string,
+  options: { verified?: boolean } = {},
 ): Promise<SitePayment[]> {
-  // Scope through the booking: payments carry no property_id.
-  const booking = await getBooking(site, bookingId);
+  if (!options.verified) {
+    const booking = await getBooking(site, bookingId);
 
-  if (!booking) return [];
+    if (!booking) return [];
+  }
 
   const { data, error } = await site.client
     .from('payments')
     .select('id, amount, status, razorpay_payment_id, created_at')
-    .eq('booking_id', booking.id)
+    .eq('booking_id', bookingId)
     .order('created_at');
 
   if (error) throw fromSiteError(error);
@@ -736,6 +756,48 @@ export async function reopenStay(
     const booking = toBooking(data as BookingRow);
     return { result: booking, siteId: booking.bookingCode ?? booking.id };
   });
+}
+
+/**
+ * The guest's own confirmation page key on the booking site.
+ *
+ * Deliberately not part of SiteBooking: that object is handed to client
+ * components on the booking screen, and this token is the only credential
+ * that opens /booking/<token>. It is read on its own, server-side, by the one
+ * caller that puts it in an email to the guest it belongs to.
+ */
+export async function getBookingAccessToken(
+  site: VillaSite,
+  bookingId: string,
+): Promise<string | null> {
+  const { data, error } = await site.client
+    .from('bookings')
+    .select('access_token')
+    .eq('property_id', site.sitePropertyId)
+    .eq('id', bookingId)
+    .maybeSingle();
+
+  if (error) throw fromSiteError(error);
+
+  return data?.access_token ?? null;
+}
+
+/** "Mangalore, Karnataka" - the locality line under the villa's name. */
+export async function getPropertyLocation(
+  site: VillaSite,
+): Promise<string | null> {
+  const { data, error } = await site.client
+    .from('properties')
+    .select('city, state')
+    .eq('id', site.sitePropertyId)
+    .maybeSingle();
+
+  if (error) throw fromSiteError(error);
+  if (!data) return null;
+
+  const line = [data.city, data.state].filter(Boolean).join(', ');
+
+  return line || null;
 }
 
 /** The villa's postal address, as the booking site lists it. */

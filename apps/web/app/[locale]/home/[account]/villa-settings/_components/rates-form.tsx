@@ -23,12 +23,9 @@ import {
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@kit/ui/select';
+  SearchableSelect,
+  type SearchableSelectOption,
+} from '@kit/ui/searchable-select';
 import { toast } from '@kit/ui/sonner';
 
 import { RupeeInput } from '~/components/rupee-input';
@@ -41,10 +38,14 @@ import {
 } from '../_lib/schemas/villa-settings.schema';
 import { saveBaseRatesAction } from '../_lib/server/villa-settings-actions';
 
-const TIMES = Array.from({ length: 48 }, (_, i) => {
-  const h = String(Math.floor(i / 2)).padStart(2, '0');
-  return `${h}:${i % 2 ? '30' : '00'}`;
-});
+const TIME_OPTIONS: SearchableSelectOption[] = Array.from(
+  { length: 48 },
+  (_, i) => {
+    const h = String(Math.floor(i / 2)).padStart(2, '0');
+    const value = `${h}:${i % 2 ? '30' : '00'}`;
+    return { value, label: value };
+  },
+);
 
 function toHHMM(value: string | null, fallback: string) {
   return value ? value.slice(0, 5) : fallback;
@@ -200,27 +201,18 @@ export function RatesForm(props: {
       render={({ field }) => (
         <FormItem>
           <FormLabel>{label}</FormLabel>
-          <Select
-            value={field.value}
-            onValueChange={field.onChange}
-            disabled={disabled}
-          >
-            <FormControl>
-              <SelectTrigger
-                className="w-full"
-                data-test={`villa-rates-${name}`}
-              >
-                <SelectValue />
-              </SelectTrigger>
-            </FormControl>
-            <SelectContent>
-              {TIMES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FormControl>
+            <SearchableSelect
+              items={TIME_OPTIONS}
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              disabled={disabled}
+              placeholder="Select time"
+              searchPlaceholder="Type time (e.g. 14:00)…"
+              data-test={`villa-rates-${name}`}
+            />
+          </FormControl>
           <FormMessage />
         </FormItem>
       )}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ban, IndianRupee, Plus, Undo2, Wallet } from 'lucide-react';
@@ -45,6 +45,7 @@ import { RupeeInput } from '~/components/rupee-input';
 import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatDateReadable } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
+import { paymentModeLabel } from '~/lib/villa/labels';
 
 import {
   PAYMENT_MODES,
@@ -61,16 +62,7 @@ import {
   voidPaymentAction,
 } from '../_lib/server/payments-actions';
 
-const MODE_LABELS: Record<(typeof PAYMENT_MODES)[number], string> = {
-  cash: 'Cash',
-  upi: 'UPI',
-  bank: 'Bank transfer',
-  card: 'Card (at the villa)',
-  other: 'Other',
-};
-
-const modeLabel = (m: string) =>
-  MODE_LABELS[m as keyof typeof MODE_LABELS] ?? m;
+const modeLabel = paymentModeLabel;
 
 const STATUS_LABELS: Record<string, string> = {
   unpaid: 'Unpaid',
@@ -130,9 +122,6 @@ export function PaymentsPanel(
   },
 ) {
   const router = useRouter();
-  const pathname = usePathname();
-  const voucher = (kind: 'receipt' | 'refund', id: string) =>
-    `${pathname}/voucher/${kind}/${id}?property=${props.propertyId}`;
   const ref: Ref = {
     accountId: props.accountId,
     propertyId: props.propertyId,
@@ -176,7 +165,7 @@ export function PaymentsPanel(
             ['Received', s.received, 'received'],
             ['Refunded', s.refunded, 'refunded'],
             [
-              s.excess > 0 ? 'Paid extra' : 'Balance due',
+              s.excess > 0 ? 'Additional Payment' : 'Balance due',
               s.excess > 0 ? s.excess : s.due,
               'due',
             ],
@@ -186,20 +175,15 @@ export function PaymentsPanel(
               className="rounded-lg border p-3"
               data-test={`villa-payments-${key as string}`}
             >
-              <dt className="text-muted-foreground text-xs">{label}</dt>
-              <dd className="font-semibold tabular-nums">
+              <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                {label}
+              </dt>
+              <dd className="text-lg font-bold tabular-nums">
                 {formatINR(value as number)}
               </dd>
             </div>
           ))}
         </dl>
-
-        {s.status === 'paid' ? (
-          <p className="text-muted-foreground text-xs">
-            The guest&apos;s booking page shows &quot;Part paid&quot; until tax
-            invoices move to check-out on the booking site.
-          </p>
-        ) : null}
 
         {canRecord ? (
           <div>
@@ -250,7 +234,7 @@ export function PaymentsPanel(
         {props.receipts.length > 0 ? (
           <section className="flex flex-col gap-1.5">
             <h3 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-              Receipts
+              Offline payments
             </h3>
             <ul className="divide-border divide-y rounded-lg border">
               {props.receipts.map((r) => (
@@ -268,16 +252,6 @@ export function PaymentsPanel(
                     >
                       {formatINR(r.amount)}
                     </span>
-                    <a
-                      href={voucher('receipt', r.id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-mono text-xs underline-offset-2 hover:underline"
-                      title="Open the receipt voucher"
-                      data-test={'villa-payment-voucher'}
-                    >
-                      {r.receiptNo}
-                    </a>
                     <span className="text-muted-foreground text-xs">
                       {modeLabel(r.mode)} · {formatDateReadable(r.paidOn)}
                       {r.reference ? ` · ${r.reference}` : ''}
@@ -329,20 +303,10 @@ export function PaymentsPanel(
                   {r.refunds.map((f) => (
                     <p
                       key={f.id}
-                      className="text-muted-foreground flex flex-wrap gap-x-2 pl-3 text-xs"
+                      className="text-muted-foreground flex flex-wrap items-center gap-x-2 pl-3 text-xs"
                       data-test={'villa-payment-refund-row'}
                     >
                       <span>Refunded {formatINR(f.amount)}</span>
-                      <a
-                        href={voucher('refund', f.id)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-mono underline-offset-2 hover:underline"
-                        title="Open the refund voucher"
-                        data-test={'villa-refund-voucher'}
-                      >
-                        {f.refundNo}
-                      </a>
                       <span>
                         {modeLabel(f.mode)} · {formatDateReadable(f.refundedOn)}
                       </span>
@@ -410,7 +374,7 @@ function ModeField({
       control={control}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>Paid by</FormLabel>
+          <FormLabel>Payment Mode</FormLabel>
           <Select value={field.value} onValueChange={field.onChange}>
             <FormControl>
               <SelectTrigger className="w-full" data-test={test}>
@@ -420,7 +384,7 @@ function ModeField({
             <SelectContent>
               {PAYMENT_MODES.map((m) => (
                 <SelectItem key={m} value={m} data-test={`${test}-${m}`}>
-                  {MODE_LABELS[m]}
+                  {modeLabel(m)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -492,10 +456,8 @@ function RecordPaymentDialog(
   const over = props.due > 0 && amount > props.due ? amount - props.due : 0;
 
   const { execute, isPending } = useAction(recordPaymentAction, {
-    onSuccess: ({ data }) => {
-      toast.success(
-        data?.receiptNo ? `Receipt ${data.receiptNo}` : 'Payment recorded',
-      );
+    onSuccess: () => {
+      toast.success('Payment recorded');
       props.onDone();
     },
     onError: ({ error }) =>
@@ -513,9 +475,7 @@ function RecordPaymentDialog(
             <IndianRupee className="h-4 w-4" />
             Record a payment
           </DialogTitle>
-          <DialogDescription>
-            Money received off the website. A receipt number is issued.
-          </DialogDescription>
+          <DialogDescription>Record the amount received.</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -605,7 +565,7 @@ function RecordPaymentDialog(
                 control={form.control}
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Paid by (name)</FormLabel>
+                    <FormLabel>Paid By</FormLabel>
                     <FormControl
                       render={
                         <Input {...field} data-test={'villa-payment-payer'} />
@@ -638,7 +598,7 @@ function RecordPaymentDialog(
             <Actions
               onClose={props.onClose}
               pending={isPending}
-              label="Save and issue receipt"
+              label="Save"
               pendingLabel="Saving…"
               test="villa-payment"
             />
@@ -670,10 +630,8 @@ function RefundDialog(
   });
 
   const { execute, isPending } = useAction(recordRefundAction, {
-    onSuccess: ({ data }) => {
-      toast.success(
-        data?.refundNo ? `Refund ${data.refundNo}` : 'Refund recorded',
-      );
+    onSuccess: () => {
+      toast.success('Refund recorded');
       props.onDone();
     },
     onError: ({ error }) =>
@@ -687,10 +645,10 @@ function RefundDialog(
         data-test={'villa-refund-dialog'}
       >
         <DialogHeader>
-          <DialogTitle>Refund against {props.receipt.receiptNo}</DialogTitle>
+          <DialogTitle>Record a refund</DialogTitle>
           <DialogDescription>
             Record money already sent back to the guest. Up to{' '}
-            {formatINR(props.receipt.refundable)} is left on this receipt.
+            {formatINR(props.receipt.refundable)} remaining.
           </DialogDescription>
         </DialogHeader>
 
@@ -819,7 +777,7 @@ function VoidDialog(
 
   const { execute, isPending } = useAction(voidPaymentAction, {
     onSuccess: () => {
-      toast.success('Receipt voided');
+      toast.success('Payment voided');
       props.onDone();
     },
     onError: ({ error }) =>
@@ -830,10 +788,9 @@ function VoidDialog(
     <Dialog open onOpenChange={(o) => (!o ? props.onClose() : undefined)}>
       <DialogContent className="max-w-md" data-test={'villa-void-dialog'}>
         <DialogHeader>
-          <DialogTitle>Void {props.receipt.receiptNo}?</DialogTitle>
+          <DialogTitle>Void this payment?</DialogTitle>
           <DialogDescription>
-            For a receipt entered by mistake. It stays in the list, marked void,
-            so the receipt numbers have no gaps.
+            For a payment entered by mistake. It stays in the list, marked void.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -863,7 +820,7 @@ function VoidDialog(
             <Actions
               onClose={props.onClose}
               pending={isPending}
-              label="Void receipt"
+              label="Void payment"
               pendingLabel="Voiding…"
               test="villa-void"
               destructive
