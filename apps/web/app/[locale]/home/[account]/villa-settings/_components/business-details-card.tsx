@@ -44,6 +44,7 @@ export function BusinessDetailsCard(props: {
   legalAddress: string | null;
   cin: string | null;
   supportEmail: string | null;
+  whatsappNumber?: string | null;
 }) {
   const form = useForm<BusinessDetailsInput>({
     resolver: zodResolver(BusinessDetailsSchema),
@@ -55,6 +56,7 @@ export function BusinessDetailsCard(props: {
       legalAddress: props.legalAddress ?? '',
       cin: props.cin ?? '',
       supportEmail: props.supportEmail ?? '',
+      whatsappNumber: props.whatsappNumber ?? '',
     },
   });
 
@@ -135,6 +137,31 @@ export function BusinessDetailsCard(props: {
             />
 
             <FormField
+              name="whatsappNumber"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>WhatsApp number</FormLabel>
+                  <FormControl
+                    render={
+                      <Input
+                        {...field}
+                        disabled={disabled}
+                        placeholder="+91 80504 84123"
+                        data-test={'villa-business-whatsapp-number'}
+                      />
+                    }
+                  />
+                  <FormDescription>
+                    Shown to guests as the fastest way to reach the villa. Leave
+                    empty to use the central reservations number.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
               name="legalAddress"
               control={form.control}
               render={({ field }) => (
@@ -171,7 +198,8 @@ export function BusinessDetailsCard(props: {
                     }
                   />
                   <FormDescription>
-                    Printed on receipts and tax invoices once registered.
+                    This villa’s GST registration. Printed on receipts, tax
+                    invoices and the guest email footer.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

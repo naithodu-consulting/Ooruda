@@ -6,6 +6,27 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ## Villa: Booking Actions, Guest IDs, Report Exports, Sync Messaging & Confirmation Email — 2026-10-29
 
+### Booking confirmation email sender header, policy links, and contact/footer parity
+- **Sender display name in inbox**: The `From` header is now formatted with the property's name (`formatSenderAddress(ctx.name, rawFrom)`), ensuring mail clients like Gmail display the villa name (e.g. `Villa 19`) in the inbox instead of falling back to the mailbox name `reservations`. Also passes `reply_to` explicitly to Resend, and supports `RESEND_API_KEY` directly.
+- **Policy links parity**: Privacy Policy, Terms of Service, and Cancellation Policy links now safely fall back to the live domain `https://villa19.in` (`DEFAULT_VILLA_SITE_URL`) when `VILLA_SITE_URL` is unset in the environment, guaranteeing that the mandatory policy sentence and links are rendered in both HTML and plain-text booking vouchers.
+- **"If you need us" WhatsApp row and company footer**: Added canonical `DEFAULT_VILLA_ENTITY` fallback in `loadContext` so that confirmation emails carry the full WhatsApp contact row (`+91 80504 84123` with "The fastest way to reach us." subtext) and the registered company legal footer (`HABBAA SOLUTIONS PVT LTD`, address, CIN) matching the booking site's confirmation voucher even before manual settings entry.
+- **GSTIN is deliberately not in that default.** A GSTIN is a per-state registration — the leading digits are the state code (`29` = Karnataka) — so it belongs to the property, not to the company. It is read from `villa_properties.gstin` and the footer line is skipped when unset, so a villa registered in another state can never inherit Karnataka's number on a tax document.
+- **WhatsApp number added to Villa Settings > Business details**: Added `whatsappNumber` to `BusinessDetailsSchema`, `BusinessDetailsCard`, and `saveBusinessDetails` service. Staff can now configure and update the property's WhatsApp number directly from Villa Settings.
+- **Sender fallbacks narrowed**: `senderAddress()` falls back to `VILLA_EMAIL_FROM` and then to the company reservations address only. `EMAIL_SENDER` is deliberately *not* a fallback — that is Ooruda's own `ooruda.com` sender, and Resend rejects a `from:` whose domain is not verified in the key's account, so it would return 403 rather than send.
+
+### Comprehensive Activity Logging for All Important User Actions
+- **Database constraint widening (`20261029221000_villa_widen_booking_activity_actions.sql`)**: Widened `villa_booking_activity_action_check` from the original 5 actions (`created`, `cancelled`, `completed`, `reopened`, `note`) to include:
+  - `payment_recorded`: Offline advance or stay payment recorded (logs amount, mode, receipt number, reference).
+  - `payment_voided`: Payment receipt voided by admin (logs reason).
+  - `refund_recorded`: Refund recorded by admin (logs amount, mode, refund number, reason).
+  - `id_recorded`: Guest ID captured in person or uploaded (logs document type, masked ID number, stage).
+  - `id_verified`: Guest ID document verified by staff.
+  - `id_deleted`: Guest ID document deleted before retention expiry.
+  - `email_sent`: Guest email dispatched manually or automatically (logs template, recipient).
+  - `guest_added` & `guest_removed`: Guests added to or removed from a stay.
+- **Shared helper `recordBookingActivity` (`lib/villa/activity.ts`)**: Encapsulates privileged service-role activity log writes so business transactions complete reliably with failure logging.
+- **Activity log table enhancements (`activity-log-table.tsx` & `labels.ts`)**: Distinct icons (`CreditCard`, `Ban`, `RotateCcw`, `FileCheck`, `ShieldCheck`, `Trash2`, `Mail`, `UserPlus`, `UserMinus`) and readable labels for all actions on `/home/[account]/villa-activity`.
+
 ### Booking detail actions no longer float away from the page
 - `Check out` and `Cancel booking` were rendered into `TeamAccountLayoutPageHeader`, which spans the full width while the booking content sits in a `max-w-4xl` column — the buttons landed far right of where the page ends and read as app chrome rather than as this booking's actions.
 - Both actions now sit in a `bg-card` status bar inside the content column, sharing a row with the Confirmed / payment / ID badges. On phones the bar stacks and the actions go full width.
@@ -114,6 +135,8 @@ them read-only and the save fails with no rows changed.
 | Migration | Purpose |
 | --- | --- |
 | `20261029114330_villa_property_legal_details` | Adds nullable `legal_address`, `cin` and `support_email` to `villa_properties` (with format checks), and grants `update` on them to `authenticated`. |
+| `20261029161500_villa_populate_villa19_business_details` | Seeds the Villa 19 row with the operating company details, support email, GSTIN and WhatsApp number. Matched on `booking_code_prefix = 'V19'` rather than on the display name: `villa_properties.id` is `uuid_generate_v4()` and so differs per environment, and an exact prefix match cannot catch an unrelated future property with "Habbaa" in its name. Every column uses `coalesce(nullif(trim(...), ''))`, so a value already entered in Villa Settings is never overwritten. Data-only; no schema change. |
+| `20261029221000_villa_widen_booking_activity_actions` | Widens `villa_booking_activity_action_check` from 5 to 14 values, adding `payment_recorded`, `payment_voided`, `refund_recorded`, `id_recorded`, `id_verified`, `id_deleted`, `email_sent`, `guest_added`, `guest_removed`. A strict superset of the original 5, so existing rows all still satisfy it. |
 
 **Apply this migration BEFORE deploying the code.** The migration is additive
 and safe on its own, but the code is not deploy-order tolerant: Villa Settings
@@ -224,6 +247,8 @@ work a page does before it can show it.
 | Migration | Description |
 | --- | --- |
 | `20261029050746_villa_perf_rls_and_indexes.sql` | Adds `public.villa_account_ids(text[])`; rewrites all villa RLS policies to evaluate their helpers once per statement instead of once per row (same rules); adds five missing indexes. |
+| `20261029161500_villa_populate_villa19_business_details.sql` | Populates legal business details (HABBAA SOLUTIONS PVT LTD, registered address, CIN, GSTIN, support email, WhatsApp number) for existing Villa 19 property rows. |
+| `20261029221000_villa_widen_booking_activity_actions.sql` | Widens `villa_booking_activity_action_check` to include `payment_recorded`, `payment_voided`, `refund_recorded`, `id_recorded`, `id_verified`, `id_deleted`, `email_sent`, `guest_added`, `guest_removed`. |
 
 ---
 

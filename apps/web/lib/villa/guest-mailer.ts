@@ -12,8 +12,9 @@ import { getMailer } from '@kit/mailers';
  * need separate keys live in one process. Sending villa mail on Ooruda's key
  * returns 403.
  *
- * Falls back to the shared mailer when VILLA_RESEND_API_KEY is unset, so a
- * deployment that keeps both domains in one Resend account still works.
+ * Falls back to RESEND_API_KEY, and then to the shared mailer, when
+ * VILLA_RESEND_API_KEY is unset, so a deployment that keeps both domains in
+ * one Resend account still works.
  */
 export async function sendVillaEmail(args: {
   to: string;
@@ -26,8 +27,11 @@ export async function sendVillaEmail(args: {
    * inbox, so it is sent whenever the template provides one.
    */
   text?: string;
+  replyTo?: string;
 }): Promise<{ providerId?: string }> {
-  const key = process.env.VILLA_RESEND_API_KEY?.trim();
+  const key =
+    process.env.VILLA_RESEND_API_KEY?.trim() ||
+    process.env.RESEND_API_KEY?.trim();
 
   if (!key) {
     // The shared mailer's config is a union of {text} | {html} and its Resend
@@ -45,6 +49,12 @@ export async function sendVillaEmail(args: {
     };
   }
 
+  const replyTo =
+    args.replyTo ??
+    (args.from.includes('<')
+      ? /<([^>]+)>/.exec(args.from)?.[1]?.trim()
+      : args.from);
+
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -54,6 +64,7 @@ export async function sendVillaEmail(args: {
     body: JSON.stringify({
       from: args.from,
       to: [args.to],
+      reply_to: replyTo,
       subject: args.subject,
       html: args.html,
       ...(args.text ? { text: args.text } : {}),

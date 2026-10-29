@@ -28,6 +28,43 @@ export const GUEST_EMAIL_LABELS: Record<GuestEmailTemplate, string> = {
   thank_you: 'Thank you (after check-out)',
 };
 
+export const DEFAULT_VILLA_SITE_URL = 'https://villa19.in';
+
+/**
+ * The operating company behind every villa, and its central guest contacts.
+ * These are company-wide facts, so a property that has not filled them in
+ * still renders a correct footer.
+ *
+ * GSTIN is deliberately NOT here. A GSTIN is a per-state registration (the
+ * leading digits are the state code), so it belongs to the property, not the
+ * company: a villa outside Karnataka must print its own. It is read from
+ * villa_properties.gstin and the line is skipped when unset.
+ */
+export const DEFAULT_VILLA_ENTITY = {
+  legalName: 'HABBAA SOLUTIONS PVT LTD',
+  legalAddress:
+    '209, Citadel Prism, PVS Kalakunj Road, Kodialbail, Mangalore 575003',
+  cin: 'U47711KA2025PTC207750',
+  supportEmail: 'reservations@habbaa.com',
+  whatsApp: '+918050484123',
+} as const;
+
+/**
+ * Formats the From header display name to match the villa name
+ * (e.g. "Villa 19 <reservations@habbaa.com>").
+ */
+export function formatSenderAddress(
+  villaName: string,
+  configuredFrom: string,
+): string {
+  const email =
+    /<([^>]+)>/.exec(configuredFrom)?.[1]?.trim() ??
+    (configuredFrom.includes('@') ? configuredFrom.trim() : null);
+
+  if (!email) return configuredFrom;
+  return `${villaName} <${email}>`;
+}
+
 const HOUR = 3_600_000;
 
 /** An India date and time ('YYYY-MM-DD', 'HH:MM') as an instant. */
@@ -464,16 +501,15 @@ function confirmationText(
     : [];
 
   // The HTML links these three inline; plain text has to spell them out.
-  const policies = v.site
-    ? [
-        '',
-        'Please note that this booking is subject to our Privacy Policy, Terms of',
-        'Service and Cancellation Policy.',
-        `  Privacy Policy: ${v.site}/privacy`,
-        `  Terms of Service: ${v.site}/terms`,
-        `  Cancellation Policy: ${v.site}/cancellation`,
-      ]
-    : [];
+  const site = (v.site ?? DEFAULT_VILLA_SITE_URL).replace(/\/+$/, '');
+  const policies = [
+    '',
+    'Please note that this booking is subject to our Privacy Policy, Terms of',
+    'Service and Cancellation Policy.',
+    `  Privacy Policy: ${site}/privacy`,
+    `  Terms of Service: ${site}/terms`,
+    `  Cancellation Policy: ${site}/cancellation`,
+  ];
 
   const footer = [
     ctx.legalName,
@@ -608,10 +644,11 @@ export function renderGuestEmail(
       .join(' ')
       .concat(ctx.paymentMethod ? ` · ${ctx.paymentMethod}` : '');
 
-    const site = ctx.siteBaseUrl?.replace(/\/+$/, '') ?? null;
-    const policyNote = site
-      ? `Please note that this booking is subject to our ${policyLink(`${site}/privacy`, 'Privacy Policy')}, ${policyLink(`${site}/terms`, 'Terms of Service')} and ${policyLink(`${site}/cancellation`, 'Cancellation Policy')}.`
-      : '';
+    const site = (ctx.siteBaseUrl ?? DEFAULT_VILLA_SITE_URL).replace(
+      /\/+$/,
+      '',
+    );
+    const policyNote = `Please note that this booking is subject to our ${policyLink(`${site}/privacy`, 'Privacy Policy')}, ${policyLink(`${site}/terms`, 'Terms of Service')} and ${policyLink(`${site}/cancellation`, 'Cancellation Policy')}.`;
 
     const preheader = `${ctx.bookingCode ?? ''} · ${stayRange(ctx.checkIn, ctx.checkOut)} · ${
       paidInFull
@@ -700,8 +737,8 @@ export function renderGuestEmail(
       ),
       ctx.supportEmail
         ? `<tr>
-        <td style="padding:0 14px 8px 0;font-family:${SANS};font-size:14px;color:${MUTED};vertical-align:top;width:30%;white-space:nowrap;">Email</td>
-        <td style="padding:0 0 8px;vertical-align:top;">
+        <td style="padding:0 14px 0 0;font-family:${SANS};font-size:14px;color:${MUTED};vertical-align:top;width:30%;white-space:nowrap;">Email</td>
+        <td style="vertical-align:top;">
           <a href="mailto:${esc(ctx.supportEmail)}" style="font-family:${SANS};font-size:14px;color:${MAROON};">${esc(ctx.supportEmail)}</a>
         </td>
       </tr>`

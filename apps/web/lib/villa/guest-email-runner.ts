@@ -22,9 +22,14 @@ import {
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { getBaseRates } from '~/lib/villa-db/rates';
 
+import { recordBookingActivity } from './activity';
 import {
+  DEFAULT_VILLA_ENTITY,
+  DEFAULT_VILLA_SITE_URL,
   type GuestEmailContext,
   type GuestEmailTemplate,
+  formatSenderAddress,
+  GUEST_EMAIL_LABELS,
   isPreArrivalDue,
   isThankYouDue,
   renderGuestEmail,
@@ -44,10 +49,19 @@ import { type LedgerStatus, summariseLedger } from './ledger';
  * Runs from the scheduled route and on villa dashboard visits.
  */
 
-/** The booking site's sender (plan decision): set per deployment. */
-function senderAddress(): string | null {
-  const from = process.env.VILLA_EMAIL_FROM?.trim();
-  return from ? from : null;
+/**
+ * The booking site's sender (plan decision): set per deployment.
+ *
+ * Falls back to the company's own reservations address rather than to
+ * nothing, so guest mail still leaves a deployment that has not set
+ * VILLA_EMAIL_FROM. EMAIL_SENDER is deliberately NOT a fallback: that is
+ * Ooruda's own ooruda.com sender, and Resend rejects a `from:` whose domain
+ * is not verified in the key's account, so it would 403 rather than send.
+ */
+function senderAddress(): string {
+  return (
+    process.env.VILLA_EMAIL_FROM?.trim() || DEFAULT_VILLA_ENTITY.supportEmail
+  );
 }
 
 type Admin = SupabaseClient<Database>;
@@ -95,10 +109,10 @@ export const EMAIL_PROPERTY_COLUMNS =
  * configured, and every block that needs it is then skipped rather than
  * linking nowhere.
  */
-function siteBaseUrl(): string | null {
+function siteBaseUrl(): string {
   const url = process.env.VILLA_SITE_URL?.trim();
 
-  return url ? url.replace(/\/+$/, '') : null;
+  return (url ? url : DEFAULT_VILLA_SITE_URL).replace(/\/+$/, '');
 }
 
 async function loadContext(
@@ -135,7 +149,7 @@ async function loadContext(
     accountId: p.account_id,
     propertyId: p.id,
     name: p.name,
-    whatsApp: p.whatsapp_number,
+    whatsApp: p.whatsapp_number || DEFAULT_VILLA_ENTITY.whatsApp,
     site,
     checkInTime: rates.checkInTime,
     checkOutTime: rates.checkOutTime,
@@ -146,13 +160,15 @@ async function loadContext(
     })),
     location,
     includedGuests: rates.includedGuests,
-    legalName: p.legal_name ?? null,
-    legalAddress: p.legal_address ?? null,
-    cin: p.cin ?? null,
+    legalName: p.legal_name || DEFAULT_VILLA_ENTITY.legalName,
+    legalAddress: p.legal_address || DEFAULT_VILLA_ENTITY.legalAddress,
+    cin: p.cin || DEFAULT_VILLA_ENTITY.cin,
+    // A GSTIN is a per-state registration, so there is no company-wide
+    // default to fall back to: the line is skipped until this villa has one.
     gstin: p.gstin ?? null,
-    // Falls back to the configured sender, which is the address the guest
-    // would reply to anyway, rather than to nothing.
-    supportEmail: p.support_email ?? replyToAddress(),
+    // Falls back to the configured sender or default support email
+    supportEmail:
+      p.support_email || replyToAddress() || DEFAULT_VILLA_ENTITY.supportEmail,
   };
 }
 
@@ -420,15 +436,13 @@ export async function deliverGuestEmail(
   reason?: string;
   providerId?: string;
 }> {
-  const from = senderAddress();
+  const rawFrom = senderAddress();
 
-  if (!from)
-    return {
-      status: 'failed',
-      reason: 'No sender address set (VILLA_EMAIL_FROM).',
-    };
   if (!b.guestEmail)
     return { status: 'skipped', reason: 'The booking has no guest email.' };
+
+  const from = formatSenderAddress(ctx.name, rawFrom);
+  const replyTo = ctx.supportEmail ?? replyToAddress() ?? undefined;
 
   // Only the confirmation prints a payment breakdown.
   const ledger =
@@ -464,6 +478,7 @@ export async function deliverGuestEmail(
     const { providerId } = await sendVillaEmail({
       to: b.guestEmail,
       from,
+      replyTo,
       subject,
       html,
       text,
@@ -738,6 +753,18 @@ export async function sendGuestEmailNow(
   if (outcome.status !== 'sent') {
     throw new Error(outcome.reason ?? 'Could not send the email.');
   }
+
+  const templateLabel = GUEST_EMAIL_LABELS[template] ?? template;
+  await recordBookingActivity(
+    {
+      accountId,
+      propertyId,
+      booking: { id: booking.id, bookingCode: booking.bookingCode },
+      action: 'email_sent',
+      note: `${templateLabel} email sent manually to ${booking.guestEmail}`,
+    },
+    actor,
+  );
 }
 
 /**
@@ -745,7 +772,7 @@ export async function sendGuestEmailNow(
  * created. Logs to villa_message_log; never throws — a failed send is
  * recorded and shown to staff on the booking page, who can resend manually.
  *
- * Skips silently when VILLA_EMAIL_FROM is not set or there is no guest email.
+ * Skips silently when the booking has no guest email.
  */
 export async function sendBookingConfirmation(
   accountId: string,
@@ -791,9 +818,19 @@ export async function sendBookingConfirmation(
     return;
   }
 
-  await finish(
-    admin,
-    row.id,
-    await deliverGuestEmail(ctx, booking, 'booking_confirmation'),
-  );
+  const outcome = await deliverGuestEmail(ctx, booking, 'booking_confirmation');
+  await finish(admin, row.id, outcome);
+
+  if (outcome.status === 'sent') {
+    await recordBookingActivity(
+      {
+        accountId,
+        propertyId,
+        booking: { id: booking.id, bookingCode: booking.bookingCode },
+        action: 'email_sent',
+        note: `Booking confirmation email sent automatically to ${booking.guestEmail}`,
+      },
+      null,
+    );
+  }
 }

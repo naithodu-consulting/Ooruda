@@ -6,14 +6,23 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
 import {
+  Ban,
   CalendarPlus,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  CreditCard,
+  FileCheck,
   LogOut,
+  Mail,
+  RotateCcw,
   Search,
+  ShieldCheck,
+  Trash2,
   Undo2,
+  UserMinus,
+  UserPlus,
   XCircle,
 } from 'lucide-react';
 
@@ -49,6 +58,17 @@ function ActivityIcon({ action }: { action: string }) {
   if (action === 'completed') return <LogOut className={cls} />;
   if (action === 'reopened') return <Undo2 className={cls} />;
   if (action === 'checked_in') return <CheckCircle2 className={cls} />;
+  if (action === 'payment_recorded') return <CreditCard className={cls} />;
+  if (action === 'payment_voided')
+    return <Ban className="text-destructive h-4 w-4 shrink-0" />;
+  if (action === 'refund_recorded') return <RotateCcw className={cls} />;
+  if (action === 'id_recorded') return <FileCheck className={cls} />;
+  if (action === 'id_verified') return <ShieldCheck className={cls} />;
+  if (action === 'id_deleted')
+    return <Trash2 className="text-destructive h-4 w-4 shrink-0" />;
+  if (action === 'email_sent') return <Mail className={cls} />;
+  if (action === 'guest_added') return <UserPlus className={cls} />;
+  if (action === 'guest_removed') return <UserMinus className={cls} />;
   return <ClipboardList className={cls} />;
 }
 

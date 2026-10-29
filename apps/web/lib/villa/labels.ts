@@ -136,6 +136,15 @@ export const ACTIVITY_LABELS: Record<BookingActivityAction, string> = {
   completed: 'Checked out',
   reopened: 'Check-out undone',
   note: 'Note',
+  payment_recorded: 'Payment recorded',
+  payment_voided: 'Payment voided',
+  refund_recorded: 'Refund recorded',
+  id_recorded: 'ID recorded',
+  id_verified: 'ID verified',
+  id_deleted: 'ID deleted',
+  email_sent: 'Email sent',
+  guest_added: 'Guest added',
+  guest_removed: 'Guest removed',
 };
 
 export function activityLabel(action: string): string {

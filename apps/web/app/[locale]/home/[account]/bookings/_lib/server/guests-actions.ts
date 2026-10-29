@@ -36,9 +36,9 @@ export const addGuestAction = authActionClient
 
 export const removeGuestAction = authActionClient
   .inputSchema(RemoveGuestSchema)
-  .action(async ({ parsedInput }) => {
+  .action(async ({ parsedInput, ctx }) => {
     await requireVillaRole(parsedInput.accountId, STAFF);
-    await service().removeGuest(parsedInput);
+    await service().removeGuest(parsedInput, ctx.user.id);
     revalidateBooking();
   });
 

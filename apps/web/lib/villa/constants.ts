@@ -42,7 +42,16 @@ export type BookingActivityAction =
   | 'cancelled'
   | 'completed'
   | 'reopened'
-  | 'note';
+  | 'note'
+  | 'payment_recorded'
+  | 'payment_voided'
+  | 'refund_recorded'
+  | 'id_recorded'
+  | 'id_verified'
+  | 'id_deleted'
+  | 'email_sent'
+  | 'guest_added'
+  | 'guest_removed';
 
 /**
  * Block reasons offered on the calendar. The site also accepts

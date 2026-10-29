@@ -39,6 +39,40 @@ const monthLabel = (m: string) =>
 
 const pct = (n: number) => `${n}%`;
 
+/**
+ * Rows per table in the PDF.
+ *
+ * The tables that grow with the villa - expenses, payments, refunds, guests -
+ * are otherwise unbounded, and the loader's own ceiling is 100,000 rows.
+ * Rendering that many @react-pdf rows and base64-ing the result would exhaust
+ * the function's memory or wall clock, and the reader would see nothing but
+ * "Could not generate the PDF."
+ *
+ * So a long table is cut here and says so. Every total in the document is
+ * computed from the full set before this runs, so a capped table still adds
+ * up to the real figure; the CSV export stays the complete record.
+ */
+const MAX_PDF_ROWS = 500;
+
+/**
+ * Caps a table and returns the note that explains the cut, or no note at all
+ * when everything fits.
+ */
+function capRows(
+  rows: string[][],
+  noun: string,
+  order = 'newest first',
+): { rows: string[][]; note?: string } {
+  if (rows.length <= MAX_PDF_ROWS) return { rows };
+
+  const shown = rows.length.toLocaleString('en-IN');
+
+  return {
+    rows: rows.slice(0, MAX_PDF_ROWS),
+    note: `Showing the first ${MAX_PDF_ROWS} of ${shown} ${noun}, ${order}. The totals below cover all of them; download the CSV for the full list.`,
+  };
+}
+
 export function buildPdfData(
   tab: ReportTabKey,
   range: ReportRange,
@@ -114,16 +148,19 @@ export function buildPdfData(
             { label: 'Amount', align: 'right' },
             { label: 'GST paid', align: 'right' },
           ],
-          rows: rows.map((e) => [
-            formatDateReadable(e.spent_on),
-            categoryLabel(e.category),
-            e.description ?? '—',
-            e.vendor ?? '—',
-            paymentModeLabel(e.mode ?? 'other'),
-            e.invoice_no ?? '—',
-            inr(e.amount),
-            inr(e.gst_amount),
-          ]),
+          ...capRows(
+            rows.map((e) => [
+              formatDateReadable(e.spent_on),
+              categoryLabel(e.category),
+              e.description ?? '—',
+              e.vendor ?? '—',
+              paymentModeLabel(e.mode ?? 'other'),
+              e.invoice_no ?? '—',
+              inr(e.amount),
+              inr(e.gst_amount),
+            ]),
+            'expenses',
+          ),
           total: ['Total', '', '', '', '', '', inr(total), inr(gst)],
           emptyText: 'No expenses recorded in this period.',
         },
@@ -176,14 +213,17 @@ export function buildPdfData(
             { label: 'Reference' },
             { label: 'Amount', align: 'right' },
           ],
-          rows: p.rows.map((r) => [
-            formatDateReadable(r.paid_on),
-            r.booking_code ?? '—',
-            r.payer_name ?? '—',
-            paymentModeLabel(r.mode),
-            r.reference ?? '—',
-            inr(r.amount),
-          ]),
+          ...capRows(
+            p.rows.map((r) => [
+              formatDateReadable(r.paid_on),
+              r.booking_code ?? '—',
+              r.payer_name ?? '—',
+              paymentModeLabel(r.mode),
+              r.reference ?? '—',
+              inr(r.amount),
+            ]),
+            'payments',
+          ),
           total: ['Total', '', '', '', '', inr(p.totalReceived)],
           emptyText: 'No payments received in this period.',
         },
@@ -195,12 +235,15 @@ export function buildPdfData(
             { label: 'Reason', width: 3 },
             { label: 'Amount', align: 'right' },
           ],
-          rows: p.refunds.map((r) => [
-            formatDateReadable(r.refunded_on),
-            paymentModeLabel(r.mode),
-            r.reason ?? '—',
-            inr(r.amount),
-          ]),
+          ...capRows(
+            p.refunds.map((r) => [
+              formatDateReadable(r.refunded_on),
+              paymentModeLabel(r.mode),
+              r.reason ?? '—',
+              inr(r.amount),
+            ]),
+            'refunds',
+          ),
           total: ['Total', '', '', inr(p.totalRefunded)],
           emptyText: 'No refunds in this period.',
         },
@@ -312,6 +355,20 @@ export function buildPdfData(
   if (tab === 'guests' && data.guests) {
     const g = data.guests;
     const list = g.allGuests ?? g.top;
+    // The directory is ordered by stays, so the cap keeps the most frequent
+    // guests rather than the most recent ones.
+    const guests = capRows(
+      list.map((x) => [
+        x.name,
+        x.phone ?? '—',
+        String(x.stays),
+        String(x.nights),
+        inr(x.revenue),
+        x.lastStay ? formatDateReadable(x.lastStay) : '—',
+      ]),
+      'guests',
+      'most stays first',
+    );
 
     return {
       ...base,
@@ -327,7 +384,14 @@ export function buildPdfData(
       sections: [
         {
           title: 'Guest directory',
-          note: 'Stays, nights and revenue are each guest’s lifetime figures to date, not just this period.',
+          // The cap note, when there is one, is appended to the standing note
+          // rather than replacing it - both say something the reader needs.
+          note: [
+            'Stays, nights and revenue are each guest’s lifetime figures to date, not just this period.',
+            guests.note,
+          ]
+            .filter(Boolean)
+            .join(' '),
           columns: [
             { label: 'Guest', width: 2 },
             { label: 'Phone', width: 1.4 },
@@ -336,14 +400,7 @@ export function buildPdfData(
             { label: 'Revenue before GST', align: 'right', width: 1.6 },
             { label: 'Last stay', width: 1.2 },
           ],
-          rows: list.map((x) => [
-            x.name,
-            x.phone ?? '—',
-            String(x.stays),
-            String(x.nights),
-            inr(x.revenue),
-            x.lastStay ? formatDateReadable(x.lastStay) : '—',
-          ]),
+          rows: guests.rows,
           emptyText: 'No guests stayed in this period.',
         },
       ],

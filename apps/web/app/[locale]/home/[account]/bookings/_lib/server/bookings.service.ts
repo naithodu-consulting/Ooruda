@@ -24,6 +24,7 @@ import { getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
 import { VillaDbError } from '~/lib/villa-db/errors';
 import { getPricingInputs } from '~/lib/villa-db/rates';
+import { recordBookingActivity } from '~/lib/villa/activity';
 import { sendBookingConfirmation } from '~/lib/villa/guest-email-runner';
 import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
 import { mirrorBooking } from '~/lib/villa/mirror';
@@ -127,30 +128,7 @@ export function createBookingsService(client: Client) {
     },
     actor: string,
   ) {
-    // The site change has already happened; a failed trail entry must not
-    // turn it into an error for the user. It is logged instead.
-    // Service role only: members cannot write history directly (a hand-made
-    // "cancelled" row would forge it). The caller has already authorised the
-    // action and made the change on the booking site.
-    const { error } = await getSupabaseServerAdminClient()
-      .from('villa_booking_activity')
-      .insert({
-        account_id: entry.accountId,
-        property_id: entry.propertyId,
-        site_booking_id: entry.booking.id,
-        booking_code: entry.booking.bookingCode,
-        action: entry.action,
-        reason_code: entry.reasonCode ?? null,
-        note: entry.note || null,
-        actor_user_id: actor,
-      });
-
-    if (error) {
-      (await getLogger()).error(
-        { bookingId: entry.booking.id, action: entry.action, code: error.code },
-        'villa booking activity write failed',
-      );
-    }
+    await recordBookingActivity(entry, actor);
   }
 
   /**

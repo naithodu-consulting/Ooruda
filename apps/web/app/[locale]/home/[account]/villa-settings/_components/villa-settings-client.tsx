@@ -223,6 +223,7 @@ export function VillaSettingsClient(props: {
             legalAddress={props.property.legalAddress}
             cin={props.property.cin}
             supportEmail={props.property.supportEmail}
+            whatsappNumber={props.property.whatsappNumber}
           />
         </TabsContent>
       </Tabs>

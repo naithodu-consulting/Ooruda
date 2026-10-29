@@ -12,10 +12,12 @@ import type { Database } from '~/lib/database.types';
 import { getBooking, setIdStatus } from '~/lib/villa-db/bookings';
 import { type VillaSite, getVillaSite } from '~/lib/villa-db/client';
 import { VillaDbError } from '~/lib/villa-db/errors';
+import { recordBookingActivity } from '~/lib/villa/activity';
 import { guestIdUploadsEnabled } from '~/lib/villa/flags';
 import { GUEST_DOCS_BUCKET, recordIdAccess } from '~/lib/villa/guest-id-access';
 import {
   ID_FILE_MAX_BYTES,
+  idDocTypeLabel,
   idPurgeDate,
   maskIdNumber,
   sniffIdFileType,
@@ -268,15 +270,29 @@ export function createGuestsService(client: Client) {
   return {
     async addGuest(input: z.output<typeof AddGuestSchema>, actor: string) {
       const site = await getVillaSite(input.accountId, input.propertyId);
-      await liveBooking(site, input.bookingId);
+      const booking = await liveBooking(site, input.bookingId);
 
       const guestId = await resolveGuest(input.accountId, input, actor);
       await linkGuest(input, guestId);
 
+      await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking: { id: booking.id, bookingCode: booking.bookingCode },
+          action: 'guest_added',
+          note: `Guest added: ${input.newGuestName || 'from directory'}`,
+        },
+        actor,
+      );
+
       return { guestId };
     },
 
-    async removeGuest(input: z.output<typeof RemoveGuestSchema>) {
+    async removeGuest(
+      input: z.output<typeof RemoveGuestSchema>,
+      actor?: string,
+    ) {
       const { count, error: docsError } = await db
         .from('villa_guest_documents')
         .select('id', { count: 'exact', head: true })
@@ -306,6 +322,17 @@ export function createGuestsService(client: Client) {
       if (error) throw new GuestIdError('Could not remove the guest.');
       if (!data?.length)
         throw new GuestIdError('That guest is not on this booking.');
+
+      await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking: { id: input.bookingId },
+          action: 'guest_removed',
+          note: 'Guest removed from booking',
+        },
+        actor,
+      );
     },
 
     /**
@@ -482,6 +509,21 @@ export function createGuestsService(client: Client) {
       ]);
       await markReceived(site, input.bookingId, actor);
 
+      const typeLabel = idDocTypeLabel(input.docType);
+      const stageText =
+        input.stage === 'seen_in_person' ? 'seen in person' : 'photo uploaded';
+      const numText = masked.masked ? ` (${masked.masked})` : '';
+      await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking: { id: booking.id, bookingCode: booking.bookingCode },
+          action: 'id_recorded',
+          note: `${typeLabel}${numText} recorded for guest (${stageText})`,
+        },
+        actor,
+      );
+
       return { documentId };
     },
 
@@ -521,6 +563,17 @@ export function createGuestsService(client: Client) {
             action: 'verified' as const,
             actor,
           })),
+        );
+
+        await recordBookingActivity(
+          {
+            accountId: input.accountId,
+            propertyId: input.propertyId,
+            booking: { id: booking.id, bookingCode: booking.bookingCode },
+            action: 'id_verified',
+            note: 'All IDs marked verified',
+          },
+          actor,
         );
       }
 
@@ -570,6 +623,17 @@ export function createGuestsService(client: Client) {
         },
       ]);
 
+      await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking: { id: input.bookingId },
+          action: 'id_verified',
+          note: 'ID marked verified',
+        },
+        actor,
+      );
+
       // Check if all adult guests' docs are now verified; if so, auto-advance
       // the booking id_status to 'verified'.
       try {
@@ -606,7 +670,7 @@ export function createGuestsService(client: Client) {
 
       const { data: doc, error } = await admin
         .from('villa_guest_documents')
-        .select('id, stage, purged_at')
+        .select('id, stage, property_id, site_booking_id, purged_at')
         .eq('id', input.documentId)
         .eq('account_id', input.accountId)
         .maybeSingle();
@@ -668,6 +732,19 @@ export function createGuestsService(client: Client) {
           actor,
         },
       ]);
+
+      if (doc.property_id && doc.site_booking_id) {
+        await recordBookingActivity(
+          {
+            accountId: input.accountId,
+            propertyId: doc.property_id,
+            booking: { id: doc.site_booking_id },
+            action: 'id_deleted',
+            note: 'Guest ID document deleted',
+          },
+          actor,
+        );
+      }
     },
 
     /**

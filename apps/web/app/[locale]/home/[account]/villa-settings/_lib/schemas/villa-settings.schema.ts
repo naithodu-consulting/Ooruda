@@ -190,6 +190,13 @@ export const BusinessDetailsSchema = z.object({
     .refine((v) => v === '' || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), {
       message: 'Enter a valid email address, or leave it empty',
     }),
+  // Where guests send their IDs and reach the property on WhatsApp.
+  whatsappNumber: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || normalizePhoneNumber(v) !== null, {
+      message: 'Enter a valid WhatsApp number or leave it empty',
+    }),
 });
 
 export type BusinessDetailsInput = z.input<typeof BusinessDetailsSchema>;

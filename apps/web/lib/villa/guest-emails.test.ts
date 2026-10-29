@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_VILLA_ENTITY,
+  formatSenderAddress,
   isPreArrivalDue,
   isThankYouDue,
   istInstant,
@@ -280,6 +282,20 @@ describe('booking confirmation: policy links, footer and text part', () => {
     expect(html).not.toContain('https://stay.example.com//');
   });
 
+  it('falls back to default villa site URL when siteBaseUrl is null or unset', () => {
+    const { html, text } = renderGuestEmail('booking_confirmation', {
+      ...full,
+      siteBaseUrl: null,
+    });
+
+    expect(html).toContain('https://villa19.in/privacy');
+    expect(html).toContain('https://villa19.in/terms');
+    expect(html).toContain('https://villa19.in/cancellation');
+    expect(text).toContain('https://villa19.in/privacy');
+    expect(text).toContain('https://villa19.in/terms');
+    expect(text).toContain('https://villa19.in/cancellation');
+  });
+
   it('carries the CTA, the locality, the extra-guest count and the paid line', () => {
     const { html } = renderGuestEmail('booking_confirmation', full);
 
@@ -331,6 +347,59 @@ describe('booking confirmation: policy links, footer and text part', () => {
 
   it('the other two templates still carry no text part', () => {
     expect(renderGuestEmail('pre_arrival', full).text).toBeUndefined();
+  });
+
+  it('renders the WhatsApp row with "The fastest way to reach us" subtitle and link', () => {
+    const { html, text } = renderGuestEmail('booking_confirmation', {
+      ...full,
+      whatsApp: '+918050484123',
+    });
+
+    expect(html).toContain('WhatsApp');
+    expect(html).toContain('https://wa.me/918050484123');
+    expect(html).toContain('+91 80504 84123');
+    expect(html).toContain('The fastest way to reach us.');
+    expect(text).toContain('WhatsApp: +91 80504 84123');
+  });
+});
+
+describe('formatSenderAddress', () => {
+  it('formats bare email into display name with villa name', () => {
+    expect(formatSenderAddress('Villa 19', 'reservations@habbaa.com')).toBe(
+      'Villa 19 <reservations@habbaa.com>',
+    );
+  });
+
+  it('replaces existing display name with villa name', () => {
+    expect(
+      formatSenderAddress(
+        'Villa 19',
+        'Villa 19 by Habbaa <reservations@habbaa.com>',
+      ),
+    ).toBe('Villa 19 <reservations@habbaa.com>');
+    expect(
+      formatSenderAddress('Villa 19', 'reservations <reservations@habbaa.com>'),
+    ).toBe('Villa 19 <reservations@habbaa.com>');
+  });
+
+  it('returns raw value if no email can be extracted', () => {
+    expect(formatSenderAddress('Villa 19', 'invalid-sender')).toBe(
+      'invalid-sender',
+    );
+  });
+});
+
+describe('DEFAULT_VILLA_ENTITY', () => {
+  it('has the canonical company details and WhatsApp for Habbaa', () => {
+    expect(DEFAULT_VILLA_ENTITY.legalName).toBe('HABBAA SOLUTIONS PVT LTD');
+    expect(DEFAULT_VILLA_ENTITY.cin).toBe('U47711KA2025PTC207750');
+    expect(DEFAULT_VILLA_ENTITY.supportEmail).toBe('reservations@habbaa.com');
+    expect(DEFAULT_VILLA_ENTITY.whatsApp).toBe('+918050484123');
+    expect(DEFAULT_VILLA_ENTITY.legalAddress).toContain('209, Citadel Prism');
+  });
+
+  it('carries no GSTIN: that is a per-state registration, so it belongs to the property', () => {
+    expect(DEFAULT_VILLA_ENTITY).not.toHaveProperty('gstin');
   });
 });
 

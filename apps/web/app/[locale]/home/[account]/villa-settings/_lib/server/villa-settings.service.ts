@@ -195,6 +195,9 @@ export function createVillaSettingsService(client: Client) {
           legal_address: input.legalAddress || null,
           cin: input.cin || null,
           support_email: input.supportEmail || null,
+          whatsapp_number: input.whatsappNumber
+            ? normalizePhoneNumber(input.whatsappNumber)
+            : null,
         })
         .eq('id', input.propertyId)
         .eq('account_id', input.accountId)
