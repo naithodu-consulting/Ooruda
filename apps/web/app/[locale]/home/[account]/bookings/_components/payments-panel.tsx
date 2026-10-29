@@ -374,7 +374,7 @@ function ModeField({
       control={control}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>Paid by</FormLabel>
+          <FormLabel>Payment Mode</FormLabel>
           <Select value={field.value} onValueChange={field.onChange}>
             <FormControl>
               <SelectTrigger className="w-full" data-test={test}>
@@ -475,9 +475,7 @@ function RecordPaymentDialog(
             <IndianRupee className="h-4 w-4" />
             Record a payment
           </DialogTitle>
-          <DialogDescription>
-            Record money received off the website.
-          </DialogDescription>
+          <DialogDescription>Record the amount received.</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
