@@ -56,7 +56,7 @@ than assumed.
   close.
 
 ### Airbnb sync messages rewritten for end users
-- A sync with no calendar linked showed a **green success** toast reading "No active Airbnb calendar feed is configured." It now shows an info toast: "Nothing to sync yet - no Airbnb calendar is linked to this villa. Add the Airbnb calendar link in Villa Settings.", with the button reading "No calendar linked".
+- A sync with no calendar linked showed a **green success** toast reading "No active Airbnb calendar feed is configured." It now shows an info toast: "Nothing to sync yet - no Airbnb calendar is linked to this villa. Ooruda support can link it for you.", with the button reading "No calendar linked". It deliberately does not name a screen: the feed lives in `ical_feeds` on the booking site's database and nothing in Ooruda writes that table, so pointing a villa owner at Villa Settings would be the same kind of confidently wrong message this replaced.
 - Every other outcome says what changed in plain language: "Airbnb calendar synced - 3 dates blocked, 1 date freed", "Airbnb calendar is up to date. Nothing changed.", "Could not reach the Airbnb calendar. Nothing was changed - please try again in a few minutes.", and the clash warning names the dates to check.
 
 ### Booking confirmation email brought to parity with the booking site

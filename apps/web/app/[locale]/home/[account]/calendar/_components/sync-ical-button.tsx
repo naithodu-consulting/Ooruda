@@ -53,13 +53,18 @@ function summarizeSync(feeds: FeedSyncResult[]): {
 
   // Nothing was synced because there is nothing to sync from. A green tick
   // beside that sentence read as "it worked", which is what confused people:
-  // this is a setup gap, so it is said plainly and points at the fix.
+  // this is a setup gap, so it is said plainly.
+  //
+  // It does NOT send them to Villa Settings. The feed lives in `ical_feeds`
+  // on the booking site's database and no screen in Ooruda writes that table,
+  // so naming a screen here would send a villa owner somewhere that cannot
+  // help them - the same confident-but-wrong message this replaced.
   if (first.status === 'no_feeds') {
     return {
       buttonLabel: 'No calendar linked',
       tone: 'info',
       toastMessage:
-        'Nothing to sync yet - no Airbnb calendar is linked to this villa. Add the Airbnb calendar link in Villa Settings.',
+        'Nothing to sync yet - no Airbnb calendar is linked to this villa. Ooruda support can link it for you.',
     };
   }
 
