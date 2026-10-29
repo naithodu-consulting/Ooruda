@@ -1,4 +1,6 @@
 import 'server-only';
+import { cache } from 'react';
+
 import { fromPaise, toPaise } from '~/lib/villa/money';
 import type { PricingProperty, PricingRuleInput } from '~/lib/villa/pricing';
 
@@ -50,35 +52,54 @@ export interface PricingRule {
   minStayNights: number;
 }
 
-export async function getBaseRates(site: VillaSite): Promise<BaseRates> {
-  const { data, error } = await site.client
-    .from('properties')
-    .select(
-      'base_nightly_rate, weekend_nightly_rate, extra_guest_rate, extra_guest_tier2_rate, extra_guest_tier2_from, base_occupancy, ideal_occupancy, max_occupancy, check_in_time, check_out_time',
-    )
-    .eq('id', site.sitePropertyId)
-    .maybeSingle();
+/**
+ * The property's rates, as the booking site holds them.
+ *
+ * Request-cached: the booking page's guest-e-mail card, the quote endpoint and
+ * Villa Settings all want these, and each read is a round trip to the booking
+ * site. `cache()` keys on the argument by reference, and `getVillaSite()` is
+ * itself request-cached, so every caller in one request passes the same
+ * `VillaSite` object and shares one read. A caller that built its own site
+ * object reads again, which is correct if slower.
+ *
+ * Do NOT "simplify" this to key on `site.sitePropertyId`: two Ooruda villas
+ * can point at the same booking-site project, and keying on the site property
+ * alone would let one villa's request serve another's rates.
+ */
+export const getBaseRates = cache(
+  async (site: VillaSite): Promise<BaseRates> => {
+    const { data, error } = await site.client
+      .from('properties')
+      .select(
+        'base_nightly_rate, weekend_nightly_rate, extra_guest_rate, extra_guest_tier2_rate, extra_guest_tier2_from, base_occupancy, ideal_occupancy, max_occupancy, check_in_time, check_out_time',
+      )
+      .eq('id', site.sitePropertyId)
+      .maybeSingle();
 
-  if (error) throw fromSiteError(error);
-  if (!data)
-    throw new VillaDbError('NOT_FOUND', `site property ${site.sitePropertyId}`);
+    if (error) throw fromSiteError(error);
+    if (!data)
+      throw new VillaDbError(
+        'NOT_FOUND',
+        `site property ${site.sitePropertyId}`,
+      );
 
-  return {
-    weekdayNightly: fromPaise(data.base_nightly_rate),
-    weekendNightly: fromPaise(data.weekend_nightly_rate),
-    extraGuestRate: fromPaise(data.extra_guest_rate),
-    extraGuestTier2Rate:
-      data.extra_guest_tier2_rate == null
-        ? null
-        : fromPaise(data.extra_guest_tier2_rate),
-    extraGuestTier2From: data.extra_guest_tier2_from ?? null,
-    includedGuests: data.base_occupancy,
-    idealOccupancy: data.ideal_occupancy ?? null,
-    maxGuests: data.max_occupancy,
-    checkInTime: data.check_in_time,
-    checkOutTime: data.check_out_time,
-  };
-}
+    return {
+      weekdayNightly: fromPaise(data.base_nightly_rate),
+      weekendNightly: fromPaise(data.weekend_nightly_rate),
+      extraGuestRate: fromPaise(data.extra_guest_rate),
+      extraGuestTier2Rate:
+        data.extra_guest_tier2_rate == null
+          ? null
+          : fromPaise(data.extra_guest_tier2_rate),
+      extraGuestTier2From: data.extra_guest_tier2_from ?? null,
+      includedGuests: data.base_occupancy,
+      idealOccupancy: data.ideal_occupancy ?? null,
+      maxGuests: data.max_occupancy,
+      checkInTime: data.check_in_time,
+      checkOutTime: data.check_out_time,
+    };
+  },
+);
 
 export interface BaseRatesInput {
   weekdayNightly: number | string;
@@ -385,38 +406,44 @@ export async function deletePricingRule(
  * The exact inputs the guest site's pricing engine uses, in paise — for
  * quoting phone/WhatsApp bookings with lib/villa/pricing (quoteStay).
  */
-export async function getPricingInputs(
-  site: VillaSite,
-): Promise<{ property: PricingProperty; rules: PricingRuleInput[] }> {
-  const [{ data: property, error }, { data: rules, error: rulesError }] =
-    await Promise.all([
-      site.client
-        .from('properties')
-        .select(
-          'base_nightly_rate, weekend_nightly_rate, base_occupancy, max_occupancy, extra_guest_rate, extra_guest_tier2_rate, extra_guest_tier2_from',
-        )
-        .eq('id', site.sitePropertyId)
-        .maybeSingle(),
-      site.client
-        .from('pricing_rules')
-        .select(
-          'rule_name, start_date, end_date, nightly_rate, min_stay_nights',
-        )
-        .eq('property_id', site.sitePropertyId),
-    ]);
+/** Everything `quoteStay` prices from. Request-cached, like getBaseRates. */
+export const getPricingInputs = cache(
+  async (
+    site: VillaSite,
+  ): Promise<{ property: PricingProperty; rules: PricingRuleInput[] }> => {
+    const [{ data: property, error }, { data: rules, error: rulesError }] =
+      await Promise.all([
+        site.client
+          .from('properties')
+          .select(
+            'base_nightly_rate, weekend_nightly_rate, base_occupancy, max_occupancy, extra_guest_rate, extra_guest_tier2_rate, extra_guest_tier2_from',
+          )
+          .eq('id', site.sitePropertyId)
+          .maybeSingle(),
+        site.client
+          .from('pricing_rules')
+          .select(
+            'rule_name, start_date, end_date, nightly_rate, min_stay_nights',
+          )
+          .eq('property_id', site.sitePropertyId),
+      ]);
 
-  if (error) throw fromSiteError(error);
-  if (rulesError) throw fromSiteError(rulesError);
-  if (!property) {
-    throw new VillaDbError('NOT_FOUND', `site property ${site.sitePropertyId}`);
-  }
+    if (error) throw fromSiteError(error);
+    if (rulesError) throw fromSiteError(rulesError);
+    if (!property) {
+      throw new VillaDbError(
+        'NOT_FOUND',
+        `site property ${site.sitePropertyId}`,
+      );
+    }
 
-  return {
-    property: {
-      ...property,
-      extra_guest_tier2_rate: property.extra_guest_tier2_rate ?? null,
-      extra_guest_tier2_from: property.extra_guest_tier2_from ?? null,
-    },
-    rules: rules ?? [],
-  };
-}
+    return {
+      property: {
+        ...property,
+        extra_guest_tier2_rate: property.extra_guest_tier2_rate ?? null,
+        extra_guest_tier2_from: property.extra_guest_tier2_from ?? null,
+      },
+      rules: rules ?? [],
+    };
+  },
+);

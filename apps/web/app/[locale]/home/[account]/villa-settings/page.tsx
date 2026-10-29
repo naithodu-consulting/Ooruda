@@ -61,23 +61,9 @@ export default async function VillaSettingsPage({
     );
   }
 
-  const [site, addons, contacts, settings] = selected
+  const [site, settings] = selected
     ? await Promise.all([
         loadSiteSettings(accountId, selected.id),
-        client
-          .from('villa_addons')
-          .select('id, name, description, price, pricing_unit, is_active')
-          .eq('property_id', selected.id)
-          .order('display_order')
-          .order('name')
-          .then(rows),
-        client
-          .from('villa_emergency_contacts')
-          .select('id, category, name, phone, notes, share_with_guests')
-          .eq('property_id', selected.id)
-          .order('display_order')
-          .order('name')
-          .then(rows),
         client
           .from('villa_account_settings')
           .select(
@@ -91,7 +77,7 @@ export default async function VillaSettingsPage({
             return data;
           }),
       ])
-    : [{ status: 'not_configured' } as SiteState, [], [], null];
+    : [{ status: 'not_configured' } as SiteState, null];
 
   return (
     <PageBody>
@@ -121,8 +107,6 @@ export default async function VillaSettingsPage({
             : null
         }
         site={site}
-        addons={addons}
-        contacts={contacts}
         managersCanCancel={settings?.managers_can_cancel ?? false}
         preArrivalEmail={settings?.pre_arrival_email ?? false}
         thankYouEmail={settings?.thank_you_email ?? false}

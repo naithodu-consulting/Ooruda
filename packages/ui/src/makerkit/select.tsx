@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { SelectContent as BaseSelectContent } from '../shadcn/select';
 
+import { cn } from '#lib/utils';
+
 export {
   Select,
   SelectGroup,
@@ -28,12 +30,14 @@ export {
 function SelectContent({
   alignItemWithTrigger = false,
   align = 'start',
+  className,
   ...props
 }: React.ComponentProps<typeof BaseSelectContent>) {
   return (
     <BaseSelectContent
       alignItemWithTrigger={alignItemWithTrigger}
       align={align}
+      className={cn('w-auto min-w-(--anchor-width)', className)}
       {...props}
     />
   );

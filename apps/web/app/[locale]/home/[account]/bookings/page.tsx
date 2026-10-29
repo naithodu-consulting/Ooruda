@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 
 import { CircleAlert } from 'lucide-react';
 
-import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { PageBody } from '@kit/ui/page';
@@ -10,6 +9,7 @@ import { Trans } from '@kit/ui/trans';
 
 import pathsConfig from '~/config/paths.config';
 import { VILLA_ROLES, requireRole } from '~/lib/rbac';
+import { type Block, listBlocks } from '~/lib/villa-db/blocks';
 import { normalizeBookingCode } from '~/lib/villa-db/booking-code';
 import {
   type BookingView,
@@ -18,7 +18,6 @@ import {
   listBookingsByView,
   searchBookings,
 } from '~/lib/villa-db/bookings';
-import { type Block, listBlocks } from '~/lib/villa-db/blocks';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { isVillaDbError } from '~/lib/villa-db/errors';
@@ -28,6 +27,7 @@ import {
   getIcalFeedsStatus,
 } from '~/lib/villa/ical-sync';
 import { selectVillaProperty } from '~/lib/villa/properties';
+import { loadVillaAccountSettings } from '~/lib/villa/settings';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
 import { BlockedDatesView } from '../blocked-dates/_components/blocked-dates-view';
@@ -38,7 +38,12 @@ import { NewBookingDialog } from './_components/new-booking-dialog';
 
 export const metadata = { title: 'Bookings' };
 
-const BOOKING_VIEWS: BookingView[] = ['upcoming', 'in_house', 'past', 'cancelled'];
+const BOOKING_VIEWS: BookingView[] = [
+  'upcoming',
+  'in_house',
+  'past',
+  'cancelled',
+];
 const LIST_LIMIT = 100;
 
 const BLOCKED_SOURCES = ['all', 'manual', 'channel'] as const;
@@ -55,7 +60,10 @@ function blockWindowFor(bview: BlockedView, today: string) {
     case 'past':
       return { from: addDays(today, -PAST_DAYS), to: today };
     case 'all':
-      return { from: addDays(today, -PAST_DAYS), to: addDays(today, FUTURE_DAYS) };
+      return {
+        from: addDays(today, -PAST_DAYS),
+        to: addDays(today, FUTURE_DAYS),
+      };
     default:
       return { from: today, to: addDays(today, FUTURE_DAYS) };
   }
@@ -92,29 +100,25 @@ export default async function BookingsPage({ params, searchParams }: Props) {
   )
     ? (sp.source as BlockedSourceFilter)
     : 'all';
-  const reason =
-    sp.reason && /^[a-z_]+$/.test(sp.reason) ? sp.reason : 'all';
+  const reason = sp.reason && /^[a-z_]+$/.test(sp.reason) ? sp.reason : 'all';
 
   const { accountId, role } = await requireRole(account, VILLA_ROLES, 'villa');
 
-  const { properties, property } = await selectVillaProperty(
-    accountId,
-    sp.property,
-    { requireSite: true },
-  );
+  // Both need only the account id, so neither waits for the other: on a
+  // remote database this was two serial round trips before the page could
+  // even start reading the booking site.
+  const [{ properties, property }, settings] = await Promise.all([
+    selectVillaProperty(accountId, sp.property, { requireSite: true }),
+    loadVillaAccountSettings(accountId),
+  ]);
+
   const base = pathsConfig.app.accountVillaBookings.replace(
     '[account]',
     account,
   );
 
-  // Load the booking cutoff date (if any) for the date picker + blocked list.
-  const supabase = getSupabaseServerClient();
-  const { data: settingsRow } = await supabase
-    .from('villa_account_settings')
-    .select('booking_cutoff_date')
-    .eq('account_id', accountId)
-    .maybeSingle();
-  const bookingCutoffDate = settingsRow?.booking_cutoff_date ?? null;
+  // The booking cutoff drives the date picker and the blocked list.
+  const bookingCutoffDate = settings.bookingCutoffDate;
 
   let bookings: SiteBooking[] = [];
   let blocks: Block[] = [];

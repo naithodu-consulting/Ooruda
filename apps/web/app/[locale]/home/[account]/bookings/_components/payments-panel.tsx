@@ -165,7 +165,7 @@ export function PaymentsPanel(
             ['Received', s.received, 'received'],
             ['Refunded', s.refunded, 'refunded'],
             [
-              s.excess > 0 ? 'Paid extra' : 'Balance due',
+              s.excess > 0 ? 'Additional Payment' : 'Balance due',
               s.excess > 0 ? s.excess : s.due,
               'due',
             ],
@@ -175,20 +175,15 @@ export function PaymentsPanel(
               className="rounded-lg border p-3"
               data-test={`villa-payments-${key as string}`}
             >
-              <dt className="text-muted-foreground text-xs">{label}</dt>
-              <dd className="font-semibold tabular-nums">
+              <dt className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                {label}
+              </dt>
+              <dd className="text-lg font-bold tabular-nums">
                 {formatINR(value as number)}
               </dd>
             </div>
           ))}
         </dl>
-
-        {s.status === 'paid' ? (
-          <p className="text-muted-foreground text-xs">
-            The guest&apos;s booking page shows &quot;Part paid&quot; until tax
-            invoices move to check-out on the booking site.
-          </p>
-        ) : null}
 
         {canRecord ? (
           <div>
@@ -308,7 +303,7 @@ export function PaymentsPanel(
                   {r.refunds.map((f) => (
                     <p
                       key={f.id}
-                      className="text-muted-foreground flex flex-wrap gap-x-2 pl-3 text-xs"
+                      className="text-muted-foreground flex flex-wrap items-center gap-x-2 pl-3 text-xs"
                       data-test={'villa-payment-refund-row'}
                     >
                       <span>Refunded {formatINR(f.amount)}</span>
@@ -637,10 +632,8 @@ function RefundDialog(
   });
 
   const { execute, isPending } = useAction(recordRefundAction, {
-    onSuccess: ({ data }) => {
-      toast.success(
-        data?.refundNo ? `Refund ${data.refundNo}` : 'Refund recorded',
-      );
+    onSuccess: () => {
+      toast.success('Refund recorded');
       props.onDone();
     },
     onError: ({ error }) =>

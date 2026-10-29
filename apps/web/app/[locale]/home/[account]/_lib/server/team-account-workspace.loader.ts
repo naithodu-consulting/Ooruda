@@ -71,6 +71,8 @@ async function workspaceLoader(accountSlug: string) {
     } else {
       // Super admin is a member, but upgrade role for UI full access
       workspace.data.account.role = actingRole;
+      workspace.data.account.role_hierarchy_level =
+        ROLE_HIERARCHY_LEVEL_BY_ROLE[actingRole];
     }
   } else if (!workspace.data?.account) {
     // Normal user, not a member

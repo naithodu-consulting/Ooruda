@@ -167,7 +167,10 @@ export default async function proxy(request: NextRequest) {
   const handlers = await matchUrlPatterns(request);
 
   for (const handler of handlers) {
-    const patternHandlerResponse = await handler(request, secureHeadersResponse);
+    const patternHandlerResponse = await handler(
+      request,
+      secureHeadersResponse,
+    );
 
     if (patternHandlerResponse) {
       return patternHandlerResponse;
@@ -372,14 +375,16 @@ async function buildPatterns() {
  */
 async function matchUrlPatterns(
   request: NextRequest,
-): Promise<Array<(req: NextRequest, res: NextResponse) => Promise<NextResponse | undefined>>> {
+): Promise<
+  Array<
+    (req: NextRequest, res: NextResponse) => Promise<NextResponse | undefined>
+  >
+> {
   const patterns = await getPatterns();
   const input = getNormalizedPathname(request.nextUrl.pathname);
 
   return patterns
-    .filter(
-      (p) => p.pattern.exec(input, request.nextUrl.origin) !== null,
-    )
+    .filter((p) => p.pattern.exec(input, request.nextUrl.origin) !== null)
     .map((p) => p.handler);
 }
 

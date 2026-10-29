@@ -97,6 +97,7 @@ export function ExpensesView(props: {
   propertyId: string;
   isOwner: boolean;
   defaultDate: string;
+  monthNav?: React.ReactNode;
   expenses: Expense[];
 }) {
   const router = useRouter();
@@ -129,33 +130,41 @@ export function ExpensesView(props: {
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {props.monthNav}
+
+        <Button
+          size="sm"
+          className="h-9"
+          onClick={() => setEditing('new')}
+          data-test={'villa-expense-add'}
+        >
+          <Plus className="mr-1.5 h-4 w-4" />
+          Add expense
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <Card className="bg-card" data-test={'villa-expenses-total'}>
-          <CardContent className="flex flex-col gap-1 px-4 py-3">
-            <span className="text-muted-foreground text-xs">Spent</span>
-            <span className="text-lg font-semibold tabular-nums">
+          <CardContent className="flex flex-col gap-1 px-4 py-3 sm:px-5 sm:py-4">
+            <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              Spent
+            </span>
+            <span className="text-xl font-bold tabular-nums sm:text-2xl">
               {formatINR(total)}
             </span>
           </CardContent>
         </Card>
         <Card className="bg-card" data-test={'villa-expenses-gst'}>
-          <CardContent className="flex flex-col gap-1 px-4 py-3">
-            <span className="text-muted-foreground text-xs">GST paid</span>
-            <span className="text-lg font-semibold tabular-nums">
+          <CardContent className="flex flex-col gap-1 px-4 py-3 sm:px-5 sm:py-4">
+            <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              GST paid
+            </span>
+            <span className="text-xl font-bold tabular-nums sm:text-2xl">
               {formatINR(gst)}
             </span>
           </CardContent>
         </Card>
-        <div className="col-span-2 flex items-center sm:col-span-1 sm:justify-end">
-          <Button
-            className="w-full sm:w-auto"
-            onClick={() => setEditing('new')}
-            data-test={'villa-expense-add'}
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            Add expense
-          </Button>
-        </div>
       </div>
 
       {byCategory.length > 0 ? (
@@ -337,9 +346,7 @@ function ExpenseDialog(props: {
       >
         <DialogHeader>
           <DialogTitle>{e ? 'Edit expense' : 'Add expense'}</DialogTitle>
-          <DialogDescription>
-            What running the villa cost. Used in the profit report.
-          </DialogDescription>
+          <DialogDescription>Enter your villa expenses here.</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -353,7 +360,7 @@ function ExpenseDialog(props: {
                 control={form.control}
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>What for</FormLabel>
+                    <FormLabel>Title</FormLabel>
                     <FormControl
                       render={
                         <Input
@@ -424,7 +431,7 @@ function ExpenseDialog(props: {
                 control={form.control}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Amount paid</FormLabel>
+                    <FormLabel>Amount (Including GST)</FormLabel>
                     <FormControl
                       render={
                         <RupeeInput
@@ -446,7 +453,7 @@ function ExpenseDialog(props: {
                 control={form.control}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Of which GST</FormLabel>
+                    <FormLabel>GST</FormLabel>
                     <FormControl
                       render={
                         <RupeeInput
@@ -470,7 +477,7 @@ function ExpenseDialog(props: {
                 control={form.control}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Paid by</FormLabel>
+                    <FormLabel>Payment Mode</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger
@@ -505,7 +512,7 @@ function ExpenseDialog(props: {
                 control={form.control}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Paid to (optional)</FormLabel>
+                    <FormLabel>Paid to (Optional)</FormLabel>
                     <FormControl
                       render={
                         <Input {...field} data-test={'villa-expense-vendor'} />
@@ -535,7 +542,7 @@ function ExpenseDialog(props: {
                 control={form.control}
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Notes (optional)</FormLabel>
+                    <FormLabel>Notes (Optional)</FormLabel>
                     <FormControl
                       render={
                         <Textarea

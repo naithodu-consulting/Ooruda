@@ -15,6 +15,7 @@ import {
   THANK_YOU_DELAY_HOURS,
   preArrivalWindow,
 } from '~/lib/villa/guest-emails';
+import { loadVillaAccountSettings } from '~/lib/villa/settings';
 
 import { GuestEmailButton, UndoCheckoutButton } from './guest-email-buttons';
 
@@ -40,7 +41,7 @@ export async function GuestEmailsSection(props: {
   const client = getSupabaseServerClient();
   const { booking } = props;
 
-  const [rates, logResult, settingsResult, lastResult] = await Promise.all([
+  const [rates, logResult, settings, lastResult] = await Promise.all([
     getVillaSite(props.accountId, props.propertyId).then(getBaseRates),
     client
       .from('villa_message_log')
@@ -50,11 +51,8 @@ export async function GuestEmailsSection(props: {
       .eq('property_id', props.propertyId)
       .eq('site_booking_id', booking.id)
       .order('created_at'),
-    client
-      .from('villa_account_settings')
-      .select('booking_confirmation_email, pre_arrival_email, thank_you_email')
-      .eq('account_id', props.accountId)
-      .maybeSingle(),
+    // Request-cached, so this is free: the booking page above already read it.
+    loadVillaAccountSettings(props.accountId),
     client
       .from('villa_booking_activity')
       .select('action, created_at')
@@ -66,15 +64,14 @@ export async function GuestEmailsSection(props: {
       .maybeSingle(),
   ]);
 
-  const error = logResult.error ?? settingsResult.error ?? lastResult.error;
+  const error = logResult.error ?? lastResult.error;
   if (error) throw new Error('Could not load the guest emails.');
 
   const log = logResult.data ?? [];
   const on = {
-    booking_confirmation:
-      settingsResult.data?.booking_confirmation_email ?? true,
-    pre_arrival: settingsResult.data?.pre_arrival_email ?? false,
-    thank_you: settingsResult.data?.thank_you_email ?? false,
+    booking_confirmation: settings.bookingConfirmationEmail,
+    pre_arrival: settings.preArrivalEmail,
+    thank_you: settings.thankYouEmail,
   };
   const checkedOutAt =
     lastResult.data?.action === 'completed'

@@ -60,14 +60,16 @@ export function CalendarView(props: {
 
   return (
     <>
-      <Legend showClosed={!!props.bookingCutoff} />
-
       <Card className="bg-card hidden overflow-hidden md:block">
-        <div className="grid grid-cols-7 border-b" role="row" aria-hidden>
+        <div
+          className="bg-muted/30 grid grid-cols-7 border-b"
+          role="row"
+          aria-hidden
+        >
           {WEEKDAYS.map((d) => (
             <div
               key={d}
-              className="text-muted-foreground px-2 py-2 text-xs font-medium"
+              className="text-muted-foreground px-2.5 py-2 text-xs font-semibold tracking-wide uppercase"
             >
               {d}
             </div>
@@ -98,9 +100,14 @@ export function CalendarView(props: {
             </div>
           ))}
         </div>
+
+        <div className="bg-muted/20 border-t px-4 py-2.5">
+          <Legend showClosed={!!props.bookingCutoff} />
+        </div>
       </Card>
 
-      <div className="md:hidden">
+      <div className="flex flex-col gap-3 md:hidden">
+        <Legend showClosed={!!props.bookingCutoff} />
         <Agenda
           entries={props.agenda}
           hrefFor={hrefFor}
@@ -163,7 +170,7 @@ function DayCell(props: {
       role="gridcell"
       aria-label={
         day.pastCutoff
-          ? `${formatDateReadable(day.date)} — closed for booking`
+          ? `${formatDateReadable(day.date)}: closed for booking`
           : formatDateReadable(day.date)
       }
       data-test={`villa-calendar-day-${day.date}`}
@@ -263,7 +270,7 @@ function NightChip(props: {
   // A channel's own calendar owns these nights: the importer replaces its rows
   // on every sync, so unblocking here would be undone minutes later.
   if (channelOwned) {
-    const title = `${label} — from a booking channel's calendar. Remove it on the channel.`;
+    const title = `${label}: from a booking channel's calendar. Remove it on the channel.`;
 
     return (
       <span

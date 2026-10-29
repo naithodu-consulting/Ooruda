@@ -62,11 +62,9 @@ export async function VillaToday(props: {
       Icon: LogIn,
       rows: board.arrivals,
       empty: 'No arrivals',
-      accent:
-        'text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/40',
-      countAccent:
-        'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300',
-      dotColor: 'bg-emerald-500',
+      accent: 'bg-success/10 text-success',
+      countAccent: 'bg-success/15 text-success',
+      dotColor: 'bg-success',
     },
     {
       key: 'departures',
@@ -74,11 +72,9 @@ export async function VillaToday(props: {
       Icon: LogOut,
       rows: board.departures,
       empty: 'No departures',
-      accent:
-        'text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-950/40',
-      countAccent:
-        'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300',
-      dotColor: 'bg-amber-500',
+      accent: 'bg-warning/10 text-warning',
+      countAccent: 'bg-warning/15 text-warning',
+      dotColor: 'bg-warning',
     },
     {
       key: 'in-house',
@@ -86,10 +82,9 @@ export async function VillaToday(props: {
       Icon: Moon,
       rows: board.inHouse,
       empty: 'Villa is free',
-      accent: 'text-blue-700 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/40',
-      countAccent:
-        'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300',
-      dotColor: 'bg-blue-500',
+      accent: 'bg-info/10 text-info',
+      countAccent: 'bg-info/15 text-info',
+      dotColor: 'bg-info',
     },
   ] as const;
 
@@ -162,7 +157,7 @@ export async function VillaToday(props: {
                           />
                           <Link
                             href={href(b.id)}
-                            className="hover:text-primary truncate text-sm font-medium underline-offset-2 hover:underline"
+                            className="hover:text-brand-ink truncate text-sm font-medium underline-offset-2 hover:underline"
                             data-test={'villa-today-guest'}
                           >
                             {b.guestName}
@@ -173,7 +168,7 @@ export async function VillaToday(props: {
                             <span className="inline-flex shrink-0 items-center gap-1">
                               {b.idStatus === 'pending' ? (
                                 <span
-                                  className="bg-warning/15 text-warning rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                                  className="bg-warning/15 text-warning rounded px-1.5 py-0.5 text-xs font-semibold"
                                   title="ID document pending"
                                 >
                                   ID
@@ -181,7 +176,7 @@ export async function VillaToday(props: {
                               ) : null}
                               {b.paymentStatus !== 'paid' ? (
                                 <span
-                                  className="bg-destructive/15 text-destructive rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                                  className="bg-destructive/15 text-destructive rounded px-1.5 py-0.5 text-xs font-semibold"
                                   title="Payment due"
                                 >
                                   Due
@@ -230,7 +225,7 @@ export async function VillaToday(props: {
                   data-test={'villa-today-overdue-guest'}
                 >
                   <span>{b.guestName}</span>
-                  <span className="text-muted-foreground inline-flex items-center gap-0.5 text-[10px]">
+                  <span className="text-muted-foreground inline-flex items-center gap-0.5 text-xs">
                     <ArrowRight className="h-3 w-3" />
                     Check out
                   </span>

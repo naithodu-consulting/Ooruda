@@ -21,7 +21,11 @@ import { If } from '@kit/ui/if';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
 
-import { productForRole } from '~/lib/roles';
+import {
+  type AppRole,
+  ROLE_HIERARCHY_LEVEL_BY_ROLE,
+  productForRole,
+} from '~/lib/roles';
 
 // local imports
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
@@ -60,6 +64,7 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
 
   const isPrimaryOwner = account.primary_owner_user_id === user.id;
   const currentUserRoleHierarchy = account.role_hierarchy_level;
+  const product = productForRole(account.role);
 
   // For non-super-admins, constrain invite/edit/delete to what super-admin
   // has granted for this association. Super-admins bypass all these checks.
@@ -69,14 +74,26 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
         canEdit: () => true,
         canDelete: () => true,
         allowedInviteRoles:
-          productForRole(account.role) === 'villa'
+          product === 'villa'
             ? DEFAULT_INVITE_ROLES.villa
-            : ['prop_owner', 'billing_operator', 'tenant'],
+            : DEFAULT_INVITE_ROLES.association,
         // Undefined => no per-role gating; super-admins bypass these checks.
         editableRoles: undefined,
         deletableRoles: undefined,
       }
-    : assocPermissions;
+    : {
+        ...assocPermissions,
+        // A member may only grant a role at or below their own seniority
+        // (a lower hierarchy level is more senior). A role this app does not
+        // know is not grantable: unknown fails closed, never open.
+        allowedInviteRoles: assocPermissions.allowedInviteRoles.filter(
+          (role) => {
+            const level = ROLE_HIERARCHY_LEVEL_BY_ROLE[role as AppRole];
+
+            return level !== undefined && level >= currentUserRoleHierarchy;
+          },
+        ),
+      };
 
   // Hide the invite button when no roles are grantable yet (super-admin hasn't
   // configured can_invite for any role in this association).

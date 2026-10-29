@@ -1,4 +1,4 @@
-import { type Page, expect } from '@playwright/test';
+import { type BrowserContext, type Page, expect } from '@playwright/test';
 
 import { join } from 'node:path';
 
@@ -31,6 +31,25 @@ export const FIX = {
   amcId: '638f05f5-5722-43bc-9bee-1315f025f83f',
   associationId: 'fc1de46d-d024-46a2-b4ff-f3bda2bd764f',
 };
+
+/**
+ * The early-access gate sits in front of every page outside production. The
+ * gate only checks a cookie, so a test sets it rather than driving the form.
+ */
+export async function passAccessGate(
+  context: BrowserContext,
+  baseURL?: string,
+) {
+  await context.addCookies([
+    {
+      name: 'ooruda_access',
+      value: '1',
+      url: baseURL ?? process.env.OORUDA_BASE_URL ?? 'http://localhost:3000',
+      httpOnly: true,
+      sameSite: 'Lax',
+    },
+  ]);
+}
 
 export async function signIn(page: Page, phone: string) {
   // Each attempt starts from a fresh page: a click that lands before React has

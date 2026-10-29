@@ -369,9 +369,9 @@ function DiscountDialog(props: {
     },
   });
   const blackouts = useFieldArray({ control: form.control, name: 'blackouts' });
-  const [type, value, minValue] = useWatch({
+  const [type, value, minValue, validFrom] = useWatch({
     control: form.control,
-    name: ['discountType', 'discountValue', 'minBookingValue'],
+    name: ['discountType', 'discountValue', 'minBookingValue', 'validFrom'],
   });
   const overCeiling = needsApproval({
     discountType: type,
@@ -553,7 +553,15 @@ function DiscountDialog(props: {
                     <FormControl>
                       <DatePicker
                         value={field.value}
-                        onChange={field.onChange}
+                        onChange={(v) => {
+                          field.onChange(v);
+                          const to = form.getValues('validTo');
+                          if (v && to && to < v) {
+                            form.setValue('validTo', v, {
+                              shouldValidate: true,
+                            });
+                          }
+                        }}
                         onBlur={field.onBlur}
                         data-test={'villa-discount-from'}
                       />
@@ -573,6 +581,7 @@ function DiscountDialog(props: {
                         value={field.value}
                         onChange={field.onChange}
                         onBlur={field.onBlur}
+                        min={validFrom || undefined}
                         data-test={'villa-discount-to'}
                       />
                     </FormControl>
@@ -641,8 +650,28 @@ function DiscountDialog(props: {
                           <FormControl>
                             <DatePicker
                               value={field.value}
-                              onChange={field.onChange}
+                              onChange={(v) => {
+                                field.onChange(v);
+                                if (k === 'start' && v) {
+                                  const ln = form.getValues(
+                                    `blackouts.${i}.lastNight`,
+                                  );
+                                  if (!ln || ln < v) {
+                                    form.setValue(
+                                      `blackouts.${i}.lastNight`,
+                                      v,
+                                      { shouldValidate: true },
+                                    );
+                                  }
+                                }
+                              }}
                               onBlur={field.onBlur}
+                              min={
+                                k === 'lastNight'
+                                  ? form.getValues(`blackouts.${i}.start`) ||
+                                    undefined
+                                  : undefined
+                              }
                               data-test={`villa-discount-blackout-${k}`}
                             />
                           </FormControl>

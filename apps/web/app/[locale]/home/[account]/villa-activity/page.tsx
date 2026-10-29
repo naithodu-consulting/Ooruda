@@ -1,6 +1,8 @@
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
+import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
 import { PageBody } from '@kit/ui/page';
+import { Trans } from '@kit/ui/trans';
 
 import { VILLA_ROLES, requireRole } from '~/lib/rbac';
 import { activityLabel } from '~/lib/villa/labels';
@@ -42,7 +44,7 @@ export default async function VillaActivityPage({
     .from('villa_booking_activity')
     .select(
       `id, action, reason_code, note, actor_user_id,
-       site_booking_id, property_id, created_at,
+       site_booking_id, booking_code, property_id, created_at,
        villa_cancellation_reasons(label),
        villa_properties(name)`,
       { count: 'exact' },
@@ -56,15 +58,18 @@ export default async function VillaActivityPage({
   }
 
   if (search) {
-    query = query.ilike('action', `%${search}%`);
+    const safe = search.replace(/[,()]/g, ' ').trim();
+    if (safe) {
+      query = query.or(
+        `action.ilike.%${safe}%,note.ilike.%${safe}%,booking_code.ilike.%${safe}%`,
+      );
+    }
   }
 
   const { data: activities, count } = await query.range(from, to);
 
   const actorIds = [
-    ...new Set(
-      (activities ?? []).map((a) => a.actor_user_id).filter(Boolean),
-    ),
+    ...new Set((activities ?? []).map((a) => a.actor_user_id).filter(Boolean)),
   ] as string[];
 
   const { data: profiles } =
@@ -104,6 +109,7 @@ export default async function VillaActivityPage({
         ? (nameById.get(a.actor_user_id) ?? 'Unknown')
         : 'System',
       bookingId: a.site_booking_id,
+      bookingCode: a.booking_code ?? null,
       propertyId: a.property_id,
       propertyName,
       createdAt: a.created_at,
@@ -113,7 +119,7 @@ export default async function VillaActivityPage({
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
-  const description =
+  const subtitle =
     role === 'villa_manager'
       ? `Your activity · ${totalCount} event${totalCount === 1 ? '' : 's'} · most recent first`
       : `${totalCount} event${totalCount === 1 ? '' : 's'} · most recent first`;
@@ -122,8 +128,8 @@ export default async function VillaActivityPage({
     <PageBody>
       <TeamAccountLayoutPageHeader
         account={account}
-        title="Activity Log"
-        description={description}
+        title={<Trans i18nKey={'villa.nav.activity'} defaults="Activity Log" />}
+        description={<AppBreadcrumbs />}
       />
 
       <ActivityLogTable
@@ -134,6 +140,7 @@ export default async function VillaActivityPage({
         totalCount={totalCount}
         pageSize={PAGE_SIZE}
         search={search}
+        subtitle={subtitle}
         isAdmin={role === 'villa_admin'}
       />
     </PageBody>

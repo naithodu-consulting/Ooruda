@@ -1,11 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FileText, IdCard, Plus, X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
-
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
@@ -209,9 +208,7 @@ function AddIdForm(
       >
         <DialogHeader>
           <DialogTitle>Add ID</DialogTitle>
-          <DialogDescription>
-            One ID per adult guest.
-          </DialogDescription>
+          <DialogDescription>One ID per adult guest.</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -297,9 +294,7 @@ function AddIdForm(
                   control={form.control}
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>
-                        Phone{first ? '' : ' (optional)'}
-                      </FormLabel>
+                      <FormLabel>Phone{first ? '' : ' (optional)'}</FormLabel>
                       <FormControl
                         render={
                           <PhoneInput
@@ -367,7 +362,7 @@ function AddIdForm(
                           {...field}
                           autoComplete="off"
                           spellCheck={false}
-                          placeholder="Last 4 digits is enough"
+                          placeholder="Last 4 digits"
                           data-test={'villa-add-id-number'}
                         />
                       }
@@ -385,8 +380,8 @@ function AddIdForm(
             <div className="flex flex-col gap-2">
               <p className="text-sm font-medium">ID photos</p>
               <p className="text-muted-foreground text-xs">
-                Front and back of the ID. JPEG, PNG, WebP or PDF · max 10 MB
-                each.
+                Front and back of the ID. Accepted Formats: JPEG, PNG, WebP and
+                PDF.
               </p>
 
               {/* Thumbnail grid */}
@@ -408,7 +403,7 @@ function AddIdForm(
                       ) : (
                         <div className="bg-muted/40 flex h-full w-full flex-col items-center justify-center gap-1 p-2">
                           <FileText className="text-muted-foreground h-7 w-7" />
-                          <span className="text-muted-foreground w-full truncate text-center text-[10px]">
+                          <span className="text-muted-foreground w-full truncate text-center text-xs">
                             {entry.file.name}
                           </span>
                         </div>

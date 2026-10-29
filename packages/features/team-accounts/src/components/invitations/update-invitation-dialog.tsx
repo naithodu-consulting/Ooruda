@@ -153,11 +153,13 @@ function UpdateInvitationForm({
                 <FormControl>
                   <RolesDataProvider maxRoleHierarchy={userRoleHierarchy}>
                     {(roles) => {
-                      const filteredRoles = isSuperAdmin
-                        ? roles
-                        : roles.filter((role) =>
-                            ['prop_owner', 'tenant'].includes(role),
-                          );
+                      const filteredRoles =
+                        isSuperAdmin ||
+                        roles.some((role) => role.startsWith('villa_'))
+                          ? roles
+                          : roles.filter((role) =>
+                              ['prop_owner', 'tenant'].includes(role),
+                            );
 
                       return (
                         <MembershipRoleSelector

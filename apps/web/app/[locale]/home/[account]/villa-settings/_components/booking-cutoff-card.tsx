@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { CalendarOff, X } from 'lucide-react';
+import { CalendarOff } from 'lucide-react';
 import { useAction } from 'next-safe-action/hooks';
 
 import { Button } from '@kit/ui/button';
@@ -52,28 +52,16 @@ export function BookingCutoffCard(props: {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div className="flex flex-wrap items-end gap-2">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 sm:w-64">
             <DatePicker
               value={value ?? ''}
               onChange={(v) => setValue(v || null)}
               min={today}
+              clearable={props.canEdit && !isPending}
               disabled={!props.canEdit || isPending}
               data-test={'villa-settings-booking-cutoff'}
             />
           </div>
-
-          {value && props.canEdit ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setValue(null)}
-              disabled={isPending}
-              aria-label="Clear cutoff date"
-              data-test={'villa-settings-booking-cutoff-clear'}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          ) : null}
         </div>
 
         {value ? (
@@ -86,7 +74,7 @@ export function BookingCutoffCard(props: {
           </p>
         ) : (
           <p className="text-muted-foreground text-xs">
-            No cutoff — bookings are open-ended.
+            No cutoff: bookings are open-ended.
           </p>
         )}
 

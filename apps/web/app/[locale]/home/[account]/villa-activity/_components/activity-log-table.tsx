@@ -1,6 +1,9 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 
 import {
   CalendarPlus,
@@ -14,6 +17,7 @@ import {
   XCircle,
 } from 'lucide-react';
 
+import { Input } from '@kit/ui/input';
 import {
   Table,
   TableBody,
@@ -31,6 +35,7 @@ export interface ActivityRow {
   note: string | null;
   actorName: string;
   bookingId: string;
+  bookingCode: string | null;
   propertyId: string;
   propertyName: string | null;
   createdAt: string;
@@ -39,7 +44,8 @@ export interface ActivityRow {
 function ActivityIcon({ action }: { action: string }) {
   const cls = 'text-muted-foreground h-4 w-4 shrink-0';
   if (action === 'created') return <CalendarPlus className={cls} />;
-  if (action === 'cancelled') return <XCircle className="text-destructive h-4 w-4 shrink-0" />;
+  if (action === 'cancelled')
+    return <XCircle className="text-destructive h-4 w-4 shrink-0" />;
   if (action === 'completed') return <LogOut className={cls} />;
   if (action === 'reopened') return <Undo2 className={cls} />;
   if (action === 'checked_in') return <CheckCircle2 className={cls} />;
@@ -68,10 +74,19 @@ export function ActivityLogTable(props: {
   totalCount: number;
   pageSize: number;
   search: string;
+  subtitle?: string;
   isAdmin: boolean;
 }) {
-  const { rows, page, totalPages, totalCount, pageSize, search, isAdmin } =
-    props;
+  const {
+    rows,
+    page,
+    totalPages,
+    totalCount,
+    pageSize,
+    search,
+    subtitle,
+    isAdmin,
+  } = props;
   const pathname = usePathname();
   const basePath = pathname.split('?')[0]!;
 
@@ -90,14 +105,21 @@ export function ActivityLogTable(props: {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {subtitle ? (
+          <p className="text-muted-foreground text-sm">{subtitle}</p>
+        ) : (
+          <span />
+        )}
         <SearchBar defaultValue={search} searchHref={searchHref} />
       </div>
 
       <div className="bg-card rounded-xl border">
         {rows.length === 0 ? (
           <p className="text-muted-foreground py-16 text-center text-sm">
-            {search ? `No results for "${search}".` : 'No activity recorded yet.'}
+            {search
+              ? `No results for "${search}".`
+              : 'No activity recorded yet.'}
           </p>
         ) : (
           <>
@@ -147,13 +169,19 @@ export function ActivityLogTable(props: {
                         </TableCell>
 
                         <TableCell className="py-3.5">
-                          <a
+                          <Link
                             href={bookingHref}
-                            className="text-primary text-sm hover:underline"
+                            className="text-brand-ink text-sm font-medium hover:underline"
                             data-test={'villa-activity-booking-link'}
                           >
-                            View booking
-                          </a>
+                            {row.bookingCode ? (
+                              <span className="font-mono">
+                                {row.bookingCode}
+                              </span>
+                            ) : (
+                              'View booking'
+                            )}
+                          </Link>
                           {row.propertyName ? (
                             <div className="text-muted-foreground mt-0.5 text-xs">
                               {row.propertyName}
@@ -198,14 +226,14 @@ export function ActivityLogTable(props: {
 
                 <div className="flex items-center gap-1">
                   {page > 1 ? (
-                    <a
+                    <Link
                       href={pageHref(page - 1)}
                       data-test={'villa-activity-pagination-prev'}
                       className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors"
                     >
                       <ChevronLeft className="h-4 w-4" />
                       Previous
-                    </a>
+                    </Link>
                   ) : (
                     <span className="border-input text-muted-foreground inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-md border px-3 text-sm font-medium opacity-50">
                       <ChevronLeft className="h-4 w-4" />
@@ -213,19 +241,19 @@ export function ActivityLogTable(props: {
                     </span>
                   )}
 
-                  <span className="text-muted-foreground px-3 text-sm">
+                  <span className="text-muted-foreground px-3 text-sm tabular-nums">
                     {page} / {totalPages}
                   </span>
 
                   {page < totalPages ? (
-                    <a
+                    <Link
                       href={pageHref(page + 1)}
                       data-test={'villa-activity-pagination-next'}
                       className="border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors"
                     >
                       Next
                       <ChevronRight className="h-4 w-4" />
-                    </a>
+                    </Link>
                   ) : (
                     <span className="border-input text-muted-foreground inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-md border px-3 text-sm font-medium opacity-50">
                       Next
@@ -244,19 +272,51 @@ export function ActivityLogTable(props: {
 
 function SearchBar({
   defaultValue,
-  searchHref: _searchHref,
+  searchHref,
 }: {
   defaultValue: string;
   searchHref: (q: string) => string;
 }) {
+  const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
+  const searchHrefRef = useRef(searchHref);
+  searchHrefRef.current = searchHref;
+  const [value, setValue] = useState(defaultValue);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      routerRef.current.push(searchHrefRef.current(value));
+    }, 300);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [value]);
+
   return (
-    <form method="get" className="relative w-64">
+    <form
+      method="get"
+      className="relative w-full sm:w-64"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (timerRef.current) clearTimeout(timerRef.current);
+        router.push(searchHref(value));
+      }}
+    >
       <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
-      <input
+      <Input
         name="search"
-        defaultValue={defaultValue}
-        placeholder="Search actions…"
-        className="border-input bg-background focus:ring-ring h-9 w-full rounded-md border py-1.5 pr-3 pl-8 text-sm focus:ring-2 focus:outline-none"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="Search actions, booking, notes…"
+        className="w-full pl-8"
         data-test={'villa-activity-search'}
       />
     </form>

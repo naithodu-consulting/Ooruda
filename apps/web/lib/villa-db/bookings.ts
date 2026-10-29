@@ -644,20 +644,29 @@ export interface SitePayment {
   createdAt: string | null;
 }
 
-/** Website (Razorpay) payments for one booking of this property. */
+/**
+ * Website (Razorpay) payments for one booking of this property.
+ *
+ * Payments carry no property_id, so the booking is what scopes them to this
+ * villa. Callers that already hold the booking (the booking page does) pass
+ * `verified: true` to say so, which saves re-reading the same row from the
+ * booking site; anyone passing a bare id still gets it checked here.
+ */
 export async function listSitePayments(
   site: VillaSite,
   bookingId: string,
+  options: { verified?: boolean } = {},
 ): Promise<SitePayment[]> {
-  // Scope through the booking: payments carry no property_id.
-  const booking = await getBooking(site, bookingId);
+  if (!options.verified) {
+    const booking = await getBooking(site, bookingId);
 
-  if (!booking) return [];
+    if (!booking) return [];
+  }
 
   const { data, error } = await site.client
     .from('payments')
     .select('id, amount, status, razorpay_payment_id, created_at')
-    .eq('booking_id', booking.id)
+    .eq('booking_id', bookingId)
     .order('created_at');
 
   if (error) throw fromSiteError(error);

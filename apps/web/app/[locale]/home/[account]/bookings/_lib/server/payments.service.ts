@@ -55,7 +55,9 @@ export async function loadLedger(
   booking: SiteBooking,
 ) {
   const [online, payments, refunds] = await Promise.all([
-    listSitePayments(site, booking.id),
+    // The caller read this booking from the site already, so it needs no
+    // second lookup to prove it belongs to this property.
+    listSitePayments(site, booking.id, { verified: true }),
     client
       .from('villa_booking_payments')
       .select(

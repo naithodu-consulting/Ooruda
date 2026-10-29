@@ -4,7 +4,12 @@ import { cache } from 'react';
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
-import { getSupabaseServerClient } from '@kit/supabase/server-client';
+
+import {
+  type VillaPropertySummary,
+  findVillaProperty,
+  findVillaPropertyAsSystem,
+} from '~/lib/villa/properties';
 
 import { VillaDbError, fromSiteError } from './errors';
 import type { Database as VillaDatabase } from './villa-db.types';
@@ -51,6 +56,26 @@ const fetchWithTimeout: typeof fetch = (input, init) =>
       : AbortSignal.timeout(VILLA_DB_TIMEOUT_MS),
   });
 
+/**
+ * The same fetch, but a booking site that rejects our credentials drops them
+ * from the cache so the very next request resolves them again.
+ *
+ * Without this, rotating a villa's service key would break every one of its
+ * screens until the cached copy expired. With it the failure window is one
+ * request, which is what it was before the cache existed.
+ */
+function fetchForProperty(propertyId: string): typeof fetch {
+  return async (input, init) => {
+    const response = await fetchWithTimeout(input, init);
+
+    if (response.status === 401 || response.status === 403) {
+      credentialCache.delete(propertyId);
+    }
+
+    return response;
+  };
+}
+
 function localOverride(): { url: string; serviceKey: string } | null {
   if (process.env.VILLA_DB_LOCAL_OVERRIDE !== 'true') return null;
 
@@ -71,12 +96,54 @@ function localOverride(): { url: string; serviceKey: string } | null {
   return LOCAL_HOSTS.has(host) ? { url, serviceKey } : null;
 }
 
+type Credentials = { url: string; serviceKey: string };
+
+/**
+ * How long a resolved booking-site credential is reused in this process.
+ *
+ * The Vault lookup is a round trip to Ooruda's database on the critical path
+ * of EVERY villa page, so it is worth not repeating per request. Kept short so
+ * a key rotated in the database is picked up without a deploy, and in-process
+ * only: nothing is written to disk, to a cookie, to a log or to the browser,
+ * and the map dies with the server instance.
+ *
+ * A cached key can never outlive the property's own state: `buildSite` reads
+ * the property row first (request-scoped, never cached beyond the request) and
+ * refuses a property that is inactive or no longer linked BEFORE it asks for
+ * credentials. So unlinking or switching off a villa takes effect at once,
+ * even though its key may sit in this map for a few minutes longer. Connecting
+ * a villa to a DIFFERENT booking-site property makes a new villa_properties
+ * row (connect_villa_property matches on site_project_ref + site_property_id),
+ * so that gets a new cache key too.
+ *
+ * The one case the property row cannot catch is a key ROTATED for the same
+ * site property. `fetchForProperty` handles it: the first request the site
+ * rejects evicts the entry, so the next one resolves the new key.
+ *
+ * The map holds one entry per villa property the process has served, so it is
+ * bounded by the number of villas, not by traffic.
+ */
+const CREDENTIAL_TTL_MS = 5 * 60_000;
+
+const credentialCache = new Map<
+  string,
+  { value: Credentials; expiresAt: number }
+>();
+
 async function loadCredentials(
   propertyId: string,
-): Promise<{ url: string; serviceKey: string } | null> {
+): Promise<Credentials | null> {
   const override = localOverride();
 
   if (override) return override;
+
+  const cached = credentialCache.get(propertyId);
+
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  // Expired (or never held): drop it before the lookup so a failure below
+  // never leaves a stale key behind.
+  credentialCache.delete(propertyId);
 
   const { data, error } = await getSupabaseServerAdminClient().rpc(
     'get_villa_site_credentials',
@@ -92,9 +159,16 @@ async function loadCredentials(
 
   const row = Array.isArray(data) ? data[0] : data;
 
-  return row?.url && row?.service_key
-    ? { url: row.url, serviceKey: row.service_key }
-    : null;
+  if (!row?.url || !row?.service_key) return null;
+
+  const value: Credentials = { url: row.url, serviceKey: row.service_key };
+
+  credentialCache.set(propertyId, {
+    value,
+    expiresAt: Date.now() + CREDENTIAL_TTL_MS,
+  });
+
+  return value;
 }
 
 /**
@@ -102,78 +176,90 @@ async function loadCredentials(
  * the property belongs to `accountId`. Request-cached.
  */
 export const getVillaSite = cache(
-  async (accountId: string, propertyId: string): Promise<VillaSite> => {
-    // Use the regular server client (RLS-enforced) so this works with both
-    // the local Supabase (where SUPABASE_SECRET_KEY may not match the local
-    // JWT secret) and the remote project. RLS on villa_properties already
-    // limits rows to the caller's own account; we still verify account_id
-    // below as a belt-and-suspenders guard.
-    const { data: property, error } = await getSupabaseServerClient()
-      .from('villa_properties')
-      .select(
-        'id, account_id, name, site_property_id, booking_code_prefix, status',
-      )
-      .eq('id', propertyId)
-      .maybeSingle();
-
-    if (error) {
-      throw new VillaDbError(
-        'UNKNOWN',
-        `property lookup failed: ${error.message}`,
-      );
-    }
-
-    // A property of another account is indistinguishable from a missing one.
-    if (!property || property.account_id !== accountId) {
-      throw new VillaDbError('NOT_FOUND', `villa property ${propertyId}`);
-    }
-
-    // Switched off by the owner: no reads or writes on the site.
-    if (property.status !== 'active') {
-      throw new VillaDbError(
-        'INACTIVE',
-        `villa property ${propertyId} is ${property.status}`,
-      );
-    }
-
-    if (!property.site_property_id) {
-      throw new VillaDbError(
-        'NOT_CONFIGURED',
-        `no site_property_id for ${propertyId}`,
-      );
-    }
-
-    const credentials = await loadCredentials(propertyId);
-
-    if (!credentials) {
-      throw new VillaDbError(
-        'NOT_CONFIGURED',
-        `no credentials for ${propertyId}`,
-      );
-    }
-
-    const client = createClient<VillaDatabase>(
-      credentials.url,
-      credentials.serviceKey,
-      {
-        auth: { persistSession: false, autoRefreshToken: false },
-        global: {
-          headers: { 'x-client-info': 'ooruda-villa' },
-          fetch: fetchWithTimeout,
-        },
-      },
-    );
-
-    return {
-      client,
-      propertyId: property.id,
-      accountId: property.account_id,
-      sitePropertyId: property.site_property_id,
-      bookingCodePrefix: property.booking_code_prefix,
-      name: property.name,
-    };
-  },
+  async (accountId: string, propertyId: string): Promise<VillaSite> =>
+    buildSite(
+      accountId,
+      propertyId,
+      await findVillaProperty(accountId, propertyId),
+    ),
 );
+
+/**
+ * The same connection for the SYSTEM (the scheduled sync), which has no user
+ * session: the RLS-enforced property lookup is refused for it outright, so the
+ * property is resolved with the service role instead. Only reachable from a
+ * path that has already authorised itself — today the cron route, which
+ * checks CRON_SECRET. Authorization is still the caller's job.
+ */
+export const getVillaSiteAsSystem = cache(
+  async (accountId: string, propertyId: string): Promise<VillaSite> =>
+    buildSite(
+      accountId,
+      propertyId,
+      await findVillaPropertyAsSystem(accountId, propertyId),
+    ),
+);
+
+async function buildSite(
+  accountId: string,
+  propertyId: string,
+  property: VillaPropertySummary | null,
+): Promise<VillaSite> {
+  // The property row comes from `loadVillaProperties`, which the pages have
+  // already loaded (request-cached): on a remote database a second
+  // villa_properties query here is a round trip per page for nothing. The
+  // account_id is still verified as a belt-and-suspenders guard.
+
+  // A property of another account is indistinguishable from a missing one.
+  if (!property || property.accountId !== accountId) {
+    throw new VillaDbError('NOT_FOUND', `villa property ${propertyId}`);
+  }
+
+  // Switched off by the owner: no reads or writes on the site.
+  if (property.status !== 'active') {
+    throw new VillaDbError(
+      'INACTIVE',
+      `villa property ${propertyId} is ${property.status}`,
+    );
+  }
+
+  if (!property.sitePropertyId) {
+    throw new VillaDbError(
+      'NOT_CONFIGURED',
+      `no site_property_id for ${propertyId}`,
+    );
+  }
+
+  const credentials = await loadCredentials(propertyId);
+
+  if (!credentials) {
+    throw new VillaDbError(
+      'NOT_CONFIGURED',
+      `no credentials for ${propertyId}`,
+    );
+  }
+
+  const client = createClient<VillaDatabase>(
+    credentials.url,
+    credentials.serviceKey,
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        headers: { 'x-client-info': 'ooruda-villa' },
+        fetch: fetchForProperty(property.id),
+      },
+    },
+  );
+
+  return {
+    client,
+    propertyId: property.id,
+    accountId: property.accountId,
+    sitePropertyId: property.sitePropertyId,
+    bookingCodePrefix: property.bookingCodePrefix,
+    name: property.name,
+  };
+}
 
 /**
  * Cheapest possible read proving the credentials work and this villa's site

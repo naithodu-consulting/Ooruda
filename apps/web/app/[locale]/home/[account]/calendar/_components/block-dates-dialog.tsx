@@ -19,7 +19,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -35,11 +34,11 @@ import {
 import { toast } from '@kit/ui/sonner';
 import { Textarea } from '@kit/ui/textarea';
 
-import { daysBetweenYmd, todayInBillingZone } from '~/lib/billing-dates';
+import { todayInBillingZone } from '~/lib/billing-dates';
 import { formatDateReadable } from '~/lib/format-date';
 import { addDays } from '~/lib/villa-db/dates';
 import { OPERATOR_BLOCK_REASONS } from '~/lib/villa/constants';
-import { blockReasonLabel, formatNights } from '~/lib/villa/labels';
+import { blockReasonLabel } from '~/lib/villa/labels';
 
 import {
   type CreateBlockInput,
@@ -94,15 +93,10 @@ function BlockDatesForm(props: {
     },
   });
 
-  const [checkIn, checkOut] = useWatch({
+  const [checkIn] = useWatch({
     control: form.control,
-    name: ['checkIn', 'checkOut'],
+    name: ['checkIn'],
   });
-
-  const nights =
-    checkIn && checkOut && checkOut > checkIn
-      ? daysBetweenYmd(checkIn, checkOut)
-      : 0;
 
   const { execute, isPending } = useAction(createBlockAction, {
     onSuccess: () => {
@@ -124,7 +118,7 @@ function BlockDatesForm(props: {
           <DialogDescription>
             Prevents bookings on these nights.
             {cutoff
-              ? ` After ${formatDateReadable(cutoff)} is already closed.`
+              ? ` Cutoff date is ${formatDateReadable(cutoff)}, after which, property is closed for bookings.`
               : ''}
           </DialogDescription>
         </DialogHeader>
@@ -140,7 +134,7 @@ function BlockDatesForm(props: {
                 control={form.control}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Check-in</FormLabel>
+                    <FormLabel>Start Date</FormLabel>
                     <FormControl>
                       <DatePicker
                         value={field.value}
@@ -169,7 +163,7 @@ function BlockDatesForm(props: {
                 control={form.control}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Check-out</FormLabel>
+                    <FormLabel>End Date</FormLabel>
                     <FormControl>
                       <DatePicker
                         value={field.value}
@@ -180,11 +174,6 @@ function BlockDatesForm(props: {
                         data-test={'villa-block-checkout'}
                       />
                     </FormControl>
-                    <FormDescription>
-                      {nights
-                        ? `${formatNights(nights)}. Free again from the morning of ${formatDateReadable(checkOut)}.`
-                        : 'First morning guests can check in again.'}
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -241,9 +230,6 @@ function BlockDatesForm(props: {
                       />
                     }
                   />
-                  <FormDescription>
-                    Only your team sees this; guests never do.
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

@@ -38,7 +38,7 @@ describe('maskIdNumber', () => {
     for (const [type, raw] of [
       ['aadhaar', '987654321098'],
       ['passport', 'Z9876543'],
-      ['other', '1234567890'],
+      ['voter_id', '1234567890'],
     ] as const) {
       const r = maskIdNumber(type, raw);
       expect(r.ok && r.masked).toBeTruthy();
@@ -51,7 +51,7 @@ describe('maskIdNumber', () => {
   });
 
   it('rejects symbols', () => {
-    expect(maskIdNumber('other', 'AB#1234').ok).toBe(false);
+    expect(maskIdNumber('voter_id', 'AB#1234').ok).toBe(false);
   });
 });
 

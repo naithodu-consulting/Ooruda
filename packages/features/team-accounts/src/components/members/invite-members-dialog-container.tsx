@@ -3,13 +3,11 @@
 import React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useQuery } from '@tanstack/react-query';
 import { Plus, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useAction } from 'next-safe-action/hooks';
 import { useFieldArray, useForm } from 'react-hook-form';
 
-import { Alert, AlertDescription } from '@kit/ui/alert';
 import { Button } from '@kit/ui/button';
 import {
   Dialog,
@@ -31,7 +29,6 @@ import { If } from '@kit/ui/if';
 import { Input } from '@kit/ui/input';
 import { PhoneInput } from '@kit/ui/phone-input';
 import { toast } from '@kit/ui/sonner';
-import { Spinner } from '@kit/ui/spinner';
 import {
   Tooltip,
   TooltipContent,
@@ -94,12 +91,9 @@ export function InviteMembersDialogContainer({
     },
   });
 
-  // Evaluate policies when dialog is open
-  const {
-    data: policiesResult,
-    isLoading: isLoadingPolicies,
-    error: policiesError,
-  } = useFetchInvitationsPolicies({ accountSlug, isOpen: dialogProps.open });
+  const isVillaWorkspace = (allowedRoles ?? []).some((role) =>
+    role.startsWith('villa_'),
+  );
 
   return (
     <Dialog {...dialogProps}>
@@ -117,7 +111,11 @@ export function InviteMembersDialogContainer({
       <DialogContent className={'sm:max-w-lg'} showCloseButton={!isPending}>
         <DialogHeader>
           <DialogTitle>
-            <Trans i18nKey={'teams.inviteMembersHeading'} />
+            {isVillaWorkspace ? (
+              'Invite Members to your Villa'
+            ) : (
+              <Trans i18nKey={'teams.inviteMembersHeading'} />
+            )}
           </DialogTitle>
 
           <DialogDescription>
@@ -125,39 +123,18 @@ export function InviteMembersDialogContainer({
           </DialogDescription>
         </DialogHeader>
 
-        <If condition={isLoadingPolicies}>
-          <div className="flex flex-col items-center justify-center gap-y-4 py-8">
-            <Spinner className="h-6 w-6" />
-
-            <span className="text-muted-foreground text-sm">
-              <Trans i18nKey="teams.checkingPolicies" />
-            </span>
-          </div>
-        </If>
-
-        <If condition={policiesError}>
-          <Alert variant="destructive">
-            <AlertDescription>
-              <Trans
-                i18nKey="teams.policyCheckError"
-                values={{ error: policiesError?.message }}
-              />
-            </AlertDescription>
-          </Alert>
-        </If>
-
-        <If condition={policiesResult && !policiesResult.allowed}>
-          <Alert variant="destructive">
-            <AlertDescription>
-              <Trans
-                i18nKey={policiesResult?.reasons[0]}
-                defaults={policiesResult?.reasons[0]}
-              />
-            </AlertDescription>
-          </Alert>
-        </If>
-
-        <If condition={policiesResult?.allowed}>
+        {allowedRoles && allowedRoles.length > 0 ? (
+          <InviteMembersForm
+            pending={isPending}
+            roles={allowedRoles}
+            onSubmit={(data) => {
+              execute({
+                accountSlug,
+                invitations: data.invitations,
+              });
+            }}
+          />
+        ) : (
           <RolesDataProvider maxRoleHierarchy={userRoleHierarchy}>
             {(roles) => {
               const filteredRoles = isSuperAdmin
@@ -178,7 +155,7 @@ export function InviteMembersDialogContainer({
               );
             }}
           </RolesDataProvider>
-        </If>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -195,12 +172,18 @@ function InviteMembersForm({
 }) {
   const t = useTranslations('teams');
 
+  const defaultRole: Role = roles.includes('prop_owner')
+    ? 'prop_owner'
+    : roles.includes('villa_manager')
+      ? 'villa_manager'
+      : (roles[0] ?? '');
+
   const form = useForm({
     resolver: zodResolver(InviteMembersSchema),
     shouldUseNativeValidation: true,
     reValidateMode: 'onSubmit',
     defaultValues: {
-      invitations: [createEmptyInviteModel()],
+      invitations: [createEmptyInviteModel(defaultRole)],
     },
   });
 
@@ -349,7 +332,7 @@ function InviteMembersForm({
                 size={'sm'}
                 disabled={pending}
                 onClick={() => {
-                  fieldArray.append(createEmptyInviteModel());
+                  fieldArray.append(createEmptyInviteModel(defaultRole));
                 }}
               >
                 <Plus className={'mr-1 h-3'} />
@@ -376,46 +359,6 @@ function InviteMembersForm({
   );
 }
 
-function createEmptyInviteModel() {
-  return { phone: '', role: 'prop_owner' as Role, name: '', email: '' };
-}
-
-function useFetchInvitationsPolicies({
-  accountSlug,
-  isOpen,
-}: {
-  accountSlug: string;
-  isOpen: boolean;
-}) {
-  return useQuery({
-    queryKey: ['invitation-policies', accountSlug],
-    queryFn: async () => {
-      // This call is a best-effort PREFLIGHT to surface policy restrictions
-      // before the user fills out the form. It is NOT the security gate:
-      // createInvitationsAction independently enforces checkInvitationPermissions
-      // and evaluateInvitationsPolicies server-side. So if the preflight endpoint
-      // is unavailable (e.g. routing 404/500), we must degrade to "allowed" and
-      // let the server action be the authority - never hard-block the dialog.
-      const permissive = {
-        allowed: true,
-        reasons: [],
-        metadata: { preflightSkipped: true },
-      };
-
-      try {
-        const response = await fetch(`./members/policies`);
-
-        if (!response.ok) {
-          return permissive;
-        }
-
-        return response.json();
-      } catch {
-        return permissive;
-      }
-    },
-    enabled: isOpen,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
+function createEmptyInviteModel(defaultRole: Role) {
+  return { phone: '', role: defaultRole, name: '', email: '' };
 }

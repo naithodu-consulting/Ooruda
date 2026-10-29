@@ -191,7 +191,10 @@ const getVillaRoutes = (account: string) => [
       },
       {
         label: 'villa.nav.activity',
-        path: pathsConfig.app.accountVillaActivity.replace('[account]', account),
+        path: pathsConfig.app.accountVillaActivity.replace(
+          '[account]',
+          account,
+        ),
         Icon: <ClipboardList className={iconClasses} />,
       },
       {

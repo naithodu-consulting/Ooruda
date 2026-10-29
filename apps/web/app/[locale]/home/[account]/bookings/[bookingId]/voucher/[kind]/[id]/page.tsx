@@ -1,8 +1,12 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
+
+import { ArrowLeft } from 'lucide-react';
 
 import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 
+import pathsConfig from '~/config/paths.config';
 import { formatDateReadable } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 import { VILLA_ROLES, requireRole } from '~/lib/rbac';
@@ -136,6 +140,8 @@ export default async function VoucherPage({ params, searchParams }: Props) {
       : []),
   ];
 
+  const backHref = `${pathsConfig.app.accountVillaBookings.replace('[account]', account)}/${bookingId}?property=${property.id}`;
+
   return (
     <div className="bg-background min-h-full p-4 sm:p-8 print:p-0">
       {/* Print the voucher only, without the app around it. */}
@@ -144,7 +150,15 @@ export default async function VoucherPage({ params, searchParams }: Props) {
         body { background: #fff !important; }
       }`}</style>
 
-      <div className="mx-auto mb-4 flex max-w-2xl justify-end print:hidden">
+      <div className="mx-auto mb-4 flex max-w-2xl items-center justify-between gap-2 print:hidden">
+        <Link
+          href={backHref}
+          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1.5 text-sm font-medium transition-colors"
+          data-test={'villa-voucher-back'}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to booking
+        </Link>
         <PrintButton />
       </div>
 
@@ -154,7 +168,7 @@ export default async function VoucherPage({ params, searchParams }: Props) {
       >
         {voided ? (
           <div
-            className="text-destructive/15 pointer-events-none absolute inset-0 flex items-center justify-center text-8xl font-black tracking-widest select-none"
+            className="text-destructive/15 pointer-events-none absolute inset-0 flex items-center justify-center text-8xl font-bold tracking-widest select-none"
             aria-hidden
           >
             VOID

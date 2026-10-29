@@ -264,8 +264,7 @@ function NewBookingForm(props: {
           <DialogHeader>
             <DialogTitle>New booking</DialogTitle>
             <DialogDescription>
-              For phone, WhatsApp and walk-in guests. It blocks the dates on the
-              booking site straight away.
+              For phone, WhatsApp and walk-in guests.
             </DialogDescription>
           </DialogHeader>
 
@@ -347,7 +346,7 @@ function NewBookingForm(props: {
 
                 {cutoff && !checkInPastCutoff ? (
                   <p className="text-muted-foreground text-xs sm:col-span-2">
-                    The website takes bookings up to{' '}
+                    The website takes bookings only up to the cutoff date i.e.{' '}
                     {formatDateReadable(cutoff)}.
                     {props.canOverrideCutoff
                       ? ' You can record one past that date yourself.'
@@ -509,7 +508,7 @@ function NewBookingForm(props: {
                   control={form.control}
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Booked by</FormLabel>
+                      <FormLabel>Booking Method</FormLabel>
                       <Select
                         value={field.value}
                         onValueChange={field.onChange}
@@ -546,7 +545,7 @@ function NewBookingForm(props: {
                   control={form.control}
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Payment so far</FormLabel>
+                      <FormLabel>Payment Status</FormLabel>
                       <Select
                         value={field.value}
                         onValueChange={field.onChange}
@@ -600,10 +599,6 @@ function NewBookingForm(props: {
                               />
                             }
                           />
-                          <FormDescription>
-                            Becomes a receipt on the booking, and the figure the
-                            guest sees in their confirmation.
-                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -614,7 +609,7 @@ function NewBookingForm(props: {
                       control={form.control}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Received by</FormLabel>
+                          <FormLabel>Payment Method</FormLabel>
                           <Select
                             value={field.value}
                             onValueChange={field.onChange}
@@ -745,7 +740,7 @@ function NewBookingForm(props: {
                   className="text-muted-foreground -mt-3 text-right text-xs"
                   aria-live="polite"
                 >
-                  Pick available dates and guests to confirm.
+                  Select available dates and guests to confirm booking.
                 </p>
               ) : null}
             </form>
@@ -798,7 +793,7 @@ function QuotePanel({ state }: { state: QuoteState }) {
   if (state.status === 'idle') {
     return (
       <p className="text-muted-foreground rounded-lg border border-dashed p-3 text-sm">
-        Pick dates and guests to check availability and see the price.
+        Select dates to check availability and see the price.
       </p>
     );
   }

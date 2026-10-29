@@ -12,7 +12,11 @@ import {
   listBookings,
   listSitePayments,
 } from '~/lib/villa-db/bookings';
-import { type VillaSite, getVillaSite } from '~/lib/villa-db/client';
+import {
+  type VillaSite,
+  getVillaSite,
+  getVillaSiteAsSystem,
+} from '~/lib/villa-db/client';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { getBaseRates } from '~/lib/villa-db/rates';
 
@@ -65,8 +69,17 @@ async function loadContext(
     name: string;
     whatsapp_number: string | null;
   },
+  options: { system?: boolean } = {},
 ): Promise<PropertyContext> {
-  const site = await getVillaSite(p.account_id, p.id);
+  // The scheduled run has no user session, so the RLS-enforced property
+  // lookup refuses it for every villa and no email would ever go out — the
+  // same cause that stopped the scheduled mirror sync. The manual "Send now"
+  // path keeps the RLS lookup: it runs under the member's own session, which
+  // bookings-actions has already checked with requireVillaRole and its own
+  // getVillaSite.
+  const site = options.system
+    ? await getVillaSiteAsSystem(p.account_id, p.id)
+    : await getVillaSite(p.account_id, p.id);
   const [rates, { data: contacts, error }] = await Promise.all([
     getBaseRates(site),
     admin
@@ -238,7 +251,8 @@ async function ledgerFor(
   const admin = getSupabaseServerAdminClient();
 
   const [online, offline, refunds] = await Promise.all([
-    listSitePayments(ctx.site, b.id),
+    // `b` came from this property's own booking list, so it is already scoped.
+    listSitePayments(ctx.site, b.id, { verified: true }),
     admin
       .from('villa_booking_payments')
       .select('amount, voided_at')
@@ -510,7 +524,7 @@ export async function runDueGuestEmails(
     if (!preArrival && !thankYou) continue;
 
     try {
-      const ctx = await loadContext(admin, p);
+      const ctx = await loadContext(admin, p, { system: true });
       if (preArrival) await runPreArrival(admin, ctx, now);
       if (thankYou) await runThankYou(admin, ctx, now);
     } catch (e) {

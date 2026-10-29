@@ -75,64 +75,66 @@ export function BookingsToolbar(props: {
         </nav>
       </div>
 
-      {props.view !== 'blocked' ? <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        {props.properties.length > 1 ? (
-          <Select
-            value={props.propertyId}
-            onValueChange={(id) => {
-              if (id) router.push(href(props.view, id));
-            }}
-          >
-            <SelectTrigger
-              className="w-full sm:w-48"
-              aria-label="Villa"
-              data-test={'villa-bookings-property'}
-            >
-              <SelectValue>
-                {(id: string) =>
-                  props.properties.find((p) => p.id === id)?.name ?? 'Villa'
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {props.properties.map((p) => (
-                <SelectItem
-                  key={p.id}
-                  value={p.id}
-                  data-test={`villa-bookings-property-${p.id}`}
-                >
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : null}
-
-        {/* Plain GET form: works before hydration and keeps the URL shareable. */}
-        <form action={base} method="get" className="flex gap-2" role="search">
-          <input type="hidden" name="view" value={props.view} />
+      {props.view !== 'blocked' ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {props.properties.length > 1 ? (
-            <input type="hidden" name="property" value={props.propertyId} />
+            <Select
+              value={props.propertyId}
+              onValueChange={(id) => {
+                if (id) router.push(href(props.view, id));
+              }}
+            >
+              <SelectTrigger
+                className="w-full sm:w-48"
+                aria-label="Villa"
+                data-test={'villa-bookings-property'}
+              >
+                <SelectValue>
+                  {(id: string) =>
+                    props.properties.find((p) => p.id === id)?.name ?? 'Villa'
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {props.properties.map((p) => (
+                  <SelectItem
+                    key={p.id}
+                    value={p.id}
+                    data-test={`villa-bookings-property-${p.id}`}
+                  >
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : null}
-          <Input
-            name="q"
-            defaultValue={props.q}
-            placeholder="Booking code, name or phone"
-            aria-label="Search bookings"
-            className="w-full sm:w-64"
-            data-test={'villa-bookings-search'}
-          />
-          <Button
-            type="submit"
-            variant="outline"
-            size="icon"
-            aria-label="Search"
-            data-test={'villa-bookings-search-submit'}
-          >
-            <Search className="h-4 w-4" />
-          </Button>
-        </form>
-      </div> : null}
+
+          {/* Plain GET form: works before hydration and keeps the URL shareable. */}
+          <form action={base} method="get" className="flex gap-2" role="search">
+            <input type="hidden" name="view" value={props.view} />
+            {props.properties.length > 1 ? (
+              <input type="hidden" name="property" value={props.propertyId} />
+            ) : null}
+            <Input
+              name="q"
+              defaultValue={props.q}
+              placeholder="Booking code, name or phone"
+              aria-label="Search bookings"
+              className="w-full sm:w-64"
+              data-test={'villa-bookings-search'}
+            />
+            <Button
+              type="submit"
+              variant="outline"
+              size="icon"
+              aria-label="Search"
+              data-test={'villa-bookings-search-submit'}
+            >
+              <Search className="h-4 w-4" />
+            </Button>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }

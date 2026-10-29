@@ -1,62 +1,66 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import {
   Building2,
-  ChevronDown,
+  CalendarRange,
+  ChevronLeft,
+  ChevronRight,
   Download,
+  FileSpreadsheet,
+  FileText,
   Globe,
-  Printer,
   Star,
-  Users,
 } from 'lucide-react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 
+import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@kit/ui/card';
 import { DatePicker } from '@kit/ui/date-picker';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@kit/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@kit/ui/popover';
+import { Skeleton } from '@kit/ui/skeleton';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@kit/ui/select';
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@kit/ui/table';
 import { cn } from '@kit/ui/utils';
 
 import { formatDateReadable } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
-import { channelLabel } from '~/lib/villa/labels';
+import { channelLabel, paymentModeLabel } from '~/lib/villa/labels';
 import {
   type ChannelLine,
+  type GstReport,
   type GuestsReport,
   type Overview,
-  REPORT_PRESETS,
+  type PaymentsReport,
   REPORT_PRESET_LABELS,
+  type ReportExpense,
   type ReportPreset,
   type ReportRange,
   toCsv,
@@ -64,13 +68,67 @@ import {
 
 import { EXPENSE_CATEGORY_LABELS } from '../../villa-expenses/_lib/schemas/villa-expenses.schema';
 
-export type ReportTab = 'overview' | 'channels' | 'guests';
+export type ReportTab =
+  | 'overview'
+  | 'expenses'
+  | 'payments'
+  | 'gst_summary'
+  | 'channels'
+  | 'guests';
 
-const TAB_LABELS: Record<ReportTab, string> = {
-  overview: 'Overview',
-  channels: 'Channels',
-  guests: 'Guests',
-};
+const TAB_GROUPS = [
+  {
+    key: 'financial',
+    label: 'Financial',
+    tabs: [
+      { value: 'overview' as ReportTab, label: 'Revenue & Occupancy' },
+      { value: 'expenses' as ReportTab, label: 'Expenses' },
+      { value: 'payments' as ReportTab, label: 'Payments & Refunds' },
+      { value: 'gst_summary' as ReportTab, label: 'GST Summary' },
+    ],
+  },
+  {
+    key: 'analytics',
+    label: 'Analytics',
+    tabs: [
+      { value: 'channels' as ReportTab, label: 'Booking Channels' },
+      { value: 'guests' as ReportTab, label: 'Guest Directory' },
+    ],
+  },
+] as const;
+
+/**
+ * Recharts is the heaviest thing this screen pulls in, and four of the six
+ * tabs draw no graph, so the charts arrive on demand instead of blocking the
+ * tables and figures. `ssr: false` because a chart measures its container
+ * before it can lay itself out — there is nothing useful to render on the
+ * server. The skeleton matches the chart box, so nothing jumps when it lands.
+ */
+const ChartFallback = () => <Skeleton className="h-full w-full rounded-lg" />;
+
+const RevenueExpensesChart = dynamic(
+  () => import('./report-charts').then((m) => m.RevenueExpensesChart),
+  { ssr: false, loading: ChartFallback },
+);
+
+const OccupancyTrendChart = dynamic(
+  () => import('./report-charts').then((m) => m.OccupancyTrendChart),
+  { ssr: false, loading: ChartFallback },
+);
+
+const DonutChart = dynamic(
+  () => import('./report-charts').then((m) => m.DonutChart),
+  { ssr: false, loading: ChartFallback },
+);
+
+const PILL_PRESETS: ReportPreset[] = [
+  'this_month',
+  'last_month',
+  '3m',
+  '6m',
+  'this_fy',
+  'last_fy',
+];
 
 const monthLabel = (m: string) =>
   new Date(`${m}-15T12:00:00Z`).toLocaleDateString('en-IN', {
@@ -79,17 +137,16 @@ const monthLabel = (m: string) =>
     timeZone: 'UTC',
   });
 
+const fullMonthLabel = (m: string) =>
+  new Date(`${m}-15T12:00:00Z`).toLocaleDateString('en-IN', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+
 const categoryLabel = (c: string) =>
   EXPENSE_CATEGORY_LABELS[c as keyof typeof EXPENSE_CATEGORY_LABELS] ?? c;
 
-/**
- * Shares as whole percentages that add up to exactly 100, by the largest
- * remainder (Hamilton) method: floor every share, then give the leftover
- * points to the categories that lost the most to rounding.
- *
- * The total is summed here rather than taken from the caller — passing one
- * that did not match these rows is the only way the result could miss 100.
- */
 function largestRemainderPct(cats: { category: string; amount: number }[]) {
   const total = cats.reduce((sum, c) => sum + c.amount, 0);
 
@@ -111,7 +168,6 @@ function largestRemainderPct(cats: { category: string; amount: number }[]) {
   return floored;
 }
 
-// Pie chart colors using CSS variable chart tokens
 const PIE_COLORS = [
   'var(--chart-1)',
   'var(--chart-2)',
@@ -120,15 +176,178 @@ const PIE_COLORS = [
   'var(--chart-5)',
 ];
 
+/**
+ * The anchor is put in the document and the blob URL is revoked on a later
+ * tick: Firefox ignores a click on a detached anchor, and revoking in the same
+ * tick as the click cancels the download in Firefox and Safari.
+ */
 function download(filename: string, csv: string) {
-  const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 0);
 }
+
+// ── Shared pagination hook + footer (matches Ooruda Reports) ──────────────────
+
+const REPORTS_PAGE_SIZE = 25;
+
+function usePagedRows<T>(
+  rows: T[],
+  resetKey: unknown = null,
+  pageSize: number = REPORTS_PAGE_SIZE,
+) {
+  const [page, setPage] = useState(1);
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [resetKey, total]);
+
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+  const paged = rows.slice(start, start + pageSize);
+
+  return {
+    page: safePage,
+    setPage,
+    paged,
+    totalPages,
+    total,
+    fromIndex: total === 0 ? 0 : start + 1,
+    toIndex: Math.min(start + pageSize, total),
+  };
+}
+
+function TablePagination(props: {
+  page: number;
+  totalPages: number;
+  total: number;
+  fromIndex: number;
+  toIndex: number;
+  onPageChange: (p: number) => void;
+  label?: string;
+  testPrefix: string;
+}) {
+  const {
+    page,
+    totalPages,
+    total,
+    fromIndex,
+    toIndex,
+    onPageChange,
+    label = 'rows',
+    testPrefix,
+  } = props;
+
+  const btn =
+    'border-input bg-background hover:bg-accent inline-flex h-8 items-center gap-1 rounded-md border px-3 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50';
+
+  return (
+    <div className="mt-3 flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between print:hidden">
+      <p className="text-muted-foreground text-sm">
+        {total === 0 ? (
+          <>No {label}</>
+        ) : (
+          <>
+            Showing{' '}
+            <span className="text-foreground font-medium tabular-nums">
+              {fromIndex}–{toIndex}
+            </span>{' '}
+            of{' '}
+            <span className="text-foreground font-medium tabular-nums">
+              {total}
+            </span>{' '}
+            {label}
+          </>
+        )}
+      </p>
+
+      {totalPages > 1 ? (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => onPageChange(page - 1)}
+            data-test={`${testPrefix}-pagination-prev`}
+            className={btn}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </button>
+          <span className="text-muted-foreground px-3 text-sm tabular-nums">
+            {page} / {totalPages}
+          </span>
+          <button
+            type="button"
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(page + 1)}
+            data-test={`${testPrefix}-pagination-next`}
+            className={btn}
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ── Shared KPI tile (matches Ooruda Reports KpiTile) ──────────────────────────
+
+const HIGHLIGHT_CLASS: Record<string, string> = {
+  green: 'text-success',
+  amber: 'text-warning',
+  red: 'text-destructive',
+  blue: 'text-info',
+};
+
+function KpiTile(props: {
+  label: string;
+  value: string;
+  sub?: string;
+  highlight?: 'green' | 'amber' | 'red' | 'blue';
+  test?: string;
+}) {
+  return (
+    <Card
+      className="bg-card rounded-2xl"
+      data-test={props.test ? `villa-report-${props.test}` : undefined}
+    >
+      <CardContent className="p-5">
+        <div className="flex min-w-0 flex-col gap-1">
+          <p className="text-muted-foreground truncate text-xs font-medium tracking-wide uppercase">
+            {props.label}
+          </p>
+          <p
+            className={cn(
+              'text-2xl leading-none font-bold tabular-nums',
+              props.highlight ? HIGHLIGHT_CLASS[props.highlight] : '',
+            )}
+          >
+            {props.value}
+          </p>
+          {props.sub ? (
+            <p className="text-muted-foreground mt-0.5 text-xs">{props.sub}</p>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Main View ─────────────────────────────────────────────────────────────────
 
 export function ReportsView(props: {
   account: string;
@@ -139,6 +358,9 @@ export function ReportsView(props: {
   propertyId: string | null;
   syncedAt: string | null;
   overview: Overview;
+  expenses?: ReportExpense[];
+  payments?: PaymentsReport | null;
+  gst?: GstReport | null;
   channels: ChannelLine[];
   guests: GuestsReport | null;
 }) {
@@ -163,14 +385,106 @@ export function ReportsView(props: {
     return `${base}?${q.toString()}`;
   };
 
+  const [customOpen, setCustomOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState(props.range.from);
   const [customTo, setCustomTo] = useState(props.range.to);
+
+  useEffect(() => {
+    setCustomFrom(props.range.from);
+    setCustomTo(props.range.to);
+  }, [props.range.from, props.range.to]);
+
+  const invalidCustom =
+    Boolean(customFrom) && Boolean(customTo) && customFrom > customTo;
 
   const period = `${formatDateReadable(props.range.from)} – ${formatDateReadable(props.range.to)}`;
   const fileStem = `${props.propertyName.replace(/[^\w-]+/g, '-')}-${props.range.from}-to-${props.range.to}`;
 
+  const activeGroup =
+    TAB_GROUPS.find((g) => g.tabs.some((t) => t.value === props.tab)) ??
+    TAB_GROUPS[0];
+
   function exportCsv() {
     const o = props.overview;
+
+    if (props.tab === 'expenses') {
+      const expRows = props.expenses ?? [];
+      download(
+        `${fileStem}-expenses.csv`,
+        toCsv([
+          [
+            'Date',
+            'Category',
+            'Description',
+            'Vendor',
+            'Mode',
+            'Invoice No',
+            'Amount (INR)',
+            'GST Paid (INR)',
+          ],
+          ...expRows.map((e) => [
+            e.spent_on,
+            categoryLabel(e.category),
+            e.description ?? '',
+            e.vendor ?? '',
+            paymentModeLabel(e.mode ?? 'other'),
+            e.invoice_no ?? '',
+            e.amount,
+            e.gst_amount,
+          ]),
+        ]),
+      );
+      return;
+    }
+
+    if (props.tab === 'payments' && props.payments) {
+      download(
+        `${fileStem}-payments.csv`,
+        toCsv([
+          ['Date', 'Booking', 'Payer', 'Mode', 'Reference', 'Amount (INR)'],
+          ...props.payments.rows.map((p) => [
+            p.paid_on,
+            p.booking_code ?? '',
+            p.payer_name ?? '',
+            paymentModeLabel(p.mode),
+            p.reference ?? '',
+            p.amount,
+          ]),
+        ]),
+      );
+      return;
+    }
+
+    if (props.tab === 'gst_summary' && props.gst) {
+      download(
+        `${fileStem}-gst-summary.csv`,
+        toCsv([
+          [
+            'Month',
+            'Stays',
+            'Nights',
+            'Taxable Revenue (INR)',
+            'Output GST (INR)',
+            'Total with GST (INR)',
+            'Expenses (INR)',
+            'Input GST (INR)',
+            'Net GST Payable (INR)',
+          ],
+          ...props.gst.months.map((m) => [
+            m.month,
+            m.stays,
+            m.nights,
+            m.taxableRevenue,
+            m.outputGst,
+            m.totalWithGst,
+            m.expenseAmount,
+            m.inputGst,
+            m.netGstPayable,
+          ]),
+        ]),
+      );
+      return;
+    }
 
     if (props.tab === 'channels') {
       download(
@@ -190,8 +504,9 @@ export function ReportsView(props: {
     }
 
     if (props.tab === 'guests' && props.guests) {
+      const list = props.guests.allGuests ?? props.guests.top;
       download(
-        `${fileStem}-returning-guests.csv`,
+        `${fileStem}-guests.csv`,
         toCsv([
           [
             'Guest',
@@ -201,7 +516,7 @@ export function ReportsView(props: {
             'Revenue before GST to date (INR)',
             'Last stay',
           ],
-          ...props.guests.top.map((g) => [
+          ...list.map((g) => [
             g.name,
             g.phone,
             g.stays,
@@ -248,178 +563,131 @@ export function ReportsView(props: {
     );
   }
 
-  const syncLabel = props.syncedAt
-    ? (() => {
-        const d = new Date(props.syncedAt);
-        return d.toLocaleString('en-IN', {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-          timeZone: 'Asia/Kolkata',
-        });
-      })()
-    : null;
-
   return (
-    <div className="flex max-w-6xl flex-col gap-5 print:max-w-none">
+    <div className="flex flex-col gap-6 print:max-w-none">
       <style>{`@media print {
         [data-sidebar="sidebar"], [data-slot="sidebar-gap"], header { display: none !important; }
         body { background: #fff !important; }
       }`}</style>
 
-      {/* ── Controls bar ─────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between print:hidden">
-        {/* Period selector + custom pickers */}
-        <div className="flex flex-wrap items-end gap-2">
-          <Select
-            value={props.range.preset}
-            onValueChange={(v) => {
-              if (v && v !== 'custom')
-                router.push(href({ range: v as ReportPreset }));
-              if (v === 'custom')
+      {/* ── Print-only Header ── */}
+      <div className="hidden border-b pb-3 print:block">
+        <h1 className="text-xl font-bold">{props.propertyName}</h1>
+        <p className="text-muted-foreground text-sm font-medium">{period}</p>
+      </div>
+
+      {/* ── Date Range Picker (matches Ooruda Reports DateRangePicker) ── */}
+      <div
+        className="flex flex-wrap items-center gap-2 print:hidden"
+        data-test={'villa-reports-period'}
+      >
+        <div
+          className="flex overflow-x-auto rounded-lg border text-sm"
+          data-test={'villa-reports-range'}
+        >
+          {PILL_PRESETS.map((p) => {
+            const active = props.range.preset === p;
+            return (
+              <Link
+                key={p}
+                href={href({ range: p })}
+                scroll={false}
+                data-test={`villa-reports-range-${p}`}
+                className={cn(
+                  'shrink-0 px-3 py-1.5 transition-colors first:rounded-l-lg last:rounded-r-lg',
+                  active
+                    ? 'bg-primary text-primary-foreground font-medium'
+                    : 'hover:bg-muted text-muted-foreground',
+                )}
+              >
+                {REPORT_PRESET_LABELS[p]}
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Custom date range popover */}
+        <Popover open={customOpen} onOpenChange={setCustomOpen}>
+          <PopoverTrigger
+            data-test={'villa-reports-range-custom'}
+            className={cn(
+              'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors',
+              props.range.preset === 'custom'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-input bg-background hover:bg-accent hover:text-accent-foreground',
+            )}
+          >
+            <CalendarRange className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden sm:inline">
+              {props.range.preset === 'custom' ? period : 'Custom range'}
+            </span>
+            <span className="sm:hidden">
+              {props.range.preset === 'custom' ? period : 'Custom'}
+            </span>
+          </PopoverTrigger>
+
+          <PopoverContent className="w-80 p-4" align="start">
+            <p className="mb-3 text-xs font-semibold tracking-wide uppercase">
+              Select date range
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                  From
+                </label>
+                <DatePicker
+                  value={customFrom}
+                  onChange={(v) => {
+                    if (!v) return;
+                    setCustomFrom(v);
+                    if (customTo && v > customTo) setCustomTo(v);
+                  }}
+                  max={customTo || undefined}
+                  data-test={'villa-reports-from'}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                  To
+                </label>
+                <DatePicker
+                  value={customTo}
+                  onChange={(v) => v && setCustomTo(v)}
+                  min={customFrom || undefined}
+                  data-test={'villa-reports-to'}
+                />
+              </div>
+            </div>
+
+            {invalidCustom ? (
+              <p className="text-destructive mt-2 text-xs">
+                &ldquo;From&rdquo; date must be before &ldquo;To&rdquo; date.
+              </p>
+            ) : customFrom && customTo ? (
+              <p className="text-muted-foreground mt-2 text-xs">
+                Range: {formatDateReadable(customFrom)} –{' '}
+                {formatDateReadable(customTo)}
+              </p>
+            ) : null}
+
+            <Button
+              size="sm"
+              className="mt-3 w-full"
+              disabled={invalidCustom || !customFrom || !customTo}
+              onClick={() => {
+                setCustomOpen(false);
                 router.push(
                   href({ range: 'custom', from: customFrom, to: customTo }),
                 );
-            }}
-          >
-            <SelectTrigger
-              className="h-9 w-48"
-              aria-label="Period"
-              data-test={'villa-reports-range'}
+              }}
+              data-test={'villa-reports-apply'}
             >
-              <SelectValue>
-                {(v: string) => REPORT_PRESET_LABELS[v as ReportPreset] ?? v}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {REPORT_PRESETS.map((p) => (
-                <SelectItem
-                  key={p}
-                  value={p}
-                  data-test={`villa-reports-range-${p}`}
-                >
-                  {REPORT_PRESET_LABELS[p]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {props.range.preset === 'custom' ? (
-            <div className="flex flex-wrap items-end gap-2">
-              <DatePicker
-                value={customFrom}
-                onChange={(v) => v && setCustomFrom(v)}
-                max={customTo}
-                data-test={'villa-reports-from'}
-              />
-              <DatePicker
-                value={customTo}
-                onChange={(v) => v && setCustomTo(v)}
-                min={customFrom}
-                data-test={'villa-reports-to'}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                nativeButton={false}
-                render={
-                  <Link
-                    href={href({
-                      range: 'custom',
-                      from: customFrom,
-                      to: customTo,
-                    })}
-                  />
-                }
-                data-test={'villa-reports-apply'}
-              >
-                Apply
-              </Button>
-            </div>
-          ) : null}
-        </div>
-
-        {/* Export + print */}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="outline"
-                size="sm"
-                data-test={'villa-reports-export'}
-              >
-                <Download className="mr-1.5 h-3.5 w-3.5" />
-                Export
-                <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={exportCsv}
-              data-test={'villa-reports-csv'}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Download CSV
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => window.print()}
-              data-test={'villa-reports-print'}
-            >
-              <Printer className="mr-2 h-4 w-4" />
-              Print / Save as PDF
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* ── Tabs ─────────────────────────────────────────────── */}
-      <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0 print:hidden">
-        <nav
-          aria-label="Report"
-          className="bg-muted inline-flex w-max min-w-max rounded-lg p-1"
-        >
-          {(Object.keys(TAB_LABELS) as ReportTab[]).map((t) => (
-            <Link
-              key={t}
-              href={href({ tab: t })}
-              scroll={false}
-              aria-current={props.tab === t ? 'page' : undefined}
-              data-test={`villa-reports-tab-${t}`}
-              className={cn(
-                'rounded-md px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-colors',
-                props.tab === t
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {TAB_LABELS[t]}
-            </Link>
-          ))}
-        </nav>
-      </div>
-
-      {/* ── Period subtitle ──────────────────────────────────── */}
-      <div
-        className="flex flex-wrap items-center gap-x-3 gap-y-1"
-        data-test={'villa-reports-period'}
-      >
-        <span className="text-muted-foreground text-sm font-medium">
-          {period}
-        </span>
-        {props.range.to > props.today ? (
-          <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs">
-            includes future bookings
-          </span>
-        ) : null}
-        {syncLabel ? (
-          <span className="text-muted-foreground text-xs">
-            · synced {syncLabel}
-          </span>
-        ) : (
-          <span className="text-muted-foreground text-xs">
-            · loading bookings from site…
-          </span>
-        )}
+              Apply range
+            </Button>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {props.range.invalid ? (
@@ -433,8 +701,125 @@ export function ReportsView(props: {
         </p>
       ) : null}
 
-      {/* ── Tab content ──────────────────────────────────────── */}
+      {/* ── Two-level Tab Hierarchy + Export (matches Ooruda ReportsTabs) ── */}
+      <div className="print:hidden">
+        {/* Level 1: Report Group segmented bar + Download menu */}
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="bg-muted flex w-full flex-wrap gap-1 rounded-lg p-1 sm:w-auto">
+            {TAB_GROUPS.map((group) => {
+              const isActiveGroup = group.key === activeGroup.key;
+
+              return (
+                <Link
+                  key={group.key}
+                  href={href({ tab: group.tabs[0].value })}
+                  scroll={false}
+                  data-test={`villa-reports-group-${group.key}`}
+                  className={cn(
+                    'flex-1 rounded-md px-3 py-1.5 text-center text-sm font-medium whitespace-nowrap transition-colors sm:flex-none',
+                    isActiveGroup
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {group.label}
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="flex shrink-0 justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                data-test={'villa-reports-export'}
+                className="border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-8 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium shadow-xs transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Download</span>
+                <span className="sm:hidden">Export</span>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent align="end" className="min-w-[240px]">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="text-muted-foreground text-xs font-medium">
+                    Download report
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem
+                    onClick={exportCsv}
+                    data-test={'villa-reports-csv'}
+                    className="flex items-start gap-3 py-2.5"
+                  >
+                    <FileSpreadsheet className="text-success mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="font-medium">Download CSV</span>
+                      <span className="text-muted-foreground text-xs">
+                        Current tab · spreadsheet format
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    onClick={() => window.print()}
+                    data-test={'villa-reports-print'}
+                    className="flex items-start gap-3 py-2.5"
+                  >
+                    <FileText className="text-info mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="font-medium">Download / Print PDF</span>
+                      <span className="text-muted-foreground text-xs">
+                        Current tab · printable layout
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Level 2: Connected underline tablist */}
+        <div
+          role="tablist"
+          className="border-border flex flex-wrap items-center gap-x-1 border-b"
+        >
+          {activeGroup.tabs.map((t) => {
+            const isActive = t.value === props.tab;
+
+            return (
+              <Link
+                key={t.value}
+                href={href({ tab: t.value })}
+                scroll={false}
+                role="tab"
+                aria-selected={isActive}
+                data-test={`villa-reports-tab-${t.value}`}
+                className={cn(
+                  '-mb-px border-b-2 px-3 pt-1 pb-2 text-sm font-medium whitespace-nowrap transition-colors',
+                  isActive
+                    ? 'border-foreground text-foreground'
+                    : 'text-muted-foreground hover:border-border hover:text-foreground border-transparent',
+                )}
+              >
+                {t.label}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Active Tab Content ───────────────────────────────── */}
       {props.tab === 'overview' ? <OverviewTab o={props.overview} /> : null}
+      {props.tab === 'expenses' ? (
+        <ExpensesTab o={props.overview} rows={props.expenses ?? []} />
+      ) : null}
+      {props.tab === 'payments' && props.payments ? (
+        <PaymentsTab p={props.payments} />
+      ) : null}
+      {props.tab === 'gst_summary' && props.gst ? (
+        <GstSummaryTab g={props.gst} />
+      ) : null}
       {props.tab === 'channels' ? <ChannelsTab lines={props.channels} /> : null}
       {props.tab === 'guests' && props.guests ? (
         <GuestsTab g={props.guests} />
@@ -443,355 +828,242 @@ export function ReportsView(props: {
   );
 }
 
-// ── Hero tile (large number) ─────────────────────────────────────────────────
-
-function HeroTile(props: {
-  label: string;
-  value: string;
-  hint?: string;
-  sub?: string;
-  trend?: 'up' | 'down' | 'neutral';
-  test: string;
-  accent?: string;
-}) {
-  return (
-    <Card
-      className={cn('bg-card', props.accent)}
-      data-test={`villa-report-${props.test}`}
-    >
-      <CardContent className="flex flex-col gap-1.5 px-4 py-4 sm:px-5 sm:py-5">
-        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-          {props.label}
-        </span>
-        <span className="text-2xl font-bold tabular-nums sm:text-3xl">
-          {props.value}
-        </span>
-        {props.hint ? (
-          <span className="text-muted-foreground text-xs">{props.hint}</span>
-        ) : null}
-        {props.sub ? (
-          <span className="text-muted-foreground text-xs">{props.sub}</span>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Small stat tile ───────────────────────────────────────────────────────────
-
-function StatTile(props: {
-  label: string;
-  value: string;
-  hint?: string;
-  test: string;
-}) {
-  return (
-    <Card className="bg-card" data-test={`villa-report-${props.test}`}>
-      <CardContent className="flex flex-col gap-1 px-4 py-3 sm:px-4 sm:py-3.5">
-        <span className="text-muted-foreground text-xs">{props.label}</span>
-        <span className="text-lg font-semibold tabular-nums">
-          {props.value}
-        </span>
-        {props.hint ? (
-          <span className="text-muted-foreground text-xs">{props.hint}</span>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Overview tab ─────────────────────────────────────────────────────────────
+// ── 1. Revenue & Occupancy Tab (Overview) ────────────────────────────────────
 
 function OverviewTab({ o }: { o: Overview }) {
   const hasMonths = o.months.length > 0;
+  const { page, setPage, paged, totalPages, total, fromIndex, toIndex } =
+    usePagedRows(o.months, o.months.length);
 
   return (
-    <>
-      {/* Hero KPIs — what owners scan for every time */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <HeroTile
-          test="revenue"
-          label="Revenue"
-          value={formatINR(o.revenue)}
-          hint={`Before GST · ${o.stays} stay${o.stays === 1 ? '' : 's'}${o.events ? `, ${o.events} event${o.events === 1 ? '' : 's'}` : ''}`}
-        />
-        <HeroTile
-          test="occupancy"
-          label="Occupancy"
-          value={`${o.occupancyPct}%`}
-          hint={`${o.bookedNights} of ${o.days} nights booked`}
-        />
-        <HeroTile
-          test="net"
-          label="Net income"
-          value={formatINR(o.net)}
-          hint="Revenue less expenses, before tax"
-          accent={o.net < 0 ? 'border-destructive/30' : undefined}
-        />
-      </div>
-
-      {/* Secondary stats */}
+    <div className="flex flex-col gap-6">
+      {/* Primary KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
-          test="adr"
-          label="Avg. per booked night"
-          value={formatINR(o.averageNightly)}
-          hint="ADR"
+        <KpiTile
+          test="revenue"
+          label="Revenue (Before GST)"
+          value={formatINR(o.revenue)}
+          highlight="green"
+          sub={`${o.stays} stay${o.stays === 1 ? '' : 's'}${o.events ? `, ${o.events} event${o.events === 1 ? '' : 's'}` : ''}`}
         />
-        <StatTile
-          test="revpar"
-          label="Revenue per night"
-          value={formatINR(o.revenuePerNight)}
-          hint="RevPAR"
+        <KpiTile
+          test="occupancy"
+          label="Occupancy Rate"
+          value={`${o.occupancyPct}%`}
+          highlight={
+            o.occupancyPct >= 60
+              ? 'green'
+              : o.occupancyPct >= 30
+                ? 'amber'
+                : undefined
+          }
+          sub={`${o.bookedNights} of ${o.days} nights booked`}
         />
-        <StatTile
+        <KpiTile
           test="expenses"
-          label="Expenses"
+          label="Total Expenses"
           value={formatINR(o.expenses)}
-          hint={`GST on expenses: ${formatINR(o.expensesGst)}`}
+          highlight={o.expenses > 0 ? 'amber' : undefined}
+          sub={`GST on expenses: ${formatINR(o.expensesGst)}`}
         />
-        <StatTile
-          test="gst"
-          label="GST collected"
-          value={formatINR(o.gstCollected)}
-          hint="From guests on stays"
+        <KpiTile
+          test="net"
+          label="Net Operating Income"
+          value={formatINR(o.net)}
+          highlight={o.net >= 0 ? 'green' : 'red'}
+          sub="Revenue less expenses, before tax"
         />
       </div>
 
-      {/* Revenue + expenses chart */}
-      <Card className="bg-card">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">
-            Revenue vs expenses by month
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {hasMonths ? (
-            <div className="h-72" data-test={'villa-report-chart'}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={o.months.map((m) => ({
-                    ...m,
-                    label: monthLabel(m.month),
-                  }))}
-                  margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
-                  barGap={4}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="var(--border)"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    width={60}
-                    tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v: number) =>
-                      v >= 100000
-                        ? `${Math.round(v / 1000) / 100}L`
-                        : v >= 1000
-                          ? `${Math.round(v / 100) / 10}k`
-                          : String(v)
-                    }
-                  />
-                  <Tooltip
-                    formatter={(v, name) => [
-                      formatINR(Number(v)),
-                      name === 'revenue'
-                        ? 'Revenue'
-                        : name === 'expenses'
-                          ? 'Expenses'
-                          : String(name),
-                    ]}
-                    contentStyle={{
-                      background: 'var(--popover)',
-                      color: 'var(--popover-foreground)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 8,
-                      fontSize: 12,
-                    }}
-                    cursor={{ fill: 'var(--muted)' }}
-                  />
-                  <Legend
-                    wrapperStyle={{ fontSize: 12 }}
-                    formatter={(value) =>
-                      value === 'revenue'
-                        ? 'Revenue'
-                        : value === 'expenses'
-                          ? 'Expenses'
-                          : value
-                    }
-                  />
-                  <Bar
-                    isAnimationActive={false}
-                    dataKey="revenue"
-                    name="revenue"
-                    fill="var(--chart-2)"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={48}
-                  />
-                  <Bar
-                    isAnimationActive={false}
-                    dataKey="expenses"
-                    name="expenses"
-                    fill="var(--chart-4)"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={48}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : null}
+      {/* Secondary Rate & Tax KPIs */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <KpiTile
+          test="adr"
+          label="Avg. Daily Rate (ADR)"
+          value={formatINR(o.averageNightly)}
+          sub="Average revenue per booked night"
+        />
+        <KpiTile
+          test="revpar"
+          label="Revenue Per Available Night"
+          value={formatINR(o.revenuePerNight)}
+          sub="RevPAR across all nights in period"
+        />
+        <KpiTile
+          test="gst"
+          label="GST Collected"
+          value={formatINR(o.gstCollected)}
+          sub="Output GST on stays in period"
+        />
+      </div>
 
-          {/* Occupancy trend line — only meaningful with 2+ months */}
-          {hasMonths && o.months.length >= 2 ? (
-            <div className="mt-4 h-28" data-test={'villa-report-occ-chart'}>
-              <p className="text-muted-foreground mb-1 text-xs font-medium">
-                Occupancy % by month
-              </p>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
+      {/* Charts row */}
+      <div
+        className={cn(
+          'grid grid-cols-1 gap-4',
+          o.months.length >= 2 ? 'lg:grid-cols-3' : '',
+        )}
+      >
+        <Card className={cn(o.months.length >= 2 ? 'lg:col-span-2' : '')}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              Monthly Revenue vs. Expenses
+            </CardTitle>
+            <CardDescription>
+              Taxable stay revenue compared against operating expenses per month
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {hasMonths ? (
+              <div className="h-[260px]" data-test={'villa-report-chart'}>
+                <RevenueExpensesChart
                   data={o.months.map((m) => ({
                     label: monthLabel(m.month),
+                    fullPeriod: fullMonthLabel(m.month),
+                    revenue: m.revenue,
+                    expenses: m.expenses,
+                  }))}
+                />
+              </div>
+            ) : (
+              <div className="flex h-[260px] items-center justify-center">
+                <p className="text-muted-foreground text-sm">
+                  No monthly data for this period.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {hasMonths && o.months.length >= 2 ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Occupancy Trend</CardTitle>
+              <CardDescription>
+                Percentage of available nights sold each month
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[260px]" data-test={'villa-report-occ-chart'}>
+                <OccupancyTrendChart
+                  data={o.months.map((m) => ({
+                    label: monthLabel(m.month),
+                    fullPeriod: fullMonthLabel(m.month),
                     occupancy: m.occupancyPct,
                   }))}
-                  margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="var(--border)"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    width={36}
-                    tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v: number) => `${v}%`}
-                    domain={[0, 100]}
-                  />
-                  <Tooltip
-                    formatter={(v) => [`${v}%`, 'Occupancy']}
-                    contentStyle={{
-                      background: 'var(--popover)',
-                      color: 'var(--popover-foreground)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 8,
-                      fontSize: 12,
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="occupancy"
-                    stroke="var(--chart-1)"
-                    strokeWidth={2}
-                    dot={{ r: 3, fill: 'var(--chart-1)', strokeWidth: 0 }}
-                    isAnimationActive={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          ) : null}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
 
-          {/* Month breakdown table */}
-          <div className="mt-5 overflow-x-auto">
-            <table
-              className="w-full min-w-[560px] text-sm"
-              data-test={'villa-report-months'}
-            >
-              <thead>
-                <tr className="text-muted-foreground border-b text-left text-xs">
-                  <th className="py-2 pr-4 font-medium">Month</th>
-                  <th className="py-2 pr-4 text-right font-medium">Nights</th>
-                  <th className="py-2 pr-4 text-right font-medium">Occ %</th>
-                  <th className="py-2 pr-4 text-right font-medium">Revenue</th>
-                  <th className="py-2 pr-4 text-right font-medium">Expenses</th>
-                  <th className="py-2 text-right font-medium">Net</th>
-                </tr>
-              </thead>
-              <tbody className="tabular-nums">
-                {o.months.map((m) => (
-                  <tr key={m.month} className="border-b last:border-b-0">
-                    <td className="py-2 pr-4 font-medium">
+      {/* Month breakdown table */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Monthly Performance</CardTitle>
+          <CardDescription>
+            Period-wise occupancy, revenue before GST, operating expenses, and
+            net income
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-xl border">
+            <Table data-test={'villa-report-months'}>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Month</TableHead>
+                  <TableHead className="text-right">Nights</TableHead>
+                  <TableHead className="text-right">Occupancy</TableHead>
+                  <TableHead className="text-right">Revenue (₹)</TableHead>
+                  <TableHead className="text-right">Expenses (₹)</TableHead>
+                  <TableHead className="text-right">Net Income (₹)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paged.map((m) => (
+                  <TableRow key={m.month}>
+                    <TableCell className="font-medium">
                       {monthLabel(m.month)}
-                    </td>
-                    <td className="py-2 pr-4 text-right">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
                       {m.nights}
                       <span className="text-muted-foreground">
                         /{m.available}
                       </span>
-                    </td>
-                    <td className="py-2 pr-4 text-right">{m.occupancyPct}%</td>
-                    <td className="py-2 pr-4 text-right">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {m.occupancyPct}%
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
                       {formatINR(m.revenue)}
-                    </td>
-                    <td className="py-2 pr-4 text-right">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
                       {m.expenses > 0 ? formatINR(m.expenses) : '₹0'}
-                    </td>
-                    <td
+                    </TableCell>
+                    <TableCell
                       className={cn(
-                        'py-2 text-right font-medium',
+                        'text-right font-semibold tabular-nums',
                         m.net < 0 ? 'text-destructive' : 'text-foreground',
                       )}
                     >
                       {formatINR(m.net)}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
+              </TableBody>
               {o.months.length > 1 ? (
-                <tfoot>
-                  <tr className="border-t-2">
-                    <td className="py-2 pr-4 text-xs font-semibold tracking-wide uppercase">
-                      Total
-                    </td>
-                    <td className="py-2 pr-4 text-right text-xs font-semibold">
+                <TableFooter>
+                  <TableRow className="bg-muted/30 font-semibold">
+                    <TableCell>Total</TableCell>
+                    <TableCell className="text-right tabular-nums">
                       {o.bookedNights}
                       <span className="text-muted-foreground">/{o.days}</span>
-                    </td>
-                    <td className="py-2 pr-4 text-right text-xs font-semibold">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
                       {o.occupancyPct}%
-                    </td>
-                    <td className="py-2 pr-4 text-right text-xs font-semibold">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
                       {formatINR(o.revenue)}
-                    </td>
-                    <td className="py-2 pr-4 text-right text-xs font-semibold">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
                       {o.expenses > 0 ? formatINR(o.expenses) : '₹0'}
-                    </td>
-                    <td
+                    </TableCell>
+                    <TableCell
                       className={cn(
-                        'py-2 text-right text-xs font-semibold',
+                        'text-right tabular-nums',
                         o.net < 0 ? 'text-destructive' : 'text-foreground',
                       )}
                     >
                       {formatINR(o.net)}
-                    </td>
-                  </tr>
-                </tfoot>
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
               ) : null}
-            </table>
+            </Table>
           </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            fromIndex={fromIndex}
+            toIndex={toIndex}
+            onPageChange={setPage}
+            label="months"
+            testPrefix="overview-months"
+          />
         </CardContent>
       </Card>
 
-      {/* Expense breakdown */}
+      {/* Expense category breakdown if expenses exist */}
       {o.expensesByCategory.length > 0 ? (
-        <Card className="bg-card">
+        <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Where the money went</CardTitle>
+            <CardTitle className="text-base">Expenses by Category</CardTitle>
+            <CardDescription>
+              Share of operating expenses across categories in the selected
+              period
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ul
@@ -802,15 +1074,19 @@ function OverviewTab({ o }: { o: Overview }) {
                 ({ category, amount, pct }) => (
                   <li key={category} className="flex flex-col gap-1">
                     <div className="flex items-center justify-between gap-3 text-sm">
-                      <span>{categoryLabel(category)}</span>
+                      <span className="font-medium">
+                        {categoryLabel(category)}
+                      </span>
                       <span className="flex items-center gap-2 tabular-nums">
                         <span className="text-muted-foreground text-xs">
                           {pct}%
                         </span>
-                        <span className="font-medium">{formatINR(amount)}</span>
+                        <span className="font-semibold">
+                          {formatINR(amount)}
+                        </span>
                       </span>
                     </div>
-                    <div className="bg-muted h-1.5 overflow-hidden rounded-full">
+                    <div className="bg-muted h-2 overflow-hidden rounded-full">
                       <div
                         className="bg-chart-3 h-full rounded-full transition-all"
                         style={{ width: `${pct}%` }}
@@ -823,11 +1099,592 @@ function OverviewTab({ o }: { o: Overview }) {
           </CardContent>
         </Card>
       ) : null}
-    </>
+    </div>
   );
 }
 
-// ── Channels tab ─────────────────────────────────────────────────────────────
+// ── 2. Expenses Tab ──────────────────────────────────────────────────────────
+
+function ExpensesTab({ o, rows }: { o: Overview; rows: ReportExpense[] }) {
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  const filtered =
+    selectedCategory === 'all'
+      ? rows
+      : rows.filter((r) => r.category === selectedCategory);
+
+  const { page, setPage, paged, totalPages, total, fromIndex, toIndex } =
+    usePagedRows(filtered, selectedCategory);
+
+  const topCat = o.expensesByCategory[0];
+  const categoriesWithPct = largestRemainderPct(o.expensesByCategory);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiTile
+          label="Total Expenses"
+          value={formatINR(o.expenses)}
+          highlight={o.expenses > 0 ? 'amber' : undefined}
+          sub={`${rows.length} expense${rows.length === 1 ? '' : 's'} recorded`}
+        />
+        <KpiTile
+          label="GST Paid on Expenses"
+          value={formatINR(o.expensesGst)}
+          sub="Input GST included in expenses"
+        />
+        <KpiTile
+          label="Expenses Excl. GST"
+          value={formatINR(Math.max(0, o.expenses - o.expensesGst))}
+          sub="Net operating cost before tax"
+        />
+        <KpiTile
+          label="Top Category"
+          value={topCat ? categoryLabel(topCat.category) : '-'}
+          sub={topCat ? formatINR(topCat.amount) : 'No expenses in period'}
+        />
+      </div>
+
+      {categoriesWithPct.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Spend by Category</CardTitle>
+              <CardDescription>
+                Click a category below to filter the expense ledger
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[240px]">
+                <DonutChart
+                  tooltipLabel="Spent"
+                  slices={categoriesWithPct.map((c) => ({
+                    name: categoryLabel(c.category),
+                    value: c.amount,
+                    key: c.category,
+                  }))}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Category Share</CardTitle>
+              <CardDescription>
+                Breakdown across {categoriesWithPct.length}{' '}
+                {categoriesWithPct.length === 1 ? 'category' : 'categories'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="flex flex-col gap-3">
+                {categoriesWithPct.map(({ category, amount, pct }, i) => (
+                  <li key={category} className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="flex items-center gap-2 font-medium">
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-full"
+                          style={{
+                            background: PIE_COLORS[i % PIE_COLORS.length],
+                          }}
+                        />
+                        {categoryLabel(category)}
+                      </span>
+                      <span className="flex items-center gap-2 tabular-nums">
+                        <span className="text-muted-foreground text-xs">
+                          {pct}%
+                        </span>
+                        <span className="font-semibold">
+                          {formatINR(amount)}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="bg-muted h-1.5 overflow-hidden rounded-full">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${pct}%`,
+                          background: PIE_COLORS[i % PIE_COLORS.length],
+                        }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {/* Filter pills */}
+      {categoriesWithPct.length > 1 ? (
+        <div className="flex flex-wrap gap-2 print:hidden">
+          <button
+            type="button"
+            onClick={() => setSelectedCategory('all')}
+            className={cn(
+              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+              selectedCategory === 'all'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground hover:border-foreground/30',
+            )}
+          >
+            All Categories ({rows.length})
+          </button>
+          {categoriesWithPct.map((c) => (
+            <button
+              key={c.category}
+              type="button"
+              onClick={() => setSelectedCategory(c.category)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                selectedCategory === c.category
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground hover:border-foreground/30',
+              )}
+            >
+              {categoryLabel(c.category)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Expense ledger table */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Expense Ledger</CardTitle>
+          <CardDescription>
+            {filtered.length} expense{filtered.length === 1 ? '' : 's'} in the
+            selected period
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {filtered.length === 0 ? (
+            <p className="text-muted-foreground py-12 text-center text-sm">
+              No expenses recorded in this period.
+            </p>
+          ) : (
+            <>
+              <div className="overflow-x-auto rounded-xl border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead>Mode</TableHead>
+                      <TableHead className="text-right">GST (₹)</TableHead>
+                      <TableHead className="text-right">Amount (₹)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paged.map((e, idx) => (
+                      <TableRow key={`${e.spent_on}-${e.category}-${idx}`}>
+                        <TableCell className="whitespace-nowrap tabular-nums">
+                          {formatDateReadable(e.spent_on)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {categoryLabel(e.category)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {e.description ?? '-'}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {e.vendor || '-'}
+                        </TableCell>
+                        <TableCell>
+                          {paymentModeLabel(e.mode ?? 'other')}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {e.gst_amount > 0 ? formatINR(e.gst_amount) : '₹0'}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums">
+                          {formatINR(e.amount)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                total={total}
+                fromIndex={fromIndex}
+                toIndex={toIndex}
+                onPageChange={setPage}
+                label="expenses"
+                testPrefix="expenses"
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ── 3. Payments & Refunds Tab ────────────────────────────────────────────────
+
+function PaymentsTab({ p }: { p: PaymentsReport }) {
+  const [selectedMode, setSelectedMode] = useState<string>('all');
+
+  const filtered =
+    selectedMode === 'all'
+      ? p.rows
+      : p.rows.filter((r) => r.mode === selectedMode);
+
+  const { page, setPage, paged, totalPages, total, fromIndex, toIndex } =
+    usePagedRows(filtered, selectedMode);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiTile
+          label="Offline Collected"
+          value={formatINR(p.totalReceived)}
+          highlight="green"
+          sub={`${p.paymentCount} payment${p.paymentCount === 1 ? '' : 's'}`}
+        />
+        <KpiTile
+          label="Refunded"
+          value={formatINR(p.totalRefunded)}
+          highlight={p.totalRefunded > 0 ? 'amber' : undefined}
+          sub={`${p.refundCount} refund${p.refundCount === 1 ? '' : 's'}`}
+        />
+        <KpiTile
+          label="Net Collected"
+          value={formatINR(p.netCollected)}
+          highlight={p.netCollected >= 0 ? 'green' : 'red'}
+          sub="Received less refunds"
+        />
+        <KpiTile
+          label="Top Payment Mode"
+          value={p.topMode ? paymentModeLabel(p.topMode) : '-'}
+          sub={
+            p.paymentCount > 0
+              ? `Avg. payment ${formatINR(p.avgPayment)}`
+              : 'No offline payments'
+          }
+        />
+      </div>
+
+      {p.byMode.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Collection by Mode</CardTitle>
+              <CardDescription>
+                Share of offline payments across payment modes
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[240px]">
+                <DonutChart
+                  tooltipLabel="Collected"
+                  slices={p.byMode.map((m) => ({
+                    name: paymentModeLabel(m.mode),
+                    value: m.amount,
+                    key: m.mode,
+                  }))}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Payment Mode Summary</CardTitle>
+              <CardDescription>
+                Transaction count and amount collected per mode
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto rounded-xl border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Mode</TableHead>
+                      <TableHead className="text-right">Payments</TableHead>
+                      <TableHead className="text-right">Amount (₹)</TableHead>
+                      <TableHead className="text-right">Share</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {p.byMode.map((m) => (
+                      <TableRow key={m.mode}>
+                        <TableCell className="font-medium">
+                          {paymentModeLabel(m.mode)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {m.count}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums">
+                          {formatINR(m.amount)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {m.sharePct}%
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {/* Filter pills */}
+      {p.byMode.length > 1 ? (
+        <div className="flex flex-wrap gap-2 print:hidden">
+          <button
+            type="button"
+            onClick={() => setSelectedMode('all')}
+            className={cn(
+              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+              selectedMode === 'all'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground hover:border-foreground/30',
+            )}
+          >
+            All Modes ({p.rows.length})
+          </button>
+          {p.byMode.map((m) => (
+            <button
+              key={m.mode}
+              type="button"
+              onClick={() => setSelectedMode(m.mode)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                selectedMode === m.mode
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground hover:border-foreground/30',
+              )}
+            >
+              {paymentModeLabel(m.mode)} ({m.count})
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Offline Payments</CardTitle>
+          <CardDescription>
+            Payments recorded directly in Ooruda for stays in this villa
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {filtered.length === 0 ? (
+            <p className="text-muted-foreground py-12 text-center text-sm">
+              No offline payments recorded in this period.
+            </p>
+          ) : (
+            <>
+              <div className="overflow-x-auto rounded-xl border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Booking</TableHead>
+                      <TableHead>Paid By</TableHead>
+                      <TableHead>Mode</TableHead>
+                      <TableHead>Reference</TableHead>
+                      <TableHead className="text-right">Amount (₹)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paged.map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell className="whitespace-nowrap tabular-nums">
+                          {formatDateReadable(r.paid_on)}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs font-medium">
+                          {r.booking_code ?? '-'}
+                        </TableCell>
+                        <TableCell>{r.payer_name || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {paymentModeLabel(r.mode)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-xs">
+                          {r.reference || '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums">
+                          {formatINR(r.amount)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                total={total}
+                fromIndex={fromIndex}
+                toIndex={toIndex}
+                onPageChange={setPage}
+                label="payments"
+                testPrefix="payments"
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ── 4. GST Summary Tab ───────────────────────────────────────────────────────
+
+function GstSummaryTab({ g }: { g: GstReport }) {
+  const { page, setPage, paged, totalPages, total, fromIndex, toIndex } =
+    usePagedRows(g.months, g.months.length);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiTile
+          label="Taxable Stay Revenue"
+          value={formatINR(g.taxableRevenue)}
+          sub="Stay tariff + extra guests less discounts"
+        />
+        <KpiTile
+          label="Output GST (Collected)"
+          value={formatINR(g.outputGst)}
+          highlight="amber"
+          sub={`Gross stay value: ${formatINR(g.totalWithGst)}`}
+        />
+        <KpiTile
+          label="Input GST (On Expenses)"
+          value={formatINR(g.inputGst)}
+          highlight="blue"
+          sub={`Total expenses: ${formatINR(g.expenseAmount)}`}
+        />
+        <KpiTile
+          label="Net GST Position"
+          value={formatINR(g.netGstPayable)}
+          highlight={g.netGstPayable > 0 ? 'amber' : 'green'}
+          sub="Output GST minus Input GST"
+        />
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Monthly GST Breakdown</CardTitle>
+          <CardDescription>
+            Period-wise taxable revenue, output GST on stays, and input GST on
+            expenses
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-xl border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Month</TableHead>
+                  <TableHead className="text-right">Stays</TableHead>
+                  <TableHead className="text-right">Nights</TableHead>
+                  <TableHead className="text-right">Taxable (₹)</TableHead>
+                  <TableHead className="text-right">Output GST (₹)</TableHead>
+                  <TableHead className="text-right">Input GST (₹)</TableHead>
+                  <TableHead className="text-right">Net GST (₹)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paged.map((m) => (
+                  <TableRow key={m.month}>
+                    <TableCell className="font-medium">
+                      {monthLabel(m.month)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {m.stays}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {m.nights}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatINR(m.taxableRevenue)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {formatINR(m.outputGst)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatINR(m.inputGst)}
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        'text-right font-semibold tabular-nums',
+                        m.netGstPayable > 0
+                          ? 'text-warning'
+                          : 'text-foreground',
+                      )}
+                    >
+                      {formatINR(m.netGstPayable)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              {g.months.length > 1 ? (
+                <TableFooter>
+                  <TableRow className="bg-muted/30 font-semibold">
+                    <TableCell>Total</TableCell>
+                    {/*
+                      Counted over the whole period, not summed from the rows:
+                      a stay across two months is in both month rows.
+                    */}
+                    <TableCell className="text-right tabular-nums">
+                      {g.stays}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {g.nights}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatINR(g.taxableRevenue)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatINR(g.outputGst)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatINR(g.inputGst)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatINR(g.netGstPayable)}
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+              ) : null}
+            </Table>
+          </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            fromIndex={fromIndex}
+            toIndex={toIndex}
+            onPageChange={setPage}
+            label="months"
+            testPrefix="gst-summary"
+          />
+        </CardContent>
+      </Card>
+
+      <p className="text-muted-foreground text-xs">
+        Output GST is pro-rated across stay nights in the period. Input GST is
+        taken from GST recorded on villa expenses.{' '}
+        <span className="font-medium">Verify against your GSTIN filings.</span>
+      </p>
+    </div>
+  );
+}
+
+// ── 5. Booking Channels Tab ──────────────────────────────────────────────────
 
 function channelIcon(channel: string) {
   if (channel === 'airbnb')
@@ -838,11 +1695,14 @@ function channelIcon(channel: string) {
 }
 
 function ChannelsTab({ lines }: { lines: ChannelLine[] }) {
+  const { page, setPage, paged, totalPages, total, fromIndex, toIndex } =
+    usePagedRows(lines, lines.length);
+
   if (lines.length === 0) {
     return (
       <Card className="bg-card">
         <CardContent
-          className="text-muted-foreground py-10 text-center text-sm"
+          className="text-muted-foreground py-16 text-center text-sm"
           data-test={'villa-report-channels-empty'}
         >
           No stays in this period.
@@ -851,71 +1711,69 @@ function ChannelsTab({ lines }: { lines: ChannelLine[] }) {
     );
   }
 
+  const totalRevenue = lines.reduce((s, c) => s + c.revenue, 0);
+  const totalStays = lines.reduce((s, c) => s + c.stays, 0);
+  const totalNights = lines.reduce((s, c) => s + c.nights, 0);
+  const topChannel = lines[0];
+
   return (
-    <div className="flex flex-col gap-4">
-      {/* Donut chart + summary cards */}
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <KpiTile
+          label="Total Channel Revenue"
+          value={formatINR(totalRevenue)}
+          highlight="green"
+          sub={`Across ${lines.length} booking channel${lines.length === 1 ? '' : 's'}`}
+        />
+        <KpiTile
+          label="Booked Nights"
+          value={String(totalNights)}
+          sub={`${totalStays} stay${totalStays === 1 ? '' : 's'} in period`}
+        />
+        <KpiTile
+          label="Top Channel"
+          value={topChannel ? channelLabel(topChannel.channel) : '-'}
+          sub={
+            topChannel
+              ? `${topChannel.sharePct}% of revenue (${formatINR(topChannel.revenue)})`
+              : ''
+          }
+        />
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Donut — only meaningful with 2+ channels */}
         {lines.length >= 2 ? (
           <Card className="bg-card">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Revenue share</CardTitle>
+              <CardTitle className="text-base">Revenue Share</CardTitle>
+              <CardDescription>
+                Proportion of stay revenue by booking source
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-56" data-test={'villa-report-channel-chart'}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={lines.map((c) => ({
-                        name: channelLabel(c.channel),
-                        value: c.revenue,
-                      }))}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius="52%"
-                      outerRadius="72%"
-                      paddingAngle={3}
-                      dataKey="value"
-                      isAnimationActive={false}
-                    >
-                      {lines.map((_, i) => (
-                        <Cell
-                          key={i}
-                          fill={PIE_COLORS[i % PIE_COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(v) => [formatINR(Number(v)), 'Revenue']}
-                      contentStyle={{
-                        background: 'var(--popover)',
-                        color: 'var(--popover-foreground)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 8,
-                        fontSize: 12,
-                      }}
-                    />
-                    <Legend
-                      wrapperStyle={{ fontSize: 12 }}
-                      iconType="circle"
-                      iconSize={8}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="h-60" data-test={'villa-report-channel-chart'}>
+                <DonutChart
+                  tooltipLabel="Revenue"
+                  scale="relative"
+                  slices={lines.map((c) => ({
+                    name: channelLabel(c.channel),
+                    value: c.revenue,
+                    key: c.channel,
+                  }))}
+                />
               </div>
             </CardContent>
           </Card>
         ) : null}
 
-        {/* Channel summary cards */}
         <div className="flex flex-col gap-3">
-          {lines.map((c) => (
+          {lines.map((c, i) => (
             <Card
               key={c.channel}
               className="bg-card"
               data-test={'villa-report-channel-card'}
             >
-              <CardContent className="flex items-start gap-3 px-4 py-3">
+              <CardContent className="flex items-start gap-3 px-4 py-3.5">
                 <div className="bg-muted text-muted-foreground mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
                   {channelIcon(c.channel)}
                 </div>
@@ -939,8 +1797,11 @@ function ChannelsTab({ lines }: { lines: ChannelLine[] }) {
                   </div>
                   <div className="bg-muted mt-1.5 h-1.5 overflow-hidden rounded-full">
                     <div
-                      className="bg-chart-2 h-full rounded-full"
-                      style={{ width: `${c.sharePct}%` }}
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${c.sharePct}%`,
+                        background: PIE_COLORS[i % PIE_COLORS.length],
+                      }}
                     />
                   </div>
                 </div>
@@ -953,155 +1814,239 @@ function ChannelsTab({ lines }: { lines: ChannelLine[] }) {
       {/* Detail table */}
       <Card className="bg-card">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Where bookings came from</CardTitle>
+          <CardTitle className="text-base">Channel Breakdown</CardTitle>
+          <CardDescription>
+            Stays, nights sold, and revenue before GST by channel
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table
-              className="w-full min-w-[420px] text-sm"
-              data-test={'villa-report-channels'}
-            >
-              <thead>
-                <tr className="text-muted-foreground border-b text-left text-xs">
-                  <th className="py-2 pr-4 font-medium">Channel</th>
-                  <th className="py-2 pr-4 text-right font-medium">Stays</th>
-                  <th className="py-2 pr-4 text-right font-medium">Nights</th>
-                  <th className="py-2 pr-4 text-right font-medium">Revenue</th>
-                  <th className="py-2 text-right font-medium">Share</th>
-                </tr>
-              </thead>
-              <tbody className="tabular-nums">
-                {lines.map((c) => (
-                  <tr key={c.channel} className="border-b last:border-b-0">
-                    <td className="py-2 pr-4 font-medium">
+          <div className="overflow-x-auto rounded-xl border">
+            <Table data-test={'villa-report-channels'}>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Channel</TableHead>
+                  <TableHead className="text-right">Stays</TableHead>
+                  <TableHead className="text-right">Nights</TableHead>
+                  <TableHead className="text-right">Revenue (₹)</TableHead>
+                  <TableHead className="text-right">Share (%)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paged.map((c) => (
+                  <TableRow key={c.channel}>
+                    <TableCell className="font-medium">
                       {channelLabel(c.channel)}
-                    </td>
-                    <td className="py-2 pr-4 text-right">{c.stays}</td>
-                    <td className="py-2 pr-4 text-right">{c.nights}</td>
-                    <td className="py-2 pr-4 text-right">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {c.stays}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {c.nights}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">
                       {formatINR(c.revenue)}
-                    </td>
-                    <td className="py-2 text-right">{c.sharePct}%</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {c.sharePct}%
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+              {lines.length > 1 ? (
+                <TableFooter>
+                  <TableRow className="bg-muted/30 font-semibold">
+                    <TableCell>Total</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {totalStays}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {totalNights}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatINR(totalRevenue)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      100%
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+              ) : null}
+            </Table>
           </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            fromIndex={fromIndex}
+            toIndex={toIndex}
+            onPageChange={setPage}
+            label="channels"
+            testPrefix="channels"
+          />
         </CardContent>
       </Card>
     </div>
   );
 }
 
-// ── Guests tab ────────────────────────────────────────────────────────────────
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
-}
+// ── 6. Guest Directory Tab ───────────────────────────────────────────────────
 
 function GuestsTab({ g }: { g: GuestsReport }) {
   const newGuests = g.guests - g.returning;
+  const allGuests = g.allGuests ?? g.top;
+  const [filter, setFilter] = useState<'all' | 'returning' | 'new'>(
+    g.top.length > 0 ? 'returning' : 'all',
+  );
+
+  const filtered =
+    filter === 'returning'
+      ? allGuests.filter((x) => x.stays > 1)
+      : filter === 'new'
+        ? allGuests.filter((x) => x.stays === 1)
+        : allGuests;
+
+  const { page, setPage, paged, totalPages, total, fromIndex, toIndex } =
+    usePagedRows(filtered, filter);
 
   return (
-    <>
-      {/* KPI row */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatTile
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <KpiTile
           test="guests"
-          label="Unique guests"
+          label="Unique Guests"
           value={String(g.guests)}
-          hint="Matched by phone"
+          sub="Matched by phone number in period"
         />
-        <StatTile
+        <KpiTile
           test="new-guests"
-          label="New guests"
+          label="First-Time Guests"
           value={String(newGuests)}
-          hint="First time at this villa"
+          sub="First stay at this villa"
         />
-        <StatTile
+        <KpiTile
           test="returning"
-          label="Returning guests"
+          label="Returning Guests"
           value={String(g.returning)}
-          hint={`${g.returningPct}% had stayed before`}
+          highlight={g.returning > 0 ? 'green' : undefined}
+          sub={`${g.returningPct}% repeat guest rate`}
         />
       </div>
 
-      {/* Returning guests list */}
+      {/* Filter pills matching Ooruda DirectoryTab */}
+      <div className="flex flex-wrap gap-2 print:hidden">
+        {(
+          [
+            { value: 'returning', label: `Returning (${g.returning})` },
+            { value: 'all', label: `All Guests (${g.guests})` },
+            { value: 'new', label: `First-Time (${newGuests})` },
+          ] as const
+        ).map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => setFilter(opt.value)}
+            className={cn(
+              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+              filter === opt.value
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground hover:border-foreground/30',
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       <Card className="bg-card">
         <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Users className="text-muted-foreground h-4 w-4" />
-            Returning guests
-          </CardTitle>
+          <CardTitle className="text-base">Guest History</CardTitle>
+          <CardDescription>
+            Lifetime stays, nights, and taxable revenue for guests who stayed in
+            this period
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {g.top.length === 0 ? (
+          {filtered.length === 0 ? (
             <p
-              className="text-muted-foreground text-sm"
+              className="text-muted-foreground py-12 text-center text-sm"
               data-test={'villa-report-guests-empty'}
             >
-              No returning guests in this period yet.
+              {filter === 'returning'
+                ? 'No returning guests in this period yet.'
+                : 'No guests found in this period.'}
             </p>
           ) : (
-            <div
-              className="flex flex-col divide-y"
-              data-test={'villa-report-guests'}
-            >
-              {g.top.map((x) => {
-                const lastStayDate = new Date(`${x.lastStay}T00:00:00Z`);
-                const lastStayLabel = lastStayDate.toLocaleDateString('en-IN', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                  timeZone: 'UTC',
-                });
-                return (
-                  <div
-                    key={`${x.name}-${x.phone}`}
-                    className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
-                  >
-                    {/* Avatar */}
-                    <div className="bg-muted flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
-                      {initials(x.name)}
-                    </div>
-                    {/* Info */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                        <span className="font-medium">{x.name}</span>
-                        <span className="font-semibold tabular-nums">
+            <div data-test={'villa-report-guests'}>
+              <div className="overflow-x-auto rounded-xl border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Guest Name</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="text-right">Stays</TableHead>
+                      <TableHead className="text-right">Nights</TableHead>
+                      <TableHead className="text-right">
+                        Lifetime Revenue (₹)
+                      </TableHead>
+                      <TableHead className="text-right">Last Stay</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paged.map((x, idx) => (
+                      <TableRow key={`${x.name}-${x.phone ?? idx}`}>
+                        <TableCell className="font-medium">{x.name}</TableCell>
+                        <TableCell className="tabular-nums">
+                          {x.phone || '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={
+                              x.stays > 1
+                                ? 'border-success/40 text-success'
+                                : 'text-muted-foreground'
+                            }
+                          >
+                            {x.stays > 1 ? `Returning (×${x.stays})` : 'New'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {x.stays}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {x.nights}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums">
                           {formatINR(x.revenue)}
-                        </span>
-                      </div>
-                      <div className="text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 text-xs tabular-nums">
-                        <span>
-                          {x.stays} stay{x.stays === 1 ? '' : 's'}
-                        </span>
-                        <span>
-                          {x.nights} night{x.nights === 1 ? '' : 's'}
-                        </span>
-                        <span>Last: {lastStayLabel}</span>
-                      </div>
-                    </div>
-                    {/* Repeat badge */}
-                    <div className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums">
-                      ×{x.stays}
-                    </div>
-                  </div>
-                );
-              })}
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap tabular-nums">
+                          {formatDateReadable(x.lastStay)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                total={total}
+                fromIndex={fromIndex}
+                toIndex={toIndex}
+                onPageChange={setPage}
+                label="guests"
+                testPrefix="guests"
+              />
             </div>
           )}
           <p className="text-muted-foreground mt-4 border-t pt-3 text-xs">
             Guests with the same phone number are counted as one person. Stays,
-            nights and revenue include every visit to this villa, not just this
+            nights, and revenue include every visit to this villa, not just this
             period.
           </p>
         </CardContent>
       </Card>
-    </>
+    </div>
   );
 }

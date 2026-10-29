@@ -19,6 +19,8 @@ import { shiftMonth } from './calendar';
 export const REPORT_PRESETS = [
   'this_month',
   'last_month',
+  '3m',
+  '6m',
   'this_fy',
   'last_fy',
   'custom',
@@ -27,11 +29,13 @@ export const REPORT_PRESETS = [
 export type ReportPreset = (typeof REPORT_PRESETS)[number];
 
 export const REPORT_PRESET_LABELS: Record<ReportPreset, string> = {
-  this_month: 'This month',
-  last_month: 'Last month',
-  this_fy: 'This financial year',
-  last_fy: 'Last financial year',
-  custom: 'Custom',
+  this_month: 'This Month',
+  last_month: 'Last Month',
+  '3m': 'Last 3 Months',
+  '6m': 'Last 6 Months',
+  this_fy: 'This FY',
+  last_fy: 'Last FY',
+  custom: 'Custom range',
 };
 
 export interface ReportRange {
@@ -70,6 +74,14 @@ export function resolveReportRange(
     case 'last_month': {
       const m = shiftMonth(month, -1);
       return { preset, from: `${m}-01`, to: lastDay(m) };
+    }
+    case '3m': {
+      const m = shiftMonth(month, -2);
+      return { preset, from: `${m}-01`, to: lastDay(month) };
+    }
+    case '6m': {
+      const m = shiftMonth(month, -5);
+      return { preset, from: `${m}-01`, to: lastDay(month) };
     }
     case 'this_fy': {
       const y = fyStartYear(today);
@@ -132,6 +144,28 @@ export interface ReportExpense {
   category: string;
   amount: number;
   gst_amount: number;
+  description?: string;
+  vendor?: string | null;
+  mode?: string;
+  invoice_no?: string | null;
+}
+
+export interface ReportPayment {
+  id: string;
+  paid_on: string;
+  mode: string;
+  amount: number;
+  reference: string | null;
+  payer_name: string | null;
+  booking_code: string | null;
+}
+
+export interface ReportRefund {
+  id: string;
+  refunded_on: string;
+  mode: string;
+  amount: number;
+  reason: string;
 }
 
 const SELLING = new Set(['confirmed', 'completed']);
@@ -357,6 +391,8 @@ export interface GuestsReport {
   returningPct: number;
   /** Returning guests in the period, most stays first. */
   top: GuestLine[];
+  /** All guests in the period, most stays/revenue first. */
+  allGuests?: GuestLine[];
 }
 
 /**
@@ -411,7 +447,11 @@ export function buildGuests(
       ),
       revenue: rupees(
         list.reduce(
-          (sum, s) => sum + paise(s.base_amount) + paise(s.extra_guest_amount),
+          (sum, s) =>
+            sum +
+            paise(s.base_amount) +
+            paise(s.extra_guest_amount) -
+            paise(s.discount_amount ?? 0),
           0,
         ),
       ),
@@ -420,6 +460,12 @@ export function buildGuests(
   });
 
   const returning = lines.filter((l) => l.stays > 1);
+  const sortedReturning = [...returning].sort(
+    (a, b) => b.stays - a.stays || b.revenue - a.revenue,
+  );
+  const sortedAll = [...lines].sort(
+    (a, b) => b.stays - a.stays || b.revenue - a.revenue,
+  );
 
   return {
     guests: lines.length,
@@ -427,9 +473,231 @@ export function buildGuests(
     returningPct: lines.length
       ? Math.round((returning.length / lines.length) * 1000) / 10
       : 0,
-    top: returning
-      .sort((a, b) => b.stays - a.stays || b.revenue - a.revenue)
-      .slice(0, limit),
+    top: sortedReturning.slice(0, limit),
+    allGuests: sortedAll,
+  };
+}
+
+// ── Payments & Refunds ──────────────────────────────────────────
+
+export interface PaymentModeLine {
+  mode: string;
+  count: number;
+  amount: number;
+  sharePct: number;
+}
+
+export interface PaymentsReport {
+  totalReceived: number;
+  totalRefunded: number;
+  netCollected: number;
+  paymentCount: number;
+  refundCount: number;
+  avgPayment: number;
+  topMode: string | null;
+  byMode: PaymentModeLine[];
+  byMonth: { month: string; received: number; refunded: number; net: number }[];
+  rows: ReportPayment[];
+  refunds: ReportRefund[];
+}
+
+export function buildPaymentsReport(
+  range: { from: string; to: string },
+  payments: ReportPayment[],
+  refunds: ReportRefund[],
+): PaymentsReport {
+  const inRangePay = payments.filter(
+    (p) => p.paid_on >= range.from && p.paid_on <= range.to,
+  );
+  const inRangeRef = refunds.filter(
+    (r) => r.refunded_on >= range.from && r.refunded_on <= range.to,
+  );
+
+  const recPaise = inRangePay.reduce((sum, p) => sum + paise(p.amount), 0);
+  const refPaise = inRangeRef.reduce((sum, r) => sum + paise(r.amount), 0);
+  const netPaise = recPaise - refPaise;
+
+  const modeMap = new Map<string, { count: number; paise: number }>();
+  for (const p of inRangePay) {
+    const cur = modeMap.get(p.mode) ?? { count: 0, paise: 0 };
+    cur.count += 1;
+    cur.paise += paise(p.amount);
+    modeMap.set(p.mode, cur);
+  }
+
+  const byMode: PaymentModeLine[] = [...modeMap.entries()]
+    .map(([mode, v]) => ({
+      mode,
+      count: v.count,
+      amount: rupees(v.paise),
+      sharePct: recPaise > 0 ? Math.round((v.paise / recPaise) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const byMonth: {
+    month: string;
+    received: number;
+    refunded: number;
+    net: number;
+  }[] = [];
+  for (
+    let m = range.from.slice(0, 7);
+    m <= range.to.slice(0, 7);
+    m = shiftMonth(m, 1)
+  ) {
+    const mFrom = `${m}-01` < range.from ? range.from : `${m}-01`;
+    const mLast = addDays(`${shiftMonth(m, 1)}-01`, -1);
+    const mTo = mLast > range.to ? range.to : mLast;
+
+    const r = inRangePay
+      .filter((p) => p.paid_on >= mFrom && p.paid_on <= mTo)
+      .reduce((sum, p) => sum + paise(p.amount), 0);
+    const f = inRangeRef
+      .filter((x) => x.refunded_on >= mFrom && x.refunded_on <= mTo)
+      .reduce((sum, x) => sum + paise(x.amount), 0);
+
+    byMonth.push({
+      month: m,
+      received: rupees(r),
+      refunded: rupees(f),
+      net: rupees(r - f),
+    });
+  }
+
+  return {
+    totalReceived: rupees(recPaise),
+    totalRefunded: rupees(refPaise),
+    netCollected: rupees(netPaise),
+    paymentCount: inRangePay.length,
+    refundCount: inRangeRef.length,
+    avgPayment:
+      inRangePay.length > 0 ? rupees(recPaise / inRangePay.length) : 0,
+    topMode: byMode[0]?.mode ?? null,
+    byMode,
+    byMonth,
+    rows: [...inRangePay].sort((a, b) => b.paid_on.localeCompare(a.paid_on)),
+    refunds: [...inRangeRef].sort((a, b) =>
+      b.refunded_on.localeCompare(a.refunded_on),
+    ),
+  };
+}
+
+// ── GST Summary ─────────────────────────────────────────────────
+
+export interface GstMonthLine {
+  month: string;
+  stays: number;
+  nights: number;
+  taxableRevenue: number;
+  outputGst: number;
+  totalWithGst: number;
+  expenseAmount: number;
+  inputGst: number;
+  netGstPayable: number;
+}
+
+export interface GstReport {
+  /** Distinct selling stays with at least one night in the period. */
+  stays: number;
+  /** Nights sold inside the period. */
+  nights: number;
+  taxableRevenue: number;
+  outputGst: number;
+  totalWithGst: number;
+  expenseAmount: number;
+  inputGst: number;
+  netGstPayable: number;
+  months: GstMonthLine[];
+}
+
+export function buildGstReport(
+  range: { from: string; to: string },
+  stays: ReportStay[],
+  expenses: ReportExpense[],
+): GstReport {
+  const selling = stays.filter((s) => SELLING.has(s.status));
+  const inRangeExpenses = expenses.filter(
+    (e) => e.spent_on >= range.from && e.spent_on <= range.to,
+  );
+
+  let totalRevPaise = 0;
+  let totalOutGstPaise = 0;
+  let totalStays = 0;
+  let totalNights = 0;
+
+  for (const s of selling) {
+    const part = slice(s, range.from, range.to);
+    if (!part.nights) continue;
+    totalStays += 1;
+    totalNights += part.nights;
+    totalRevPaise += part.revenuePaise;
+    totalOutGstPaise += part.gstPaise;
+  }
+
+  const totalExpPaise = inRangeExpenses.reduce(
+    (sum, e) => sum + paise(e.amount),
+    0,
+  );
+  const totalInGstPaise = inRangeExpenses.reduce(
+    (sum, e) => sum + paise(e.gst_amount),
+    0,
+  );
+
+  const months: GstMonthLine[] = [];
+  for (
+    let m = range.from.slice(0, 7);
+    m <= range.to.slice(0, 7);
+    m = shiftMonth(m, 1)
+  ) {
+    const mFrom = `${m}-01` < range.from ? range.from : `${m}-01`;
+    const mLast = addDays(`${shiftMonth(m, 1)}-01`, -1);
+    const mTo = mLast > range.to ? range.to : mLast;
+
+    let stayCount = 0;
+    let nights = 0;
+    let rev = 0;
+    let outGst = 0;
+    for (const s of selling) {
+      const part = slice(s, mFrom, mTo);
+      if (!part.nights) continue;
+      stayCount += 1;
+      nights += part.nights;
+      rev += part.revenuePaise;
+      outGst += part.gstPaise;
+    }
+
+    const mExp = inRangeExpenses.filter(
+      (e) => e.spent_on >= mFrom && e.spent_on <= mTo,
+    );
+    const expPaise = mExp.reduce((sum, e) => sum + paise(e.amount), 0);
+    const inGstPaise = mExp.reduce((sum, e) => sum + paise(e.gst_amount), 0);
+
+    months.push({
+      month: m,
+      stays: stayCount,
+      nights,
+      taxableRevenue: rupees(rev),
+      outputGst: rupees(outGst),
+      totalWithGst: rupees(rev + outGst),
+      expenseAmount: rupees(expPaise),
+      inputGst: rupees(inGstPaise),
+      netGstPayable: rupees(outGst - inGstPaise),
+    });
+  }
+
+  return {
+    // Counted over the whole period, NOT as the sum of the month rows: a stay
+    // that spans two months appears in both, so adding the rows up would
+    // count it twice.
+    stays: totalStays,
+    nights: totalNights,
+    taxableRevenue: rupees(totalRevPaise),
+    outputGst: rupees(totalOutGstPaise),
+    totalWithGst: rupees(totalRevPaise + totalOutGstPaise),
+    expenseAmount: rupees(totalExpPaise),
+    inputGst: rupees(totalInGstPaise),
+    netGstPayable: rupees(totalOutGstPaise - totalInGstPaise),
+    months,
   };
 }
 

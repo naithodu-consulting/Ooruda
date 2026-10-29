@@ -88,27 +88,32 @@ export default async function VillaExpensesPage({
         account={account}
         title={<Trans i18nKey={'villa.nav.expenses'} />}
         description={<AppBreadcrumbs />}
-      />
-
-      <div className="flex max-w-5xl flex-col gap-4">
+      >
         <VillaSwitcher
           properties={properties.map((p) => ({ id: p.id, name: p.name }))}
           current={property.id}
         />
-        <MonthNav
-          month={month}
-          prevHref={hrefFor(shiftMonth(month, -1))}
-          nextHref={hrefFor(shiftMonth(month, 1))}
-          data-test-prev="villa-expenses-prev"
-          data-test-month="villa-expenses-month"
-          data-test-next="villa-expenses-next"
-        />
+      </TeamAccountLayoutPageHeader>
 
+      <div className="flex max-w-5xl flex-col gap-4">
         <ExpensesView
           accountId={accountId}
           propertyId={property.id}
           isOwner={role === 'villa_admin'}
           defaultDate={month === today.slice(0, 7) ? today : `${month}-01`}
+          monthNav={
+            <MonthNav
+              month={month}
+              prevHref={hrefFor(shiftMonth(month, -1))}
+              nextHref={hrefFor(shiftMonth(month, 1))}
+              todayHref={hrefFor(today.slice(0, 7))}
+              todayLabel="Current month"
+              data-test-prev="villa-expenses-prev"
+              data-test-month="villa-expenses-month"
+              data-test-next="villa-expenses-next"
+              data-test-today="villa-expenses-today"
+            />
+          }
           expenses={(expenses ?? []).map((e) => ({
             id: e.id,
             category: e.category,

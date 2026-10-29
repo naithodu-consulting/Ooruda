@@ -506,7 +506,9 @@ export function renderGuestEmail(
           <p style="margin:0;font-family:${SANS};font-size:14px;line-height:1.6;color:#5d5550;">Around 24 hours before check-in, we will share the exact address, directions and access instructions with you.</p>
         </td>
       </tr>
-      ${ctx.whatsApp ? `<tr>
+      ${
+        ctx.whatsApp
+          ? `<tr>
         <td style="padding:0 14px 20px 0;vertical-align:top;width:26px;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
             <td width="24" height="24" align="center" style="width:24px;height:24px;background:${CARD};border:1px solid ${RULE};border-radius:12px;font-family:${SANS};font-size:12px;font-weight:bold;color:${MUTED};line-height:24px;">2</td>
@@ -516,7 +518,9 @@ export function renderGuestEmail(
           <p style="margin:0 0 5px;font-family:${SANS};font-size:15px;font-weight:bold;color:${INK};">Need anything before then?</p>
           <p style="margin:0;font-family:${SANS};font-size:14px;line-height:1.6;color:#5d5550;">Just <a href="https://wa.me/${ctx.whatsApp.replace(/\D/g, '')}" style="color:${MAROON};">WhatsApp</a> us. We&#39;re usually available during the day and aim to respond within an hour.</p>
         </td>
-      </tr>` : ''}
+      </tr>`
+          : ''
+      }
     </table>
 
     ${emailRule()}

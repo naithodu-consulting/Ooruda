@@ -2,13 +2,10 @@ import Link from 'next/link';
 
 import { CircleAlert } from 'lucide-react';
 
-import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
 import { AppBreadcrumbs } from '@kit/ui/app-breadcrumbs';
-import { Button } from '@kit/ui/button';
 import { PageBody } from '@kit/ui/page';
 import { Trans } from '@kit/ui/trans';
-import { cn } from '@kit/ui/utils';
 
 import pathsConfig from '~/config/paths.config';
 import { formatDateReadable } from '~/lib/format-date';
@@ -32,9 +29,11 @@ import {
   getIcalFeedsStatus,
 } from '~/lib/villa/ical-sync';
 import { selectVillaProperty } from '~/lib/villa/properties';
+import { loadVillaAccountSettings } from '~/lib/villa/settings';
 
 import { MonthNav } from '../_components/month-nav';
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
+import { VillaSwitcher } from '../_components/villa-switcher';
 import { NewBookingDialog } from '../bookings/_components/new-booking-dialog';
 import { BlockDatesDialog } from './_components/block-dates-dialog';
 import { CalendarView } from './_components/calendar-view';
@@ -53,23 +52,20 @@ export default async function CalendarPage({ params, searchParams }: Props) {
   const month = parseMonth(sp.month, today);
 
   const { accountId, role } = await requireRole(account, VILLA_ROLES, 'villa');
-  const { properties, property } = await selectVillaProperty(
-    accountId,
-    sp.property,
-    { requireSite: true },
-  );
 
   // The cutoff is Ooruda's setting, mirrored to the booking site. The site's
   // check_availability() reports every night past it as unavailable, so the
   // calendar has to show it: without it, an operator sees those nights as free
   // and blocks or unblocks them with no effect anywhere.
-  const { data: settings } = await getSupabaseServerClient()
-    .from('villa_account_settings')
-    .select('booking_cutoff_date')
-    .eq('account_id', accountId)
-    .maybeSingle();
+  //
+  // It needs only the account id, so it is read alongside the property rather
+  // than after it.
+  const [{ properties, property }, settings] = await Promise.all([
+    selectVillaProperty(accountId, sp.property, { requireSite: true }),
+    loadVillaAccountSettings(accountId),
+  ]);
 
-  const bookingCutoff = settings?.booking_cutoff_date ?? null;
+  const bookingCutoff = settings.bookingCutoffDate;
   const canOverrideCutoff = role === 'villa_admin';
 
   const base = pathsConfig.app.accountVillaCalendar.replace(
@@ -155,27 +151,15 @@ export default async function CalendarPage({ params, searchParams }: Props) {
         ) : (
           <>
             {properties.length > 1 ? (
-              <nav
-                aria-label="Villa"
-                className="flex flex-wrap gap-2"
-                data-test={'villa-calendar-properties'}
-              >
-                {properties.map((p) => (
-                  <Link
-                    key={p.id}
-                    href={hrefFor(month, p.id)}
-                    aria-current={p.id === property.id ? 'page' : undefined}
-                    className={cn(
-                      'rounded-full border px-3 py-1 text-sm',
-                      p.id === property.id
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-card hover:bg-muted',
-                    )}
-                  >
-                    {p.name}
-                  </Link>
-                ))}
-              </nav>
+              <div data-test={'villa-calendar-properties'}>
+                <VillaSwitcher
+                  properties={properties.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                  }))}
+                  current={property.id}
+                />
+              </div>
             ) : null}
 
             {bookingCutoff ? (
@@ -186,53 +170,85 @@ export default async function CalendarPage({ params, searchParams }: Props) {
                 </AlertTitle>
                 <AlertDescription>
                   The website and booking channels take no check-in after this
-                  date, so those nights need no block — and unblocking them
+                  date, so those nights need no block, and unblocking them
                   changes nothing.{' '}
                   {canOverrideCutoff
                     ? 'You can still record a booking past it yourself.'
                     : 'Only a villa admin can record a booking past it.'}{' '}
-                  Change the date in Settings.
+                  Change the date in{' '}
+                  <Link
+                    href={`${pathsConfig.app.accountVillaSettings.replace('[account]', account)}?tab=cutoff`}
+                    className="hover:text-foreground font-medium underline"
+                  >
+                    Settings
+                  </Link>
+                  .
                 </AlertDescription>
               </Alert>
             ) : null}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <MonthNav
-                  month={month}
-                  prevHref={hrefFor(shiftMonth(month, -1))}
-                  nextHref={hrefFor(shiftMonth(month, 1))}
-                  data-test-prev="villa-calendar-prev"
-                  data-test-month="villa-calendar-month"
-                  data-test-next="villa-calendar-next"
-                />
-                {month !== today.slice(0, 7) ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    nativeButton={false}
-                    render={
-                      <Link href={hrefFor(today.slice(0, 7))} scroll={false} />
-                    }
-                    data-test={'villa-calendar-today'}
-                    className="text-muted-foreground hover:text-foreground text-xs"
-                  >
-                    Jump to today
-                  </Button>
-                ) : null}
-              </div>
+              <MonthNav
+                month={month}
+                prevHref={hrefFor(shiftMonth(month, -1))}
+                nextHref={hrefFor(shiftMonth(month, 1))}
+                todayHref={hrefFor(today.slice(0, 7))}
+                todayLabel="Today"
+                data-test-prev="villa-calendar-prev"
+                data-test-month="villa-calendar-month"
+                data-test-next="villa-calendar-next"
+                data-test-today="villa-calendar-today"
+              />
 
               {!siteError ? (
-                <p
-                  className="text-muted-foreground text-sm"
+                <div
+                  className="bg-card text-muted-foreground inline-flex min-h-9 flex-wrap items-center gap-2.5 rounded-lg border px-3.5 py-1.5 text-xs shadow-2xs"
                   data-test={'villa-calendar-occupancy'}
                 >
-                  {occupancy.booked} of {occupancy.nights} nights booked
-                  {occupancy.blocked ? `, ${occupancy.blocked} blocked` : ''}
-                  {occupancy.closed
-                    ? `, ${occupancy.closed} closed for booking`
-                    : ''}
-                </p>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="bg-primary/40 border-primary/70 h-2.5 w-2.5 shrink-0 rounded-full border" />
+                    <span>
+                      <strong className="text-foreground font-semibold tabular-nums">
+                        {occupancy.booked}
+                      </strong>{' '}
+                      of{' '}
+                      <span className="tabular-nums">{occupancy.nights}</span>{' '}
+                      nights booked
+                    </span>
+                  </span>
+                  {occupancy.blocked ? (
+                    <>
+                      <span className="text-border" aria-hidden>
+                        ·
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="bg-muted-foreground/25 border-muted-foreground/50 h-2.5 w-2.5 shrink-0 rounded-full border" />
+                        <span>
+                          <strong className="text-foreground font-semibold tabular-nums">
+                            {occupancy.blocked}
+                          </strong>{' '}
+                          blocked
+                        </span>
+                      </span>
+                    </>
+                  ) : null}
+                  {occupancy.closed ? (
+                    <>
+                      <span className="text-border" aria-hidden>
+                        ·
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="bg-destructive/20 border-destructive/40 h-2.5 w-2.5 shrink-0 rounded-full border" />
+                        <span>
+                          <strong className="text-foreground font-semibold tabular-nums">
+                            {occupancy.closed}
+                          </strong>{' '}
+                          closed for booking
+                        </span>
+                      </span>
+                    </>
+                  ) : null}
+                </div>
               ) : null}
             </div>
 
