@@ -178,7 +178,7 @@ export function DiscountsView(props: {
             className="text-muted-foreground py-10 text-center text-sm"
             data-test={'villa-discounts-empty'}
           >
-            No discount codes yet.
+            No coupon codes yet.
           </CardContent>
         </Card>
       ) : (
@@ -454,12 +454,10 @@ function DiscountDialog(props: {
         data-test={'villa-discount-dialog'}
       >
         <DialogHeader>
-          <DialogTitle>
-            {c ? `Edit ${c.code}` : 'New discount code'}
-          </DialogTitle>
+          <DialogTitle>{c ? `Edit ${c.code}` : 'New coupon code'}</DialogTitle>
           <DialogDescription>
-            For guests booking on your website. Changing an approved code over{' '}
-            {DISCOUNT_CEILING_PCT}% sends it back for approval.
+            For guests booking on your website. Any coupon code with over{' '}
+            {DISCOUNT_CEILING_PCT}% discount requires Ooruda admin approval.
           </DialogDescription>
         </DialogHeader>
 
@@ -540,8 +538,8 @@ function DiscountDialog(props: {
               {type === 'percent'
                 ? money(
                     'maxDiscount',
-                    'Most a booking can save',
-                    'e.g. 20% off never exceeds this.',
+                    'Max Savings',
+                    'Maximum discount that can be given',
                   )
                 : null}
               <FormField
@@ -549,7 +547,7 @@ function DiscountDialog(props: {
                 control={form.control}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Bookable from</FormLabel>
+                    <FormLabel>Valid from</FormLabel>
                     <FormControl>
                       <DatePicker
                         value={field.value}
@@ -575,7 +573,7 @@ function DiscountDialog(props: {
                 control={form.control}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Bookable until</FormLabel>
+                    <FormLabel>Valid until</FormLabel>
                     <FormControl>
                       <DatePicker
                         value={field.value}
@@ -585,9 +583,7 @@ function DiscountDialog(props: {
                         data-test={'villa-discount-to'}
                       />
                     </FormControl>
-                    <FormDescription>
-                      The day the guest books, not the stay.
-                    </FormDescription>
+                    <FormDescription>The coupon expiry date.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -604,13 +600,13 @@ function DiscountDialog(props: {
               )}
               {num(
                 'maxUses',
-                'Uses in all (optional)',
-                'Leave empty for no overall limit.',
+                'Max Uses (optional)',
+                'Leave empty field for no limit',
               )}
               {num(
                 'maxUsesPerGuest',
                 'Uses per guest (optional)',
-                'Counted by phone number. 1 to 999 (default 1).',
+                'Per guest contact number',
               )}
             </div>
 
@@ -630,7 +626,7 @@ function DiscountDialog(props: {
                 </Button>
               </div>
               <p className="text-muted-foreground text-xs">
-                Stays touching these nights cannot use the code (e.g. New Year).
+                Stays on these nights cannot use the code (e.g. New Year eve).
               </p>
               {blackouts.fields.map((f, i) => (
                 <div

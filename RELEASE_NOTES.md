@@ -4,6 +4,40 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Villa: Availability Caching, Navigation Responsiveness & Landing Redesign — 2026-10-30
+
+### Short-lived read caches for the villa-booking database
+- **`listBlocks`, `listBookingsByView`, `getPricingInputs`, and `getIcalFeedsStatus`** now sit behind in-memory, per-process caches (30s for blocks/bookings, 60s for pricing/iCal status) keyed by `sitePropertyId`. Repeated navigation between the calendar, bookings views, and reports no longer re-queries the villa database on every request. Access remains gated at the route/action layer (the villa client uses the service-role key), so the site-scoped caches carry no per-user data.
+- **Every write path invalidates its cache.** `createOfflineBooking`, `cancelBooking`, `markStayCompleted`, `reopenStay`, and `setPaymentStatus` drop the bookings-view cache; `createBlock` and `releaseFromBlock` drop the blocks cache; `updateBaseRates`, `createPricingRule`, and `deletePricingRule` drop the pricing cache.
+- **iCal "Sync now" drops the blocks cache.** `syncIcalFeeds` rewrites `blocked_dates` (source `ical`); it now invalidates both the guest booking site cache and Ooruda's own blocks cache when a feed changed, so the operator calendar, blocked-dates list, and bookings "blocked" view reflect the sync immediately instead of lagging behind the TTL.
+- **Payment status changes refresh the bookings list.** `setPaymentStatus` now drops the bookings-view cache so the payment-status badge in the list updates the moment a payment is recorded, voided, or refunded — matching the behaviour of the cancel/complete/reopen actions.
+- Note: these caches are per-process, so on a multi-instance deployment invalidation only clears the instance that handled the mutation; other instances refresh on TTL expiry.
+
+### Month and bookings navigation show pending state
+- `MonthNav` prev/next/today controls and the bookings view tabs now use `useTransition` with `prefetch`, showing an inline spinner and dimming the other controls while the next screen loads, instead of looking inert on a slow network. Modifier-clicks (open in new tab) still work.
+
+### Faster, cancellable booking quotes
+- The new-booking dialog debounce dropped from 350ms to 150ms and in-flight quote requests are now aborted with an `AbortController` when the inputs change again, so the quote keeps pace with rapid edits without racing stale responses. The default adult count was raised to 8 to match typical full-villa bookings.
+
+### Bookings toolbar and action placement
+- The "New booking" / "Sync iCal" action moved from the page header into the bookings toolbar row, alongside the search and villa picker, and the toolbar wraps cleanly on narrow screens.
+
+### Calendar mobile view toggle
+- On phones the calendar screen now offers a "Calendar grid" / "Agenda" toggle, with a compact responsive grid (smaller cells and type) so the month view is usable at 360px rather than agenda-only.
+
+### Members page responsiveness
+- The Account Members and Pending Invites card headers stack on mobile and their tables scroll horizontally rather than overflowing. The super-admin bulk-invite dialog is now shown only for association accounts (not villa).
+
+### Discounts: "coupon" wording and clearer field help
+- The discounts screen now speaks of "coupon codes", with field labels and help text reworded for clarity ("Valid from/until", "Max Savings", "Max Uses", approval-above-ceiling copy).
+
+### Landing page redesign
+- The marketing landing page, early-access form, and layout were restyled: sticky header, two-column hero and feature sections with bordered image cards, a carded early-access form, a restructured footer with legal links and the registered-entity block, and smooth scroll. Form fields and the submit button were given consistent full-width styling with the 16px mobile font floor retained to avoid iOS focus zoom.
+
+**Database migrations:** none.
+
+---
+
 ## Villa: Booking Actions, Guest IDs, Report Exports, Sync Messaging & Confirmation Email — 2026-10-29
 
 ### Booking confirmation email sender header, policy links, and contact/footer parity

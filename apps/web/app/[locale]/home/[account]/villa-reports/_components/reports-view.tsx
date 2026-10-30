@@ -764,6 +764,7 @@ export function ReportsView(props: {
                   key={group.key}
                   href={href({ tab: group.tabs[0].value })}
                   scroll={false}
+                  prefetch={true}
                   data-test={`villa-reports-group-${group.key}`}
                   className={cn(
                     'flex-1 rounded-md px-3 py-1.5 text-center text-sm font-medium whitespace-nowrap transition-colors sm:flex-none',
@@ -850,6 +851,7 @@ export function ReportsView(props: {
                 key={t.value}
                 href={href({ tab: t.value })}
                 scroll={false}
+                prefetch={true}
                 role="tab"
                 aria-selected={isActive}
                 data-test={`villa-reports-tab-${t.value}`}

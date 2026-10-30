@@ -13,236 +13,207 @@ const LEGAL_LINKS = [
 const BUILDING_IMAGE =
   'https://images.unsplash.com/photo-1554435493-93422e8220c8?auto=format&fit=crop&w=1400&q=80';
 
+const SECONDARY_IMAGE =
+  'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80';
+
 export const metadata = {
   title: 'Ooruda — Private Beta',
   description:
-    'Future of Property Management, Simplified. Ooruda is stepping in to digitize, streamline and automate your entire property ecosystem.',
+    'Future of Property Management, Simplified. Ooruda is stepping in to digitize, streamline, and automate your entire property ecosystem.',
 };
 
 export default function LandingPage() {
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        fontFamily: '"DM Sans", sans-serif',
-        backgroundColor: '#ffffff',
-      }}
-    >
+    <div className="min-h-screen bg-white text-neutral-900">
       {/* ── Header ── */}
-      <header
-        className="flex items-center justify-between px-8 py-5 sm:px-14"
-        style={{ backgroundColor: '#ffffff' }}
-      >
-        {/* Status badge, not a link — the underline it carried read as one. */}
-        <span className="rounded-full bg-[#1d1e20]/5 px-3 py-1 text-[12px] font-medium tracking-wide text-[#1d1e20]">
-          Private Beta
-        </span>
+      <header className="sticky top-0 z-50 border-b border-neutral-100 bg-white/95 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 sm:px-8">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-2">
+              <OorudaMark size={30} className="text-[#FCD469]" />
+              <span className="text-xl font-bold tracking-tight text-neutral-950 lowercase">
+                ooruda
+              </span>
+            </Link>
+            <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-700">
+              Private Beta
+            </span>
+          </div>
 
-        <div className="flex flex-col items-center gap-1">
-          <OorudaMark size={34} className="text-[#FCD469]" />
-          <span className="text-[22px] font-bold tracking-tight text-[#1d1e20] lowercase">
-            ooruda
-          </span>
+          <Link
+            href="/access"
+            className="inline-flex items-center justify-center rounded-lg border border-neutral-200 bg-white px-3.5 py-1.5 text-xs font-medium text-neutral-800 transition hover:border-neutral-300 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950"
+          >
+            Sign in
+          </Link>
         </div>
-
-        <Link
-          href="/access"
-          className="rounded-lg border border-[#FCD469] bg-[#FCD469]/30 px-4 py-1.5 text-[12px] font-medium text-[#1d1e20] transition-colors hover:bg-[#FCD469]/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1d1e20]"
-        >
-          Sign in
-        </Link>
       </header>
 
       {/* ── Hero ── */}
-      {/*
-        Building image sits absolutely within this section, mirroring the original.
-        Content overlaps from the left; the building fades to white on all sides.
-      */}
-      {/*
-        Two columns, mirroring the section below: copy left, photo card right.
-        The photo used to be an absolutely-positioned, gradient-masked
-        background, which is why it had hard edges, a muddy fade and no
-        relationship to the rounded card further down. As a real flex child it
-        also stacks under the copy on mobile, so the building is finally
-        visible on a phone instead of hidden.
-      */}
-      <section
-        className="px-8 pt-8 pb-12 sm:px-14 sm:pt-10 sm:pb-16"
-        style={{ backgroundColor: '#ffffff' }}
-      >
-        {/*
-          Grid on desktop, plain block flow on mobile. This lets the photo sit
-          between the copy and the CTA on a phone — so the button is the last
-          thing in the hero and reads as the section's endpoint — while still
-          occupying the full right-hand column on desktop. Ordering this with
-          flex would have meant duplicating either the image or the button.
-        */}
-        <div className="mx-auto max-w-6xl lg:grid lg:grid-cols-2 lg:items-center lg:gap-x-16">
-          <h1
-            className="text-[52px] leading-[1.15] text-[#1d1e20]"
-            style={{ fontWeight: 400 }}
-          >
-            <strong style={{ fontWeight: 700 }}>Future</strong> of Property
-            Management, <strong style={{ fontWeight: 700 }}>Simplified.</strong>
-          </h1>
+      <section className="px-6 pt-12 pb-16 sm:px-8 sm:pt-16 sm:pb-20 lg:pt-20 lg:pb-24">
+        <div className="mx-auto max-w-6xl lg:grid lg:grid-cols-12 lg:items-center lg:gap-12 xl:gap-16">
+          <div className="lg:col-span-7">
+            <h1 className="text-4xl font-normal tracking-tight text-neutral-950 sm:text-5xl lg:text-[54px] lg:leading-[1.14]">
+              <strong className="font-bold">Future</strong> of Property
+              Management, <strong className="font-bold">Simplified.</strong>
+            </h1>
 
-          <p className="mt-6 max-w-2xl text-[16px] leading-[1.7] text-[#1d1e20]">
-            Managing properties shouldn&apos;t feel like a full-time chore.
-            Whether you are overseeing a bustling commercial complex or tracking
-            utility bills across multiple units, <strong>Ooruda</strong> is
-            stepping in to digitize, streamline, and automate your entire
-            property ecosystem.
-          </p>
+            <p className="mt-6 max-w-xl text-base leading-relaxed text-neutral-600 sm:text-lg">
+              Managing properties shouldn&apos;t feel like a full-time chore.
+              Whether you are overseeing a bustling commercial complex or
+              tracking utility bills across multiple units,{' '}
+              <strong className="font-semibold text-neutral-900">Ooruda</strong>{' '}
+              is stepping in to digitize, streamline, and automate your entire
+              property ecosystem.
+            </p>
 
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={BUILDING_IMAGE}
-            alt="A commercial office building of the kind Ooruda associations manage"
-            width={1400}
-            height={1867}
-            loading="eager"
-            decoding="async"
-            className="mt-8 w-full rounded-2xl object-cover shadow-xl lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:mt-0"
-            style={{ aspectRatio: '4 / 3' }}
-          />
+            <div className="mt-8 flex items-center gap-4 sm:mt-10">
+              <a
+                href="#waitlist"
+                className="inline-flex items-center justify-center rounded-lg bg-[#FCD469] px-6 py-3.5 text-sm font-semibold text-neutral-950 shadow-sm transition hover:bg-[#f5cf5e] hover:shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950"
+              >
+                Request Access
+              </a>
+            </div>
+          </div>
 
-          <a
-            href="#waitlist"
-            className="mt-8 inline-block justify-self-start rounded-lg px-6 py-3.5 text-[16px] font-medium text-black transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1d1e20] lg:mt-9"
-            style={{ background: '#FCD469', borderRadius: '8px' }}
-          >
-            Request Access
-          </a>
+          <div className="mt-10 lg:col-span-5 lg:mt-0">
+            <div className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-neutral-100 shadow-lg shadow-neutral-200/50">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={BUILDING_IMAGE}
+                alt="A commercial office building of the kind Ooruda associations manage"
+                width={1400}
+                height={1867}
+                loading="eager"
+                decoding="async"
+                className="aspect-[4/3] w-full object-cover lg:aspect-[4/4.2]"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
       {/* ── "Something Big" section ── */}
-      <section
-        className="border-t border-[#f0f0f0] px-8 py-12 sm:px-14 sm:py-16"
-        style={{ backgroundColor: '#ffffff' }}
-      >
-        {/*
-          Centred and capped. The text column was `flex-1` while its own copy
-          was capped at max-w-xl, so on a wide screen the column kept growing
-          and left a dead channel between the paragraph and the photo.
-        */}
-        <div className="mx-auto flex max-w-6xl flex-col gap-10 lg:flex-row lg:items-center lg:gap-14">
-          {/* Text */}
-          <div className="min-w-0 flex-1">
-            <h2 className="text-[32px] leading-[1.2] font-bold text-[#FCD469]">
+      <section className="border-y border-[#f0eee6] bg-[#faf8f2]/80 px-6 py-16 sm:px-8 sm:py-20 lg:py-24">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-8 lg:grid-cols-12 lg:gap-12 xl:gap-16">
+          {/* On desktop: Image on left (lg:order-1, col-span-5). On mobile: renders after text */}
+          <div className="lg:order-1 lg:col-span-5">
+            <div className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-neutral-100 shadow-lg shadow-neutral-200/50">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={SECONDARY_IMAGE}
+                alt="Property management essentials — commercial building architecture"
+                width={1200}
+                height={800}
+                loading="lazy"
+                decoding="async"
+                className="aspect-[16/10] w-full object-cover lg:aspect-[4/3.5]"
+              />
+            </div>
+          </div>
+
+          {/* On desktop: Text on right (lg:order-2, col-span-7). On mobile: renders first */}
+          <div className="order-first lg:order-2 lg:col-span-7">
+            <h2 className="text-2xl font-bold tracking-tight text-neutral-950 sm:text-3xl lg:text-4xl">
               Something Big is Built for Your Properties.
             </h2>
-            <p className="mt-5 max-w-2xl text-[16px] leading-[1.7] text-[#4a4a4a]">
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-neutral-600 sm:text-lg">
               Ooruda is live with a hyper-focus on Commercial Property
               Management, bringing associations smarter tools to handle the
               essentials without the headache. We are onboarding a limited
               number of associations at a time.
             </p>
           </div>
-
-          {/* Dark property photo */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="https://images.pexels.com/photos/27920274/pexels-photo-27920274.jpeg?auto=compress&cs=tinysrgb&w=800"
-            alt="Property management essentials — house models, key, calculator"
-            width={800}
-            height={450}
-            loading="lazy"
-            decoding="async"
-            className="w-full shrink-0 rounded-2xl object-cover shadow-xl lg:w-[480px]"
-            style={{ aspectRatio: '16/9' }}
-          />
         </div>
       </section>
 
       {/* ── Early access form ── */}
       <section
         id="waitlist"
-        className="px-8 py-16 sm:px-14"
-        style={{ backgroundColor: '#ffffff' }}
+        className="border-t border-neutral-100 px-6 py-16 sm:px-8 sm:py-24"
       >
-        <div className="mx-auto max-w-xl text-center">
-          <span className="text-[12px] font-semibold tracking-[0.15em] text-[#FCD469] uppercase">
+        <div className="mx-auto max-w-2xl text-center">
+          <span className="text-xs font-semibold tracking-wider text-amber-700 uppercase">
             Early Access
           </span>
-          <h3 className="mt-3 text-[24px] leading-[1.25] font-bold text-[#1d1e20]">
+          <h3 className="mt-2 text-2xl font-bold tracking-tight text-neutral-950 sm:text-3xl">
             Secure your spot
           </h3>
-          <p className="mt-4 text-[16px] leading-[1.7] text-[#4a4a4a]">
+          <p className="mt-4 text-base leading-relaxed text-neutral-600 sm:text-lg">
             Request an invitation to the private beta. We will get in touch to
             set your association up, and founding members keep preferential
             pricing at launch.
           </p>
         </div>
-        <div className="mx-auto mt-10 max-w-xl">
+
+        <div className="mx-auto mt-10 max-w-lg rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm sm:p-8">
           <EarlyAccessForm />
-          <p className="mt-6 text-center text-[14px] text-[#1d1e20]/60">
+          <div className="mt-6 border-t border-neutral-100 pt-6 text-center text-xs text-neutral-500 sm:text-sm">
             OR drop us a line at:{' '}
             <a
               href="mailto:hello@ooruda.com"
-              className="font-medium text-[#1d1e20] underline underline-offset-2"
+              className="font-medium text-neutral-900 underline underline-offset-4 hover:text-neutral-700"
             >
               hello@ooruda.com
             </a>
-          </p>
+          </div>
         </div>
       </section>
 
       {/* ── Footer ── */}
-      <footer
-        className="border-t border-[#eee] px-8 py-12 sm:px-14"
-        style={{ backgroundColor: '#ffffff' }}
-      >
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="flex flex-col items-center gap-1">
-            <div className="mx-auto mb-1 h-px w-12 bg-[#FCD469]" />
-            <span className="text-[22px] font-bold text-[#1d1e20]">Ooruda</span>
-            <p className="text-[14px] font-medium text-[#1d1e20]">
-              <strong>Future</strong> of Property Management,{' '}
-              <strong>Simplified</strong>
-            </p>
+      <footer className="border-t border-neutral-200/80 bg-neutral-50 px-6 py-12 sm:px-8 sm:py-16">
+        <div className="mx-auto max-w-6xl">
+          <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
+            {/* Brand & Tagline */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <OorudaMark size={28} className="text-[#FCD469]" />
+                <span className="text-xl font-bold tracking-tight text-neutral-950">
+                  Ooruda
+                </span>
+                <span className="rounded-full bg-neutral-200/70 px-2 py-0.5 text-[11px] font-medium text-neutral-700">
+                  Private Beta
+                </span>
+              </div>
+              <p className="text-sm text-neutral-600">
+                <strong>Future</strong> of Property Management,{' '}
+                <strong>Simplified</strong>
+              </p>
+            </div>
 
-            <span className="mt-1 text-[11px] font-semibold tracking-[0.2em] text-[#FCD469] uppercase">
-              Ooruda Private Beta
-            </span>
+            {/* Legal Links */}
+            <nav
+              aria-label="Legal"
+              className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-neutral-600"
+            >
+              {LEGAL_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="transition-colors hover:text-neutral-950"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
           </div>
 
-          {/*
-            These three links are the only public route to the policies:
-            proxy.ts gates /(auth|home)/* behind the access cookie, so the
-            copies rendered on the auth screens are unreachable to a visitor
-            who has no PIN — including a payment-gateway reviewer.
-          */}
-          <nav
-            aria-label="Legal"
-            className="flex flex-wrap justify-center gap-x-5 gap-y-2"
-          >
-            {LEGAL_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="rounded text-[12px] text-[#1d1e20]/70 transition-colors hover:text-[#1d1e20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1d1e20]"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+          <div className="my-8 h-px w-full bg-neutral-200/70" />
 
-          <div className="h-px w-full bg-[#eee]" />
+          <div className="flex flex-col gap-4 text-xs text-neutral-500 sm:flex-row sm:items-center sm:justify-between">
+            {/* Corporate entity */}
+            <address className="leading-relaxed not-italic">
+              Habbaa Solutions Private Limited &middot; 209, Citadel Prism, PVS
+              Kalakunj Road, Kodialbail, Mangalore 575003, Karnataka, India
+              <br />
+              CIN: U47711KA2025PTC207750 &middot; GSTIN: 29AAICH1682G1ZD
+            </address>
 
-          {/* The operating entity: "Ooruda" is the product, not the company. */}
-          <address className="text-[12px] leading-relaxed text-[#1d1e20]/70 not-italic">
-            Habbaa Solutions Private Limited
-            <br />
-            209, Citadel Prism, PVS Kalakunj Road, Kodialbail, Mangalore 575003,
-            Karnataka, India
-            <br />
-            CIN: U47711KA2025PTC207750 &middot; GSTIN: 29AAICH1682G1ZD
-          </address>
-
-          <span className="text-[12px] text-[#1d1e20]/70">
-            &copy; {new Date().getFullYear()} Ooruda. All rights reserved.
-          </span>
+            <span className="shrink-0">
+              &copy; {new Date().getFullYear()} Ooruda. All rights reserved.
+            </span>
+          </div>
         </div>
       </footer>
     </div>

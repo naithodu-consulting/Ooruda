@@ -85,6 +85,22 @@ function assertReleasable(block: Block): void {
   }
 }
 
+const BLOCKS_CACHE_TTL_MS = 30_000;
+
+const blocksCache = new Map<string, { value: Block[]; expiresAt: number }>();
+
+export function invalidateBlocksCache(sitePropertyId?: string) {
+  if (sitePropertyId) {
+    for (const key of blocksCache.keys()) {
+      if (key.startsWith(sitePropertyId)) {
+        blocksCache.delete(key);
+      }
+    }
+  } else {
+    blocksCache.clear();
+  }
+}
+
 /** Blocks overlapping [from, to). */
 export async function listBlocks(
   site: VillaSite,
@@ -92,6 +108,13 @@ export async function listBlocks(
   to: string,
 ): Promise<Block[]> {
   nightsIn(from, to);
+
+  const cacheKey = `${site.sitePropertyId}:${from}:${to}`;
+  const cached = blocksCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
 
   const { data, error } = await site.client
     .from('blocked_dates')
@@ -103,7 +126,14 @@ export async function listBlocks(
 
   if (error) throw fromSiteError(error);
 
-  return (data ?? []).map(toBlock);
+  const result = (data ?? []).map(toBlock);
+
+  blocksCache.set(cacheKey, {
+    value: result,
+    expiresAt: Date.now() + BLOCKS_CACHE_TTL_MS,
+  });
+
+  return result;
 }
 
 /**
@@ -146,6 +176,7 @@ export async function createBlock(
 
     if (error) throw fromSiteWriteError(error);
 
+    invalidateBlocksCache(site.sitePropertyId);
     return { result: toBlock(data), siteId: data.id };
   });
 }
@@ -260,6 +291,7 @@ export async function releaseFromBlock(
       );
     }
 
+    invalidateBlocksCache(site.sitePropertyId);
     return { result: { remaining }, siteId: blockId };
   });
 }

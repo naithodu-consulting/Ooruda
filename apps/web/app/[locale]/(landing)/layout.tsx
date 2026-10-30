@@ -5,7 +5,14 @@ const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-dm-sans' });
 export default function LandingLayout({ children }: React.PropsWithChildren) {
   return (
     <>
-      <style>{`html, body { background-color: #ffffff !important; }`}</style>
+      <style>{`
+        html, body {
+          background-color: #ffffff !important;
+        }
+        html {
+          scroll-behavior: smooth;
+        }
+      `}</style>
       <div
         className={`${dmSans.variable} font-[family-name:var(--font-dm-sans)]`}
         style={{ backgroundColor: '#ffffff' }}

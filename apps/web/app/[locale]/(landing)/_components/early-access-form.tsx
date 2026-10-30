@@ -7,15 +7,13 @@ import Link from 'next/link';
 import appConfig from '~/config/app.config';
 
 /**
- * 16px is a floor, not a style choice: iOS Safari zooms the viewport on focus
- * for any input below it, which jerks the layout on every tap.
+ * 16px font-size floor on mobile prevents iOS Safari from zooming the viewport on focus.
  */
 const FIELD_CLASS =
-  'rounded-lg border border-[#ddd] bg-[#fafafa] px-4 py-3 text-[16px] text-[#1d1e20] transition outline-none focus:border-[#FCD469] focus:ring-2 focus:ring-[#FCD469]/30';
+  'w-full rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-[16px] text-neutral-900 placeholder:text-neutral-400 transition outline-none focus:border-neutral-400 focus:ring-2 focus:ring-[#FCD469]/50 sm:text-sm';
 
-const LABEL_CLASS = 'text-[12px] font-medium text-[#1d1e20]';
+const LABEL_CLASS = 'text-xs font-medium text-neutral-700';
 
-/** Meets 4.5:1 on white; the default red-500 measured 3.81:1. */
 const REQUIRED_MARK_CLASS = 'text-red-600';
 
 export function EarlyAccessForm() {
@@ -36,17 +34,11 @@ export function EarlyAccessForm() {
 
       {/*
         Redirect back to whichever environment the visitor is actually on.
-        This was hardcoded to the production URL, so submitting from localhost
-        or a preview deploy bounced the tester onto the live site and made the
-        success path impossible to verify anywhere but production.
       */}
       <input type={'hidden'} name={'_next'} value={appConfig.url} />
 
       {/*
-        Honeypot. Captcha stays off so the form keeps its one-step flow, but
-        this catches the bulk of automated submissions — the form is public,
-        unauthenticated and posts to a third party, so it had no spam
-        protection at all before.
+        Honeypot spam protection.
       */}
       <input
         type={'text'}
@@ -101,33 +93,23 @@ export function EarlyAccessForm() {
         />
       </div>
 
-      {/*
-        The form navigates away on submit, so a slow network previously looked
-        like a dead button and invited a second click — which creates duplicate
-        leads at the form provider.
-      */}
       <button
         type={'submit'}
         disabled={submitting}
         aria-busy={submitting}
         className={
-          'mx-auto mt-1 block rounded-lg px-10 py-3.5 text-center text-[16px] font-medium text-black transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1d1e20] disabled:cursor-not-allowed disabled:opacity-60'
+          'mt-2 w-full rounded-lg bg-[#FCD469] px-6 py-3 text-center text-sm font-semibold text-neutral-950 shadow-sm transition hover:bg-[#f5cf5e] hover:shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-60'
         }
-        style={{ background: '#FCD469' }}
       >
         {submitting ? 'Sending…' : 'Request Early Access'}
       </button>
 
-      {/*
-        Notice at the point of collection: this form posts name, email and a
-        free-text message to formsubmit.co, a third-party processor.
-      */}
-      <p className={'mt-3 text-center text-[12px] text-[#1d1e20]/70'}>
+      <p className={'mt-2 text-center text-xs leading-normal text-neutral-500'}>
         By submitting, you agree to our{' '}
         <Link
           href={'/privacy-policy'}
           className={
-            'rounded underline underline-offset-2 hover:text-[#1d1e20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1d1e20]'
+            'underline underline-offset-2 hover:text-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950'
           }
         >
           Privacy Policy

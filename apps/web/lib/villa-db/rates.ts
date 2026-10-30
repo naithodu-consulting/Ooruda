@@ -248,6 +248,7 @@ export async function updateBaseRates(
     return { result: undefined, siteId: site.sitePropertyId };
   });
 
+  invalidatePricingInputs(site.sitePropertyId);
   return getBaseRates(site);
 }
 
@@ -377,6 +378,7 @@ export async function createPricingRule(
 
     if (error) throw fromSiteWriteError(error);
 
+    invalidatePricingInputs(site.sitePropertyId);
     return { result: toRule(data), siteId: data.id };
   });
 }
@@ -398,6 +400,7 @@ export async function deletePricingRule(
     if (!data || data.length === 0)
       throw new VillaDbError('NOT_FOUND', `rule ${ruleId}`);
 
+    invalidatePricingInputs(site.sitePropertyId);
     return { result: undefined, siteId: ruleId };
   });
 }
@@ -406,11 +409,30 @@ export async function deletePricingRule(
  * The exact inputs the guest site's pricing engine uses, in paise — for
  * quoting phone/WhatsApp bookings with lib/villa/pricing (quoteStay).
  */
-/** Everything `quoteStay` prices from. Request-cached, like getBaseRates. */
+const PRICING_INPUTS_TTL_MS = 60_000;
+
+const pricingInputsCache = new Map<
+  string,
+  {
+    value: { property: PricingProperty; rules: PricingRuleInput[] };
+    expiresAt: number;
+  }
+>();
+
+export function invalidatePricingInputs(sitePropertyId: string) {
+  pricingInputsCache.delete(sitePropertyId);
+}
+
+/** Everything `quoteStay` prices from. In-memory and request-cached. */
 export const getPricingInputs = cache(
   async (
     site: VillaSite,
   ): Promise<{ property: PricingProperty; rules: PricingRuleInput[] }> => {
+    const cached = pricingInputsCache.get(site.sitePropertyId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+
     const [{ data: property, error }, { data: rules, error: rulesError }] =
       await Promise.all([
         site.client
@@ -437,7 +459,7 @@ export const getPricingInputs = cache(
       );
     }
 
-    return {
+    const value = {
       property: {
         ...property,
         extra_guest_tier2_rate: property.extra_guest_tier2_rate ?? null,
@@ -445,5 +467,12 @@ export const getPricingInputs = cache(
       },
       rules: rules ?? [],
     };
+
+    pricingInputsCache.set(site.sitePropertyId, {
+      value,
+      expiresAt: Date.now() + PRICING_INPUTS_TTL_MS,
+    });
+
+    return value;
   },
 );

@@ -2,6 +2,7 @@ import 'server-only';
 import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 
+import { invalidateBlocksCache } from '~/lib/villa-db/blocks';
 import type { VillaSite } from '~/lib/villa-db/client';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { logSync } from '~/lib/villa-db/sync-log';
@@ -597,9 +598,25 @@ export interface IcalFeedStatusSummary {
  * When any active feed has a non-ok status, `lastSyncedAt` is returned as `null`
  * so the UI never labels a failure timestamp as "last ok".
  */
+const ICAL_STATUS_TTL_MS = 60_000;
+
+const icalStatusCache = new Map<
+  string,
+  { value: IcalFeedStatusSummary; expiresAt: number }
+>();
+
+export function invalidateIcalFeedsStatus(sitePropertyId: string) {
+  icalStatusCache.delete(sitePropertyId);
+}
+
 export async function getIcalFeedsStatus(
   site: VillaSite,
 ): Promise<IcalFeedStatusSummary> {
+  const cached = icalStatusCache.get(site.sitePropertyId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
   const { data, error } = await site.client
     .from('ical_feeds')
     .select('id, name, last_synced_at, last_status')
@@ -608,7 +625,12 @@ export async function getIcalFeedsStatus(
     .order('name');
 
   if (error || !data || data.length === 0) {
-    return { lastSyncedAt: null, lastStatus: null };
+    const res = { lastSyncedAt: null, lastStatus: null };
+    icalStatusCache.set(site.sitePropertyId, {
+      value: res,
+      expiresAt: Date.now() + ICAL_STATUS_TTL_MS,
+    });
+    return res;
   }
 
   let latestOkAt: string | null = null;
@@ -626,14 +648,19 @@ export async function getIcalFeedsStatus(
     }
   }
 
-  if (failedStatus) {
-    return { lastSyncedAt: null, lastStatus: failedStatus };
-  }
+  const res: IcalFeedStatusSummary = failedStatus
+    ? { lastSyncedAt: null, lastStatus: failedStatus }
+    : {
+        lastSyncedAt: latestOkAt,
+        lastStatus: latestOkAt ? 'ok' : null,
+      };
 
-  return {
-    lastSyncedAt: latestOkAt,
-    lastStatus: latestOkAt ? 'ok' : null,
-  };
+  icalStatusCache.set(site.sitePropertyId, {
+    value: res,
+    expiresAt: Date.now() + ICAL_STATUS_TTL_MS,
+  });
+
+  return res;
 }
 
 /**
@@ -648,6 +675,7 @@ export async function syncIcalFeeds(
   site: VillaSite,
   actorUserId: string | null = null,
 ): Promise<SyncNowResult> {
+  invalidateIcalFeedsStatus(site.sitePropertyId);
   const logger = await getLogger();
   const startedAt = Date.now();
 
@@ -957,8 +985,11 @@ export async function syncIcalFeeds(
   }
 
   // Purge the guest booking site cache when blocks changed so the guest
-  // availability calendar reflects the sync immediately.
+  // availability calendar reflects the sync immediately, and drop Ooruda's
+  // own blocks cache so the operator calendar does the same (the sync
+  // rewrote `blocked_dates`, which `listBlocks` caches).
   if (anyChanged) {
+    invalidateBlocksCache(site.sitePropertyId);
     await revalidateBookingSite('ical-sync');
   }
 

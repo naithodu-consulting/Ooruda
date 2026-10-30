@@ -45,6 +45,7 @@ export function CalendarView(props: {
   blocks: ReleasableBlock[];
   bookingCutoff: string | null;
 }) {
+  const [mobileView, setMobileView] = useState<'grid' | 'agenda'>('grid');
   const [releasing, setReleasing] = useState<ReleasableBlock | null>(null);
   const openBlock = (id: string) => {
     const block = props.blocks.find((b) => b.id === id);
@@ -60,7 +61,41 @@ export function CalendarView(props: {
 
   return (
     <>
-      <Card className="bg-card hidden overflow-hidden md:block">
+      <div className="flex items-center justify-between md:hidden">
+        <div className="bg-muted inline-flex rounded-lg p-1">
+          <button
+            type="button"
+            onClick={() => setMobileView('grid')}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+              mobileView === 'grid'
+                ? 'bg-background text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            Calendar
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileView('agenda')}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+              mobileView === 'agenda'
+                ? 'bg-background text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            Agenda
+          </button>
+        </div>
+      </div>
+
+      <Card
+        className={cn(
+          'bg-card overflow-hidden',
+          mobileView === 'agenda' && 'hidden md:block',
+        )}
+      >
         <div
           className="bg-muted/30 grid grid-cols-7 border-b"
           role="row"
@@ -69,7 +104,7 @@ export function CalendarView(props: {
           {WEEKDAYS.map((d) => (
             <div
               key={d}
-              className="text-muted-foreground px-2.5 py-2 text-xs font-semibold tracking-wide uppercase"
+              className="text-muted-foreground px-1 py-1.5 text-center text-[10px] font-semibold tracking-wide uppercase md:px-2.5 md:py-2 md:text-left md:text-xs"
             >
               {d}
             </div>
@@ -106,7 +141,12 @@ export function CalendarView(props: {
         </div>
       </Card>
 
-      <div className="flex flex-col gap-3 md:hidden">
+      <div
+        className={cn(
+          'flex flex-col gap-3',
+          mobileView === 'grid' ? 'hidden md:hidden' : 'md:hidden',
+        )}
+      >
         <Legend showClosed={!!props.bookingCutoff} />
         <Agenda
           entries={props.agenda}
@@ -176,14 +216,14 @@ function DayCell(props: {
       data-test={`villa-calendar-day-${day.date}`}
       data-past-cutoff={day.pastCutoff ? 'true' : undefined}
       className={cn(
-        'flex min-h-24 flex-col gap-1 border-r p-1 last:border-r-0',
+        'flex min-h-16 flex-col gap-0.5 border-r p-0.5 last:border-r-0 md:min-h-24 md:gap-1 md:p-1',
         !day.inMonth && 'bg-muted/30',
         day.pastCutoff && 'bg-destructive/5',
       )}
     >
       <span
         className={cn(
-          'flex h-6 w-6 items-center justify-center self-end rounded-full text-xs tabular-nums',
+          'flex h-5 w-5 items-center justify-center self-end rounded-full text-[10px] tabular-nums md:h-6 md:w-6 md:text-xs',
           day.isToday && 'bg-primary text-primary-foreground font-semibold',
           !day.isToday &&
             (day.inMonth ? 'text-foreground' : 'text-muted-foreground'),

@@ -315,6 +315,7 @@ export async function createOfflineBooking(
 
     const booking = toBooking(confirmedRow);
 
+    invalidateBookingsViewCache(site.sitePropertyId);
     return { result: booking, siteId: booking.bookingCode ?? booking.id };
   });
 }
@@ -357,6 +358,7 @@ export async function cancelBooking(
 
     const booking = toBooking(data as BookingRow);
 
+    invalidateBookingsViewCache(site.sitePropertyId);
     return { result: booking, siteId: booking.bookingCode ?? booking.id };
   });
 }
@@ -404,6 +406,7 @@ export async function markStayCompleted(
 
     const booking = toBooking(data as BookingRow);
 
+    invalidateBookingsViewCache(site.sitePropertyId);
     return { result: booking, siteId: booking.bookingCode ?? booking.id };
   });
 }
@@ -469,6 +472,25 @@ export async function listBookings(
 
 export type BookingView = 'upcoming' | 'in_house' | 'past' | 'cancelled';
 
+const BOOKINGS_VIEW_TTL_MS = 30_000;
+
+const bookingsViewCache = new Map<
+  string,
+  { value: SiteBooking[]; expiresAt: number }
+>();
+
+export function invalidateBookingsViewCache(sitePropertyId?: string) {
+  if (sitePropertyId) {
+    for (const key of bookingsViewCache.keys()) {
+      if (key.startsWith(sitePropertyId)) {
+        bookingsViewCache.delete(key);
+      }
+    }
+  } else {
+    bookingsViewCache.clear();
+  }
+}
+
 /**
  * Bookings for a list view, relative to today in India:
  *   upcoming   confirmed, check-in after today
@@ -481,6 +503,13 @@ export async function listBookingsByView(
   view: BookingView,
   limit = 100,
 ): Promise<SiteBooking[]> {
+  const cacheKey = `${site.sitePropertyId}:${view}:${limit}`;
+  const cached = bookingsViewCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
   const today = todayIst();
   let query = site.client
     .from('bookings')
@@ -512,7 +541,14 @@ export async function listBookingsByView(
 
   if (error) throw fromSiteError(error);
 
-  return (data ?? []).map((row) => toBooking(row as BookingRow));
+  const result = (data ?? []).map((row) => toBooking(row as BookingRow));
+
+  bookingsViewCache.set(cacheKey, {
+    value: result,
+    expiresAt: Date.now() + BOOKINGS_VIEW_TTL_MS,
+  });
+
+  return result;
 }
 
 /**
@@ -711,6 +747,9 @@ export async function setPaymentStatus(
       if (!data) throw new VillaDbError('NOT_FOUND', `booking ${bookingId}`);
 
       const booking = toBooking(data as BookingRow);
+      // The list view renders payment_status as a badge, so the cached list
+      // must drop when it changes (as cancel/complete/reopen already do).
+      invalidateBookingsViewCache(site.sitePropertyId);
       return { result: booking, siteId: booking.bookingCode ?? booking.id };
     },
   );
@@ -754,6 +793,7 @@ export async function reopenStay(
     }
 
     const booking = toBooking(data as BookingRow);
+    invalidateBookingsViewCache(site.sitePropertyId);
     return { result: booking, siteId: booking.bookingCode ?? booking.id };
   });
 }

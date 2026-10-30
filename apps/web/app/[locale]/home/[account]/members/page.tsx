@@ -110,7 +110,11 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
 
       <div className={'flex w-full max-w-4xl flex-col space-y-4 pb-32'}>
         <Card>
-          <CardHeader className={'flex flex-row justify-between'}>
+          <CardHeader
+            className={
+              'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'
+            }
+          >
             <div className={'flex flex-col space-y-1.5'}>
               <CardTitle>
                 <Trans i18nKey={'common.accountMembers'} />
@@ -121,8 +125,8 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
               </CardDescription>
             </div>
 
-            <div className={'flex items-center gap-2'}>
-              {isSuperAdmin ? (
+            <div className={'flex flex-wrap items-center gap-2'}>
+              {isSuperAdmin && product === 'association' ? (
                 <AdminBulkInviteDialog
                   associationName={account.name ?? undefined}
                 >
@@ -159,7 +163,7 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
             </div>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <AccountMembersTable
               userRoleHierarchy={currentUserRoleHierarchy}
               currentUserId={user.id}
@@ -175,7 +179,11 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
         </Card>
 
         <Card>
-          <CardHeader className={'flex flex-row justify-between'}>
+          <CardHeader
+            className={
+              'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'
+            }
+          >
             <div className={'flex flex-col space-y-1.5'}>
               <CardTitle>
                 <Trans i18nKey={'teams.pendingInvitesHeading'} />
@@ -187,7 +195,7 @@ async function TeamAccountMembersPage({ params }: TeamAccountMembersPageProps) {
             </div>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <AccountInvitationsTable
               permissions={{
                 canUpdateInvitation: canManageRoles,

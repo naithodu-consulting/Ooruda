@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -9,6 +9,7 @@ import {
   CalendarIcon,
   ChevronLeft,
   ChevronRight,
+  Loader2,
   RotateCcw,
 } from 'lucide-react';
 
@@ -57,6 +58,7 @@ export function MonthNav(props: {
 
   const [open, setOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(currentYear);
+  const [isPending, startTransition] = useTransition();
 
   const label = new Date(`${props.month}-15T12:00:00Z`).toLocaleDateString(
     'en-IN',
@@ -68,11 +70,17 @@ export function MonthNav(props: {
     .slice(0, 7);
   const isCurrent = props.month === todayMonth;
 
+  function navigateTo(href: string) {
+    startTransition(() => {
+      router.push(href, { scroll: false });
+    });
+  }
+
   function selectMonth(targetMonth: string) {
     const q = new URLSearchParams(searchParams.toString());
     q.set('month', targetMonth);
     setOpen(false);
-    router.push(`${pathname}?${q.toString()}`, { scroll: false });
+    navigateTo(`${pathname}?${q.toString()}`);
   }
 
   return (
@@ -81,9 +89,18 @@ export function MonthNav(props: {
         <Link
           href={props.prevHref}
           scroll={false}
+          prefetch={true}
           aria-label="Previous month"
           data-test={props['data-test-prev']}
-          className="text-muted-foreground hover:bg-muted/70 hover:text-foreground focus-visible:bg-muted/70 inline-flex h-full w-9 items-center justify-center border-r transition-colors focus-visible:outline-none"
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || isPending) return;
+            e.preventDefault();
+            navigateTo(props.prevHref);
+          }}
+          className={cn(
+            'text-muted-foreground hover:bg-muted/70 hover:text-foreground focus-visible:bg-muted/70 inline-flex h-full w-9 items-center justify-center border-r transition-colors focus-visible:outline-none',
+            isPending && 'pointer-events-none opacity-60',
+          )}
         >
           <ChevronLeft className="h-4 w-4" />
         </Link>
@@ -105,7 +122,11 @@ export function MonthNav(props: {
               />
             }
           >
-            <CalendarIcon className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+            {isPending ? (
+              <Loader2 className="text-muted-foreground h-3.5 w-3.5 shrink-0 animate-spin" />
+            ) : (
+              <CalendarIcon className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+            )}
             <span className="text-sm font-semibold tracking-tight tabular-nums">
               {label}
             </span>
@@ -188,9 +209,18 @@ export function MonthNav(props: {
         <Link
           href={props.nextHref}
           scroll={false}
+          prefetch={true}
           aria-label="Next month"
           data-test={props['data-test-next']}
-          className="text-muted-foreground hover:bg-muted/70 hover:text-foreground focus-visible:bg-muted/70 inline-flex h-full w-9 items-center justify-center border-l transition-colors focus-visible:outline-none"
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || isPending) return;
+            e.preventDefault();
+            navigateTo(props.nextHref);
+          }}
+          className={cn(
+            'text-muted-foreground hover:bg-muted/70 hover:text-foreground focus-visible:bg-muted/70 inline-flex h-full w-9 items-center justify-center border-l transition-colors focus-visible:outline-none',
+            isPending && 'pointer-events-none opacity-60',
+          )}
         >
           <ChevronRight className="h-4 w-4" />
         </Link>
@@ -200,10 +230,21 @@ export function MonthNav(props: {
         <Link
           href={props.todayHref}
           scroll={false}
+          prefetch={true}
           data-test={props['data-test-today']}
-          className="bg-card text-muted-foreground hover:bg-muted/70 hover:text-foreground inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium shadow-2xs transition-colors"
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || isPending) return;
+            e.preventDefault();
+            navigateTo(props.todayHref!);
+          }}
+          className={cn(
+            'bg-card text-muted-foreground hover:bg-muted/70 hover:text-foreground inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium shadow-2xs transition-colors',
+            isPending && 'pointer-events-none opacity-60',
+          )}
         >
-          <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+          <RotateCcw
+            className={cn('h-3.5 w-3.5 shrink-0', isPending && 'animate-spin')}
+          />
           <span>{props.todayLabel ?? 'Today'}</span>
         </Link>
       ) : null}

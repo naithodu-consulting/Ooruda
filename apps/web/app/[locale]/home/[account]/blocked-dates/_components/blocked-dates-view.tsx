@@ -78,6 +78,7 @@ export function BlockedDatesView(props: {
                 <Link
                   key={option.value}
                   href={option.href}
+                  prefetch={true}
                   aria-current={option.active ? 'page' : undefined}
                   scroll={false}
                   className={cn(
