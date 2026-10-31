@@ -42,6 +42,7 @@ This document covers all feature work, enhancements, and notable changes built o
 - **Tariff**: Per night, printed as `₹19,700 per night + GST` so a signed card cannot be read as quoting an all-in price. Extra-guest charges included and the discount applied, rounded to the rupee — an average across the nights when weekend or seasonal rates differ. No rate is stated, since the GST slab depends on the nightly rate.
 - **`SEC DEPOSIT` is now `SECURITY DEPOSIT`** and prints blank: a refundable deposit collected at check-in is not the tariff advance (`deposit_amount`), so nothing is prefilled until that amount is configured.
 - **House rules track the villa's settings**: The occupancy clause takes its two numbers from Villa Settings (max guests / included guests) instead of a frozen "14 / 8", so a signed card cannot contradict what the system enforces. Two typos in the villa's original wording were corrected ("will **be** collected", "Quiet hours**, 10** PM to 7 AM").
+- **Mode of payment** prints the plain mode ("Card", not the ledger's "Card (at the villa)"), and only when exactly one mode has been recorded.
 - **Privacy**: The PDF is served from `/api/villa/bookings/[bookingId]/registration-card/pdf` behind the villa role check, with `Cache-Control: private, no-store` and no storage copy.
 
 **Database migrations:**

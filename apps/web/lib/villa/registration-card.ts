@@ -4,7 +4,6 @@ import { formatDateReadable } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 
 import { ID_DOC_TYPE_LABELS, type IdDocType } from './guest-ids';
-import { paymentModeLabel } from './labels';
 import { fromPaise } from './money';
 
 /**
@@ -200,7 +199,9 @@ export function buildRegistrationCard(
   // assert one - staff write it in.
   const modes = [...new Set(input.paymentModes)];
   const modeOfPayment =
-    modes.length === 1 && modes[0] ? paymentModeLabel(modes[0]) : null;
+    modes.length === 1 && modes[0]
+      ? (CARD_PAYMENT_MODES[modes[0]] ?? modes[0])
+      : null;
 
   return {
     letterhead: {
@@ -246,6 +247,23 @@ export function buildRegistrationCard(
  * pushed onto a second page - a page carrying neither the letterhead nor the
  * booking id. Capped here, in the one place that is unit-testable.
  */
+/**
+ * Payment modes as the card names them.
+ *
+ * Not the shared `paymentModeLabel`: that one says "Card (at the villa)",
+ * which is useful in the ledger - it distinguishes a card swiped at the
+ * property from the website's gateway - but reads as an instruction on a form
+ * the guest fills in at the gate, where "at the villa" is where they already
+ * are. The sheet asks how this stay was paid, and the answer is one word.
+ */
+const CARD_PAYMENT_MODES: Record<string, string> = {
+  cash: 'Cash',
+  upi: 'UPI',
+  bank: 'Bank transfer',
+  card: 'Card',
+  other: 'Other',
+};
+
 const REMARKS_LIMIT = 160;
 const COMPANY_LIMIT = 70;
 

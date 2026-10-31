@@ -193,6 +193,9 @@ describe('buildRegistrationCard', () => {
     expect(input({ paymentModes: ['upi'] }).modeOfPayment).toBe('UPI');
     expect(input({ paymentModes: ['upi', 'upi'] }).modeOfPayment).toBe('UPI');
     expect(input({ paymentModes: ['upi', 'cash'] }).modeOfPayment).toBeNull();
+    // "Card", not the ledger's "Card (at the villa)": the guest filling this
+    // in is already at the villa.
+    expect(input({ paymentModes: ['card'] }).modeOfPayment).toBe('Card');
   });
 
   it('falls back to the reference number when there is no booking code', () => {
