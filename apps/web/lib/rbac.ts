@@ -32,7 +32,7 @@ export const ROLE_HIERARCHY: Record<PropOpsRole, number> = {
 export const ROLE_LABELS: Record<PropOpsRole, string> = {
   assoc_admin: 'Association Admin',
   billing_operator: 'Billing Operator',
-  prop_owner: 'Property Owner',
+  prop_owner: 'Unit Owner',
   tenant: 'Tenant',
 };
 

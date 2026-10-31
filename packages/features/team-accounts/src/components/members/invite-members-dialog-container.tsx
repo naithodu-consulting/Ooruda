@@ -172,10 +172,13 @@ function InviteMembersForm({
 }) {
   const t = useTranslations('teams');
 
-  const defaultRole: Role = roles.includes('prop_owner')
-    ? 'prop_owner'
-    : roles.includes('villa_manager')
+  const isVilla = roles.some((role) => role.startsWith('villa_'));
+  const defaultRole: Role = isVilla
+    ? roles.includes('villa_manager')
       ? 'villa_manager'
+      : (roles[0] ?? '')
+    : roles.includes('prop_owner')
+      ? 'prop_owner'
       : (roles[0] ?? '');
 
   const form = useForm({

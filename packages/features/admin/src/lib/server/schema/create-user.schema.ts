@@ -22,7 +22,7 @@ export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 export const ROLE_LABELS: Record<AssignableRole, string> = {
   assoc_admin: 'Association Admin',
   billing_operator: 'Billing Operator',
-  prop_owner: 'Property Owner',
+  prop_owner: 'Unit Owner',
   tenant: 'Tenant',
   villa_admin: 'Villa Admin',
   villa_manager: 'Villa Manager',

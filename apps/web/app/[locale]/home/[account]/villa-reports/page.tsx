@@ -99,10 +99,7 @@ export default async function VillaReportsPage({
         take a couple of seconds, so it must not hold up the page: the header
         and the villa switcher paint at once and the report streams in.
       */}
-      <Suspense
-        key={`${property.id}-${tab}-${range.from}-${range.to}`}
-        fallback={<ReportSkeleton />}
-      >
+      <Suspense key={property.id} fallback={<ReportSkeleton />}>
         <ReportBody
           account={account}
           tab={tab}

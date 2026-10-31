@@ -82,7 +82,7 @@
       "label": "Billing Operator"
     },
     "prop_owner": {
-      "label": "Property Owner"
+      "label": "Unit Owner"
     },
     "tenant": {
       "label": "Tenant"

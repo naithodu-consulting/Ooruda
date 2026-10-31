@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 
 import { ArrowLeft, CircleAlert, IndianRupee, Phone } from 'lucide-react';
 
+import { hasRegistrationCardTemplate } from '@kit/pdf-templates/registration-card-templates';
 import { formatPhoneNumber } from '@kit/shared/utils';
 import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Alert, AlertDescription, AlertTitle } from '@kit/ui/alert';
@@ -39,6 +40,7 @@ import { CompleteStayButton } from '../_components/complete-stay-button';
 import { GuestEmailsSection } from '../_components/guest-emails-section';
 import { GuestIdsSection } from '../_components/guest-ids-section';
 import { PaymentsSection } from '../_components/payments-section';
+import { RegistrationCardButton } from '../_components/registration-card-button';
 
 export const metadata = { title: 'Booking' };
 
@@ -121,6 +123,12 @@ export default async function BookingPage({ params, searchParams }: Props) {
     (role === 'villa_admin' || settings.managersCanCancel);
   const canCheckOut =
     booking.status === 'confirmed' && booking.checkIn <= today;
+  // The card is the villa's own sheet, printed for a stay that is happening:
+  // a cancelled booking has no check-in, and a villa with no template of its
+  // own offers no download at all rather than a generic form.
+  const canDownloadCard =
+    ['confirmed', 'completed'].includes(booking.status) &&
+    hasRegistrationCardTemplate(property.registrationCardTemplate);
   const guests = booking.adults + booking.children;
   const bookingTitle =
     booking.bookingCode ?? booking.referenceNumber ?? booking.guestName;
@@ -203,7 +211,7 @@ export default async function BookingPage({ params, searchParams }: Props) {
             </Badge>
           </div>
 
-          {canCheckOut || canCancel ? (
+          {canCheckOut || canCancel || canDownloadCard ? (
             <div
               className="flex flex-wrap items-center gap-2 max-sm:w-full max-sm:[&>*]:flex-1"
               data-test={'villa-booking-actions'}
@@ -214,6 +222,13 @@ export default async function BookingPage({ params, searchParams }: Props) {
                   propertyId={propertyId}
                   bookingId={booking.id}
                   guestName={booking.guestName}
+                />
+              ) : null}
+              {canDownloadCard ? (
+                <RegistrationCardButton
+                  accountId={accountId}
+                  propertyId={propertyId}
+                  bookingId={booking.id}
                 />
               ) : null}
               {canCancel ? (
@@ -298,6 +313,17 @@ export default async function BookingPage({ params, searchParams }: Props) {
                     '-'
                   )}
                 </dd>
+                {booking.specialRequests ? (
+                  <>
+                    <dt className="text-muted-foreground">Special requests</dt>
+                    <dd
+                      className="border-warning/30 bg-warning/5 text-warning rounded-md border p-2 text-sm"
+                      data-test={'villa-booking-special-requests'}
+                    >
+                      {booking.specialRequests}
+                    </dd>
+                  </>
+                ) : null}
               </dl>
             </CardContent>
           </Card>

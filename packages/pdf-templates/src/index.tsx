@@ -28,6 +28,9 @@ import {
   ReceiptDocument,
   type ReceiptPdfData,
 } from './documents/receipt-document';
+import { REGISTRATION_CARD_TEMPLATES } from './documents/registration-card/registry';
+import type { RegistrationCardTemplateKey } from './documents/registration-card/template-keys';
+import type { RegistrationCardPdfData } from './documents/registration-card/types';
 import {
   ReportDocument,
   type ReportPdfData,
@@ -71,6 +74,16 @@ export type {
   ExpensesExportPdfData,
   ExpenseExportRow,
 } from './documents/expenses-export-document';
+export type {
+  RegistrationCardPdfData,
+  RegistrationCardLetterhead,
+  RegistrationCardOccupancy,
+} from './documents/registration-card/types';
+export type { RegistrationCardTemplateKey } from './documents/registration-card/template-keys';
+export {
+  REGISTRATION_CARD_TEMPLATE_KEYS,
+  hasRegistrationCardTemplate,
+} from './documents/registration-card/template-keys';
 export type {
   VillaReportPdfData,
   VillaReportSection,
@@ -140,6 +153,26 @@ export async function renderPaymentsExportPdf(
 ): Promise<Buffer> {
   registerPdfFonts();
   return renderToBuffer(<PaymentsExportDocument data={data} />);
+}
+
+/**
+ * Renders one property's own guest registration card. The template is chosen
+ * by the property's key, never defaulted: callers check
+ * `hasRegistrationCardTemplate` first, and an unknown key throws here rather
+ * than quietly printing another villa's letterhead.
+ */
+export async function renderRegistrationCardPdf(
+  template: RegistrationCardTemplateKey,
+  data: RegistrationCardPdfData,
+): Promise<Buffer> {
+  const Card = REGISTRATION_CARD_TEMPLATES[template];
+
+  if (!Card) {
+    throw new Error(`No registration card template '${template}'`);
+  }
+
+  registerPdfFonts();
+  return renderToBuffer(<Card data={data} />);
 }
 
 let warmUp: Promise<void> | null = null;

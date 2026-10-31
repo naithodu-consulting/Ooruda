@@ -88,12 +88,13 @@ export interface SiteBooking {
   discountCode: string | null;
   idStatus: string;
   invoiceNumber: string | null;
+  specialRequests: string | null;
   updatedAt: string | null;
   createdAt: string | null;
 }
 
 const BOOKING_COLUMNS =
-  'id, booking_code, reference_number, status, payment_status, booking_channel, guest_name, guest_email, guest_phone, check_in, check_out, num_nights, num_adults, num_children, num_infants, base_amount, extra_guest_amount, tax_amount, total_amount, discount_amount, discount_code, id_status, invoice_number, updated_at, created_at';
+  'id, booking_code, reference_number, status, payment_status, booking_channel, guest_name, guest_email, guest_phone, check_in, check_out, num_nights, num_adults, num_children, num_infants, base_amount, extra_guest_amount, tax_amount, total_amount, discount_amount, discount_code, id_status, invoice_number, special_requests, updated_at, created_at';
 
 type BookingRow = {
   id: string;
@@ -119,6 +120,7 @@ type BookingRow = {
   discount_code: string | null;
   id_status: string | null;
   invoice_number: string | null;
+  special_requests: string | null;
   updated_at: string | null;
   created_at: string | null;
 };
@@ -148,6 +150,7 @@ function toBooking(row: BookingRow): SiteBooking {
     discountCode: row.discount_code ?? null,
     idStatus: row.id_status ?? 'pending',
     invoiceNumber: row.invoice_number,
+    specialRequests: row.special_requests ?? null,
     updatedAt: row.updated_at,
     createdAt: row.created_at,
   };

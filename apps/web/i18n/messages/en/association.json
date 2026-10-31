@@ -42,7 +42,7 @@
     "super_admin": "Super Admin",
     "assoc_admin": "Association Admin",
     "billing_operator": "Billing Operator",
-    "prop_owner": "Property Owner",
+    "prop_owner": "Unit Owner",
     "tenant": "Tenant"
   }
 }

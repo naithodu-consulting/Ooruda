@@ -172,6 +172,8 @@ export interface GuestEmailContext {
   gstin?: string | null;
   /** Where a guest writes to cancel. Falls back to nothing, not to a guess. */
   supportEmail?: string | null;
+  /** When true, the email notes that extra guests are on mattresses. */
+  additionalGuestsNote?: boolean;
 }
 
 const esc = (s: string) =>
@@ -415,7 +417,7 @@ function confirmationText(
     phone: string | null;
     paidLine: string;
     extraGuestLabel: string;
-    refunds: CancellationOutlook | null;
+    refunds: CancellationOutlook;
     site: string | null;
     base: number;
     extra: number;
@@ -465,40 +467,38 @@ function confirmationText(
             : []),
           ...(v.paidInFull ? ['', 'Amount is paid in full.'] : []),
           '',
-          'Note: A refundable security deposit might be requested upon check-in.',
+          'Note: A refundable security deposit is collected upon check-in.',
           'This is in addition to the online payment. Please contact the property',
           'in case of questions.',
         ]
       : [];
 
-  const cancellation = v.refunds
-    ? [
-        '',
-        'CANCELLATIONS & REFUND',
-        ...(v.refunds.state === 'none'
-          ? ['This booking is non-refundable.']
-          : [
-              ...(v.refunds.state === 'partial'
-                ? [
-                    `This booking may be eligible for a refund if cancelled on or before ${v.refunds.lastRefundableAt}.`,
-                    '',
-                  ]
-                : []),
-              ...v.refunds.rows.map(
-                (r) =>
-                  `  ${r.when} - ${r.refundPaise > 0 ? `${inrP(r.refundPaise)} will be refunded` : 'no refund'}`,
-              ),
-            ]),
-        ...(v.refunds.state !== 'none' && ctx.supportEmail
-          ? [
-              '',
-              `For cancellations, email us at ${ctx.supportEmail} with your booking reference.`,
-              'Approved refunds are generally processed to the original payment',
-              'method within 5 to 7 working days.',
-            ]
-          : []),
-      ]
-    : [];
+  const cancellation = [
+    '',
+    'CANCELLATIONS & REFUND',
+    ...(v.refunds.state === 'none'
+      ? ['This booking is non-refundable.']
+      : [
+          ...(v.refunds.state === 'partial'
+            ? [
+                `This booking may be eligible for a refund if cancelled on or before ${v.refunds.lastRefundableAt}.`,
+                '',
+              ]
+            : []),
+          ...v.refunds.rows.map(
+            (r) =>
+              `  ${r.when} - ${r.refundPaise > 0 ? `${inrP(r.refundPaise)} will be refunded` : 'no refund'}`,
+          ),
+        ]),
+    ...(v.refunds.state !== 'none' && ctx.supportEmail
+      ? [
+          '',
+          `For cancellations, email us at ${ctx.supportEmail} with your booking reference.`,
+          'Approved refunds are generally processed to the original payment',
+          'method within 5 to 7 working days.',
+        ]
+      : []),
+  ];
 
   // The HTML links these three inline; plain text has to spell them out.
   const site = (v.site ?? DEFAULT_VILLA_SITE_URL).replace(/\/+$/, '');
@@ -542,6 +542,13 @@ function confirmationText(
     'We will send the exact address and check-in details to this mobile number',
     'via WhatsApp. If the email address or mobile number above is incorrect,',
     'please let us know.',
+    ...(ctx.additionalGuestsNote
+      ? [
+          '',
+          'Additional guests can be accommodated on mattresses in select bedrooms',
+          'and in the lounge.',
+        ]
+      : []),
     ...payment,
     ...(ctx.bookingUrl ? ['', `View your booking: ${ctx.bookingUrl}`] : []),
     '',
@@ -612,25 +619,14 @@ export function renderGuestEmail(
         ? `Extra guests, ${ctx.extraGuests}`
         : 'Extra guests';
 
-    // The ladder quotes what would come BACK, so it is a percentage of what
-    // the guest has actually paid - never of the contract total.
-    //
-    // The booking site passes its total safely because a stay exists there
-    // only once Razorpay has settled it in full. Ooruda sends this same
-    // confirmation for bookings staff enter by hand, where unpaid and
-    // part-paid are the ordinary cases, so the same argument would have
-    // promised an unpaid ₹54,280 booking that ₹54,280 "will be refunded",
-    // in writing, under the company's CIN and GSTIN.
-    //
-    // So: nothing received, or an amount we cannot name, prints no ladder at
-    // all - the policy links below it still go out. Filtered against when the
-    // booking was made, so a guest booking close in is never shown deadlines
-    // that passed before they paid; with no booked-at timestamp there is
-    // nothing to filter against and again no ladder is printed.
-    const refunds: CancellationOutlook | null =
-      ctx.bookedAt && paid > 0 && !depositUnknown
-        ? cancellationOutlook(ctx.checkIn, paid, ctx.bookedAt)
-        : null;
+    // The cancellation schedule is calculated against the total stay amount
+    // (matching villa-booking), with bookedAt falling back to now if omitted.
+    const bookedAt = ctx.bookedAt || new Date().toISOString();
+    const refunds: CancellationOutlook = cancellationOutlook(
+      ctx.checkIn,
+      total > 0 ? total : paid,
+      bookedAt,
+    );
 
     // "Paid 13 Oct 2026 · Razorpay" rather than a bare "Paid": the date and
     // the method are what a guest checks this line against. It is the date
@@ -828,13 +824,18 @@ export function renderGuestEmail(
       ${detailRow('Guests', esc(guestLine(ctx.adults, children)))}
       ${detailRow('Villa', esc(ctx.villaName), ctx.propertyLocation ?? undefined)}
       ${ctx.bookedAt && bookedOnFmt(ctx.bookedAt) ? detailRow('Booked on', esc(bookedOnFmt(ctx.bookedAt)!)) : ''}
-      ${ctx.guestEmail ? detailRow('Email', `<a href="mailto:${esc(ctx.guestEmail)}" style="color:${MAROON};">${esc(ctx.guestEmail)}</a>`) : ''}
-      ${ctx.guestPhone ? detailRow('Mobile', `<a href="tel:${esc(ctx.guestPhone)}" style="color:${MAROON};">${esc(phone ?? ctx.guestPhone)}</a>`) : ''}
+      ${ctx.guestEmail ? detailRow('Email', esc(ctx.guestEmail)) : ''}
+      ${ctx.guestPhone ? detailRow('Mobile', esc(phone ?? ctx.guestPhone)) : ''}
     </table>
     <p style="margin:10px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};">
       We will send the exact address and check-in details to this mobile number via WhatsApp.
       If the email address or mobile number above is incorrect, please let us know.
     </p>
+    ${
+      ctx.additionalGuestsNote
+        ? `<p style="margin:14px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;color:#5d5550;background:${CARD};border:1px solid ${RULE};border-radius:8px;padding:12px 14px;">Additional guests can be accommodated on mattresses in select bedrooms and in the lounge.</p>`
+        : ''
+    }
 
     ${emailRule()}
 
@@ -848,7 +849,7 @@ export function renderGuestEmail(
     ${paidInFullBadge}
     ${partialPayNote}
     <p style="margin:14px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;color:#5d5550;">
-      <strong style="color:${INK};">Note:</strong> A refundable security deposit might be requested upon check-in. This is in addition to the online payment. Please contact the property in case of questions.
+      <strong style="color:${INK};">Note:</strong> A refundable security deposit is collected upon check-in. This is in addition to the online payment. Please contact the property in case of questions.
     </p>
     ${
       ctx.bookingUrl
@@ -887,16 +888,14 @@ export function renderGuestEmail(
         </td>
         <td style="padding:0 0 20px;vertical-align:top;">
           <p style="margin:0 0 5px;font-family:${SANS};font-size:15px;font-weight:bold;color:${INK};">Need anything before then?</p>
-          <p style="margin:0;font-family:${SANS};font-size:14px;line-height:1.6;color:#5d5550;">Just <a href="https://wa.me/${ctx.whatsApp.replace(/\D/g, '')}" style="color:${MAROON};">WhatsApp</a> us. We&#39;re usually available during the day and aim to respond within an hour.</p>
+          <p style="margin:0;font-family:${SANS};font-size:14px;line-height:1.6;color:#5d5550;">Just <a href="https://wa.me/${ctx.whatsApp.replace(/\D/g, '')}" style="color:${MAROON};font-weight:bold;">WhatsApp</a> us. We&#39;re usually available during the day and aim to respond within an hour.</p>
         </td>
       </tr>`
           : ''
       }
     </table>
 
-    ${
-      refunds
-        ? `${emailRule()}
+    ${emailRule()}
 
     <!-- Cancellations -->
     ${sectionLabel('Cancellations & refund')}
@@ -929,21 +928,13 @@ export function renderGuestEmail(
         .join('')}
     </table>`
     }
-    ${
-      // Nothing is coming back, so a refund address and a processing time
-      // would contradict the line directly above them. The policy sentence is
-      // common to all three states, so it is appended rather than repeated.
-      refunds.state !== 'none' && ctx.supportEmail
-        ? `<p style="margin:10px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};">For cancellations, email us at <a href="mailto:${esc(ctx.supportEmail)}" style="color:${MAROON};font-weight:bold;">${esc(ctx.supportEmail)}</a> with your booking reference. Approved refunds are generally processed to the original payment method within 5 to 7 working days.${policyNote ? ` ${policyNote}` : ''}</p>`
-        : policyNote
-          ? `<p style="margin:10px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};">${policyNote}</p>`
+    <p style="margin:10px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};">${
+      refunds.state === 'none'
+        ? ''
+        : ctx.supportEmail
+          ? `For cancellations, email us at <a href="mailto:${esc(ctx.supportEmail)}" style="color:${MAROON};font-weight:bold;">${esc(ctx.supportEmail)}</a> with your booking reference. Approved refunds are generally processed to the original payment method within 5 to 7 working days. `
           : ''
-    }`
-        : policyNote
-          ? `${emailRule()}
-    <p style="margin:0;font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};">${policyNote}</p>`
-          : ''
-    }
+    }${policyNote}</p>
 
     ${emailRule()}
 
@@ -965,7 +956,9 @@ ${footerBlock(ctx)}
 </html>`;
 
     return {
-      subject: `Your booking is confirmed · ${ctx.bookingCode ?? ''} · ${ctx.villaName}`,
+      subject: ['Your booking is confirmed', ctx.bookingCode, ctx.villaName]
+        .filter(Boolean)
+        .join(' · '),
       html,
       text: confirmationText(ctx, {
         nights,

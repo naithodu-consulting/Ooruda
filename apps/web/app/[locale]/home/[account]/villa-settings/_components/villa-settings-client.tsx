@@ -81,11 +81,17 @@ export function VillaSettingsClient(props: {
   }, [tab]);
 
   // Keep the tab (and property) in the URL so a refresh or a shared link
-  // lands on it.
+  // lands on it. For tab changes, use replaceState so it doesn't trigger
+  // an expensive server component re-fetch.
   function setQuery(key: string, value: string) {
     const query = new URLSearchParams(searchParams.toString());
     query.set(key, value);
-    router.replace(`${pathname}?${query.toString()}`, { scroll: false });
+
+    if (key === 'property') {
+      router.replace(`${pathname}?${query.toString()}`, { scroll: false });
+    } else {
+      window.history.replaceState(null, '', `${pathname}?${query.toString()}`);
+    }
   }
 
   function changeTab(next: string) {

@@ -11,7 +11,8 @@
   },
   "exports": {
     ".": "./src/index.tsx",
-    "./bill-type-labels": "./src/lib/bill-type-labels.ts"
+    "./bill-type-labels": "./src/lib/bill-type-labels.ts",
+    "./registration-card-templates": "./src/documents/registration-card/template-keys.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .turbo node_modules",

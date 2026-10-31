@@ -81,7 +81,10 @@ const bookingFields = {
       message: 'Enter a valid phone number',
     }),
   // Required: the confirmation email is the guest's only record of a booking
-  // taken by phone or message.
+  // taken by phone or message. It is held back until a payment is recorded
+  // (lib/villa/booking-payments.ts), so the address is still required for a
+  // booking that has not paid yet: staff send it from the booking page once
+  // the advance is recorded.
   guestEmail: z
     .string()
     .trim()

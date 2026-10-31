@@ -504,7 +504,8 @@ function NewBookingForm(props: {
                         }
                       />
                       <FormDescription>
-                        The booking confirmation goes here.
+                        The booking confirmation goes here, once a payment is
+                        recorded.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
