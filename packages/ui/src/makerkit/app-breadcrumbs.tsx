@@ -5,6 +5,7 @@ import { Fragment } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 
+import { cn } from '../lib/utils';
 import {
   Breadcrumb,
   BreadcrumbEllipsis,
@@ -46,10 +47,15 @@ export function AppBreadcrumbs(props: {
     ? ([splitPath[0], ...splitPath.slice(-maxDepth + 1)] as string[])
     : splitPath;
 
+  const hasMultiple = visiblePaths.length > 1;
+
   return (
     <Breadcrumb>
       <BreadcrumbList>
         {visiblePaths.map((path, index) => {
+          const isLast = index === visiblePaths.length - 1;
+          const isSecondToLast = index === visiblePaths.length - 2;
+
           const label =
             path in values ? (
               values[path]
@@ -62,11 +68,13 @@ export function AppBreadcrumbs(props: {
 
           return (
             <Fragment key={index}>
-              <BreadcrumbItem className={'capitalize lg:text-xs'}>
-                <If
-                  condition={index < visiblePaths.length - 1}
-                  fallback={label}
-                >
+              <BreadcrumbItem
+                className={cn(
+                  'capitalize lg:text-xs',
+                  hasMultiple && isLast && 'max-sm:hidden',
+                )}
+              >
+                <If condition={!isLast} fallback={label}>
                   <BreadcrumbLink
                     render={
                       <Link
@@ -91,8 +99,12 @@ export function AppBreadcrumbs(props: {
                 </>
               )}
 
-              <If condition={index !== visiblePaths.length - 1}>
-                <BreadcrumbSeparator />
+              <If condition={!isLast}>
+                <BreadcrumbSeparator
+                  className={cn(
+                    hasMultiple && isSecondToLast && 'max-sm:hidden',
+                  )}
+                />
               </If>
             </Fragment>
           );

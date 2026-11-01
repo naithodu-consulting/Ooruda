@@ -4,6 +4,19 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Invite Member Phone Placeholder & Mobile Breadcrumb Duplication Fix — 2026-11-01
+
+### Invite Member Dialog Phone Placeholder
+- **Removed hardcoded country code placeholder in Invite Members form**: Changed `teams.phonePlaceholder` from `"+91 98765 43210"` to `"Phone number"`. Since the country calling code is already chosen via the country select dropdown (`+1`, `+91`, etc.), the input field placeholder no longer shows any country-specific calling code prefix.
+
+### Mobile Breadcrumbs Header De-duplication
+- **Hide leaf breadcrumb on mobile view (`max-sm`)**: In `AppBreadcrumbs`, the leaf item (current page) and its immediately preceding separator are now hidden on mobile viewport sizes (`max-sm:hidden`). On narrow mobile screens, having the leaf in the breadcrumbs caused it to wrap onto a new line, displaying the booking number / page title twice consecutively in the header area. Mobile view now cleanly shows the ancestor breadcrumb path (`Home > Villa 19 > Bookings`) directly above the page title (`V19-DVG-BYY`).
+
+### Villa Guest Emails
+- **Confirmation email tooltip**: Simplified unfulfilled confirmation email tooltip note to "Enabled once the payment(partial/full) is recorded."
+
+---
+
 ## Roles Segregation, Booking Confirmation Parity & Villa Performance — 2026-10-31
 
 ### Role Segregation & Label Alignment (Ooruda vs Ooruda Villa)
@@ -5251,4 +5264,4 @@ Separated the single Supabase project into three distinct environments - local D
 | `20260805000002_missing_fk_indexes.sql` | 8 missing FK indexes (CONCURRENTLY), GIN trigram indexes on `profiles.full_name` and `audit_logs.action`, new `get_unit_ledger_balances()` RPC for DB-side aggregation |
 | `20261031104000_user_accounts_add_product_type.sql` | Add `product_type` column to `public.user_accounts` view |
 
-_Last updated: 2026-10-31_
+_Last updated: 2026-11-01_

@@ -138,7 +138,7 @@ export async function GuestEmailsSection(props: {
     if (template === 'booking_confirmation') {
       return paid
         ? `Sent automatically when the booking was created.${extra}`
-        : `Not sent: no payment recorded yet. Record the advance, then send it from here.${extra}`;
+        : `Enabled once the payment(partial/full) is recorded.${extra}`;
     }
 
     if (template === 'pre_arrival') {
