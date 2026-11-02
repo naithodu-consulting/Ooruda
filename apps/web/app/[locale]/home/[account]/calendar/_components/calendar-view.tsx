@@ -3,16 +3,23 @@
 import { useState } from 'react';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { Ban, ChevronRight, Lock, Rss } from 'lucide-react';
 
 import { Card, CardContent } from '@kit/ui/card';
 import { cn } from '@kit/ui/utils';
 
+import { daysBetweenYmd } from '~/lib/billing-dates';
 import { formatDateReadable } from '~/lib/format-date';
 import type { AgendaEntry, CalendarDay, NightItem } from '~/lib/villa/calendar';
+import { parseChannelNote } from '~/lib/villa/channel-note';
 import { blockLabel } from '~/lib/villa/labels';
 
+import {
+  type EnrichableChannelStay,
+  EnrichChannelStayDialog,
+} from '../../bookings/_components/enrich-channel-stay-dialog';
 import {
   type ReleasableBlock,
   ReleaseBlockDialog,
@@ -27,26 +34,35 @@ const TONE = {
   closed: 'bg-destructive/10 text-foreground border-destructive/30',
 } as const;
 
+export interface CalendarBlockItem extends ReleasableBlock {
+  feedId?: string | null;
+  externalUid?: string | null;
+  recordedBookingId?: string | null;
+}
+
 /**
  * Month grid from 768px up, a date-ordered agenda below it. Bookings open
  * their booking page; blocks open the unblock dialog.
  *
- * Nights past the booking cutoff are drawn as closed and offer no actions:
- * they are already unsellable on the guest site, so blocking or unblocking
- * them changes nothing there. Channel-imported blocks are shown but not
- * clickable — the channel owns them.
+ * Nights past the booking cutoff are drawn as closed and offer no actions.
+ * Channel-imported bookings open the booking details dialog/page.
  */
 export function CalendarView(props: {
+  account: string;
   accountId: string;
   propertyId: string;
   bookingHref: string;
   weeks: CalendarDay[][];
   agenda: AgendaEntry[];
-  blocks: ReleasableBlock[];
+  blocks: CalendarBlockItem[];
   bookingCutoff: string | null;
 }) {
+  const router = useRouter();
   const [mobileView, setMobileView] = useState<'grid' | 'agenda'>('grid');
   const [releasing, setReleasing] = useState<ReleasableBlock | null>(null);
+  const [enrichingStay, setEnrichingStay] =
+    useState<EnrichableChannelStay | null>(null);
+
   const openBlock = (id: string) => {
     const block = props.blocks.find((b) => b.id === id);
 
@@ -55,6 +71,41 @@ export function CalendarView(props: {
 
     setReleasing(block);
   };
+
+  const openChannelBooking = (id: string) => {
+    const block = props.blocks.find((b) => b.id === id);
+    if (!block) return;
+
+    if (block.recordedBookingId) {
+      router.push(
+        `/home/${props.account}/bookings/${block.recordedBookingId}?property=${props.propertyId}`,
+      );
+      return;
+    }
+
+    if (!block.feedId || !block.externalUid) return;
+
+    const note = parseChannelNote(block.notes ?? null);
+    const nights = daysBetweenYmd(block.startDate, block.endDate);
+
+    setEnrichingStay({
+      feedId: block.feedId,
+      externalUid: block.externalUid,
+      channelName: block.channelName ?? 'Airbnb',
+      startDate: block.startDate,
+      endDate: block.endDate,
+      nights,
+      confirmationCode: note.confirmationCode,
+      phoneLast4: note.phoneLast4,
+    });
+  };
+
+  const isChannelBooking = (id: string) => {
+    const block = props.blocks.find((b) => b.id === id);
+    if (!block || block.source !== 'ical') return false;
+    return !parseChannelNote(block.notes ?? null).isChannelBlock;
+  };
+
   const hrefFor = (id: string) => props.bookingHref.replace('[id]', id);
   const blockSource = (id: string) =>
     props.blocks.find((b) => b.id === id)?.source ?? 'manual';
@@ -141,6 +192,8 @@ export function CalendarView(props: {
                   col={col}
                   hrefFor={hrefFor}
                   onBlock={openBlock}
+                  onChannelBooking={openChannelBooking}
+                  isChannelBooking={isChannelBooking}
                   blockSource={blockSource}
                   blockLabel={labelForBlock}
                 />
@@ -165,6 +218,8 @@ export function CalendarView(props: {
           entries={props.agenda}
           hrefFor={hrefFor}
           onBlock={openBlock}
+          onChannelBooking={openChannelBooking}
+          isChannelBooking={isChannelBooking}
           blockSource={blockSource}
           blockLabel={labelForBlock}
         />
@@ -176,6 +231,16 @@ export function CalendarView(props: {
           propertyId={props.propertyId}
           block={releasing}
           onClose={() => setReleasing(null)}
+        />
+      ) : null}
+
+      {enrichingStay ? (
+        <EnrichChannelStayDialog
+          account={props.account}
+          accountId={props.accountId}
+          propertyId={props.propertyId}
+          stay={enrichingStay}
+          onClose={() => setEnrichingStay(null)}
         />
       ) : null}
     </>
@@ -215,6 +280,8 @@ function DayCell(props: {
   col: number;
   hrefFor: (id: string) => string;
   onBlock: (id: string) => void;
+  onChannelBooking: (id: string) => void;
+  isChannelBooking: (id: string) => boolean;
   blockSource: (id: string) => 'manual' | 'ical';
   blockLabel: (id: string, reason: string | null) => string;
 }) {
@@ -256,6 +323,8 @@ function DayCell(props: {
           showLabel={item.starts || props.col === 0 || day.day === 1}
           hrefFor={props.hrefFor}
           onBlock={props.onBlock}
+          onChannelBooking={props.onChannelBooking}
+          isChannelBooking={props.isChannelBooking}
           blockSource={props.blockSource}
           blockLabel={props.blockLabel}
           dim={day.isPast}
@@ -284,6 +353,8 @@ function NightChip(props: {
   dim: boolean;
   hrefFor: (id: string) => string;
   onBlock: (id: string) => void;
+  onChannelBooking: (id: string) => void;
+  isChannelBooking: (id: string) => boolean;
   blockSource: (id: string) => 'manual' | 'ical';
   blockLabel: (id: string, reason: string | null) => string;
 }) {
@@ -322,6 +393,30 @@ function NightChip(props: {
   }
 
   const label = props.blockLabel(item.id, item.reason);
+
+  if (props.isChannelBooking(item.id)) {
+    return (
+      <button
+        type="button"
+        onClick={() => props.onChannelBooking(item.id)}
+        className={cn(
+          className,
+          TONE.booked,
+          'hover:bg-primary/40 flex cursor-pointer items-center gap-1',
+        )}
+        title={label}
+        data-test={'villa-calendar-channel-booking'}
+      >
+        <Rss className="h-3 w-3 shrink-0" aria-hidden />
+        {props.showLabel ? (
+          <span className="truncate">{label}</span>
+        ) : (
+          <span className="sr-only">{label}</span>
+        )}
+      </button>
+    );
+  }
+
   const channelOwned = props.blockSource(item.id) === 'ical';
 
   // A channel's own calendar owns these nights: the importer replaces its rows
@@ -371,6 +466,8 @@ function Agenda(props: {
   entries: AgendaEntry[];
   hrefFor: (id: string) => string;
   onBlock: (id: string) => void;
+  onChannelBooking: (id: string) => void;
+  isChannelBooking: (id: string) => boolean;
   blockSource: (id: string) => 'manual' | 'ical';
   blockLabel: (id: string, reason: string | null) => string;
 }) {
@@ -434,9 +531,43 @@ function Agenda(props: {
             );
           }
 
-          const channelOwned = props.blockSource(e.id) === 'ical';
           const nightsLabel =
             e.from === e.lastNight ? `Night of ${range}` : `Nights ${range}`;
+
+          if (props.isChannelBooking(e.id)) {
+            return (
+              <li key={`k-${e.id}`}>
+                <button
+                  type="button"
+                  onClick={() => props.onChannelBooking(e.id)}
+                  className={rowClass}
+                  data-test={'villa-calendar-agenda-channel-booking'}
+                >
+                  <span
+                    className={cn(
+                      'h-8 w-1.5 shrink-0 rounded-full border',
+                      TONE.booked,
+                    )}
+                    aria-hidden
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-sm font-medium">
+                      {props.blockLabel(e.id, e.reason)}
+                    </span>
+                    <span className="text-muted-foreground text-xs">
+                      {nightsLabel} · from a booking channel
+                    </span>
+                  </span>
+                  <ChevronRight
+                    className="text-muted-foreground h-4 w-4 shrink-0"
+                    aria-hidden
+                  />
+                </button>
+              </li>
+            );
+          }
+
+          const channelOwned = props.blockSource(e.id) === 'ical';
 
           // Channel-owned blocks are shown, never actionable.
           if (channelOwned) {

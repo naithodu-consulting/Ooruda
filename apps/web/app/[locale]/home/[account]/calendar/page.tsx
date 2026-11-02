@@ -11,7 +11,11 @@ import pathsConfig from '~/config/paths.config';
 import { formatDateReadable } from '~/lib/format-date';
 import { VILLA_ROLES, requireRole } from '~/lib/rbac';
 import { type Block, listBlocks } from '~/lib/villa-db/blocks';
-import { type SiteBooking, listBookings } from '~/lib/villa-db/bookings';
+import {
+  type SiteBooking,
+  listBookings,
+  listChannelLinkedBookings,
+} from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
 import { isVillaDbError } from '~/lib/villa-db/errors';
@@ -86,17 +90,20 @@ export default async function CalendarPage({ params, searchParams }: Props) {
     lastStatus: null,
   };
   let siteError: string | null = null;
+  let recordedByBlock = new Map<string, string>();
 
   if (property) {
     try {
       const site = await getVillaSite(accountId, property.id);
       const { from, to } = gridRange(month);
 
-      const [bookingList, blockList, status] = await Promise.all([
-        listBookings(site, from, to),
-        listBlocks(site, from, to),
-        getIcalFeedsStatus(site),
-      ]);
+      const [bookingList, blockList, status, linkedBookings] =
+        await Promise.all([
+          listBookings(site, from, to),
+          listBlocks(site, from, to),
+          getIcalFeedsStatus(site),
+          listChannelLinkedBookings(site, { from, to }),
+        ]);
 
       bookings = bookingList;
       icalStatus = status;
@@ -104,13 +111,20 @@ export default async function CalendarPage({ params, searchParams }: Props) {
       // A channel stay that has been filled in is drawn once, as its booking.
       // The block still holds the nights on the site — it is just not a
       // second thing on the calendar saying the same nights are taken.
-      const { enrichedBlockIds } = linkChannelStays({
+      const linkResult = linkChannelStays({
         blocks: blockList,
-        bookings: bookingList,
+        bookings: [...bookingList, ...linkedBookings],
         today,
       });
 
-      blocks = blockList.filter((b) => !enrichedBlockIds.has(b.id));
+      blocks = blockList.filter((b) => !linkResult.enrichedBlockIds.has(b.id));
+
+      recordedByBlock = new Map(
+        [...linkResult.blockIdByBooking].map(([bookingId, blockId]) => [
+          blockId,
+          bookingId,
+        ]),
+      );
     } catch (error) {
       if (!isVillaDbError(error)) throw error;
       siteError = error.message;
@@ -278,6 +292,7 @@ export default async function CalendarPage({ params, searchParams }: Props) {
               </Alert>
             ) : (
               <CalendarView
+                account={account}
                 accountId={accountId}
                 propertyId={property.id}
                 bookingHref={bookingHref}
@@ -298,6 +313,9 @@ export default async function CalendarPage({ params, searchParams }: Props) {
                   notes: blockNoteForDisplay(b.notes),
                   source: b.source,
                   channelName: b.channelName,
+                  feedId: b.feedId,
+                  externalUid: b.externalUid,
+                  recordedBookingId: recordedByBlock.get(b.id) ?? null,
                 }))}
               />
             )}

@@ -235,6 +235,7 @@ function BlockRow(props: {
         </Button>
       ) : canRecord ? (
         <AddChannelDetailsButton
+          account={props.account}
           accountId={props.accountId}
           propertyId={props.propertyId}
           className="shrink-0"

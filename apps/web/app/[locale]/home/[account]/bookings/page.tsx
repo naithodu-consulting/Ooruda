@@ -201,14 +201,17 @@ export default async function BookingsPage({ params, searchParams }: Props) {
           listChannelLinkedBookings(site, { from, to }),
         ]);
 
-        blocks = blockList;
+        // Channel guest bookings belong on the Bookings tabs, not on the Blocked tab.
+        // Only actual blocks (manual blocks, or host holds on the channel) belong here.
+        blocks = blockList.filter(
+          (b) =>
+            b.source !== 'ical' ||
+            parseChannelNote(blockNoteForDisplay(b.notes)).isChannelBlock,
+        );
         icalStatus = status;
 
-        // A channel block that has been filled in stays in this list — it is
-        // still what holds the nights — but it says so, and offers the
-        // booking rather than the form.
         const linkResult = linkChannelStays({
-          blocks: blockList,
+          blocks,
           bookings: linked,
           today,
         });

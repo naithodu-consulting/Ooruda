@@ -135,7 +135,7 @@ export const NewBookingSchema = z
  *
  * Deliberately NOT the new-booking schema:
  *   - the dates come from the feed, not the operator, so they are not priced
- *     against the rate card: what matters is what the channel paid out;
+ *     against the rate card;
  *   - the guest email is optional, because Airbnb never gives us one and the
  *     channel owns the guest conversation;
  *   - there is no cutoff question: the stay has already been sold.
@@ -175,35 +175,17 @@ export const EnrichChannelStaySchema = z
       .max(100),
     children: guests,
     infants: guests,
-    /** What the channel pays out for the stay, in rupees, GST included. */
-    payoutAmount: z.coerce
+    /** Total amount charged to the guest, in rupees. */
+    totalAmount: z.coerce
       .number()
-      .positive({ message: 'Enter the amount earned' })
+      .positive({ message: 'Enter the amount charged' })
       .max(10_000_000)
       .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, {
         message: 'Use at most 2 decimals',
       }),
-    /**
-     * GST inside that payout. Zero by default: on Indian stays the channel
-     * normally collects and remits it, and Ooruda must not invent a tax
-     * figure the operator's accountant has not agreed.
-     */
-    taxAmount: z.coerce
-      .number()
-      .min(0)
-      .max(10_000_000)
-      .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, {
-        message: 'Use at most 2 decimals',
-      }),
-    /** The payout has already reached the villa's account. */
-    payoutReceived: z.boolean(),
     specialRequests: z.string().trim().max(1000),
   })
-  .refine(checkOutAfterCheckIn, checkOutMessage)
-  .refine((v) => v.taxAmount <= v.payoutAmount, {
-    message: 'GST cannot be more than the amount earned',
-    path: ['taxAmount'],
-  });
+  .refine(checkOutAfterCheckIn, checkOutMessage);
 
 export type EnrichChannelStayInput = z.input<typeof EnrichChannelStaySchema>;
 

@@ -4,6 +4,23 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Airbnb Booking Details, Blocked Tab Filter & Calendar Links — 2026-11-02
+
+### Add booking details simplified
+- Replaced payout, GST, and bank receipt fields with amount charged to the customer.
+- What was charged now reflects in the booking details and guest registration card.
+- Saving an Airbnb stay redirects directly to the booking details page.
+- Cleaned up dialog copy to be short and direct.
+
+### Airbnb bookings removed from Blocked tab
+- Channel bookings now only appear in the Bookings tabs (Upcoming, In house, Past).
+- The Blocked tab only displays manual blocks and channel host holds.
+
+### Calendar Airbnb bookings are clickable
+- Clicking an Airbnb booking on the calendar opens the booking details dialog or navigates to the booking details page.
+
+---
+
 ## Airbnb Stays Count as Bookings — 2026-11-02
 
 ### Filling in a stay a channel sold
