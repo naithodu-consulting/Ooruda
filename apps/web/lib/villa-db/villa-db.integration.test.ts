@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { linkChannelStays } from '~/lib/villa/channel-link';
+
 import { checkAvailability, getUnavailableNights } from './availability';
 import {
   createBlock,
@@ -14,7 +16,9 @@ import {
   createOfflineBooking,
   getBooking,
   getBookingByCode,
+  getChannelLinkedBooking,
   listBookings,
+  relinkChannelBooking,
 } from './bookings';
 import type { VillaSite } from './client';
 import { addDays } from './dates';
@@ -519,5 +523,181 @@ run('villa-db adapter against a local villa-booking database', () => {
     await expect(deletePricingRule(site, rule.id, null)).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+
+  /**
+   * Enriching a channel stay, against the real functions (villa-booking
+   * 00108). The whole point of the feature is that a booking may cover nights
+   * a block already holds — but only its own block — so the thing worth
+   * testing is the database's refusal, not ours.
+   */
+  it('records a booking over its own channel block, and re-links a re-keyed event', async () => {
+    const feedName = `IntegrationTest-${Math.random().toString(36).slice(2, 8)}`;
+
+    const { data: feed, error: feedError } = await site.client
+      .from('ical_feeds')
+      .insert({
+        property_id: site.sitePropertyId,
+        name: feedName,
+        url: 'https://example.invalid/never-fetched.ics',
+        is_active: false,
+      })
+      .select('id')
+      .single();
+
+    if (feedError) throw feedError;
+
+    const apply = async (events: unknown[]) => {
+      const { error } = await site.client.rpc('apply_ical_feed', {
+        p_feed_id: feed.id,
+        p_events: events as never,
+        p_fingerprint: null as unknown as string,
+      });
+
+      if (error) throw error;
+    };
+
+    let bookingId: string | null = null;
+
+    try {
+      await apply([
+        {
+          start: d(0),
+          end: d(3),
+          uid: 'uid-original',
+          summary: `${feedName} · booking · HMINTEG001`,
+        },
+      ]);
+
+      // The block holds the nights for everyone else.
+      expect(await checkAvailability(site, d(0), d(3))).toBe('DATE_BLOCKED');
+
+      // Without the link, so would the operator's own booking.
+      await expect(
+        createOfflineBooking(
+          site,
+          {
+            guestName: 'Unlinked Guest',
+            adults: 2,
+            checkIn: d(0),
+            checkOut: d(3),
+            baseAmount: '1000',
+            extraGuestAmount: '0',
+            taxAmount: '0',
+            totalAmount: '1000',
+            channel: 'phone',
+            paymentStatus: 'unpaid',
+            ignoreCutoff: true,
+          },
+          null,
+        ),
+      ).rejects.toMatchObject({ code: 'DATE_BLOCKED' });
+
+      const link = { feedId: feed.id, externalUid: 'uid-original' };
+
+      const booking = await createOfflineBooking(
+        site,
+        {
+          guestName: 'Channel Guest',
+          adults: 2,
+          checkIn: d(0),
+          checkOut: d(3),
+          baseAmount: '30000',
+          extraGuestAmount: '0',
+          taxAmount: '0',
+          totalAmount: '30000',
+          channel: 'airbnb',
+          paymentStatus: 'paid',
+          ignoreCutoff: true,
+          source: link,
+        },
+        null,
+      );
+
+      bookingId = booking.id;
+
+      expect(booking.channel).toBe('airbnb');
+      expect(booking.sourceExternalUid).toBe('uid-original');
+      expect((await getChannelLinkedBooking(site, link))?.id).toBe(booking.id);
+
+      // A second booking for the same event is refused: the first one now
+      // holds the nights, link or no link.
+      await expect(
+        createOfflineBooking(
+          site,
+          {
+            guestName: 'Double Guest',
+            adults: 2,
+            checkIn: d(0),
+            checkOut: d(3),
+            baseAmount: '1',
+            extraGuestAmount: '0',
+            taxAmount: '0',
+            totalAmount: '1',
+            channel: 'airbnb',
+            paymentStatus: 'unpaid',
+            ignoreCutoff: true,
+            source: link,
+          },
+          null,
+        ),
+      ).rejects.toMatchObject({ code: 'DATE_UNAVAILABLE' });
+
+      // The channel re-keys the event: same nights, new UID (what Airbnb
+      // does on every edit). The pairing is recovered from the dates.
+      await apply([
+        {
+          start: d(0),
+          end: d(3),
+          uid: 'uid-rekeyed',
+          summary: `${feedName} · booking · HMINTEG001`,
+        },
+      ]);
+
+      const blocks = (await listBlocks(site, d(0), d(3))).filter(
+        (b) => b.feedId === feed.id,
+      );
+
+      const { relinks, enrichedBlockIds } = linkChannelStays({
+        blocks,
+        bookings: [await getBooking(site, booking.id).then((b) => b!)],
+        today: d(-30),
+      });
+
+      expect(relinks).toEqual([
+        {
+          bookingId: booking.id,
+          feedId: feed.id,
+          externalUid: 'uid-rekeyed',
+        },
+      ]);
+      expect(enrichedBlockIds.size).toBe(1);
+
+      expect(await relinkChannelBooking(site, booking.id, relinks[0]!)).toBe(
+        true,
+      );
+      expect(
+        (
+          await getChannelLinkedBooking(site, {
+            feedId: feed.id,
+            externalUid: 'uid-rekeyed',
+          })
+        )?.id,
+      ).toBe(booking.id);
+
+      // A repair never moves a booking between feeds.
+      expect(
+        await relinkChannelBooking(site, booking.id, {
+          feedId: '00000000-0000-0000-0000-00000000beef',
+          externalUid: 'uid-elsewhere',
+        }),
+      ).toBe(false);
+    } finally {
+      if (bookingId) await cancelBooking(site, bookingId, null);
+      // Deleting the feed cascades its blocked_dates rows (00102) and leaves
+      // the booking's source_feed_id null (00108), which is the point of
+      // ON DELETE SET NULL.
+      await site.client.from('ical_feeds').delete().eq('id', feed.id);
+    }
   });
 });

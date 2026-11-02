@@ -14,7 +14,16 @@ export const OFFLINE_CHANNEL_VALUES = [
 ] as const;
 
 export type OfflineChannel = (typeof OFFLINE_CHANNEL_VALUES)[number];
-export type BookingChannel = OfflineChannel | 'online';
+
+/**
+ * Channels that sold the stay themselves. Ooruda records one of these only
+ * when an operator enriches a stay imported from that channel's calendar
+ * feed, never as a free choice in the booking form (villa-booking 00108).
+ */
+export const CHANNEL_SOLD_CHANNEL_VALUES = ['airbnb', 'channel'] as const;
+
+export type ChannelSoldChannel = (typeof CHANNEL_SOLD_CHANNEL_VALUES)[number];
+export type BookingChannel = OfflineChannel | ChannelSoldChannel | 'online';
 
 /**
  * Payment states a NEW offline booking may start in. 'paid' is left out on

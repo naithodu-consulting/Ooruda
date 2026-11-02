@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  channelBlockNote,
+  channelEventDetails,
   classifyEvents,
   eventSetFingerprint,
   nightsBetween,
@@ -50,6 +52,7 @@ describe('parseIcal', () => {
       {
         uid: 'airbnb-123',
         summary: 'Airbnb (Not available)',
+        description: '',
         start: '2026-11-05',
         end: '2026-11-08',
       },
@@ -74,17 +77,99 @@ describe('parseIcal', () => {
   });
 });
 
+describe('channelEventDetails', () => {
+  const reservation = [
+    'BEGIN:VCALENDAR',
+    'BEGIN:VEVENT',
+    'UID:airbnb-res',
+    'DTSTART;VALUE=DATE:20261107',
+    'DTEND;VALUE=DATE:20261110',
+    'SUMMARY:Reserved',
+    'DESCRIPTION:Reservation URL: https://www.airbnb.com/hosting/reser',
+    ' vations/details/HM5XK3J9QW\\nPhone Number (Last 4 Digits): 4821',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  it('reads the confirmation code and phone last 4 from a folded DESCRIPTION', () => {
+    const { events } = parseIcal(reservation);
+    const details = channelEventDetails(events[0]!);
+
+    expect(details).toEqual({
+      kind: 'reservation',
+      confirmationCode: 'HM5XK3J9QW',
+      phoneLast4: '4821',
+    });
+  });
+
+  it("treats the host's own channel hold as a block, not a booking", () => {
+    expect(
+      channelEventDetails({
+        summary: 'Airbnb (Not available)',
+        description: '',
+      }),
+    ).toEqual({
+      kind: 'block',
+      confirmationCode: null,
+      phoneLast4: null,
+    });
+  });
+
+  it('degrades to a bare reservation when the feed carries no description', () => {
+    expect(
+      channelEventDetails({ summary: 'Reserved', description: '' }),
+    ).toEqual({
+      kind: 'reservation',
+      confirmationCode: null,
+      phoneLast4: null,
+    });
+  });
+
+  it('writes an operator-readable note', () => {
+    const { events } = parseIcal(reservation);
+
+    expect(channelBlockNote('Airbnb', channelEventDetails(events[0]!))).toBe(
+      'Airbnb · booking · HM5XK3J9QW · phone ending 4821',
+    );
+    expect(
+      channelBlockNote('Airbnb', {
+        kind: 'block',
+        confirmationCode: null,
+        phoneLast4: null,
+      }),
+    ).toBe('Airbnb · blocked on channel');
+  });
+});
+
 describe('classifyEvents', () => {
   const today = '2026-10-27';
 
   it('drops past events and Airbnb availability-window edge', () => {
     const events = [
       // Past stay ending today
-      { uid: '1', summary: 'Past', start: '2026-10-24', end: '2026-10-27' },
+      {
+        uid: '1',
+        summary: 'Past',
+        description: '',
+        start: '2026-10-24',
+        end: '2026-10-27',
+      },
       // Valid upcoming stay
-      { uid: '2', summary: 'Stay', start: '2026-11-10', end: '2026-11-14' },
+      {
+        uid: '2',
+        summary: 'Stay',
+        description: '',
+        start: '2026-11-10',
+        end: '2026-11-14',
+      },
       // Airbnb 3-month availability horizon (ends > today+300 and > 90 nights)
-      { uid: '3', summary: 'Horizon', start: '2027-01-25', end: '2027-10-28' },
+      {
+        uid: '3',
+        summary: 'Horizon',
+        description: '',
+        start: '2027-01-25',
+        end: '2027-10-28',
+      },
     ];
 
     const result = classifyEvents(events, { today });
@@ -99,7 +184,13 @@ describe('classifyEvents', () => {
 
   it('holds feed for review when a single non-horizon event exceeds maxSpanNights', () => {
     const events = [
-      { uid: '1', summary: 'Long', start: '2026-11-01', end: '2027-02-15' },
+      {
+        uid: '1',
+        summary: 'Long',
+        description: '',
+        start: '2026-11-01',
+        end: '2027-02-15',
+      },
     ];
 
     const result = classifyEvents(events, { today });
@@ -114,12 +205,14 @@ describe('eventSetFingerprint', () => {
     const a = {
       uid: 'u1',
       summary: 'S',
+      description: '',
       start: '2026-11-01',
       end: '2026-11-03',
     };
     const b = {
       uid: 'u2',
       summary: 'S',
+      description: '',
       start: '2026-12-01',
       end: '2026-12-05',
     };

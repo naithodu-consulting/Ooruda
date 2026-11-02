@@ -24,6 +24,7 @@ import {
   parseMonth,
   shiftMonth,
 } from '~/lib/villa/calendar';
+import { linkChannelStays } from '~/lib/villa/channel-link';
 import {
   type IcalFeedStatusSummary,
   getIcalFeedsStatus,
@@ -91,11 +92,25 @@ export default async function CalendarPage({ params, searchParams }: Props) {
       const site = await getVillaSite(accountId, property.id);
       const { from, to } = gridRange(month);
 
-      [bookings, blocks, icalStatus] = await Promise.all([
+      const [bookingList, blockList, status] = await Promise.all([
         listBookings(site, from, to),
         listBlocks(site, from, to),
         getIcalFeedsStatus(site),
       ]);
+
+      bookings = bookingList;
+      icalStatus = status;
+
+      // A channel stay that has been filled in is drawn once, as its booking.
+      // The block still holds the nights on the site — it is just not a
+      // second thing on the calendar saying the same nights are taken.
+      const { enrichedBlockIds } = linkChannelStays({
+        blocks: blockList,
+        bookings: bookingList,
+        today,
+      });
+
+      blocks = blockList.filter((b) => !enrichedBlockIds.has(b.id));
     } catch (error) {
       if (!isVillaDbError(error)) throw error;
       siteError = error.message;
@@ -282,6 +297,7 @@ export default async function CalendarPage({ params, searchParams }: Props) {
                   reason: b.reason,
                   notes: blockNoteForDisplay(b.notes),
                   source: b.source,
+                  channelName: b.channelName,
                 }))}
               />
             )}

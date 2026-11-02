@@ -11,7 +11,7 @@ import { cn } from '@kit/ui/utils';
 
 import { formatDateReadable } from '~/lib/format-date';
 import type { AgendaEntry, CalendarDay, NightItem } from '~/lib/villa/calendar';
-import { blockReasonLabel } from '~/lib/villa/labels';
+import { blockLabel } from '~/lib/villa/labels';
 
 import {
   type ReleasableBlock,
@@ -58,6 +58,18 @@ export function CalendarView(props: {
   const hrefFor = (id: string) => props.bookingHref.replace('[id]', id);
   const blockSource = (id: string) =>
     props.blocks.find((b) => b.id === id)?.source ?? 'manual';
+  // An imported block's reason is always `offline_booking`; the channel's own
+  // name lives on the block, so the label is looked up rather than derived.
+  const labelForBlock = (id: string, reason: string | null) => {
+    const block = props.blocks.find((b) => b.id === id);
+
+    return blockLabel({
+      reason,
+      source: block?.source ?? 'manual',
+      channelName: block?.channelName,
+      notes: block?.notes,
+    });
+  };
 
   return (
     <>
@@ -130,6 +142,7 @@ export function CalendarView(props: {
                   hrefFor={hrefFor}
                   onBlock={openBlock}
                   blockSource={blockSource}
+                  blockLabel={labelForBlock}
                 />
               ))}
             </div>
@@ -153,6 +166,7 @@ export function CalendarView(props: {
           hrefFor={hrefFor}
           onBlock={openBlock}
           blockSource={blockSource}
+          blockLabel={labelForBlock}
         />
       </div>
 
@@ -202,6 +216,7 @@ function DayCell(props: {
   hrefFor: (id: string) => string;
   onBlock: (id: string) => void;
   blockSource: (id: string) => 'manual' | 'ical';
+  blockLabel: (id: string, reason: string | null) => string;
 }) {
   const { day } = props;
 
@@ -242,6 +257,7 @@ function DayCell(props: {
           hrefFor={props.hrefFor}
           onBlock={props.onBlock}
           blockSource={props.blockSource}
+          blockLabel={props.blockLabel}
           dim={day.isPast}
         />
       ))}
@@ -269,6 +285,7 @@ function NightChip(props: {
   hrefFor: (id: string) => string;
   onBlock: (id: string) => void;
   blockSource: (id: string) => 'manual' | 'ical';
+  blockLabel: (id: string, reason: string | null) => string;
 }) {
   const { item } = props;
   const shape = cn(
@@ -304,13 +321,13 @@ function NightChip(props: {
     );
   }
 
-  const label = blockReasonLabel(item.reason);
+  const label = props.blockLabel(item.id, item.reason);
   const channelOwned = props.blockSource(item.id) === 'ical';
 
   // A channel's own calendar owns these nights: the importer replaces its rows
   // on every sync, so unblocking here would be undone minutes later.
   if (channelOwned) {
-    const title = `${label}: from a booking channel's calendar. Remove it on the channel.`;
+    const title = `${label}: from the channel's own calendar. Change it on the channel.`;
 
     return (
       <span
@@ -355,6 +372,7 @@ function Agenda(props: {
   hrefFor: (id: string) => string;
   onBlock: (id: string) => void;
   blockSource: (id: string) => 'manual' | 'ical';
+  blockLabel: (id: string, reason: string | null) => string;
 }) {
   if (props.entries.length === 0) {
     return (
@@ -437,7 +455,7 @@ function Agenda(props: {
                 />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-sm font-medium">
-                    {blockReasonLabel(e.reason)}
+                    {props.blockLabel(e.id, e.reason)}
                   </span>
                   <span className="text-muted-foreground text-xs">
                     {nightsLabel} · from a booking channel
@@ -468,7 +486,7 @@ function Agenda(props: {
                 />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-sm font-medium">
-                    {blockReasonLabel(e.reason)}
+                    {props.blockLabel(e.id, e.reason)}
                   </span>
                   <span className="text-muted-foreground text-xs">
                     {nightsLabel}

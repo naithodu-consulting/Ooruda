@@ -15,12 +15,26 @@ import { cn } from '@kit/ui/utils';
 import { daysBetweenYmd } from '~/lib/billing-dates';
 import { formatDateReadable } from '~/lib/format-date';
 import { lastNightOf } from '~/lib/villa-db/dates';
-import { blockReasonLabel, formatNights } from '~/lib/villa/labels';
+import { parseChannelNote } from '~/lib/villa/channel-note';
+import { blockLabel, blockReasonLabel, formatNights } from '~/lib/villa/labels';
 
+import { AddChannelDetailsButton } from '../../bookings/_components/add-channel-details-button';
 import {
   type ReleasableBlock,
   ReleaseBlockDialog,
 } from '../../calendar/_components/release-block-dialog';
+
+/**
+ * A block as this list shows it: a channel block may already have a booking
+ * recorded against it, in which case the list offers that booking instead of
+ * the form.
+ */
+export interface BlockedListItem extends ReleasableBlock {
+  recordedBookingId?: string | null;
+  /** The feed and the channel's UID: the key a booking links by. */
+  feedId?: string | null;
+  externalUid?: string | null;
+}
 
 interface FilterOption {
   value: string;
@@ -51,6 +65,8 @@ function filterLabel(group: 'view' | 'source' | 'reason', value: string) {
  */
 export function BlockedDatesView(props: {
   accountId: string;
+  /** Account slug, for the link to a recorded booking. */
+  account: string;
   propertyId: string;
   today: string;
   bookingCutoff: string | null;
@@ -59,7 +75,7 @@ export function BlockedDatesView(props: {
     source: FilterOption[];
     reason: FilterOption[];
   };
-  blocks: ReleasableBlock[];
+  blocks: BlockedListItem[];
 }) {
   const [releasing, setReleasing] = useState<ReleasableBlock | null>(null);
 
@@ -132,6 +148,9 @@ export function BlockedDatesView(props: {
                 key={block.id}
                 block={block}
                 today={props.today}
+                account={props.account}
+                accountId={props.accountId}
+                propertyId={props.propertyId}
                 onRelease={() => setReleasing(block)}
               />
             ))}
@@ -152,8 +171,11 @@ export function BlockedDatesView(props: {
 }
 
 function BlockRow(props: {
-  block: ReleasableBlock;
+  block: BlockedListItem;
   today: string;
+  account: string;
+  accountId: string;
+  propertyId: string;
   onRelease: () => void;
 }) {
   const { block } = props;
@@ -161,6 +183,11 @@ function BlockRow(props: {
   const nights = daysBetweenYmd(block.startDate, block.endDate);
   const channelOwned = block.source === 'ical';
   const allPast = lastNight < props.today;
+  const note = parseChannelNote(block.notes);
+  // A host's own hold on the channel sold nothing, so there is no guest and
+  // no money to record against it.
+  const sold = channelOwned && !note.isChannelBlock;
+  const canRecord = sold && Boolean(block.feedId) && Boolean(block.externalUid);
 
   return (
     <li
@@ -169,13 +196,11 @@ function BlockRow(props: {
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">
-            {blockReasonLabel(block.reason)}
-          </span>
+          <span className="text-sm font-medium">{blockLabel(block)}</span>
           {channelOwned ? (
             <Badge variant="outline" className="gap-1">
               <Rss className="h-3 w-3" aria-hidden />
-              From a channel
+              {block.channelName ?? 'From a channel'}
             </Badge>
           ) : null}
           {allPast ? <Badge variant="secondary">Past</Badge> : null}
@@ -194,7 +219,37 @@ function BlockRow(props: {
         ) : null}
       </div>
 
-      {channelOwned ? (
+      {sold && block.recordedBookingId ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          render={
+            <Link
+              href={`/home/${props.account}/bookings/${block.recordedBookingId}?property=${props.propertyId}`}
+              data-test={'villa-blocked-open-booking'}
+            />
+          }
+        >
+          Open booking
+        </Button>
+      ) : canRecord ? (
+        <AddChannelDetailsButton
+          accountId={props.accountId}
+          propertyId={props.propertyId}
+          className="shrink-0"
+          stay={{
+            feedId: block.feedId!,
+            externalUid: block.externalUid!,
+            channelName: block.channelName ?? null,
+            startDate: block.startDate,
+            endDate: block.endDate,
+            nights,
+            confirmationCode: note.confirmationCode,
+            phoneLast4: note.phoneLast4,
+          }}
+        />
+      ) : channelOwned ? (
         <span
           className="text-muted-foreground shrink-0 text-xs sm:max-w-56 sm:text-right"
           data-test={'villa-blocked-channel-note'}

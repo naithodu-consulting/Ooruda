@@ -42,6 +42,19 @@ export interface Block {
   source: BlockSource;
   /** The channel feed that owns this block, when `source` is 'ical'. */
   feedId: string | null;
+  /**
+   * The channel's UID for the event this row came from. Tracing only as far
+   * as the site is concerned (channels reissue UIDs), but it is half of the
+   * key an enriched booking is linked by — see lib/villa/channel-link.
+   */
+  externalUid: string | null;
+  /**
+   * The channel's own name ('Airbnb'), read from `ical_feeds`, when `source`
+   * is 'ical'. The site stamps every imported row with reason
+   * `offline_booking`, so the reason alone would call an Airbnb stay an
+   * offline booking: the name is what the operator must see.
+   */
+  channelName: string | null;
 }
 
 export type BlockSource = 'manual' | 'ical';
@@ -53,26 +66,83 @@ function marker(): string {
 }
 
 const BLOCK_COLUMNS =
-  'id, start_date, end_date, reason, notes, source, feed_id';
+  'id, start_date, end_date, reason, notes, source, feed_id, external_uid';
 
-function toBlock(row: {
-  id: string;
-  start_date: string;
-  end_date: string;
-  reason: string | null;
-  notes: string | null;
-  source: string;
-  feed_id: string | null;
-}): Block {
+function toBlock(
+  row: {
+    id: string;
+    start_date: string;
+    end_date: string;
+    reason: string | null;
+    notes: string | null;
+    source: string;
+    feed_id: string | null;
+    external_uid: string | null;
+  },
+  channelNames?: Map<string, string>,
+): Block {
+  const source = row.source === 'ical' ? 'ical' : 'manual';
+
   return {
     id: row.id,
     startDate: row.start_date,
     endDate: row.end_date,
     reason: row.reason,
     notes: row.notes,
-    source: row.source === 'ical' ? 'ical' : 'manual',
+    source,
     feedId: row.feed_id,
+    externalUid: row.external_uid,
+    channelName:
+      source === 'ical' && row.feed_id
+        ? (channelNames?.get(row.feed_id) ?? null)
+        : null,
   };
+}
+
+const FEED_NAMES_TTL_MS = 5 * 60_000;
+
+const feedNamesCache = new Map<
+  string,
+  { value: Map<string, string>; expiresAt: number }
+>();
+
+export function invalidateFeedNamesCache(sitePropertyId?: string) {
+  if (sitePropertyId) {
+    feedNamesCache.delete(sitePropertyId);
+  } else {
+    feedNamesCache.clear();
+  }
+}
+
+/**
+ * feed id → channel name for the property's iCal feeds. Feeds change about
+ * never, so this is cached well past the blocks themselves; a failed read
+ * returns an empty map and the UI falls back to a generic channel label
+ * rather than failing the page.
+ */
+async function listFeedNames(site: VillaSite): Promise<Map<string, string>> {
+  const cached = feedNamesCache.get(site.sitePropertyId);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const { data, error } = await site.client
+    .from('ical_feeds')
+    .select('id, name')
+    .eq('property_id', site.sitePropertyId);
+
+  const value = new Map<string, string>();
+
+  if (!error) {
+    for (const row of data ?? []) {
+      if (row.name?.trim()) value.set(row.id, row.name.trim());
+    }
+  }
+
+  feedNamesCache.set(site.sitePropertyId, {
+    value,
+    expiresAt: Date.now() + FEED_NAMES_TTL_MS,
+  });
+
+  return value;
 }
 
 /** Channel-owned blocks are read-only here: the importer replaces them. */
@@ -126,7 +196,12 @@ export async function listBlocks(
 
   if (error) throw fromSiteError(error);
 
-  const result = (data ?? []).map(toBlock);
+  const rows = data ?? [];
+  const channelNames = rows.some((r) => r.source === 'ical')
+    ? await listFeedNames(site)
+    : undefined;
+
+  const result = rows.map((r) => toBlock(r, channelNames));
 
   blocksCache.set(cacheKey, {
     value: result,
@@ -254,12 +329,13 @@ export async function releaseFromBlock(
             notes: block.notes,
             source: block.source,
             feed_id: block.feedId,
+            external_uid: block.externalUid,
           })),
         )
         .select(BLOCK_COLUMNS);
 
       if (insertError) throw fromSiteWriteError(insertError);
-      remaining = (inserted ?? []).map(toBlock);
+      remaining = (inserted ?? []).map((r) => toBlock(r));
     }
 
     const { data: deleted, error: deleteError } = await site.client
@@ -325,4 +401,37 @@ export async function deleteBlock(
     { from: block.start_date, to: block.end_date },
     actorUserId,
   );
+}
+
+/**
+ * The channel block for one feed event, or null.
+ *
+ * Keyed on (feed_id, external_uid) rather than the row id on purpose:
+ * `apply_ical_feed` deletes and re-inserts the feed's rows on every sync, so
+ * every `blocked_dates.id` is new afterwards. A screen rendered before a sync
+ * carries ids that no longer exist, and looking one up would report a stay
+ * that is sitting right there in the calendar as gone.
+ */
+export async function getChannelBlock(
+  site: VillaSite,
+  link: { feedId: string; externalUid: string },
+): Promise<Block | null> {
+  const { data, error } = await site.client
+    .from('blocked_dates')
+    .select(BLOCK_COLUMNS)
+    .eq('property_id', site.sitePropertyId)
+    .eq('feed_id', link.feedId)
+    .eq('external_uid', link.externalUid)
+    .order('start_date')
+    .limit(2);
+
+  if (error) throw fromSiteError(error);
+
+  const rows = data ?? [];
+
+  // One event, one row. Two would mean the feed's own rows disagree, and
+  // guessing which the operator meant is worse than refusing.
+  if (rows.length !== 1) return null;
+
+  return toBlock(rows[0]!, await listFeedNames(site));
 }

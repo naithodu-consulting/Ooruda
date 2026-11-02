@@ -43,6 +43,8 @@ export interface ReleasableBlock {
   notes: string | null;
   /** 'ical' blocks belong to a channel feed; the calendar never opens these. */
   source: 'manual' | 'ical';
+  /** The channel's name ('Airbnb') for an 'ical' block. */
+  channelName?: string | null;
 }
 
 /**

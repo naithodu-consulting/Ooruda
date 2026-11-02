@@ -4,6 +4,35 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Airbnb Stays Count as Bookings — 2026-11-02
+
+### Filling in a stay a channel sold
+- **"Add booking details" on an imported channel stay.** An Airbnb stay reaches Ooruda as an iCal block: nights, and nothing else — no guest, no phone, no money, and nothing in Reports. The Bookings tabs and the Blocked list now offer a form on each imported stay where the operator records who stayed and what Airbnb paid out. The result is an ordinary booking with channel **Airbnb**, so it counts in revenue, occupancy, ADR, RevPAR and the channel breakdown like any other.
+- **The dates are the feed's, not the form's.** They are shown, never edited; a stale dialog whose nights have since moved on the channel is refused rather than writing a booking over the wrong nights.
+- **The money is the operator's figure, not the rate card's.** The rate card never sold these nights, so the stay is not priced: the form asks for the payout, plus the GST inside it, which defaults to zero because the channel normally collects and remits it. Ticking "the payout is already in the bank" writes a receipt against the booking (mode: bank, reference: the Airbnb confirmation code), so the money reaches the ledger and the cash figures, not just the status badge.
+- **No guest email is sent.** Airbnb gives us no address and has already sent the guest their confirmation; a second one from a sender they do not know is not an improvement.
+
+### One stay, shown once
+- A filled-in stay appears in the Bookings tabs as its booking, never also as a bare channel row, and the calendar draws the booking instead of a booking stacked on a block. The Blocked list still shows the block — it is what holds the nights — but offers **Open booking** rather than the form.
+- **A host's own hold on the channel** ("Airbnb (Not available)") sold nothing, so it is never offered the form.
+
+### When the channel changes its mind
+- **Airbnb re-keys an event on every edit.** The booking is linked by `(feed, UID)`, and when the UID changes the pairing is recovered from the nights on the same feed and written back after the sync, so the link heals itself. If the dates moved as well there is nothing left to match on: the booking and a fresh, un-enriched channel row both appear, visibly wrong rather than quietly wrong, for a human to resolve.
+- **If the feed drops the stay** (the guest cancelled on Airbnb), the booking is **not** deleted and does **not** quietly release the nights — a booking is a promise, and one feed read is not enough to break it. The row is badged **"Gone from channel"** and the nights stay held until someone cancels it deliberately. A stay that has already finished is never badged: the importer drops past events by design.
+- **Channel-sold nights are never exported back to the channel.** A booking carrying a channel link is excluded from the iCal export, for the same reason imported blocks always were: telling Airbnb its own booking is unavailable is a loop a cancellation there could never break.
+
+### Migrations
+
+Applied to the **villa-booking** database (the guest booking site), not Ooruda's.
+
+| Migration | Purpose |
+| --- | --- |
+| `00108_channel_booking_link` (villa-booking) | Adds `bookings.source_feed_id` (FK to `ical_feeds`, `ON DELETE SET NULL`) and `bookings.source_external_uid`, with a partial unique index so one channel event can have only one LIVE booking (cancelled rows are excluded, so a stay cancelled by mistake can be recorded again). Adds `airbnb` and `channel` to the `booking_channel` check. `check_occupancy()` gains two optional parameters that excuse exactly one channel block, so the booking fulfilling it can be created over it — every other block, booking and live hold still refuses. `create_booking_atomic()` accepts and stores the link, and skips the past-check-in guard when one is given, because a stay the channel has already hosted is a fact to record. `get_export_blocked_nights()` stops publishing channel-linked bookings back to the channel. The 3-argument `check_occupancy` and the 18-argument `create_booking_atomic` are dropped rather than left as overloads. |
+
+**Apply this migration BEFORE deploying the code**: Ooruda reads
+`source_feed_id` / `source_external_uid` on every bookings, calendar and
+blocked-dates page, and passes the link to `create_booking_atomic`.
+
 ## Invite Member Phone Placeholder & Mobile Breadcrumb Duplication Fix — 2026-11-01
 
 ### Invite Member Dialog Phone Placeholder
@@ -5264,4 +5293,4 @@ Separated the single Supabase project into three distinct environments - local D
 | `20260805000002_missing_fk_indexes.sql` | 8 missing FK indexes (CONCURRENTLY), GIN trigram indexes on `profiles.full_name` and `audit_logs.action`, new `get_unit_ledger_balances()` RPC for DB-side aggregation |
 | `20261031104000_user_accounts_add_product_type.sql` | Add `product_type` column to `public.user_accounts` view |
 
-_Last updated: 2026-11-01_
+_Last updated: 2026-11-02_

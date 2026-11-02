@@ -9,10 +9,12 @@ import { Trans } from '@kit/ui/trans';
 import pathsConfig from '~/config/paths.config';
 import { VILLA_ROLES, requireRole } from '~/lib/rbac';
 import { type Block, listBlocks } from '~/lib/villa-db/blocks';
+import { listChannelLinkedBookings } from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { isVillaDbError } from '~/lib/villa-db/errors';
 import { blockNoteForDisplay } from '~/lib/villa/calendar';
+import { linkChannelStays } from '~/lib/villa/channel-link';
 import { selectVillaProperty } from '~/lib/villa/properties';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
@@ -124,10 +126,28 @@ export default async function BlockedDatesPage({
 
   let blocks: Block[] = [];
   let siteError: string | null = null;
+  // block id → the booking recorded for it, so a filled-in channel stay
+  // offers its booking instead of the form.
+  let recordedByBlock = new Map<string, string>();
 
   try {
     const site = await getVillaSite(accountId, property.id);
-    blocks = await listBlocks(site, from, to);
+    const [blockList, linked] = await Promise.all([
+      listBlocks(site, from, to),
+      listChannelLinkedBookings(site, { from, to }),
+    ]);
+
+    blocks = blockList;
+
+    const { blockIdByBooking } = linkChannelStays({
+      blocks: blockList,
+      bookings: linked,
+      today,
+    });
+
+    recordedByBlock = new Map(
+      [...blockIdByBooking].map(([bookingId, blockId]) => [blockId, bookingId]),
+    );
   } catch (error) {
     if (!isVillaDbError(error)) throw error;
     siteError = error.message;
@@ -206,6 +226,7 @@ export default async function BlockedDatesPage({
         ) : (
           <BlockedDatesView
             accountId={accountId}
+            account={account}
             propertyId={property.id}
             today={today}
             filters={filters}
@@ -217,6 +238,10 @@ export default async function BlockedDatesPage({
               reason: b.reason,
               notes: blockNoteForDisplay(b.notes),
               source: b.source,
+              channelName: b.channelName,
+              recordedBookingId: recordedByBlock.get(b.id) ?? null,
+              feedId: b.feedId,
+              externalUid: b.externalUid,
             }))}
           />
         )}

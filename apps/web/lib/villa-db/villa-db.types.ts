@@ -204,6 +204,8 @@ export type Database = {
           property_id: string;
           reference_number: string;
           source: string | null;
+          source_external_uid: string | null;
+          source_feed_id: string | null;
           special_requests: string | null;
           status: string | null;
           tax_amount: number;
@@ -245,6 +247,8 @@ export type Database = {
           property_id: string;
           reference_number: string;
           source?: string | null;
+          source_external_uid?: string | null;
+          source_feed_id?: string | null;
           special_requests?: string | null;
           status?: string | null;
           tax_amount?: number;
@@ -286,6 +290,8 @@ export type Database = {
           property_id?: string;
           reference_number?: string;
           source?: string | null;
+          source_external_uid?: string | null;
+          source_feed_id?: string | null;
           special_requests?: string | null;
           status?: string | null;
           tax_amount?: number;
@@ -1543,6 +1549,8 @@ export type Database = {
         Args: {
           p_check_in: string;
           p_check_out: string;
+          p_ignore_external_uid?: string;
+          p_ignore_feed_id?: string;
           p_property_id: string;
         };
         Returns: string;
@@ -1564,6 +1572,8 @@ export type Database = {
           p_num_infants: number;
           p_num_nights: number;
           p_property_id: string;
+          p_source_external_uid?: string;
+          p_source_feed_id?: string;
           p_special_requests: string;
           p_tax_amount: number;
           p_total_amount: number;

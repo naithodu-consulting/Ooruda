@@ -16,12 +16,15 @@ import {
   type SiteBooking,
   getBookingByCode,
   listBookingsByView,
+  listChannelLinkedBookings,
   searchBookings,
 } from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { isVillaDbError } from '~/lib/villa-db/errors';
 import { blockNoteForDisplay } from '~/lib/villa/calendar';
+import { linkChannelStays } from '~/lib/villa/channel-link';
+import { parseChannelNote } from '~/lib/villa/channel-note';
 import {
   type IcalFeedStatusSummary,
   getIcalFeedsStatus,
@@ -54,6 +57,58 @@ type BlockedView = (typeof BLOCKED_VIEWS)[number];
 
 const PAST_DAYS = 365;
 const FUTURE_DAYS = 730;
+
+/**
+ * The window of blocks to read alongside a booking list view, so channel
+ * stays (Airbnb and friends) appear where the operator looks for bookings.
+ * An imported stay is a block on the site, not a booking row, so without
+ * this the Bookings page says "No upcoming bookings" while the calendar
+ * shows the villa sold out.
+ */
+function channelWindowFor(view: BookingView, today: string) {
+  switch (view) {
+    case 'in_house':
+      return { from: addDays(today, -PAST_DAYS), to: addDays(today, 1) };
+    case 'past':
+      return { from: addDays(today, -PAST_DAYS), to: addDays(today, 1) };
+    default:
+      return { from: today, to: addDays(today, FUTURE_DAYS) };
+  }
+}
+
+function channelStaysFor(
+  blocks: Block[],
+  view: BookingView,
+  today: string,
+): Block[] {
+  const channel = blocks.filter(
+    (b) =>
+      b.source === 'ical' &&
+      // A hold the host made on the channel is not a guest booking; it is a
+      // block, and it belongs only on the Blocked tab.
+      !parseChannelNote(blockNoteForDisplay(b.notes)).isChannelBlock,
+  );
+
+  if (view === 'upcoming') {
+    return channel
+      .filter((b) => b.startDate > today)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  }
+
+  if (view === 'in_house') {
+    return channel
+      .filter((b) => b.startDate <= today && b.endDate > today)
+      .sort((a, b) => a.endDate.localeCompare(b.endDate));
+  }
+
+  if (view === 'past') {
+    return channel
+      .filter((b) => b.endDate <= today)
+      .sort((a, b) => b.startDate.localeCompare(a.startDate));
+  }
+
+  return [];
+}
 
 function blockWindowFor(bview: BlockedView, today: string) {
   switch (bview) {
@@ -122,6 +177,10 @@ export default async function BookingsPage({ params, searchParams }: Props) {
 
   let bookings: SiteBooking[] = [];
   let blocks: Block[] = [];
+  let channelStays: Block[] = [];
+  let orphanedBookingIds: string[] = [];
+  // block id → the booking that fulfils it, for the blocked list.
+  let recordedByBlock = new Map<string, string>();
   let icalStatus: IcalFeedStatusSummary = {
     lastSyncedAt: null,
     lastStatus: null,
@@ -136,22 +195,85 @@ export default async function BookingsPage({ params, searchParams }: Props) {
 
       if (isBlocked) {
         const { from, to } = blockWindowFor(bview, today);
-        [blocks, icalStatus] = await Promise.all([
+        const [blockList, status, linked] = await Promise.all([
           listBlocks(site, from, to),
           getIcalFeedsStatus(site),
+          listChannelLinkedBookings(site, { from, to }),
         ]);
+
+        blocks = blockList;
+        icalStatus = status;
+
+        // A channel block that has been filled in stays in this list — it is
+        // still what holds the nights — but it says so, and offers the
+        // booking rather than the form.
+        const linkResult = linkChannelStays({
+          blocks: blockList,
+          bookings: linked,
+          today,
+        });
+
+        recordedByBlock = new Map(
+          [...linkResult.blockIdByBooking].map(([bookingId, blockId]) => [
+            blockId,
+            bookingId,
+          ]),
+        );
       } else {
         // A booking code (typed any way) opens that booking; any other text is
         // searched on the site across every status.
         const code = q ? normalizeBookingCode(q) : null;
         const bookingView = view as BookingView;
 
-        const [found, list] = await Promise.all([
+        // Channel stays are blocks, not bookings, so they come from a second
+        // read — in parallel, and only when the list is not a search (a
+        // search is for a guest, a phone or a code, none of which a channel
+        // block has) and not the cancelled view (a channel cancellation just
+        // disappears from the feed).
+        const wantsChannel = !q && bookingView !== 'cancelled';
+        const channelWindow = channelWindowFor(bookingView, today);
+
+        const [found, list, blocksForView, linkedBookings] = await Promise.all([
           code ? getBookingByCode(site, code) : Promise.resolve(null),
           q
             ? searchBookings(site, q)
             : listBookingsByView(site, bookingView, LIST_LIMIT),
+          wantsChannel
+            ? listBlocks(site, channelWindow.from, channelWindow.to)
+            : Promise.resolve([] as Block[]),
+          wantsChannel
+            ? listChannelLinkedBookings(site)
+            : Promise.resolve([] as SiteBooking[]),
         ]);
+
+        // Pairing needs every booking that could claim a block in the window:
+        // the ones on this tab, plus the channel-linked ones in the same
+        // window (a stay filled in today may belong to another tab). Both
+        // lists are clipped to the block window, so a stay outside it is
+        // never called "gone from channel" on the strength of blocks that
+        // were never read.
+        const byId = new Map(
+          [...list, ...linkedBookings]
+            .filter(
+              (b) =>
+                b.checkIn < channelWindow.to && b.checkOut > channelWindow.from,
+            )
+            .map((b) => [b.id, b]),
+        );
+
+        const linkResult = linkChannelStays({
+          blocks: blocksForView,
+          bookings: [...byId.values()],
+          today,
+        });
+
+        channelStays = channelStaysFor(
+          blocksForView,
+          bookingView,
+          today,
+        ).filter((b) => !linkResult.enrichedBlockIds.has(b.id));
+
+        orphanedBookingIds = [...linkResult.orphanedBookingIds];
 
         if (found) {
           jumpTo = `${base}/${found.id}?property=${property.id}`;
@@ -273,6 +395,7 @@ export default async function BookingsPage({ params, searchParams }: Props) {
                 today={today}
                 filters={blockedFilters}
                 bookingCutoff={bookingCutoffDate}
+                account={account}
                 blocks={visible.map((b) => ({
                   id: b.id,
                   startDate: b.startDate,
@@ -280,13 +403,33 @@ export default async function BookingsPage({ params, searchParams }: Props) {
                   reason: b.reason,
                   notes: blockNoteForDisplay(b.notes),
                   source: b.source,
+                  channelName: b.channelName,
+                  recordedBookingId: recordedByBlock.get(b.id) ?? null,
+                  feedId: b.feedId,
+                  externalUid: b.externalUid,
                 }))}
               />
             ) : (
               <BookingsList
                 account={account}
+                accountId={accountId}
                 propertyId={property.id}
+                orphanedBookingIds={orphanedBookingIds}
                 bookings={bookings}
+                channelStays={channelStays.map((b) => {
+                  const note = parseChannelNote(blockNoteForDisplay(b.notes));
+
+                  return {
+                    id: b.id,
+                    channelName: b.channelName,
+                    startDate: b.startDate,
+                    endDate: b.endDate,
+                    confirmationCode: note.confirmationCode,
+                    phoneLast4: note.phoneLast4,
+                    feedId: b.feedId,
+                    externalUid: b.externalUid,
+                  };
+                })}
                 view={view as BookingView}
                 searching={Boolean(q)}
                 truncated={!q && bookings.length >= LIST_LIMIT}

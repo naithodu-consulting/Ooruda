@@ -13,6 +13,7 @@ import { sendGuestEmailNow } from '~/lib/villa/guest-email-runner';
 import {
   CancelBookingSchema,
   CompleteStaySchema,
+  EnrichChannelStaySchema,
   NewBookingSchema,
   ReopenStaySchema,
   SendGuestEmailSchema,
@@ -40,6 +41,27 @@ export const createBookingAction = authActionClient
     ).create(parsedInput, ctx.user.id, role);
 
     revalidateBookings();
+
+    return { id: booking.id, bookingCode: booking.bookingCode };
+  });
+
+// Filling in a stay a booking channel sold. Same people who take bookings:
+// it records what already happened on the channel and sells nothing.
+export const enrichChannelStayAction = authActionClient
+  .inputSchema(EnrichChannelStaySchema)
+  .action(async ({ parsedInput, ctx }) => {
+    await requireVillaRole(parsedInput.accountId, [
+      'villa_admin',
+      'villa_manager',
+    ]);
+
+    const booking = await createBookingsService(
+      getSupabaseServerClient(),
+    ).enrichChannelStay(parsedInput, ctx.user.id);
+
+    revalidateBookings();
+    revalidatePath('/[locale]/home/[account]/calendar', 'page');
+    revalidatePath('/[locale]/home/[account]/blocked-dates', 'page');
 
     return { id: booking.id, bookingCode: booking.bookingCode };
   });

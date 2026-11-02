@@ -11,6 +11,7 @@ export type VillaDbErrorCode =
   | 'DATE_UNAVAILABLE' // a booking (or a guest mid-checkout) holds those nights
   | 'DATE_BLOCKED' // an existing block covers those nights
   | 'CHANNEL_MANAGED' // the block belongs to a channel feed, not to Ooruda
+  | 'CHANNEL_EVENT_GONE' // the channel's calendar no longer holds those nights
   | 'HOLD_LAPSED' // the 15-minute hold expired before we confirmed
   | 'INVALID_INPUT' // bad dates, zero-night range, negative amounts…
   | 'OVERLAP' // a pricing rule already covers some of those nights
@@ -30,6 +31,8 @@ const MESSAGES: Record<VillaDbErrorCode, string> = {
   DATE_BLOCKED: 'Some of those nights are already blocked.',
   CHANNEL_MANAGED:
     'These nights come from a booking channel’s calendar, so they cannot be unblocked here. Remove the booking on the channel instead — the next sync clears it.',
+  CHANNEL_EVENT_GONE:
+    'The booking channel’s calendar no longer shows this stay on these nights — it was changed or cancelled there. Refresh the page to see what the channel says now.',
   HOLD_LAPSED:
     'The dates were released before the booking was confirmed. Please try again.',
   INVALID_INPUT: 'Some details are not valid. Check the dates and amounts.',
@@ -57,6 +60,7 @@ export const REJECTION_CODES: readonly VillaDbErrorCode[] = [
   'DATE_UNAVAILABLE',
   'DATE_BLOCKED',
   'CHANNEL_MANAGED',
+  'CHANNEL_EVENT_GONE',
   'OVERLAP',
   'INVALID_INPUT',
   'HOLD_LAPSED',
@@ -89,6 +93,17 @@ export function fromSiteError(error: {
 
   if (message.startsWith('DATE_BLOCKED')) {
     return new VillaDbError('DATE_BLOCKED', detail);
+  }
+
+  // check_occupancy, when the channel event a booking names is no longer in
+  // the calendar or no longer covers the whole stay (villa-booking 00108).
+  if (message.startsWith('CHANNEL_EVENT_GONE')) {
+    return new VillaDbError('CHANNEL_EVENT_GONE', detail);
+  }
+
+  // create_booking_atomic, when a link names a feed of another property.
+  if (message.startsWith('FEED_MISMATCH')) {
+    return new VillaDbError('INVALID_INPUT', detail);
   }
 
   // check_violation / invalid_text_representation / not_null_violation

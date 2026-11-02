@@ -13,18 +13,24 @@ import type { Database } from '~/lib/database.types';
 import { formatDateReadable } from '~/lib/format-date';
 import type { VillaRole } from '~/lib/roles';
 import { checkAvailability } from '~/lib/villa-db/availability';
+import { getChannelBlock } from '~/lib/villa-db/blocks';
 import {
   type SiteBooking,
   cancelBooking,
+  channelValueForFeed,
+  clearChannelLink,
   createOfflineBooking,
+  getChannelLinkedBooking,
   markStayCompleted,
   reopenStay,
 } from '~/lib/villa-db/bookings';
 import { type VillaSite, getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
-import { VillaDbError } from '~/lib/villa-db/errors';
+import { VillaDbError, isVillaDbError } from '~/lib/villa-db/errors';
 import { getPricingInputs } from '~/lib/villa-db/rates';
 import { recordBookingActivity } from '~/lib/villa/activity';
+import { blockNoteForDisplay } from '~/lib/villa/calendar';
+import { parseChannelNote } from '~/lib/villa/channel-note';
 import { sendBookingConfirmation } from '~/lib/villa/guest-email-runner';
 import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
 import { mirrorBooking } from '~/lib/villa/mirror';
@@ -34,10 +40,13 @@ import { type QuoteError, quoteStay } from '~/lib/villa/pricing';
 import type {
   CancelBookingSchema,
   CompleteStaySchema,
+  EnrichChannelStaySchema,
   NewBookingSchema,
   ReopenStaySchema,
   StaySchema,
 } from '../schemas/bookings.schema';
+
+import { createHash } from 'node:crypto';
 
 type Client = SupabaseClient<Database>;
 
@@ -74,6 +83,30 @@ const TAKEN: Record<'DATE_UNAVAILABLE' | 'DATE_BLOCKED', string> = {
   DATE_UNAVAILABLE: 'Some of those nights are already booked.',
   DATE_BLOCKED: 'Some of those nights are blocked.',
 };
+
+/**
+ * The request id for a channel payout receipt.
+ *
+ * Derived from the booking so the same payout recorded twice — a retry after
+ * a timeout, say — is recognised by `record_villa_payment`'s idempotency key
+ * instead of being counted as a second payment. A random id would make every
+ * retry a new receipt.
+ */
+function channelPayoutRequestId(bookingId: string): string {
+  const hash = createHash('sha1')
+    .update(`villa:channel-payout:${bookingId}`)
+    .digest('hex');
+
+  // Shaped as a v5-style UUID: the column is a uuid.
+  return [
+    hash.slice(0, 8),
+    hash.slice(8, 12),
+    `5${hash.slice(13, 16)}`,
+    ((parseInt(hash.slice(16, 17), 16) & 0x3) | 0x8).toString(16) +
+      hash.slice(17, 20),
+    hash.slice(20, 32),
+  ].join('-');
+}
 
 /**
  * Bookings for a villa property. Callers authorise first; every site call is
@@ -444,6 +477,193 @@ export function createBookingsService(client: Client) {
           );
         }
       });
+
+      return booking;
+    },
+
+    /**
+     * Attaches guest and money details to a stay a booking channel sold.
+     *
+     * The channel's block keeps holding the nights — the feed owns it and
+     * replaces it on every sync — and this records the booking that fulfils
+     * it, linked by (feed, UID). From then on the stay counts in revenue,
+     * occupancy and Reports like any other booking.
+     *
+     * What it deliberately does NOT do:
+     *   - price the stay. The rate card never sold these nights; the channel's
+     *     payout is the only true figure, so the operator supplies it.
+     *   - email the guest. Airbnb gives us no address and owns the guest
+     *     conversation; a confirmation from us would be the second one they
+     *     received for the same stay, from a sender they do not know.
+     *   - ask about the booking cutoff. The cutoff closes OUR sales; this
+     *     stay is already sold.
+     */
+    async enrichChannelStay(
+      input: z.output<typeof EnrichChannelStaySchema>,
+      actor: string,
+    ) {
+      const site = await getVillaSite(input.accountId, input.propertyId);
+      const link = { feedId: input.feedId, externalUid: input.externalUid };
+
+      // Read by the key, not by the row id the browser last saw: a sync
+      // between render and submit replaces every row (villa-booking 00104),
+      // and an id lookup would call a stay that is sitting in the calendar
+      // gone. The feed id is checked against this property by the read
+      // itself, and again by create_booking_atomic.
+      const block = await getChannelBlock(site, link);
+
+      if (!block) {
+        throw new VillaDbError(
+          'CHANNEL_EVENT_GONE',
+          `no block for feed ${link.feedId} uid ${link.externalUid}`,
+        );
+      }
+
+      // The dates are the feed's, never the browser's: a stale dialog must
+      // not create a booking over nights the channel has since released.
+      if (
+        input.checkIn !== block.startDate ||
+        input.checkOut !== block.endDate
+      ) {
+        throw new VillaDbError(
+          'CONFLICT',
+          `block ${block.id} is ${block.startDate}→${block.endDate}, form said ${input.checkIn}→${input.checkOut}`,
+          'These dates changed on the channel. Reload the page and try again.',
+        );
+      }
+
+      const existing = await getChannelLinkedBooking(site, link);
+
+      // A cancelled one does not stand in the way: cancelling by mistake must
+      // not make a stay unrecordable for ever. It is noted on the new
+      // booking's trail so the pair is not a mystery later.
+      if (existing && existing.status !== 'cancelled') {
+        throw new VillaDbError(
+          'CONFLICT',
+          `booking ${existing.id} already fulfils ${link.externalUid}`,
+          'This stay has already been filled in.',
+        );
+      }
+
+      const payoutPaise = Math.round(input.payoutAmount * 100);
+      const taxPaise = Math.round(input.taxAmount * 100);
+      const basePaise = payoutPaise - taxPaise;
+
+      let booking: SiteBooking;
+
+      try {
+        booking = await createOfflineBooking(
+          site,
+          {
+            guestName: input.guestName,
+            guestEmail: input.guestEmail || '',
+            guestPhone: input.guestPhone
+              ? normalizePhoneNumber(input.guestPhone)
+              : '',
+            adults: input.adults,
+            children: input.children,
+            infants: input.infants,
+            checkIn: block.startDate,
+            checkOut: block.endDate,
+            baseAmount: fromPaiseToString(basePaise),
+            extraGuestAmount: '0',
+            taxAmount: fromPaiseToString(taxPaise),
+            totalAmount: fromPaiseToString(payoutPaise),
+            specialRequests: input.specialRequests,
+            channel: channelValueForFeed(block.channelName),
+            paymentStatus: input.payoutReceived ? 'paid' : 'unpaid',
+            // The stay is already sold; our own sales cutoff has no say in it.
+            ignoreCutoff: true,
+            source: link,
+          },
+          actor,
+        );
+      } catch (error) {
+        // The site creates the row pending and confirms it in a second
+        // statement. When that second step fails, a pending row is left
+        // holding this event's link: no list view shows it, nothing will
+        // confirm it, and it would block the stay from ever being recorded
+        // again. Free the link before giving up, so the operator can retry.
+        if (isVillaDbError(error) && error.code === 'HOLD_LAPSED') {
+          await clearChannelLink(site, link).catch(async (e: unknown) =>
+            (await getLogger()).error(
+              { uid: link.externalUid, error: String(e) },
+              'villa channel enrich: could not free a stranded link',
+            ),
+          );
+        }
+
+        throw error;
+      }
+
+      const channel = block.channelName ?? 'the channel';
+      const note = [
+        `Recorded from the ${channel} calendar`,
+        block.notes ? blockNoteForDisplay(block.notes) : null,
+        existing
+          ? `Replaces cancelled booking ${existing.bookingCode ?? existing.referenceNumber}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+
+      // Order matters here, in both directions.
+      //
+      // The mirror goes first because `record_villa_payment` looks the stay
+      // up in `villa_bookings_mirror` and refuses a payment for a booking it
+      // cannot find there. It never throws (it logs and returns), so nothing
+      // between the booking and its receipt can abort this.
+      //
+      // The receipt goes before the audit trail, because the booking is
+      // already committed on the site and reads as paid: if anything in
+      // between threw, the operator would retry, be told the stay is already
+      // filled in, and the money would never reach the ledger — revenue
+      // understated with nothing on screen to say so. The request id is
+      // derived from the booking, so a retry of this same payout is
+      // recognised by `record_villa_payment` instead of double-counted.
+      await mirrorBooking(site, booking, 'stay');
+
+      if (input.payoutReceived) {
+        const { error } = await client.rpc('record_villa_payment', {
+          p_property_id: input.propertyId,
+          p_site_booking_id: booking.id,
+          p_request_id: channelPayoutRequestId(booking.id),
+          p_mode: 'bank',
+          p_amount: input.payoutAmount,
+          p_paid_on: todayIst(),
+          p_reference:
+            parseChannelNote(blockNoteForDisplay(block.notes))
+              .confirmationCode ?? '',
+          p_payer_name: channel,
+          p_note: `Payout from ${channel}`,
+        });
+
+        if (error) {
+          (await getLogger()).error(
+            { bookingId: booking.id, code: error.code },
+            'villa channel payout receipt failed',
+          );
+        }
+      }
+
+      // The trail comes last and never fails the call: the stay is recorded
+      // and the money is in the ledger, and refusing to return a booking that
+      // exists would only send the operator round again.
+      await record(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking,
+          action: 'created',
+          note,
+        },
+        actor,
+      ).catch(async (e: unknown) =>
+        (await getLogger()).error(
+          { bookingId: booking.id, error: String(e) },
+          'villa channel enrich: activity record failed',
+        ),
+      );
 
       return booking;
     },

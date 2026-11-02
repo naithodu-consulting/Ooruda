@@ -1,5 +1,8 @@
 import 'server-only';
-import { OFFLINE_CHANNEL_VALUES } from '~/lib/villa/constants';
+import {
+  CHANNEL_SOLD_CHANNEL_VALUES,
+  OFFLINE_CHANNEL_VALUES,
+} from '~/lib/villa/constants';
 import { toPaise } from '~/lib/villa/money';
 
 import type { VillaSite } from './client';
@@ -32,6 +35,23 @@ export const OFFLINE_CHANNELS = OFFLINE_CHANNEL_VALUES;
 
 export type OfflineChannel = (typeof OFFLINE_CHANNELS)[number];
 
+/**
+ * Channels Ooruda may record for a stay a booking channel sold (villa-booking
+ * 00108 added them to `bookings.booking_channel`). These are never offered in
+ * the new-booking form: such a booking exists only as the enrichment of an
+ * imported block, and one entered freehand would hold the nights twice.
+ */
+export const CHANNEL_SOLD_CHANNELS = CHANNEL_SOLD_CHANNEL_VALUES;
+
+export type ChannelSoldChannel = (typeof CHANNEL_SOLD_CHANNELS)[number];
+
+/** 'Airbnb' → 'airbnb'; any other feed name → the generic 'channel'. */
+export function channelValueForFeed(
+  feedName: string | null,
+): ChannelSoldChannel {
+  return feedName?.trim().toLowerCase() === 'airbnb' ? 'airbnb' : 'channel';
+}
+
 export type PaymentStatus = 'unpaid' | 'partially_paid' | 'paid';
 
 export interface NewOfflineBooking {
@@ -50,8 +70,15 @@ export interface NewOfflineBooking {
   taxAmount: number | string;
   totalAmount: number | string;
   specialRequests?: string | null;
-  channel: OfflineChannel;
+  channel: OfflineChannel | ChannelSoldChannel;
   paymentStatus: PaymentStatus;
+  /**
+   * The channel event this booking fulfils. Given only by the enrichment of
+   * an imported stay: the site excuses that one block from its occupancy test
+   * (and skips the past-check-in guard), so the booking can cover the nights
+   * the feed is already holding. See lib/villa/channel-link.
+   */
+  source?: { feedId: string; externalUid: string } | null;
   /**
    * Record this stay even though its check-in is past the property's booking
    * cutoff. The cutoff closes PUBLIC sales; the villa's own admin still has to
@@ -89,12 +116,15 @@ export interface SiteBooking {
   idStatus: string;
   invoiceNumber: string | null;
   specialRequests: string | null;
+  /** The channel feed whose event this booking fulfils; null for direct ones. */
+  sourceFeedId: string | null;
+  sourceExternalUid: string | null;
   updatedAt: string | null;
   createdAt: string | null;
 }
 
 const BOOKING_COLUMNS =
-  'id, booking_code, reference_number, status, payment_status, booking_channel, guest_name, guest_email, guest_phone, check_in, check_out, num_nights, num_adults, num_children, num_infants, base_amount, extra_guest_amount, tax_amount, total_amount, discount_amount, discount_code, id_status, invoice_number, special_requests, updated_at, created_at';
+  'id, booking_code, reference_number, status, payment_status, booking_channel, guest_name, guest_email, guest_phone, check_in, check_out, num_nights, num_adults, num_children, num_infants, base_amount, extra_guest_amount, tax_amount, total_amount, discount_amount, discount_code, id_status, invoice_number, special_requests, source_feed_id, source_external_uid, updated_at, created_at';
 
 type BookingRow = {
   id: string;
@@ -121,6 +151,8 @@ type BookingRow = {
   id_status: string | null;
   invoice_number: string | null;
   special_requests: string | null;
+  source_feed_id: string | null;
+  source_external_uid: string | null;
   updated_at: string | null;
   created_at: string | null;
 };
@@ -151,6 +183,8 @@ function toBooking(row: BookingRow): SiteBooking {
     idStatus: row.id_status ?? 'pending',
     invoiceNumber: row.invoice_number,
     specialRequests: row.special_requests ?? null,
+    sourceFeedId: row.source_feed_id,
+    sourceExternalUid: row.source_external_uid,
     updatedAt: row.updated_at,
     createdAt: row.created_at,
   };
@@ -199,7 +233,11 @@ export async function createOfflineBooking(
 ): Promise<SiteBooking> {
   const nights = nightsIn(input.checkIn, input.checkOut);
 
-  if (!OFFLINE_CHANNELS.includes(input.channel)) {
+  const channelAllowed = input.source
+    ? (CHANNEL_SOLD_CHANNELS as readonly string[]).includes(input.channel)
+    : (OFFLINE_CHANNELS as readonly string[]).includes(input.channel);
+
+  if (!channelAllowed) {
     throw new VillaDbError('INVALID_INPUT', `bad channel ${input.channel}`);
   }
 
@@ -263,6 +301,14 @@ export async function createOfflineBooking(
         // generated RPC arg types cannot express that.
         p_special_requests: (input.specialRequests?.trim() || null) as string,
         p_ignore_cutoff: input.ignoreCutoff ?? false,
+        // Generated arg types are non-nullable; the SQL parameters default to
+        // NULL, which is what a direct booking passes.
+        ...(input.source
+          ? {
+              p_source_feed_id: input.source.feedId,
+              p_source_external_uid: input.source.externalUid,
+            }
+          : {}),
       },
     );
 
@@ -863,4 +909,125 @@ export async function getPropertyAddress(
   ]
     .filter(Boolean)
     .join(', ');
+}
+
+/**
+ * Re-points an enriched booking at the channel's new UID for the same stay.
+ *
+ * Airbnb reissues a UID whenever an event changes, so a stay nobody touched
+ * in Ooruda can come back under a new key (villa-booking 00102). The pairing
+ * is recovered from the dates (lib/villa/channel-link), and this writes the
+ * recovery down so the next read matches on the UID again.
+ *
+ * Scoped to the same feed on purpose: a repair must never move a booking from
+ * one channel to another.
+ */
+export async function relinkChannelBooking(
+  site: VillaSite,
+  bookingId: string,
+  link: { feedId: string; externalUid: string },
+): Promise<boolean> {
+  const { data, error } = await site.client
+    .from('bookings')
+    .update({ source_external_uid: link.externalUid })
+    .eq('id', bookingId)
+    .eq('property_id', site.sitePropertyId)
+    .eq('source_feed_id', link.feedId)
+    .select('id');
+
+  if (error) throw fromSiteWriteError(error);
+
+  if ((data ?? []).length > 0) {
+    invalidateBookingsViewCache(site.sitePropertyId);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * The booking that fulfils one channel event, or null. Read before enriching
+ * a stay, so a second attempt reports "already recorded" rather than being
+ * refused as a double booking.
+ *
+ * A live booking wins over a cancelled one. Only live rows are unique per
+ * event (villa-booking 00108), because a stay cancelled by mistake has to be
+ * recordable again; so there may be several cancelled rows and at most one
+ * live one, and the caller cares about the live one.
+ */
+export async function getChannelLinkedBooking(
+  site: VillaSite,
+  link: { feedId: string; externalUid: string },
+): Promise<SiteBooking | null> {
+  const { data, error } = await site.client
+    .from('bookings')
+    .select(BOOKING_COLUMNS)
+    .eq('property_id', site.sitePropertyId)
+    .eq('source_feed_id', link.feedId)
+    .eq('source_external_uid', link.externalUid)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (error) throw fromSiteError(error);
+
+  const rows = (data ?? []).map((row) => toBooking(row as BookingRow));
+
+  return rows.find((b) => b.status !== 'cancelled') ?? rows[0] ?? null;
+}
+
+/**
+ * Channel-linked bookings still holding nights.
+ *
+ * `window` must be the SAME range the caller read its blocks over. Pairing a
+ * windowed block list against a differently-windowed booking list reports
+ * nonsense both ways: a stay outside the booking window looks un-recorded
+ * (so a screen offers to record it again), and a booking outside the block
+ * window looks dropped by the channel. Without a window this answers "from
+ * today onwards", which is what the post-sync link repair wants.
+ */
+export async function listChannelLinkedBookings(
+  site: VillaSite,
+  window?: { from: string; to: string },
+): Promise<SiteBooking[]> {
+  let query = site.client
+    .from('bookings')
+    .select(BOOKING_COLUMNS)
+    .eq('property_id', site.sitePropertyId)
+    .not('source_feed_id', 'is', null)
+    .in('status', ['pending', 'confirmed', 'completed']);
+
+  query = window
+    ? query.lt('check_in', window.to).gt('check_out', window.from)
+    : query.gte('check_out', todayIst());
+
+  const { data, error } = await query.order('check_in');
+
+  if (error) throw fromSiteError(error);
+
+  return (data ?? []).map((row) => toBooking(row as BookingRow));
+}
+
+/**
+ * Takes the channel link off a booking that never got confirmed.
+ *
+ * `createOfflineBooking` creates the row inside the site's lock and confirms
+ * it in a second statement; if that second step fails the row is left
+ * `pending`, which no list view shows and which no hold keeps alive. Without
+ * this it would still own the channel event's link for ever, and the stay
+ * could never be recorded again. Scoped to pending rows, so a confirmed
+ * booking can never be unlinked by accident.
+ */
+export async function clearChannelLink(
+  site: VillaSite,
+  link: { feedId: string; externalUid: string },
+): Promise<void> {
+  const { error } = await site.client
+    .from('bookings')
+    .update({ source_feed_id: null, source_external_uid: null })
+    .eq('property_id', site.sitePropertyId)
+    .eq('source_feed_id', link.feedId)
+    .eq('source_external_uid', link.externalUid)
+    .eq('status', 'pending');
+
+  if (error) throw fromSiteWriteError(error);
 }

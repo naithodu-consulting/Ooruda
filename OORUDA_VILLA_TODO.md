@@ -152,3 +152,46 @@ dependencies are visible from here:
 - **Add-on history for invoices (M5):** invoice lines must snapshot the add-on's
   name, price and unit at the time, since add-ons can be edited or removed.
 
+
+## Deferred from the channel-stay enrichment review (2026-11-02)
+
+The major findings were fixed in the change itself; these are the minor ones.
+
+- **`invalidateFeedNamesCache` is never called** (`lib/villa-db/blocks.ts`), so
+  renaming or adding an iCal feed leaves blocks labelled with the old channel
+  name for up to five minutes. Wire it into the feed create/rename/delete paths,
+  or drop it and say in the comment that the TTL is the policy.
+- **A failed `ical_feeds` read caches an empty map for five minutes** (same
+  file), so one transient error labels every channel block "Channel" and makes
+  `channelValueForFeed` record the generic `channel` instead of `airbnb` —
+  splitting one channel across two values in Reports. Don't cache a failed read.
+- **The channel name is stored twice.** `channelBlockNote` writes the feed's
+  name into the block note, but every reader takes the name from `ical_feeds`.
+  The copy can drift after a rename. Worse, `parseChannelNote` picks the
+  confirmation code as the first segment matching `^[A-Z0-9]{6,20}$`, so a feed
+  named in capitals (`AIRBNB`) would be read back as a confirmation code and
+  land in a payment reference. Drop the name from the note, or label the code.
+- **The block/booking pairing is assembled in three pages** (bookings, calendar,
+  blocked-dates): read blocks, read linked bookings, `linkChannelStays`, invert
+  the map. Worth one server helper (`loadChannelStays`) that owns the window;
+  `linkChannelStays` stays pure and keeps its tests.
+- **"Statuses that still hold nights"** is written out in `channel-link.ts`
+  (`HOLDING`), in `listChannelLinkedBookings`, and twice in SQL. Share the TS
+  pair from `lib/villa/constants.ts`.
+- **New channel-stay UI is hard-coded English** (enrich dialog, the channel row,
+  the Blocked list buttons), like the rest of the villa module. Move to
+  `villa.json` with the rest when the module is translated.
+- **`villa-booking`'s `src/types/database.types.ts` is stale** for
+  `check_occupancy` and `create_booking_atomic` after migration 00108. Its own
+  `rpc()` callers pass named arguments, so nothing breaks today; regenerate it
+  in that repo.
+- **`CREATE INDEX` in 00108 is not `CONCURRENTLY`**, and the `booking_channel`
+  check constraint is validated in place rather than `NOT VALID` +
+  `VALIDATE CONSTRAINT`. Both take write locks on `bookings` for the length of
+  a scan. Deliberate: the table is small and `CONCURRENTLY` cannot run inside
+  the migration's transaction. Revisit if that table ever grows.
+- **`listBlocks`' 30-second cache breaks an existing test.**
+  `villa-db.integration.test.ts` → "refuses to release a block a channel feed
+  owns" re-reads the same window after deleting the feed and gets the cached
+  list. Pre-existing, unrelated to this work: invalidate on delete, or have the
+  test read a different range.

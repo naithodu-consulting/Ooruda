@@ -3,9 +3,14 @@ import { getLogger } from '@kit/shared/logger';
 import { getSupabaseServerAdminClient } from '@kit/supabase/server-admin-client';
 
 import { invalidateBlocksCache } from '~/lib/villa-db/blocks';
+import {
+  listChannelLinkedBookings,
+  relinkChannelBooking,
+} from '~/lib/villa-db/bookings';
 import type { VillaSite } from '~/lib/villa-db/client';
 import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { logSync } from '~/lib/villa-db/sync-log';
+import { linkChannelStays } from '~/lib/villa/channel-link';
 import { sendVillaEmail } from '~/lib/villa/guest-mailer';
 import { revalidateBookingSite } from '~/lib/villa/revalidate-site';
 
@@ -128,10 +133,105 @@ export async function fetchIcal(url: string): Promise<{
 export interface IcalEvent {
   uid: string;
   summary: string;
+  /** Raw DESCRIPTION, unescaped. Empty when the feed carries none. */
+  description: string;
   /** First night held, YYYY-MM-DD. */
   start: string;
   /** Checkout day, YYYY-MM-DD, exclusive. */
   end: string;
+}
+
+/**
+ * What a channel's calendar entry actually tells us about the stay.
+ *
+ * Airbnb's export is deliberately thin: SUMMARY is `Reserved` for a guest
+ * reservation and `Airbnb (Not available)` for a block the host made on
+ * Airbnb itself, and DESCRIPTION — when present — carries only the
+ * reservation URL (which ends in the confirmation code) and the last four
+ * digits of the guest's phone. There is never a name, an email or an amount,
+ * so this is the ceiling of what iCal can give us.
+ */
+export interface ChannelEventDetails {
+  /** 'block' = the host closed these nights on the channel, not a guest. */
+  kind: 'reservation' | 'block';
+  /** Airbnb confirmation code, e.g. HM5XK3J9QW. */
+  confirmationCode: string | null;
+  /** Last four digits of the guest's phone, as the channel gives them. */
+  phoneLast4: string | null;
+}
+
+/** `\n`, `\,` and friends are escapes in an iCal text value (RFC 5545 §3.3.11). */
+function unescapeText(value: string): string {
+  return value.replace(/\\n/gi, '\n').replace(/\\([,;\\])/g, '$1');
+}
+
+const CONFIRMATION_CODE = /\b([A-Z0-9]{6,20})\b/;
+
+/**
+ * Reads what little a channel event says about the stay. Pure, and tolerant:
+ * a feed that changes its wording loses the extra detail and still syncs,
+ * because every field is optional and nothing here can throw.
+ */
+export function channelEventDetails(event: {
+  summary: string;
+  description: string;
+}): ChannelEventDetails {
+  const summary = event.summary.toLowerCase();
+  const description = event.description;
+
+  // "Airbnb (Not available)", "Not available", "Blocked" — the host's own
+  // hold on the channel, not a guest. Only "reserved"/a reservation URL
+  // means money changed hands somewhere.
+  const kind: ChannelEventDetails['kind'] =
+    summary.includes('not available') || summary.includes('blocked')
+      ? 'block'
+      : 'reservation';
+
+  const urlMatch =
+    /reservations?\/details\/([A-Z0-9]+)/i.exec(description) ??
+    /\/hosting\/reservations\/([A-Z0-9]+)/i.exec(description);
+
+  let confirmationCode = urlMatch?.[1]?.toUpperCase() ?? null;
+
+  if (!confirmationCode) {
+    const line = /^\s*(?:confirmation\s*code|reservation)\s*:\s*(.+)$/im.exec(
+      description,
+    );
+    confirmationCode =
+      CONFIRMATION_CODE.exec(line?.[1]?.toUpperCase() ?? '')?.[1] ?? null;
+  }
+
+  const phoneMatch =
+    /phone\s*(?:number)?\s*\(last\s*4\s*digits\)\s*:?\s*\(?(\d{4})/i.exec(
+      description,
+    ) ?? /last\s*4\s*digits\s*:?\s*\(?(\d{4})/i.exec(description);
+
+  return {
+    kind,
+    confirmationCode,
+    phoneLast4: phoneMatch?.[1] ?? null,
+  };
+}
+
+/**
+ * The operator-facing note stored on the block, and read back by Ooruda's
+ * screens (`parseChannelNote` in ~/lib/villa/channel-note).
+ *
+ * It is a plain sentence on purpose: the booking site's own admin shows this
+ * column too, and a JSON blob there would be unreadable.
+ */
+export function channelBlockNote(
+  channel: string,
+  details: ChannelEventDetails,
+): string {
+  const parts = [channel];
+
+  parts.push(details.kind === 'block' ? 'blocked on channel' : 'booking');
+
+  if (details.confirmationCode) parts.push(details.confirmationCode);
+  if (details.phoneLast4) parts.push(`phone ending ${details.phoneLast4}`);
+
+  return parts.join(' · ');
 }
 
 function unfold(body: string): string[] {
@@ -193,6 +293,7 @@ export function parseIcal(body: string): {
             events.push({
               uid: current.uid ?? '',
               summary: current.summary ?? '',
+              description: current.description ?? '',
               start: current.start,
               end,
             });
@@ -217,7 +318,10 @@ export function parseIcal(body: string): {
         current.uid = prop.value.trim();
         break;
       case 'SUMMARY':
-        current.summary = prop.value.trim();
+        current.summary = unescapeText(prop.value).trim();
+        break;
+      case 'DESCRIPTION':
+        current.description = unescapeText(prop.value).trim();
         break;
       case 'DTSTART':
         current.start = toISODate(prop.value) ?? undefined;
@@ -338,15 +442,28 @@ export interface ConflictReport {
   feedEnd: string;
 }
 
+/**
+ * Confirmed bookings this feed's events would land on top of — the villa sold
+ * twice, which a human has to resolve.
+ *
+ * A booking recorded FOR one of these events is not a conflict: it is the
+ * same stay, written down (villa-booking 00108). It is matched the way every
+ * other screen matches it — the UID it was linked by, or the same nights on
+ * the same feed after the channel re-keyed the event — so an enriched stay
+ * does not raise a double-booking alarm on every sync.
+ */
 async function findConflicts(
   site: VillaSite,
+  feedId: string,
   events: IcalEvent[],
 ): Promise<ConflictReport[]> {
   if (events.length === 0) return [];
 
   const { data, error } = await site.client
     .from('bookings')
-    .select('id, reference_number, check_in, check_out')
+    .select(
+      'id, reference_number, check_in, check_out, source_feed_id, source_external_uid',
+    )
     .eq('property_id', site.sitePropertyId)
     .eq('status', 'confirmed');
 
@@ -361,9 +478,39 @@ async function findConflicts(
 
   const bookings = data ?? [];
 
+  // A booking fulfils this event when it was linked to it, or when it was
+  // linked to a UID this feed no longer carries and holds exactly these
+  // nights — which is what a re-key looks like.
+  //
+  // The second half is deliberately narrow. Accepting any same-dates booking
+  // would also swallow the case worth shouting about: the channel cancelled
+  // one guest and re-sold the same nights to another, so our stored guest and
+  // payout belong to someone who is no longer coming.
+  const liveUids = new Set(events.map((e) => e.uid));
+
+  const fulfils = (
+    b: {
+      source_feed_id: string | null;
+      source_external_uid: string | null;
+      check_in: string;
+      check_out: string;
+    },
+    e: IcalEvent,
+  ) => {
+    if (b.source_feed_id !== feedId) return false;
+    if (b.source_external_uid === e.uid) return true;
+
+    return (
+      !liveUids.has(b.source_external_uid ?? '') &&
+      b.check_in === e.start &&
+      b.check_out === e.end
+    );
+  };
+
   return events.flatMap((e) =>
     bookings
       .filter((b) => e.start < b.check_out && e.end > b.check_in)
+      .filter((b) => !fulfils(b, e))
       .map((b) => ({
         bookingId: b.id,
         reference: b.reference_number,
@@ -664,6 +811,77 @@ export async function getIcalFeedsStatus(
 }
 
 /**
+ * Re-points this feed's enriched bookings at the UIDs it has just applied.
+ *
+ * Best-effort: a failed repair leaves the booking visibly unlinked (the
+ * screens say "gone from channel"), which is recoverable, and must never fail
+ * a sync that has already applied correctly.
+ */
+async function repairChannelLinks(
+  site: VillaSite,
+  feedId: string,
+  events: IcalEvent[],
+): Promise<number> {
+  try {
+    const linked = (await listChannelLinkedBookings(site)).filter(
+      (b) => b.sourceFeedId === feedId,
+    );
+
+    if (linked.length === 0) return 0;
+
+    const { relinks } = linkChannelStays({
+      // An event with no UID gives nothing to re-link to, and they would all
+      // share the empty id and shadow one another in the matcher.
+      blocks: events
+        .filter((e) => e.uid.trim() !== '')
+        .map((e) => ({
+          id: e.uid,
+          feedId,
+          externalUid: e.uid,
+          startDate: e.start,
+          endDate: e.end,
+        })),
+      bookings: linked,
+      today: todayIst(),
+    });
+
+    let repaired = 0;
+
+    for (const relink of relinks) {
+      // Each repair stands alone. One that cannot be written — the operator
+      // filled the re-keyed event in by hand, so the new UID is already
+      // claimed — must not abandon the repairs queued behind it; that
+      // booking simply stays unlinked and shows as gone from the channel.
+      try {
+        if (await relinkChannelBooking(site, relink.bookingId, relink)) {
+          repaired += 1;
+        }
+      } catch (error) {
+        (await getLogger()).warn(
+          { feedId, bookingId: relink.bookingId, error: String(error) },
+          'ical sync: one channel link repair failed',
+        );
+      }
+    }
+
+    if (repaired > 0) {
+      (await getLogger()).info(
+        { propertyId: site.propertyId, feedId, repaired },
+        'ical sync: re-keyed channel links repaired',
+      );
+    }
+
+    return repaired;
+  } catch (error) {
+    (await getLogger()).warn(
+      { propertyId: site.propertyId, feedId, error: String(error) },
+      'ical sync: channel link repair failed',
+    );
+    return 0;
+  }
+}
+
+/**
  * Syncs all active iCal feeds for a villa property.
  *
  * Logs every run to:
@@ -878,15 +1096,16 @@ export async function syncIcalFeeds(
     }
 
     // ── 5. Conflicts (detected before writing) ────────────────────────────
-    const conflicts = await findConflicts(site, classified.apply);
+    const conflicts = await findConflicts(site, feed.id, classified.apply);
 
     // ── 6. Apply atomically ───────────────────────────────────────────────
-    const label = `${feed.name} Booking`;
+    // The note is the only column the site gives us for channel detail, so
+    // everything the feed revealed about the stay goes in it.
     const payload = classified.apply.map((e) => ({
       start: e.start,
       end: e.end,
       uid: e.uid,
-      summary: label,
+      summary: channelBlockNote(feed.name, channelEventDetails(e)),
     }));
 
     const { data, error: applyError } = await site.client.rpc(
@@ -933,6 +1152,13 @@ export async function syncIcalFeeds(
     const applied = row?.inserted ?? 0;
     const removed = row?.removed ?? 0;
     anyChanged = true;
+
+    // ── 6b. Repair re-keyed links ─────────────────────────────────────────
+    // Airbnb reissues a UID whenever an event changes, so a stay an operator
+    // already filled in can come back under a new key. The pairing is
+    // recovered from the nights and written back, or the booking would show
+    // as "gone from channel" beside a fresh, un-enriched channel row.
+    await repairChannelLinks(site, feed.id, classified.apply);
 
     // ── 7. Record conflicts after applying ────────────────────────────────
     if (conflicts.length > 0) {

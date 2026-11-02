@@ -2,6 +2,7 @@
  * Villa vocabulary shared by settings, bookings (M3) and invoices (M5).
  * The values mirror database check constraints; labels are what people read.
  */
+import { parseChannelNote } from './channel-note';
 
 export const ADDON_UNITS = [
   'per_stay',
@@ -77,6 +78,8 @@ export const BOOKING_CHANNEL_LABELS: Record<BookingChannel, string> = {
   instagram: 'Instagram',
   manual: 'Walk-in / manual',
   other: 'Other',
+  airbnb: 'Airbnb',
+  channel: 'Booking channel',
 };
 
 export function channelLabel(channel: string | null): string {
@@ -179,4 +182,29 @@ export const BLOCK_REASON_LABELS: Record<string, string> = {
 
 export function blockReasonLabel(reason: string | null): string {
   return reason ? (BLOCK_REASON_LABELS[reason] ?? reason) : 'Blocked';
+}
+
+/**
+ * What a blocked stretch of nights is called on screen.
+ *
+ * An imported block carries the reason `offline_booking` whatever channel it
+ * came from (the site stamps it in `apply_ical_feed`), so the reason alone
+ * labels an Airbnb stay "Offline booking". For a channel block the channel's
+ * own name is the only honest label.
+ */
+export function blockLabel(block: {
+  reason: string | null;
+  source: 'manual' | 'ical';
+  channelName?: string | null;
+  notes?: string | null;
+}): string {
+  if (block.source !== 'ical') return blockReasonLabel(block.reason);
+
+  const channel = block.channelName ?? 'Channel';
+
+  // A hold the host made on the channel is not a guest booking, and calling
+  // it one sends the operator hunting for a reservation that never existed.
+  return parseChannelNote(block.notes ?? null).isChannelBlock
+    ? `Blocked on ${channel}`
+    : `${channel} booking`;
 }
