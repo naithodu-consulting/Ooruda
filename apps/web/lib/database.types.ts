@@ -3803,6 +3803,7 @@ export type Database = {
           legal_name: string | null
           name: string
           ota_buffer_nights: number
+          registration_card_template: string | null
           retention_days: number
           site_credentials_ref: string | null
           site_project_ref: string | null
@@ -3824,6 +3825,7 @@ export type Database = {
           legal_name?: string | null
           name: string
           ota_buffer_nights?: number
+          registration_card_template?: string | null
           retention_days?: number
           site_credentials_ref?: string | null
           site_project_ref?: string | null
@@ -3845,6 +3847,7 @@ export type Database = {
           legal_name?: string | null
           name?: string
           ota_buffer_nights?: number
+          registration_card_template?: string | null
           retention_days?: number
           site_credentials_ref?: string | null
           site_project_ref?: string | null
@@ -4083,6 +4086,7 @@ export type Database = {
           id: string | null
           name: string | null
           picture_url: string | null
+          product_type: string | null
           role: string | null
           slug: string | null
         }

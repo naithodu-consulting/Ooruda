@@ -204,7 +204,7 @@ type Step = 'upload' | 'preview' | 'result';
 const ROLE_LABELS: Record<string, string> = {
   assoc_admin: 'Assoc Admin',
   billing_operator: 'Billing Operator',
-  prop_owner: 'Property Owner',
+  prop_owner: 'Unit Owner',
   tenant: 'Tenant',
 };
 

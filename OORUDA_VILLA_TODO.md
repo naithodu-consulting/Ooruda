@@ -45,6 +45,52 @@ revenue and channel-mix reporting, which M6 covers. No Ooruda work needed until 
 ### Mobile app for owners / managers
 `react-native-expo-turbo-saas-kit` was noted in the original plan. Far future.
 
+### Foreign-national registration (separate form) — raised 2026-10-31
+The Villa 19 guest registration card is built for Indian guests. A foreign national needs more
+than a nationality line, and the villa has a statutory reporting duty:
+- **Form C** must be filed with the Bureau of Immigration for every foreign guest, within 24 hours
+  of check-in, on the FRRO portal (`indianfrro.gov.in`). Hotels, guest houses and homestays are
+  all covered; a villa let commercially is in scope.
+- Fields the current card does not capture: passport number, place and date of issue, date of
+  expiry, visa number / type / validity, date of arrival in India, port of arrival, purpose of
+  visit under the visa, and the next destination with intended departure date.
+- Design it as a **second per-property template** in the same registration-card registry
+  (`villa19-foreign`), chosen by a nationality toggle on the download button rather than by
+  guessing from the booking — staff know on arrival, the booking record does not.
+- Also needs a photocopy of the passport photo page and the visa/stamp page kept with the guest
+  documents, under the existing `villa_guest_documents` purge path.
+- Open question for the owner: does Villa 19 actually accept foreign guests today? If yes this
+  moves from deferred into a milestone, because the Form C duty is not optional.
+
+### Refund ladder on a part-paid booking — raised 2026-10-31
+**Priority:** next, and it is a money-in-writing issue.
+`CANCELLATION_TIERS` defines `fraction` as a fraction of the total **paid**
+(`lib/villa/cancellation.ts`), but `renderGuestEmail` now feeds
+`cancellationOutlook` the contract total (`total > 0 ? total : paid`). On a
+part-paid booking the e-mail therefore prints rupee figures larger than the
+guest could ever get back: a ₹54,280 stay with a ₹10,000 advance is promised
+"₹54,280 will be refunded", under the company's CIN and GSTIN.
+- The 2026-10-31 payment gate fixes only the ₹0 case: no payment, no
+  confirmation e-mail (`lib/villa/booking-payments.ts`). Everything part-paid
+  still over-promises.
+- Fix is small — compute the ladder on the amount actually received (sum of
+  non-voided `villa_booking_payments`) — but decide the wording first: the
+  guest sees a smaller number than the policy percentages imply, so the e-mail
+  probably needs a line saying the percentages apply to amounts already paid.
+- Keep in step with `villa-booking`: its own confirmation quotes the same
+  ladder from its own copy of the tiers, and a website booking is paid in full,
+  which is why the site never hit this.
+- Add a test alongside `guest-emails.test.ts` covering unpaid / part-paid /
+  paid once the basis changes.
+
+### Signed registration card scan-back — raised 2026-10-31
+The guest signs the printed card on arrival and hands it back on paper. Storing the signed copy
+is deliberately out of v1: the data loader and template are being written so it drops in later.
+When wanted: upload the scan against the booking through the existing
+`villa_guest_documents` / `villa_guest_document_files` path with `stage = 'check_in'` and the
+property's `retention_days` driving `purge_after`, and show it in the booking's guest-documents
+panel beside the ID documents. No new table.
+
 ---
 
 ## Cross-repo work required (`villa-booking`)

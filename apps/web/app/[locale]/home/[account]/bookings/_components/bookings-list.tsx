@@ -65,9 +65,19 @@ export function BookingsList(props: {
                 >
                   <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
                     <div className="flex min-w-0 flex-col sm:w-56">
-                      <span className="truncate text-sm font-medium">
-                        {b.guestName}
-                      </span>
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="truncate text-sm font-medium">
+                          {b.guestName}
+                        </span>
+                        {b.specialRequests ? (
+                          <span
+                            title={`Special request: ${b.specialRequests}`}
+                            className="border-warning/30 bg-warning/5 text-warning shrink-0 rounded border px-1.5 py-0.5 text-xs font-medium"
+                          >
+                            Request
+                          </span>
+                        ) : null}
+                      </div>
                       <span className="text-muted-foreground font-mono text-xs">
                         {b.bookingCode ?? b.referenceNumber}
                       </span>

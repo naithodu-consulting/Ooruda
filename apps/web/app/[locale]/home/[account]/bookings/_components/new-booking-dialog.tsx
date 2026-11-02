@@ -128,7 +128,7 @@ function NewBookingForm(props: {
       propertyId: props.propertyId,
       checkIn: '',
       checkOut: '',
-      adults: 2,
+      adults: 8,
       children: 0,
       infants: 0,
       guestName: '',
@@ -178,12 +178,14 @@ function NewBookingForm(props: {
 
     const id = ++requestId.current;
     setQuote({ status: 'loading' });
+    const controller = new AbortController();
 
     const timer = setTimeout(async () => {
       try {
         const res = await fetch('/api/villa/quote', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
             accountId: props.accountId,
             propertyId: props.propertyId,
@@ -206,7 +208,10 @@ function NewBookingForm(props: {
             ? { status: 'done', quote: body }
             : { status: 'error', message: 'Could not get a quote.' },
         );
-      } catch {
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return;
+        }
         if (id === requestId.current) {
           setQuote({
             status: 'error',
@@ -214,9 +219,12 @@ function NewBookingForm(props: {
           });
         }
       }
-    }, 350);
+    }, 150);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [
     checkIn,
     checkOut,
@@ -496,7 +504,8 @@ function NewBookingForm(props: {
                         }
                       />
                       <FormDescription>
-                        The booking confirmation goes here.
+                        The booking confirmation goes here, once a payment is
+                        recorded.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -652,7 +661,7 @@ function NewBookingForm(props: {
                               <Input
                                 {...field}
                                 autoComplete="off"
-                                placeholder="UPI reference, cheque number, and so on"
+                                placeholder="UPI reference, cheque number"
                                 data-test={'villa-booking-payment-reference'}
                               />
                             }

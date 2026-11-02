@@ -23,6 +23,7 @@ import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { getBaseRates } from '~/lib/villa-db/rates';
 
 import { recordBookingActivity } from './activity';
+import { NO_PAYMENT_REASON, hasRecordedPayment } from './booking-payments';
 import {
   DEFAULT_VILLA_ENTITY,
   DEFAULT_VILLA_SITE_URL,
@@ -237,6 +238,9 @@ function contextFor(
       b.extraGuestAmountPaise > 0
         ? Math.max(0, b.adults + b.children - ctx.includedGuests)
         : null,
+    additionalGuestsNote:
+      b.extraGuestAmountPaise > 0 ||
+      (ctx.includedGuests > 0 && b.adults + b.children > ctx.includedGuests),
     paymentMethod: extra?.paymentMethod ?? null,
     paymentDate: extra?.paymentDate ?? null,
     bookingUrl: extra?.bookingUrl ?? null,
@@ -727,6 +731,24 @@ export async function sendGuestEmailNow(
   if (!booking.guestEmail) throw new Error('The booking has no guest email.');
 
   const admin = getSupabaseServerAdminClient();
+
+  // The same rule the button applies, enforced here: the confirmation quotes
+  // a refund ladder, so it goes only once money has been received. The other
+  // two emails quote nothing and are unaffected.
+  if (
+    template === 'booking_confirmation' &&
+    !(await hasRecordedPayment(
+      admin,
+      await getVillaSite(accountId, propertyId),
+      propertyId,
+      booking,
+    ))
+  ) {
+    throw new Error(
+      'Record the advance payment first - the confirmation email states what would be refunded.',
+    );
+  }
+
   const ctx = await loadGuestEmailContext(accountId, propertyId);
 
   const { data: row, error } = await admin
@@ -793,7 +815,17 @@ export async function sendBookingConfirmation(
 
   if (settings?.booking_confirmation_email === false) return;
 
+  // Nothing received yet: the booking is real, but the confirmation is not
+  // sent. It quotes a cancellation ladder in rupees, and promising a refund
+  // to a guest who has paid nothing - in writing, under the company's CIN and
+  // GSTIN - is the one thing this email must never do. Recorded as a skipped
+  // row rather than dropped, so the booking page can say why and staff can
+  // send it by hand once the advance is in.
+  //
+  // The ledger spans both databases, so the context (which holds the site
+  // connection) is loaded first and reused for the check.
   const ctx = await loadGuestEmailContext(accountId, propertyId);
+  const paid = await hasRecordedPayment(admin, ctx.site, propertyId, booking);
 
   const { data: row, error } = await admin
     .from('villa_message_log')
@@ -804,7 +836,8 @@ export async function sendBookingConfirmation(
       booking_code: booking.bookingCode,
       template: 'booking_confirmation' as const,
       manual: false,
-      status: 'sending',
+      status: paid ? 'sending' : 'skipped',
+      reason: paid ? null : NO_PAYMENT_REASON,
       to_email: booking.guestEmail,
     })
     .select('id')
@@ -817,6 +850,8 @@ export async function sendBookingConfirmation(
     );
     return;
   }
+
+  if (!paid) return;
 
   const outcome = await deliverGuestEmail(ctx, booking, 'booking_confirmation');
   await finish(admin, row.id, outcome);

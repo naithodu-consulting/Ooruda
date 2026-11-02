@@ -100,7 +100,7 @@
   "inviteMembersDescription": "Invite members by entering their name, phone number and role. They will join automatically the first time they sign in.",
   "emailPlaceholder": "member@email.com",
   "phoneLabel": "Phone",
-  "phonePlaceholder": "+91 98765 43210",
+  "phonePlaceholder": "Phone number",
   "membersPageHeading": "Members",
   "inviteMembersButton": "Invite Member",
   "invitingMembers": "Inviting members...",

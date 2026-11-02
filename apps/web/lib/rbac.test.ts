@@ -50,6 +50,7 @@ describe('Ooruda role model', () => {
       expect(ROLE_LABELS[role]).toBeTruthy();
     }
 
+    expect(ROLE_LABELS.prop_owner).toBe('Unit Owner');
     expect(Object.keys(ROLE_LABELS).sort()).toEqual([...PROPOPS_ROLES].sort());
   });
 });

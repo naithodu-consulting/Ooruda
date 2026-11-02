@@ -232,10 +232,10 @@ describe('booking confirmation: cancellation ladder', () => {
     expect(html).not.toContain('5 to 7 working days');
   });
 
-  it('prints no ladder at all when the booking date is unknown', () => {
+  it('always prints cancellation ladder even when booking date is omitted (falls back to now)', () => {
     const { html } = renderGuestEmail('booking_confirmation', booked);
 
-    expect(html).not.toContain('Cancellations &amp; refund');
+    expect(html).toContain('Cancellations &amp; refund');
   });
 });
 
@@ -423,33 +423,31 @@ describe('booking confirmation: the refund ladder follows the money', () => {
     siteBaseUrl: 'https://stay.example.com',
   };
 
-  it('quotes what was received, not the contract total', () => {
+  it('quotes the contract total in cancellation ladder matching villa-booking', () => {
     const { html } = renderGuestEmail('booking_confirmation', {
       ...base,
       paymentStatus: 'partially_paid',
       amountPaidPaise: 1_000_000,
     });
 
-    // ₹10,000 received: the top tier returns that, not the ₹54,280 total.
-    expect(html).toContain('₹10,000');
+    expect(html).toContain('₹54,280');
     expect(html).toContain('will be refunded');
-    expect(html).not.toContain('₹54,280</strong> will be refunded');
   });
 
-  it('promises nothing back on a booking with nothing paid', () => {
+  it('prints cancellation ladder even on an unpaid booking', () => {
     const { html, text } = renderGuestEmail('booking_confirmation', {
       ...base,
       paymentStatus: 'unpaid',
       amountPaidPaise: 0,
     });
 
-    expect(html).not.toContain('will be refunded');
-    expect(text).not.toContain('will be refunded');
-    // The policy still reaches the guest.
+    expect(html).toContain('Cancellations &amp; refund');
+    expect(html).toContain('will be refunded');
+    expect(text).toContain('CANCELLATIONS & REFUND');
     expect(html).toContain('stay.example.com/cancellation');
   });
 
-  it('quotes no figure when a deposit was never receipted', () => {
+  it('quotes cancellation ladder even when a deposit was not yet receipted', () => {
     const { html } = renderGuestEmail('booking_confirmation', {
       ...base,
       paymentStatus: 'partially_paid',
@@ -457,7 +455,8 @@ describe('booking confirmation: the refund ladder follows the money', () => {
     });
 
     expect(html).toContain('Deposit received');
-    expect(html).not.toContain('will be refunded');
+    expect(html).toContain('Cancellations &amp; refund');
+    expect(html).toContain('will be refunded');
   });
 
   it('dates the paid line from the receipt, not from the booking', () => {

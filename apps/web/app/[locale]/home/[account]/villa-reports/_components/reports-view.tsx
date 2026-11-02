@@ -392,6 +392,21 @@ export function ReportsView(props: {
     return `${base}?${q.toString()}`;
   };
 
+  const [isPending, startTransition] = useTransition();
+  const [pendingTab, setPendingTab] = useState<ReportTab | null>(null);
+  const [pendingRange, setPendingRange] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPendingTab(null);
+  }, [props.tab]);
+
+  useEffect(() => {
+    setPendingRange(null);
+  }, [props.range.preset]);
+
+  const activeTab = pendingTab ?? props.tab;
+  const activePreset = pendingRange ?? props.range.preset;
+
   const [customOpen, setCustomOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState(props.range.from);
   const [customTo, setCustomTo] = useState(props.range.to);
@@ -408,7 +423,7 @@ export function ReportsView(props: {
   const fileStem = `${props.propertyName.replace(/[^\w-]+/g, '-')}-${props.range.from}-to-${props.range.to}`;
 
   const activeGroup =
-    TAB_GROUPS.find((g) => g.tabs.some((t) => t.value === props.tab)) ??
+    TAB_GROUPS.find((g) => g.tabs.some((t) => t.value === activeTab)) ??
     TAB_GROUPS[0];
 
   function exportCsv() {
@@ -636,18 +651,27 @@ export function ReportsView(props: {
           data-test={'villa-reports-range'}
         >
           {PILL_PRESETS.map((p) => {
-            const active = props.range.preset === p;
+            const active = activePreset === p;
             return (
               <Link
                 key={p}
                 href={href({ range: p })}
                 scroll={false}
                 data-test={`villa-reports-range-${p}`}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || active) return;
+                  e.preventDefault();
+                  setPendingRange(p);
+                  startTransition(() => {
+                    router.push(href({ range: p }), { scroll: false });
+                  });
+                }}
                 className={cn(
                   'shrink-0 px-3 py-1.5 transition-colors first:rounded-l-lg last:rounded-r-lg',
                   active
                     ? 'bg-primary text-primary-foreground font-medium'
                     : 'hover:bg-muted text-muted-foreground',
+                  isPending && active && 'opacity-80',
                 )}
               >
                 {REPORT_PRESET_LABELS[p]}
@@ -764,12 +788,24 @@ export function ReportsView(props: {
                   key={group.key}
                   href={href({ tab: group.tabs[0].value })}
                   scroll={false}
+                  prefetch={true}
                   data-test={`villa-reports-group-${group.key}`}
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || isActiveGroup) return;
+                    e.preventDefault();
+                    setPendingTab(group.tabs[0].value);
+                    startTransition(() => {
+                      router.push(href({ tab: group.tabs[0].value }), {
+                        scroll: false,
+                      });
+                    });
+                  }}
                   className={cn(
                     'flex-1 rounded-md px-3 py-1.5 text-center text-sm font-medium whitespace-nowrap transition-colors sm:flex-none',
                     isActiveGroup
                       ? 'bg-background text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground',
+                    isPending && isActiveGroup && 'opacity-80',
                   )}
                 >
                   {group.label}
@@ -843,21 +879,31 @@ export function ReportsView(props: {
           className="border-border flex flex-wrap items-center gap-x-1 border-b"
         >
           {activeGroup.tabs.map((t) => {
-            const isActive = t.value === props.tab;
+            const isActive = t.value === activeTab;
 
             return (
               <Link
                 key={t.value}
                 href={href({ tab: t.value })}
                 scroll={false}
+                prefetch={true}
                 role="tab"
                 aria-selected={isActive}
                 data-test={`villa-reports-tab-${t.value}`}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || isActive) return;
+                  e.preventDefault();
+                  setPendingTab(t.value);
+                  startTransition(() => {
+                    router.push(href({ tab: t.value }), { scroll: false });
+                  });
+                }}
                 className={cn(
                   '-mb-px border-b-2 px-3 pt-1 pb-2 text-sm font-medium whitespace-nowrap transition-colors',
                   isActive
                     ? 'border-foreground text-foreground'
                     : 'text-muted-foreground hover:border-border hover:text-foreground border-transparent',
+                  isPending && isActive && 'opacity-80',
                 )}
               >
                 {t.label}
@@ -868,20 +914,29 @@ export function ReportsView(props: {
       </div>
 
       {/* ── Active Tab Content ───────────────────────────────── */}
-      {props.tab === 'overview' ? <OverviewTab o={props.overview} /> : null}
-      {props.tab === 'expenses' ? (
-        <ExpensesTab o={props.overview} rows={props.expenses ?? []} />
-      ) : null}
-      {props.tab === 'payments' && props.payments ? (
-        <PaymentsTab p={props.payments} />
-      ) : null}
-      {props.tab === 'gst_summary' && props.gst ? (
-        <GstSummaryTab g={props.gst} />
-      ) : null}
-      {props.tab === 'channels' ? <ChannelsTab lines={props.channels} /> : null}
-      {props.tab === 'guests' && props.guests ? (
-        <GuestsTab g={props.guests} />
-      ) : null}
+      <div
+        className={cn(
+          'transition-opacity duration-150',
+          isPending && 'pointer-events-none opacity-60',
+        )}
+      >
+        {props.tab === 'overview' ? <OverviewTab o={props.overview} /> : null}
+        {props.tab === 'expenses' ? (
+          <ExpensesTab o={props.overview} rows={props.expenses ?? []} />
+        ) : null}
+        {props.tab === 'payments' && props.payments ? (
+          <PaymentsTab p={props.payments} />
+        ) : null}
+        {props.tab === 'gst_summary' && props.gst ? (
+          <GstSummaryTab g={props.gst} />
+        ) : null}
+        {props.tab === 'channels' ? (
+          <ChannelsTab lines={props.channels} />
+        ) : null}
+        {props.tab === 'guests' && props.guests ? (
+          <GuestsTab g={props.guests} />
+        ) : null}
+      </div>
     </div>
   );
 }

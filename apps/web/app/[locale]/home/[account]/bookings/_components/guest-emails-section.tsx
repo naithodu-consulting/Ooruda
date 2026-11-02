@@ -10,6 +10,10 @@ import { getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
 import { getBaseRates } from '~/lib/villa-db/rates';
 import {
+  NO_PAYMENT_REASON,
+  hasRecordedPayment,
+} from '~/lib/villa/booking-payments';
+import {
   GUEST_EMAIL_LABELS,
   type GuestEmailTemplate,
   THANK_YOU_DELAY_HOURS,
@@ -41,8 +45,11 @@ export async function GuestEmailsSection(props: {
   const client = getSupabaseServerClient();
   const { booking } = props;
 
-  const [rates, logResult, settings, lastResult] = await Promise.all([
-    getVillaSite(props.accountId, props.propertyId).then(getBaseRates),
+  // Request-cached, and the rates read below needs it too.
+  const site = await getVillaSite(props.accountId, props.propertyId);
+
+  const [rates, logResult, settings, lastResult, paid] = await Promise.all([
+    getBaseRates(site),
     client
       .from('villa_message_log')
       .select(
@@ -62,6 +69,11 @@ export async function GuestEmailsSection(props: {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // The confirmation quotes a cancellation ladder in rupees, so it goes
+    // only once the guest has actually paid something - website payments and
+    // offline receipts alike, less refunds. Same rule the send itself
+    // enforces (lib/villa/booking-payments.ts).
+    hasRecordedPayment(client, site, props.propertyId, booking),
   ]);
 
   const error = logResult.error ?? lastResult.error;
@@ -103,8 +115,17 @@ export async function GuestEmailsSection(props: {
     if (auto?.status === 'sent')
       return `Sent ${when(auto.updated_at)}.${extra}`;
     if (!on[template]) return `Switched off in Villa Settings.${extra}`;
-    if (auto?.status === 'skipped')
+    if (auto?.status === 'skipped') {
+      // The no-payment skip is the one that can go stale: once the advance is
+      // recorded the sentence would otherwise still read as if the booking
+      // were unpaid, next to a button that now works. Matched on the reason,
+      // so a skip for any other cause still shows its own.
+      if (auto.reason === NO_PAYMENT_REASON && paid) {
+        return `Not sent automatically — no payment was recorded at the time. Send it from here.${extra}`;
+      }
+
       return `Not sent: ${auto.reason ?? 'skipped'}.${extra}`;
+    }
     if (auto?.status === 'failed') {
       return `Could not be sent (${auto.reason ?? 'error'}). Use Send now to try again.${extra}`;
     }
@@ -115,7 +136,9 @@ export async function GuestEmailsSection(props: {
     }
 
     if (template === 'booking_confirmation') {
-      return `Sent automatically when the booking was created.${extra}`;
+      return paid
+        ? `Sent automatically when the booking was created.${extra}`
+        : `Enabled once the payment(partial/full) is recorded.${extra}`;
     }
 
     if (template === 'pre_arrival') {
@@ -171,8 +194,9 @@ export async function GuestEmailsSection(props: {
                 isEnabled &&
                 Boolean(booking.guestEmail) &&
                 (t === 'booking_confirmation'
-                  ? booking.status === 'confirmed' ||
-                    booking.status === 'completed'
+                  ? (booking.status === 'confirmed' ||
+                      booking.status === 'completed') &&
+                    paid
                   : t === 'pre_arrival'
                     ? booking.status === 'confirmed' &&
                       booking.checkIn >= todayIst()

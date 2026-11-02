@@ -220,26 +220,7 @@ export default async function BookingsPage({ params, searchParams }: Props) {
         account={account}
         title={<Trans i18nKey={'villa.nav.bookings'} />}
         description={<AppBreadcrumbs />}
-      >
-        {property && !siteError ? (
-          isBlocked ? (
-            <SyncIcalButton
-              accountId={accountId}
-              propertyId={property.id}
-              lastSyncedAt={icalStatus.lastSyncedAt}
-              lastStatus={icalStatus.lastStatus}
-            />
-          ) : (
-            <NewBookingDialog
-              accountId={accountId}
-              propertyId={property.id}
-              account={account}
-              bookingCutoffDate={bookingCutoffDate}
-              canOverrideCutoff={canOverrideCutoff}
-            />
-          )
-        ) : null}
-      </TeamAccountLayoutPageHeader>
+      />
 
       <div className="flex max-w-5xl flex-col gap-4">
         {!property ? (
@@ -265,6 +246,24 @@ export default async function BookingsPage({ params, searchParams }: Props) {
               q={q}
               propertyId={property.id}
               properties={properties.map((p) => ({ id: p.id, name: p.name }))}
+              action={
+                isBlocked ? (
+                  <SyncIcalButton
+                    accountId={accountId}
+                    propertyId={property.id}
+                    lastSyncedAt={icalStatus.lastSyncedAt}
+                    lastStatus={icalStatus.lastStatus}
+                  />
+                ) : (
+                  <NewBookingDialog
+                    accountId={accountId}
+                    propertyId={property.id}
+                    account={account}
+                    bookingCutoffDate={bookingCutoffDate}
+                    canOverrideCutoff={canOverrideCutoff}
+                  />
+                )
+              }
             />
 
             {isBlocked ? (

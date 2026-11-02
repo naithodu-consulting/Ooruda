@@ -4,6 +4,100 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Invite Member Phone Placeholder & Mobile Breadcrumb Duplication Fix — 2026-11-01
+
+### Invite Member Dialog Phone Placeholder
+- **Removed hardcoded country code placeholder in Invite Members form**: Changed `teams.phonePlaceholder` from `"+91 98765 43210"` to `"Phone number"`. Since the country calling code is already chosen via the country select dropdown (`+1`, `+91`, etc.), the input field placeholder no longer shows any country-specific calling code prefix.
+
+### Mobile Breadcrumbs Header De-duplication
+- **Hide leaf breadcrumb on mobile view (`max-sm`)**: In `AppBreadcrumbs`, the leaf item (current page) and its immediately preceding separator are now hidden on mobile viewport sizes (`max-sm:hidden`). On narrow mobile screens, having the leaf in the breadcrumbs caused it to wrap onto a new line, displaying the booking number / page title twice consecutively in the header area. Mobile view now cleanly shows the ancestor breadcrumb path (`Home > Villa 19 > Bookings`) directly above the page title (`V19-DVG-BYY`).
+
+### Villa Guest Emails
+- **Confirmation email tooltip**: Simplified unfulfilled confirmation email tooltip note to "Enabled once the payment(partial/full) is recorded."
+
+---
+
+## Roles Segregation, Booking Confirmation Parity & Villa Performance — 2026-10-31
+
+### Role Segregation & Label Alignment (Ooruda vs Ooruda Villa)
+- **"Property Owner" re-labeled to "Unit Owner" in Association**: In apartment associations, residents own a flat/unit, not the property. Updated `prop_owner` display label from `"Property Owner"` to `"Unit Owner"` across `common.json`, `association.json`, `lib/rbac.ts`, `team-account-layout-sidebar.tsx`, and admin invite dialogs/schemas.
+- **Villa roles preserved**: Villa accounts cleanly offer only `villa_admin` ("Villa Admin") and `villa_manager` ("Villa Manager"). Unit Owner is strictly excluded from Villa.
+- **Product-aware settings routing**: `/home/[account]/settings` now checks `productType` via `getAccountContext()`. Villa accounts are redirected to `/home/[account]/villa-settings`, avoiding the previous unauthorized redirect to `/settings/association`.
+- **Invite member dialog role defaulting**: `InviteMembersDialogContainer` now checks workspace product type — Villa workspaces default to `'villa_manager'` while Association workspaces default to `'prop_owner'` ("Unit Owner").
+- **`user_accounts` view enhancement (`20261031104000_user_accounts_add_product_type.sql`)**: Added `accounts.product_type` column to `public.user_accounts` view and updated TypeScript definitions.
+
+### Booking Confirmation Email 3-Way Parity
+- **Place 2 & 3 alignment**: Aligned Ooruda Villa "Send again" and "Create new booking" confirmation emails with the canonical Place 1 (`villa-booking` flow).
+- **Always-present cancellation ladder**: Calculates and renders the refund ladder using `total > 0 ? total : paid` and booking creation date (falling back to now), ensuring unpaid/part-paid stays accurately show policy tiers.
+- **Extra guest note & formatting parity**: Added mattress note when guests exceed base occupancy, styled the WhatsApp quick contact row, and aligned plaintext email alternatives.
+- **Special requests excluded from emails**: Verified special requests are omitted from all guest vouchers and confirmation emails.
+
+### Special Requests in Villa Workspace
+- **Booking details callout**: Added an amber-accented "Special requests from guest" box in the Guest card on `/home/[account]/bookings/[bookingId]`.
+- **Bookings list badge**: Added an amber `Request` badge in `/home/[account]/bookings` next to guest names when special requests are present.
+
+### Villa Tab & Preset Switching Performance
+- **Optimistic transitions in Reports**: Reports tabs and date-range presets now leverage React `useTransition`, `router.push(..., { scroll: false })`, and CSS opacity indicators for instant, flicker-free tab switching.
+- **Settings tab URL synchronization**: Replaced `router.replace` with `window.history.replaceState` in `VillaSettingsClient` for active tab switches, avoiding full server-side revalidation of remote rate plans.
+
+### No Booking Confirmation Email Until the Guest Has Paid
+- **The confirmation is held back when nothing has been received.** A booking created in Ooruda Villa is saved as before, but the confirmation email now goes only once a payment is recorded against it. The email quotes a cancellation ladder in rupees, and sending "₹54,280 will be refunded" to a guest who has paid nothing — in writing, under the company's CIN and GSTIN — is what this prevents.
+- **The rule is "money actually received, net of refunds"**, read from the same ledger the email's own figures come from (`lib/villa/booking-payments.ts`): website Razorpay payments, which live on the booking site, plus offline receipts in `villa_booking_payments`, less refunds. Not the booking's `payment_status` — staff can set "partially paid" and leave the amount blank, which writes no receipt. Voiding the receipt or refunding the money closes the gate again, and a booking site that cannot be reached counts as unpaid.
+- **Nothing is silently dropped**: the skipped send is written to `villa_message_log` with the reason, so the booking page's Guest emails card says "Not sent: no payment recorded against this booking" instead of showing nothing.
+- **"Send now" / "Send again" is disabled until a payment exists**, and the server action refuses it too — the button is not the only guard. The arrival and thank-you emails quote no amounts and are unaffected.
+- Once the advance is recorded the card reads "Not sent automatically — no payment was recorded at the time. Send it from here." and the button is enabled. The send stays manual by design.
+- Known gap, tracked in `OORUDA_VILLA_TODO.md`: a **part-paid** booking still computes its ladder on the contract total rather than the amount received, so it over-states the refund. Separate fix.
+
+### Guest Registration Card (Villa 19)
+- **Prefilled, downloadable registration card**: The booking details screen now offers a "Registration card" download that renders Villa 19's own check-in sheet as a PDF — same letterhead, same field order, same house rules — with the booking's facts already filled in: booking code, guest name, e-mail, mobile, company and GSTIN, arrival and departure date **and time**, guest count, the ID type on file, remarks, and the per-night tariff.
+- **Per villa, never generic**: The template is chosen by `villa_properties.registration_card_template` and looked up in a code registry (`packages/pdf-templates/src/documents/registration-card/`). A property with no template of its own shows no download button — there is deliberately no fallback form, so no guest can be handed another villa's letterhead. Cancelled bookings offer no card.
+- **Blank by design**: Salutation, last name, arrival from, next destination, purpose of visit, permanent address, nationality, date of birth and the ID *number* are left empty for the guest to complete and sign. The full ID number is never stored (only a masked last-four), so the card asks for it rather than printing our own mask.
+- **Tariff**: Per night, printed as `₹19,700 per night + GST` so a signed card cannot be read as quoting an all-in price. Extra-guest charges included and the discount applied, rounded to the rupee — an average across the nights when weekend or seasonal rates differ. No rate is stated, since the GST slab depends on the nightly rate.
+- **`SEC DEPOSIT` is now `SECURITY DEPOSIT`** and prints blank: a refundable deposit collected at check-in is not the tariff advance (`deposit_amount`), so nothing is prefilled until that amount is configured.
+- **House rules track the villa's settings**: The occupancy clause takes its two numbers from Villa Settings (max guests / included guests) instead of a frozen "14 / 8", so a signed card cannot contradict what the system enforces. Two typos in the villa's original wording were corrected ("will **be** collected", "Quiet hours**, 10** PM to 7 AM").
+- **Mode of payment** prints the plain mode ("Card", not the ledger's "Card (at the villa)"), and only when exactly one mode has been recorded.
+- **Privacy**: The PDF is served from `/api/villa/bookings/[bookingId]/registration-card/pdf` behind the villa role check, with `Cache-Control: private, no-store` and no storage copy.
+
+**Database migrations:**
+- `20261031104000_user_accounts_add_product_type.sql`: Add `product_type` to `public.user_accounts` view.
+- `20261031154000_villa_registration_card_template.sql`: Add `registration_card_template` to `public.villa_properties` (nullable, slug-shaped check constraint), backfilled to `'villa19'` for the property matching `booking_code_prefix = 'V19'` **and** Villa 19's GSTIN (the prefix alone is not unique), with a `raise notice` if nothing matched. Not granted to `authenticated` — the template must match one that exists in code.
+
+---
+
+## Villa: Availability Caching, Navigation Responsiveness & Landing Redesign — 2026-10-30
+
+### Short-lived read caches for the villa-booking database
+- **`listBlocks`, `listBookingsByView`, `getPricingInputs`, and `getIcalFeedsStatus`** now sit behind in-memory, per-process caches (30s for blocks/bookings, 60s for pricing/iCal status) keyed by `sitePropertyId`. Repeated navigation between the calendar, bookings views, and reports no longer re-queries the villa database on every request. Access remains gated at the route/action layer (the villa client uses the service-role key), so the site-scoped caches carry no per-user data.
+- **Every write path invalidates its cache.** `createOfflineBooking`, `cancelBooking`, `markStayCompleted`, `reopenStay`, and `setPaymentStatus` drop the bookings-view cache; `createBlock` and `releaseFromBlock` drop the blocks cache; `updateBaseRates`, `createPricingRule`, and `deletePricingRule` drop the pricing cache.
+- **iCal "Sync now" drops the blocks cache.** `syncIcalFeeds` rewrites `blocked_dates` (source `ical`); it now invalidates both the guest booking site cache and Ooruda's own blocks cache when a feed changed, so the operator calendar, blocked-dates list, and bookings "blocked" view reflect the sync immediately instead of lagging behind the TTL.
+- **Payment status changes refresh the bookings list.** `setPaymentStatus` now drops the bookings-view cache so the payment-status badge in the list updates the moment a payment is recorded, voided, or refunded — matching the behaviour of the cancel/complete/reopen actions.
+- Note: these caches are per-process, so on a multi-instance deployment invalidation only clears the instance that handled the mutation; other instances refresh on TTL expiry.
+
+### Month and bookings navigation show pending state
+- `MonthNav` prev/next/today controls and the bookings view tabs now use `useTransition` with `prefetch`, showing an inline spinner and dimming the other controls while the next screen loads, instead of looking inert on a slow network. Modifier-clicks (open in new tab) still work.
+
+### Faster, cancellable booking quotes
+- The new-booking dialog debounce dropped from 350ms to 150ms and in-flight quote requests are now aborted with an `AbortController` when the inputs change again, so the quote keeps pace with rapid edits without racing stale responses. The default adult count was raised to 8 to match typical full-villa bookings.
+
+### Bookings toolbar and action placement
+- The "New booking" / "Sync iCal" action moved from the page header into the bookings toolbar row, alongside the search and villa picker, and the toolbar wraps cleanly on narrow screens.
+
+### Calendar mobile view toggle
+- On phones the calendar screen now offers a "Calendar grid" / "Agenda" toggle, with a compact responsive grid (smaller cells and type) so the month view is usable at 360px rather than agenda-only.
+
+### Members page responsiveness
+- The Account Members and Pending Invites card headers stack on mobile and their tables scroll horizontally rather than overflowing. The super-admin bulk-invite dialog is now shown only for association accounts (not villa).
+
+### Discounts: "coupon" wording and clearer field help
+- The discounts screen now speaks of "coupon codes", with field labels and help text reworded for clarity ("Valid from/until", "Max Savings", "Max Uses", approval-above-ceiling copy).
+
+### Landing page redesign
+- The marketing landing page, early-access form, and layout were restyled: sticky header, two-column hero and feature sections with bordered image cards, a carded early-access form, a restructured footer with legal links and the registered-entity block, and smooth scroll. Form fields and the submit button were given consistent full-width styling with the 16px mobile font floor retained to avoid iOS focus zoom.
+
+**Database migrations:** none.
+
+---
+
 ## Villa: Booking Actions, Guest IDs, Report Exports, Sync Messaging & Confirmation Email — 2026-10-29
 
 ### Booking confirmation email sender header, policy links, and contact/footer parity
@@ -5168,5 +5262,6 @@ Separated the single Supabase project into three distinct environments - local D
 | `20260728000002_cash_ledger_bill_numbering.sql` | Patched to enable RLS on `cash_ledger_sequences` (missed in original migration) |
 | `20260804093956_reconcile_schema_drift.sql` | Drop orphaned functions, fix `account_image` storage policy, revoke anon grants |
 | `20260805000002_missing_fk_indexes.sql` | 8 missing FK indexes (CONCURRENTLY), GIN trigram indexes on `profiles.full_name` and `audit_logs.action`, new `get_unit_ledger_balances()` RPC for DB-side aggregation |
+| `20261031104000_user_accounts_add_product_type.sql` | Add `product_type` column to `public.user_accounts` view |
 
-_Last updated: 2026-10-29_
+_Last updated: 2026-11-01_

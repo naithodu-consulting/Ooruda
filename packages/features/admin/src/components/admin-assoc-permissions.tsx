@@ -28,7 +28,7 @@ export interface AssocPermissionRow {
 }
 
 const ROLE_LABELS: Record<AssocPermissionRow['targetRole'], string> = {
-  prop_owner: 'Property Owner',
+  prop_owner: 'Unit Owner',
   billing_operator: 'Billing Operator',
   tenant: 'Tenant',
 };

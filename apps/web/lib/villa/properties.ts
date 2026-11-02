@@ -22,6 +22,13 @@ export interface VillaPropertySummary {
   bookingCodePrefix: string | null;
   otaBufferNights: number;
   retentionDays: number;
+  /**
+   * Key of this villa's own guest registration card template, or null when it
+   * has none (see packages/pdf-templates registration-card registry). Carried
+   * on the summary because the booking page has to know whether to offer the
+   * download, and this list is already loaded on every villa page.
+   */
+  registrationCardTemplate: string | null;
 }
 
 /**
@@ -53,7 +60,7 @@ async function queryVillaProperties(
   const { data, error } = await client
     .from('villa_properties')
     .select(
-      'id, account_id, name, status, site_property_id, booking_code_prefix, ota_buffer_nights, retention_days',
+      'id, account_id, name, status, site_property_id, booking_code_prefix, ota_buffer_nights, retention_days, registration_card_template',
     )
     .eq('account_id', accountId)
     .order('created_at');
@@ -76,6 +83,7 @@ async function queryVillaProperties(
     bookingCodePrefix: p.booking_code_prefix,
     otaBufferNights: p.ota_buffer_nights,
     retentionDays: p.retention_days,
+    registrationCardTemplate: p.registration_card_template,
   }));
 }
 

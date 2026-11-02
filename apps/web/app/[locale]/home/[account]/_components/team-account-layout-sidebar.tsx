@@ -54,7 +54,7 @@ export function TeamAccountLayoutSidebar(props: {
   if (role === 'assoc_admin') {
     roleLabel = 'Assoc. admin';
   } else if (role === 'prop_owner') {
-    roleLabel = 'Property Owner';
+    roleLabel = 'Unit Owner';
   } else if (role === 'tenant') {
     roleLabel = 'Tenant';
   } else if (role === 'billing_operator') {

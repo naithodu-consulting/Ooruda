@@ -20,7 +20,7 @@ import {
   markStayCompleted,
   reopenStay,
 } from '~/lib/villa-db/bookings';
-import { getVillaSite } from '~/lib/villa-db/client';
+import { type VillaSite, getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
 import { VillaDbError } from '~/lib/villa-db/errors';
 import { getPricingInputs } from '~/lib/villa-db/rates';
@@ -97,8 +97,10 @@ export function createBookingsService(client: Client) {
   async function priceStay(
     input: z.output<typeof StaySchema>,
     options?: { ignoreCutoff?: boolean },
+    existingSite?: VillaSite,
   ) {
-    const site = await getVillaSite(input.accountId, input.propertyId);
+    const site =
+      existingSite ?? (await getVillaSite(input.accountId, input.propertyId));
     const [availability, pricing] = await Promise.all([
       checkAvailability(site, input.checkIn, input.checkOut, options),
       getPricingInputs(site),
@@ -225,7 +227,10 @@ export function createBookingsService(client: Client) {
       input: z.output<typeof StaySchema>,
       role: VillaRole,
     ): Promise<QuoteView> {
-      const cutoff = await cutoffDecision(input, role);
+      const [cutoff, site] = await Promise.all([
+        cutoffDecision(input, role),
+        getVillaSite(input.accountId, input.propertyId),
+      ]);
 
       if (cutoff.kind === 'refused') {
         return {
@@ -235,9 +240,11 @@ export function createBookingsService(client: Client) {
         };
       }
 
-      const { availability, result } = await priceStay(input, {
-        ignoreCutoff: cutoff.kind === 'override',
-      });
+      const { availability, result } = await priceStay(
+        input,
+        { ignoreCutoff: cutoff.kind === 'override' },
+        site,
+      );
 
       if (availability !== 'AVAILABLE') {
         return {
@@ -287,7 +294,10 @@ export function createBookingsService(client: Client) {
       actor: string,
       role: VillaRole,
     ) {
-      const cutoff = await cutoffDecision(input, role);
+      const [cutoff, site] = await Promise.all([
+        cutoffDecision(input, role),
+        getVillaSite(input.accountId, input.propertyId),
+      ]);
 
       if (cutoff.kind === 'refused') {
         throw new VillaDbError(
@@ -297,9 +307,11 @@ export function createBookingsService(client: Client) {
         );
       }
 
-      const { site, availability, result } = await priceStay(input, {
-        ignoreCutoff: cutoff.kind === 'override',
-      });
+      const { availability, result } = await priceStay(
+        input,
+        { ignoreCutoff: cutoff.kind === 'override' },
+        site,
+      );
 
       if (availability !== 'AVAILABLE') {
         throw new VillaDbError(
@@ -363,17 +375,19 @@ export function createBookingsService(client: Client) {
           : null,
       ].filter(Boolean);
 
-      await record(
-        {
-          accountId: input.accountId,
-          propertyId: input.propertyId,
-          booking,
-          action: 'created',
-          note: notes.length > 0 ? notes.join('. ') : null,
-        },
-        actor,
-      );
-      await mirrorBooking(site, booking, input.isEvent ? 'event' : 'stay');
+      await Promise.all([
+        record(
+          {
+            accountId: input.accountId,
+            propertyId: input.propertyId,
+            booking,
+            action: 'created',
+            note: notes.length > 0 ? notes.join('. ') : null,
+          },
+          actor,
+        ),
+        mirrorBooking(site, booking, input.isEvent ? 'event' : 'stay'),
+      ]);
 
       // The advance taken when the booking was agreed becomes a receipt, so
       // the ledger — and the confirmation email that reads it — states a real
