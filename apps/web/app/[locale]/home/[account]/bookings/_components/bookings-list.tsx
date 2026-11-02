@@ -101,6 +101,7 @@ export function BookingsList(props: {
             <ChannelStayRow
               key={`c-${stay.id}`}
               stay={stay}
+              account={props.account}
               accountId={props.accountId}
               propertyId={props.propertyId}
             />
@@ -219,6 +220,7 @@ export function BookingsList(props: {
 
 function ChannelStayRow(props: {
   stay: ChannelStay;
+  account: string;
   accountId: string;
   propertyId: string;
 }) {
@@ -261,6 +263,7 @@ function ChannelStayRow(props: {
           <Badge variant="outline">Booked on {name}</Badge>
           {stay.feedId && stay.externalUid ? (
             <AddChannelDetailsButton
+              account={props.account}
               accountId={props.accountId}
               propertyId={props.propertyId}
               stay={{

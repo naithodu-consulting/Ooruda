@@ -30,7 +30,6 @@ import { VillaDbError, isVillaDbError } from '~/lib/villa-db/errors';
 import { getPricingInputs } from '~/lib/villa-db/rates';
 import { recordBookingActivity } from '~/lib/villa/activity';
 import { blockNoteForDisplay } from '~/lib/villa/calendar';
-import { parseChannelNote } from '~/lib/villa/channel-note';
 import { sendBookingConfirmation } from '~/lib/villa/guest-email-runner';
 import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
 import { mirrorBooking } from '~/lib/villa/mirror';
@@ -45,8 +44,6 @@ import type {
   ReopenStaySchema,
   StaySchema,
 } from '../schemas/bookings.schema';
-
-import { createHash } from 'node:crypto';
 
 type Client = SupabaseClient<Database>;
 
@@ -83,30 +80,6 @@ const TAKEN: Record<'DATE_UNAVAILABLE' | 'DATE_BLOCKED', string> = {
   DATE_UNAVAILABLE: 'Some of those nights are already booked.',
   DATE_BLOCKED: 'Some of those nights are blocked.',
 };
-
-/**
- * The request id for a channel payout receipt.
- *
- * Derived from the booking so the same payout recorded twice — a retry after
- * a timeout, say — is recognised by `record_villa_payment`'s idempotency key
- * instead of being counted as a second payment. A random id would make every
- * retry a new receipt.
- */
-function channelPayoutRequestId(bookingId: string): string {
-  const hash = createHash('sha1')
-    .update(`villa:channel-payout:${bookingId}`)
-    .digest('hex');
-
-  // Shaped as a v5-style UUID: the column is a uuid.
-  return [
-    hash.slice(0, 8),
-    hash.slice(8, 12),
-    `5${hash.slice(13, 16)}`,
-    ((parseInt(hash.slice(16, 17), 16) & 0x3) | 0x8).toString(16) +
-      hash.slice(17, 20),
-    hash.slice(20, 32),
-  ].join('-');
-}
 
 /**
  * Bookings for a villa property. Callers authorise first; every site call is
@@ -545,9 +518,7 @@ export function createBookingsService(client: Client) {
         );
       }
 
-      const payoutPaise = Math.round(input.payoutAmount * 100);
-      const taxPaise = Math.round(input.taxAmount * 100);
-      const basePaise = payoutPaise - taxPaise;
+      const totalPaise = Math.round(input.totalAmount * 100);
 
       let booking: SiteBooking;
 
@@ -565,13 +536,13 @@ export function createBookingsService(client: Client) {
             infants: input.infants,
             checkIn: block.startDate,
             checkOut: block.endDate,
-            baseAmount: fromPaiseToString(basePaise),
+            baseAmount: fromPaiseToString(totalPaise),
             extraGuestAmount: '0',
-            taxAmount: fromPaiseToString(taxPaise),
-            totalAmount: fromPaiseToString(payoutPaise),
+            taxAmount: '0',
+            totalAmount: fromPaiseToString(totalPaise),
             specialRequests: input.specialRequests,
             channel: channelValueForFeed(block.channelName),
-            paymentStatus: input.payoutReceived ? 'paid' : 'unpaid',
+            paymentStatus: 'paid',
             // The stay is already sold; our own sales cutoff has no say in it.
             ignoreCutoff: true,
             source: link,
@@ -607,44 +578,7 @@ export function createBookingsService(client: Client) {
         .filter(Boolean)
         .join(' · ');
 
-      // Order matters here, in both directions.
-      //
-      // The mirror goes first because `record_villa_payment` looks the stay
-      // up in `villa_bookings_mirror` and refuses a payment for a booking it
-      // cannot find there. It never throws (it logs and returns), so nothing
-      // between the booking and its receipt can abort this.
-      //
-      // The receipt goes before the audit trail, because the booking is
-      // already committed on the site and reads as paid: if anything in
-      // between threw, the operator would retry, be told the stay is already
-      // filled in, and the money would never reach the ledger — revenue
-      // understated with nothing on screen to say so. The request id is
-      // derived from the booking, so a retry of this same payout is
-      // recognised by `record_villa_payment` instead of double-counted.
       await mirrorBooking(site, booking, 'stay');
-
-      if (input.payoutReceived) {
-        const { error } = await client.rpc('record_villa_payment', {
-          p_property_id: input.propertyId,
-          p_site_booking_id: booking.id,
-          p_request_id: channelPayoutRequestId(booking.id),
-          p_mode: 'bank',
-          p_amount: input.payoutAmount,
-          p_paid_on: todayIst(),
-          p_reference:
-            parseChannelNote(blockNoteForDisplay(block.notes))
-              .confirmationCode ?? '',
-          p_payer_name: channel,
-          p_note: `Payout from ${channel}`,
-        });
-
-        if (error) {
-          (await getLogger()).error(
-            { bookingId: booking.id, code: error.code },
-            'villa channel payout receipt failed',
-          );
-        }
-      }
 
       // The trail comes last and never fails the call: the stay is recorded
       // and the money is in the ledger, and refusing to return a booking that

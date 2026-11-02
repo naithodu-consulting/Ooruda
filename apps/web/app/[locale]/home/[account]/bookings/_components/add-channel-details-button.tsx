@@ -18,6 +18,7 @@ import {
  * here rather than in each of them.
  */
 export function AddChannelDetailsButton(props: {
+  account: string;
   accountId: string;
   propertyId: string;
   stay: EnrichableChannelStay;
@@ -41,6 +42,7 @@ export function AddChannelDetailsButton(props: {
 
       {open ? (
         <EnrichChannelStayDialog
+          account={props.account}
           accountId={props.accountId}
           propertyId={props.propertyId}
           stay={props.stay}

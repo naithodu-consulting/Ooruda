@@ -15,6 +15,7 @@ import { addDays, todayIst } from '~/lib/villa-db/dates';
 import { isVillaDbError } from '~/lib/villa-db/errors';
 import { blockNoteForDisplay } from '~/lib/villa/calendar';
 import { linkChannelStays } from '~/lib/villa/channel-link';
+import { parseChannelNote } from '~/lib/villa/channel-note';
 import { selectVillaProperty } from '~/lib/villa/properties';
 
 import { TeamAccountLayoutPageHeader } from '../_components/team-account-layout-page-header';
@@ -137,10 +138,15 @@ export default async function BlockedDatesPage({
       listChannelLinkedBookings(site, { from, to }),
     ]);
 
-    blocks = blockList;
+    // Channel guest bookings belong on the Bookings page, not in Blocked dates.
+    blocks = blockList.filter(
+      (b) =>
+        b.source !== 'ical' ||
+        parseChannelNote(blockNoteForDisplay(b.notes)).isChannelBlock,
+    );
 
     const { blockIdByBooking } = linkChannelStays({
-      blocks: blockList,
+      blocks,
       bookings: linked,
       today,
     });
