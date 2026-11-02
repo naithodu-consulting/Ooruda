@@ -17,6 +17,7 @@ import {
   GUEST_EMAIL_LABELS,
   type GuestEmailTemplate,
   THANK_YOU_DELAY_HOURS,
+  blockedForChannelStay,
   preArrivalWindow,
 } from '~/lib/villa/guest-emails';
 import { loadVillaAccountSettings } from '~/lib/villa/settings';
@@ -89,6 +90,12 @@ export async function GuestEmailsSection(props: {
     lastResult.data?.action === 'completed'
       ? new Date(lastResult.data.created_at)
       : null;
+  // What to call the channel on screen. `booking_channel` is the only name
+  // the booking carries ('airbnb' for Airbnb, 'channel' for any other feed);
+  // the feed's own name lives on the block, which this card does not read.
+  const channelName =
+    booking.channel === 'airbnb' ? 'Airbnb' : 'The booking channel';
+
   const isAdmin = props.role === 'villa_admin';
   const canUndo =
     isAdmin &&
@@ -98,6 +105,13 @@ export async function GuestEmailsSection(props: {
     Date.now() - checkedOutAt.getTime() < 24 * 3_600_000;
 
   function status(template: GuestEmailTemplate): string {
+    // Ahead of everything else, including the log: this one is not sent at
+    // all, so a stale "sent automatically" or "enabled once paid" line would
+    // promise something the server refuses.
+    if (blockedForChannelStay(template, booking)) {
+      return `${channelName} sends the guest its own confirmation. Ours states cancellation and refund terms that do not apply to this booking, so it is never sent from here.`;
+    }
+
     const auto = log.findLast(
       (l) =>
         l.template === template &&
@@ -182,7 +196,9 @@ export async function GuestEmailsSection(props: {
             className="text-muted-foreground text-sm"
             data-test={'villa-guest-emails-none'}
           >
-            No guest email on this booking, so no emails go out.
+            {booking.sourceFeedId
+              ? `No guest email on this booking, so no emails go out. ${channelName} does not share one; add it here if the guest gave it to you.`
+              : 'No guest email on this booking, so no emails go out.'}
           </p>
         ) : null}
 
@@ -192,6 +208,7 @@ export async function GuestEmailsSection(props: {
               const isEnabled = on[t];
               const sendable =
                 isEnabled &&
+                !blockedForChannelStay(t, booking) &&
                 Boolean(booking.guestEmail) &&
                 (t === 'booking_confirmation'
                   ? (booking.status === 'confirmed' ||
@@ -210,7 +227,8 @@ export async function GuestEmailsSection(props: {
                   key={t}
                   className={cn(
                     'flex flex-wrap items-center gap-x-3 gap-y-1 p-3 transition-opacity',
-                    !isEnabled && 'bg-muted/30 opacity-60',
+                    (!isEnabled || blockedForChannelStay(t, booking)) &&
+                      'bg-muted/30 opacity-60',
                   )}
                   data-test={`villa-guest-email-${t}`}
                 >
@@ -218,7 +236,8 @@ export async function GuestEmailsSection(props: {
                     <span
                       className={cn(
                         'text-sm font-medium',
-                        !isEnabled && 'text-muted-foreground',
+                        (!isEnabled || blockedForChannelStay(t, booking)) &&
+                          'text-muted-foreground',
                       )}
                     >
                       {GUEST_EMAIL_LABELS[t]}

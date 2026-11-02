@@ -28,6 +28,30 @@ export const GUEST_EMAIL_LABELS: Record<GuestEmailTemplate, string> = {
   thank_you: 'Thank you (after check-out)',
 };
 
+/**
+ * Why the confirmation is never sent for a stay a booking channel sold.
+ *
+ * It is not only that Airbnb has already sent the guest a confirmation. Ours
+ * carries a CANCELLATIONS & REFUND block: a ladder in rupees, an address to
+ * write to, and a promise that refunds reach the original payment method in
+ * five to seven working days. None of that governs a channel booking — the
+ * channel's own policy does, the guest cancels there, and any refund comes
+ * out of money we never held. Sending it under the company's CIN and GSTIN
+ * would state refund terms the guest does not have.
+ *
+ * The arrival and thank-you emails quote no terms and are unaffected.
+ */
+export const CHANNEL_CONFIRMATION_REASON =
+  'the booking channel sends its own confirmation';
+
+/** Must this template be withheld because a channel sold the stay? */
+export function blockedForChannelStay(
+  template: GuestEmailTemplate,
+  booking: { sourceFeedId: string | null },
+): boolean {
+  return template === 'booking_confirmation' && booking.sourceFeedId !== null;
+}
+
 export const DEFAULT_VILLA_SITE_URL = 'https://villa19.in';
 
 /**

@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FileText, IdCard, Plus, X } from 'lucide-react';
-import { useForm, useWatch } from 'react-hook-form';
+import { type Resolver, useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
 import {
@@ -42,6 +42,8 @@ import {
 } from '~/lib/villa/guest-ids';
 
 import {
+  GUEST_SALUTATIONS,
+  type GuestSalutation,
   type RecordIdInput,
   RecordIdSchema,
 } from '../_lib/schemas/guests.schema';
@@ -62,6 +64,9 @@ export function AddIdDialog(props: {
   bookingId: string;
   guests: GuestRow[];
   bookingGuestName: string;
+  bookingSalutation?: string | null;
+  bookingFirstName?: string | null;
+  bookingLastName?: string | null;
   bookingGuestPhone: string | null;
   uploadsEnabled: boolean;
   onSaved: () => void;
@@ -93,14 +98,30 @@ function AddIdForm(
 ) {
   const first = props.guests.length === 0;
 
+  // The booking's salutation comes from the database as a plain string, so it
+  // is checked against the allowed set rather than asserted.
+  const bookingSalutation: GuestSalutation | undefined = GUEST_SALUTATIONS.find(
+    (s) => s === props.bookingSalutation,
+  );
+
   const form = useForm<RecordIdInput>({
-    resolver: zodResolver(RecordIdSchema),
+    resolver: zodResolver(RecordIdSchema) as Resolver<RecordIdInput>,
     defaultValues: {
       accountId: props.accountId,
       propertyId: props.propertyId,
       bookingId: props.bookingId,
       guestId: first ? '' : (props.guests[0]?.id ?? ''),
       // The first ID is usually the lead guest who booked.
+      newGuestSalutation: first ? (bookingSalutation ?? 'Mr') : 'Mr',
+      newGuestFirstName: first
+        ? (props.bookingFirstName ??
+          props.bookingGuestName.split(' ')[0] ??
+          props.bookingGuestName)
+        : '',
+      newGuestLastName: first
+        ? (props.bookingLastName ??
+          props.bookingGuestName.split(' ').slice(1).join(' '))
+        : '',
       newGuestName: first ? props.bookingGuestName : '',
       newGuestPhone: first ? (props.bookingGuestPhone ?? '') : '',
       isAdult: true,
@@ -280,19 +301,49 @@ function AddIdForm(
 
             {/* New guest fields */}
             {guestId === '' ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
                 <FormField
-                  name="newGuestName"
+                  name="newGuestSalutation"
                   control={form.control}
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Name as on the ID</FormLabel>
+                    <FormItem className="sm:col-span-3">
+                      <FormLabel>Salutation</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger
+                            className="w-full"
+                            data-test={'villa-add-id-salutation'}
+                          >
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Mr">Mr</SelectItem>
+                          <SelectItem value="Mrs">Mrs</SelectItem>
+                          <SelectItem value="Ms">Ms</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  name="newGuestFirstName"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-5">
+                      <FormLabel>First name</FormLabel>
                       <FormControl
                         render={
                           <Input
                             {...field}
                             autoComplete="off"
-                            data-test={'villa-add-id-name'}
+                            placeholder="As on the ID"
+                            data-test={'villa-add-id-first-name'}
                           />
                         }
                       />
@@ -300,11 +351,38 @@ function AddIdForm(
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  name="newGuestLastName"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-4">
+                      <FormLabel>
+                        Last name{' '}
+                        <span className="text-muted-foreground text-xs font-normal">
+                          (optional)
+                        </span>
+                      </FormLabel>
+                      <FormControl
+                        render={
+                          <Input
+                            {...field}
+                            autoComplete="off"
+                            placeholder="Surname"
+                            data-test={'villa-add-id-last-name'}
+                          />
+                        }
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <FormField
                   name="newGuestPhone"
                   control={form.control}
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="sm:col-span-12">
                       <FormLabel>Phone{first ? '' : ' (optional)'}</FormLabel>
                       <FormControl
                         render={

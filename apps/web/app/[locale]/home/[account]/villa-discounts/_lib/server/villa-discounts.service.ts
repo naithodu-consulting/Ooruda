@@ -12,6 +12,7 @@ import { getVillaSite } from '~/lib/villa-db/client';
 import { addDays } from '~/lib/villa-db/dates';
 
 import type {
+  DiscountArchiveSchema,
   DiscountReviewSchema,
   DiscountSchema,
   DiscountToggleSchema,
@@ -153,6 +154,57 @@ export function createVillaDiscountsService(client: Client) {
 
       // Fire-and-forget: sync to booking site
       after(() => syncDiscountCode(client, input.id));
+    },
+
+    /**
+     * Retire a code for good.
+     *
+     * The booking site is cleared FIRST, and only then is the code archived
+     * here. Every other write syncs in the background and shrugs off a
+     * failure, because it can be retried by saving, pausing or resuming the
+     * code again. Archiving is irreversible and closes all three of those
+     * paths, so a swallowed failure would leave the code live at checkout
+     * for ever while the screen said "Archived" — a discount nobody can
+     * withdraw. In this order the worst case is the harmless one: the code
+     * is gone from the site but still shows as active here, and archiving
+     * again finishes the job.
+     */
+    async archive(input: z.output<typeof DiscountArchiveSchema>) {
+      const { data: row, error: readError } = await client
+        .from('villa_discount_codes')
+        .select('id, account_id, property_id, status')
+        .eq('id', input.id)
+        .single();
+
+      if (readError || !row) throw new Error('That code no longer exists.');
+
+      if (row.status !== 'archived') {
+        try {
+          const site = await getVillaSite(row.account_id, row.property_id);
+
+          const { error } = await site.client
+            .from('discount_codes')
+            .delete()
+            .eq('id', row.id);
+
+          if (error) throw new Error(error.message);
+        } catch (err) {
+          (await getLogger()).error(
+            { discountId: row.id, error: String(err) },
+            'villa discount archive could not clear the booking site',
+          );
+
+          throw new Error(
+            'Could not remove the code from your website, so it has not been archived. Please try again in a moment.',
+          );
+        }
+      }
+
+      const { error } = await client.rpc('archive_villa_discount', {
+        p_id: input.id,
+      });
+
+      if (error) throw fromDb(error);
     },
 
     async review(input: z.output<typeof DiscountReviewSchema>) {

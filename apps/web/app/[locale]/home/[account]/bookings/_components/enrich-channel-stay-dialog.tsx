@@ -25,6 +25,13 @@ import {
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
 import { PhoneInput } from '@kit/ui/phone-input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@kit/ui/select';
 import { toast } from '@kit/ui/sonner';
 import { Textarea } from '@kit/ui/textarea';
 
@@ -70,7 +77,9 @@ export function EnrichChannelStayDialog(props: {
       externalUid: stay.externalUid,
       checkIn: stay.startDate,
       checkOut: stay.endDate,
-      guestName: '',
+      salutation: 'Mr',
+      firstName: '',
+      lastName: '',
       guestPhone: '',
       guestEmail: '',
       adults: 2,
@@ -118,19 +127,69 @@ export function EnrichChannelStayDialog(props: {
             className="flex flex-col gap-4"
             onSubmit={form.handleSubmit((values) => execute(values))}
           >
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
               <FormField
-                name="guestName"
+                name="salutation"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Guest name</FormLabel>
+                  <FormItem className="sm:col-span-3">
+                    <FormLabel>Salutation</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger
+                          className="w-full"
+                          data-test={'villa-enrich-salutation'}
+                        >
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Mr">Mr</SelectItem>
+                        <SelectItem value="Mrs">Mrs</SelectItem>
+                        <SelectItem value="Ms">Ms</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                name="firstName"
+                control={form.control}
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-5">
+                    <FormLabel>First name</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
                         autoComplete="off"
-                        placeholder="Guest full name"
-                        data-test={'villa-enrich-guest-name'}
+                        placeholder="First name"
+                        data-test={'villa-enrich-first-name'}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                name="lastName"
+                control={form.control}
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-4">
+                    <FormLabel>
+                      Last name{' '}
+                      <span className="text-muted-foreground text-xs font-normal">
+                        (optional)
+                      </span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        autoComplete="off"
+                        placeholder="Surname"
+                        data-test={'villa-enrich-last-name'}
                       />
                     </FormControl>
                     <FormMessage />
@@ -142,7 +201,7 @@ export function EnrichChannelStayDialog(props: {
                 name="guestPhone"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="sm:col-span-6">
                     <FormLabel>Phone (optional)</FormLabel>
                     <FormControl>
                       <PhoneInput
@@ -166,7 +225,7 @@ export function EnrichChannelStayDialog(props: {
                 name="guestEmail"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="sm:col-span-6">
                     <FormLabel>Email (optional)</FormLabel>
                     <FormControl>
                       <Input
@@ -240,6 +299,10 @@ export function EnrichChannelStayDialog(props: {
                         data-test={'villa-enrich-total-amount'}
                       />
                     </FormControl>
+                    <FormDescription>
+                      Recorded as received from {channel}, so the stay shows as
+                      paid and the money appears in your reports.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

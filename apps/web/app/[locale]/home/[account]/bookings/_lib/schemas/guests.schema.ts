@@ -17,25 +17,42 @@ const phone = z
     message: 'Enter a valid phone number, or leave it empty',
   });
 
+export const GUEST_SALUTATIONS = ['Mr', 'Mrs', 'Ms'] as const;
+export type GuestSalutation = (typeof GUEST_SALUTATIONS)[number];
+
 /** A guest on a booking: an existing register entry, or a new one. */
 const guestChoice = {
   guestId: z.string().uuid().or(z.literal('')),
-  newGuestName: z.string().trim().max(120),
+  newGuestSalutation: z.enum(GUEST_SALUTATIONS).or(z.literal('')).optional(),
+  newGuestFirstName: z.string().trim().max(120).optional().default(''),
+  newGuestLastName: z.string().trim().max(120).optional().default(''),
+  newGuestName: z.string().trim().max(120).optional().default(''),
   newGuestPhone: phone,
   isAdult: z.boolean(),
 };
 
-const needsGuest = (v: { guestId: string; newGuestName: string }) =>
-  v.guestId !== '' || v.newGuestName !== '';
+const needsSalutation = (v: { guestId: string; newGuestSalutation?: string }) =>
+  v.guestId !== '' || ['Mr', 'Mrs', 'Ms'].includes(v.newGuestSalutation ?? '');
 
-const needsGuestMessage = {
-  message: 'Pick a guest or enter a name',
-  path: ['newGuestName'],
-};
+const needsFirstName = (v: {
+  guestId: string;
+  newGuestFirstName?: string;
+  newGuestName?: string;
+}) =>
+  v.guestId !== '' ||
+  (v.newGuestFirstName?.trim().length ?? 0) > 0 ||
+  (v.newGuestName?.trim().length ?? 0) > 0;
 
 export const AddGuestSchema = z
   .object({ ...bookingRef, ...guestChoice })
-  .refine(needsGuest, needsGuestMessage);
+  .refine(needsSalutation, {
+    message: 'Select a salutation',
+    path: ['newGuestSalutation'],
+  })
+  .refine(needsFirstName, {
+    message: 'Enter first name',
+    path: ['newGuestFirstName'],
+  });
 
 export type AddGuestInput = z.input<typeof AddGuestSchema>;
 
@@ -52,7 +69,14 @@ export const RecordIdSchema = z
     idNumber: z.string().trim().max(40),
     stage: z.enum(['soft_copy', 'seen_in_person']),
   })
-  .refine(needsGuest, needsGuestMessage);
+  .refine(needsSalutation, {
+    message: 'Select a salutation',
+    path: ['newGuestSalutation'],
+  })
+  .refine(needsFirstName, {
+    message: 'Enter first name',
+    path: ['newGuestFirstName'],
+  });
 
 export type RecordIdInput = z.input<typeof RecordIdSchema>;
 

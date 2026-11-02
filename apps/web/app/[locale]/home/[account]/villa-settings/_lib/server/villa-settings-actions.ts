@@ -17,10 +17,10 @@ import {
   ContactSchema,
   DeleteAddonSchema,
   DeleteContactSchema,
-  DeleteSeasonalRateSchema,
+  DeleteRateGroupSchema,
   GuestEmailSettingsSchema,
   PoliciesSchema,
-  SeasonalRateSchema,
+  RateGroupSchema,
 } from '../schemas/villa-settings.schema';
 import { createVillaSettingsService } from './villa-settings.service';
 
@@ -55,21 +55,20 @@ export const saveBaseRatesAction = authActionClient
     return rates;
   });
 
-export const addSeasonalRateAction = authActionClient
-  .inputSchema(SeasonalRateSchema)
+export const saveRateGroupAction = authActionClient
+  .inputSchema(RateGroupSchema)
   .action(async ({ parsedInput, ctx }) => {
     const service = await ownerService(parsedInput.accountId);
-    const rule = await service.addSeasonalRate(parsedInput, ctx.user.id);
-    await revalidateSettingsAndSite('seasonal-rate-added');
-    return rule;
+    await service.saveRateGroup(parsedInput, ctx.user.id);
+    await revalidateSettingsAndSite('rate-group-saved');
   });
 
-export const deleteSeasonalRateAction = authActionClient
-  .inputSchema(DeleteSeasonalRateSchema)
+export const deleteRateGroupAction = authActionClient
+  .inputSchema(DeleteRateGroupSchema)
   .action(async ({ parsedInput, ctx }) => {
     const service = await ownerService(parsedInput.accountId);
-    await service.removeSeasonalRate(parsedInput, ctx.user.id);
-    await revalidateSettingsAndSite('seasonal-rate-removed');
+    await service.removeRateGroup(parsedInput, ctx.user.id);
+    await revalidateSettingsAndSite('rate-group-removed');
   });
 
 export const saveAddonAction = authActionClient

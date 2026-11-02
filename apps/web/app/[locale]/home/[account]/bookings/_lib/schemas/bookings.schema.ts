@@ -66,14 +66,17 @@ export const StaySchema = z
 
 export type StayInput = z.input<typeof StaySchema>;
 
+export const SALUTATIONS = ['Mr', 'Mrs', 'Ms'] as const;
+export type Salutation = (typeof SALUTATIONS)[number];
+
 const bookingFields = {
   ...stayFields,
   infants: guests,
-  guestName: z
-    .string()
-    .trim()
-    .min(1, { message: 'Enter the guest name' })
-    .max(120),
+  salutation: z.enum(SALUTATIONS, {
+    message: 'Select a salutation',
+  }),
+  firstName: z.string().trim().min(1, { message: 'Enter first name' }).max(120),
+  lastName: z.string().trim().max(120).optional().default(''),
   guestPhone: z
     .string()
     .trim()
@@ -149,11 +152,15 @@ export const EnrichChannelStaySchema = z
     externalUid: z.string().trim().min(1).max(500),
     checkIn: ymd,
     checkOut: ymd,
-    guestName: z
+    salutation: z.enum(SALUTATIONS, {
+      message: 'Select a salutation',
+    }),
+    firstName: z
       .string()
       .trim()
-      .min(1, { message: 'Enter the guest name' })
+      .min(1, { message: 'Enter first name' })
       .max(120),
+    lastName: z.string().trim().max(120).optional().default(''),
     guestPhone: z
       .string()
       .trim()

@@ -97,6 +97,9 @@ export async function GuestIdsSection(props: {
       propertyId={props.propertyId}
       bookingId={booking.id}
       bookingGuestName={booking.guestName}
+      bookingSalutation={booking.salutation}
+      bookingFirstName={booking.firstName}
+      bookingLastName={booking.lastName}
       bookingGuestPhone={
         booking.guestPhone ? normalizePhoneNumber(booking.guestPhone) : null
       }

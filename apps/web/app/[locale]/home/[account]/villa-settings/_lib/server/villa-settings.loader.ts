@@ -3,7 +3,11 @@ import { getLogger } from '@kit/shared/logger';
 
 import { getVillaSite } from '~/lib/villa-db/client';
 import { isVillaDbError } from '~/lib/villa-db/errors';
-import { getBaseRates, listPricingRules } from '~/lib/villa-db/rates';
+import {
+  getBaseRates,
+  groupPricingRules,
+  listPricingRules,
+} from '~/lib/villa-db/rates';
 
 import type { SiteState } from '../types';
 
@@ -19,7 +23,10 @@ export async function loadSiteSettings(
       listPricingRules(site),
     ]);
 
-    return { status: 'ok', rates, rules };
+    // Grouped here, not in the screen: `rates` is server-only, and the
+    // calendar wants each named rate as one thing rather than as the rows it
+    // happens to take.
+    return { status: 'ok', rates, rules, groups: groupPricingRules(rules) };
   } catch (error) {
     const code = isVillaDbError(error) ? error.code : 'UNKNOWN';
 

@@ -85,30 +85,35 @@ export const BaseRatesSchema = z
 
 export type BaseRatesInput = z.input<typeof BaseRatesSchema>;
 
-export const SeasonalRateSchema = z
-  .object({
-    ...ids,
-    name: z
-      .string()
-      .trim()
-      .min(1, { message: 'Name the rate, e.g. Diwali' })
-      .max(150),
-    firstNight: ymd,
-    // The LAST night the rate applies — converted to the site's exclusive end.
-    lastNight: ymd,
-    nightlyRate: rupees,
-    minStayNights: z.coerce.number().int().min(1).max(60),
-  })
-  .refine((v) => v.lastNight >= v.firstNight, {
-    message: 'The last night must be on or after the first night',
-    path: ['lastNight'],
-  });
-
-export type SeasonalRateInput = z.input<typeof SeasonalRateSchema>;
-
-export const DeleteSeasonalRateSchema = z.object({
+/**
+ * A named rate over an arbitrary set of nights — 20–25 December AND New
+ * Year's Eve, picked together on the calendar and saved as one rate.
+ *
+ * `replaceRuleIds` are the rows the rate is made of today; an edit rewrites
+ * them, because changing the nights changes how many rows it takes.
+ */
+export const RateGroupSchema = z.object({
   ...ids,
-  ruleId: z.string().uuid(),
+  name: z
+    .string()
+    .trim()
+    .min(1, { message: 'Name the rate, e.g. Diwali' })
+    .max(150),
+  nights: z
+    .array(ymd)
+    .min(1, { message: 'Pick at least one night on the calendar' })
+    // A whole year of separate nights is not a rate, it is a mistake.
+    .max(400, { message: 'That is too many nights for one rate' }),
+  nightlyRate: rupees,
+  minStayNights: z.coerce.number().int().min(1).max(60),
+  replaceRuleIds: z.array(z.string().uuid()).max(400),
+});
+
+export type RateGroupInput = z.input<typeof RateGroupSchema>;
+
+export const DeleteRateGroupSchema = z.object({
+  ...ids,
+  ruleIds: z.array(z.string().uuid()).min(1).max(400),
 });
 
 export const AddonSchema = z.object({

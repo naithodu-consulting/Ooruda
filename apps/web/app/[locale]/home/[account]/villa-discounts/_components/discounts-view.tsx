@@ -1,11 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Info, Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Archive,
+  History,
+  Info,
+  Pencil,
+  Plus,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
 import { useAction } from 'next-safe-action/hooks';
 import {
   type Resolver,
@@ -14,7 +23,17 @@ import {
   useWatch,
 } from 'react-hook-form';
 
+import { useSupabase } from '@kit/supabase/hooks/use-supabase';
 import { Alert, AlertDescription } from '@kit/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@kit/ui/alert-dialog';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
 import { Card, CardContent } from '@kit/ui/card';
@@ -43,13 +62,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@kit/ui/select';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@kit/ui/sheet';
 import { toast } from '@kit/ui/sonner';
+import { Tabs, TabsList, TabsTrigger } from '@kit/ui/tabs';
 import { cn } from '@kit/ui/utils';
 
 import { RupeeInput } from '~/components/rupee-input';
-import { formatDateReadable } from '~/lib/format-date';
+import { formatDateReadable, formatTimestampDMY } from '~/lib/format-date';
 import { formatINR } from '~/lib/format-inr';
 
+import {
+  type DiscountAuditRow,
+  type DiscountLastAction,
+  buildDiscountHistory,
+} from '../_lib/discount-history';
 import {
   DISCOUNT_CEILING_PCT,
   type DiscountInput,
@@ -57,6 +90,7 @@ import {
   needsApproval,
 } from '../_lib/schemas/villa-discounts.schema';
 import {
+  archiveDiscountAction,
   reviewDiscountAction,
   saveDiscountAction,
   toggleDiscountAction,
@@ -77,9 +111,11 @@ export interface DiscountRow {
   blackouts: { start: string; lastNight: string }[];
   note: string | null;
   needsApproval: boolean;
-  status: 'pending_approval' | 'active' | 'paused' | 'rejected';
+  status: 'pending_approval' | 'active' | 'paused' | 'rejected' | 'archived';
   expired: boolean;
-  history: { action: string; at: string; actorName: string | null }[];
+  /** The most recent audit entry, for the list's one line. The full trail is
+   *  loaded by the History panel when it opens. */
+  lastAction: DiscountLastAction | null;
   usage: {
     timesUsed: number;
     totalDiscount: number;
@@ -93,6 +129,7 @@ const STATUS: Record<DiscountRow['status'], string> = {
   active: 'Active',
   paused: 'Paused',
   rejected: 'Not approved',
+  archived: 'Archived',
 };
 
 const ACTION: Record<string, string> = {
@@ -102,7 +139,25 @@ const ACTION: Record<string, string> = {
   resumed: 'Resumed',
   approved: 'Approved by Ooruda',
   rejected: 'Refused by Ooruda',
+  archived: 'Archived',
 };
+
+/** The three groups the list is split into, with the statuses each holds. */
+const TABS = [
+  { id: 'current', label: 'Current', statuses: ['active', 'paused'] },
+  {
+    id: 'approval',
+    label: 'Approval',
+    statuses: ['pending_approval', 'rejected'],
+  },
+  { id: 'archived', label: 'Archived', statuses: ['archived'] },
+] as const satisfies readonly {
+  id: string;
+  label: string;
+  statuses: readonly DiscountRow['status'][];
+}[];
+
+type TabId = (typeof TABS)[number]['id'];
 
 function terms(c: DiscountRow): string {
   const off =
@@ -134,6 +189,23 @@ export function DiscountsView(props: {
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<DiscountRow | 'new' | null>(null);
+  const [tab, setTab] = useState<TabId>('current');
+
+  const counts = useMemo(() => {
+    const byTab = {} as Record<TabId, number>;
+    for (const t of TABS) {
+      byTab[t.id] = props.codes.filter((c) =>
+        (t.statuses as readonly string[]).includes(c.status),
+      ).length;
+    }
+    return byTab;
+  }, [props.codes]);
+
+  const visible = useMemo(() => {
+    const statuses = TABS.find((t) => t.id === tab)!
+      .statuses as readonly string[];
+    return props.codes.filter((c) => statuses.includes(c.status));
+  }, [props.codes, tab]);
 
   const toggle = useAction(toggleDiscountAction, {
     onSuccess: () => router.refresh(),
@@ -172,13 +244,36 @@ export function DiscountsView(props: {
         </div>
       ) : null}
 
-      {props.codes.length === 0 ? (
+      <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
+        <TabsList data-test={'villa-discount-tabs'}>
+          {TABS.map((t) => (
+            <TabsTrigger
+              key={t.id}
+              value={t.id}
+              data-test={`villa-discount-tab-${t.id}`}
+            >
+              {t.label}
+              <span className="text-muted-foreground ml-1.5 tabular-nums">
+                {counts[t.id]}
+              </span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      {visible.length === 0 ? (
         <Card className="bg-card">
           <CardContent
             className="text-muted-foreground py-10 text-center text-sm"
             data-test={'villa-discounts-empty'}
           >
-            No coupon codes yet.
+            {props.codes.length === 0
+              ? 'No coupon codes yet.'
+              : tab === 'archived'
+                ? 'No archived codes. Archiving retires a code without losing its history.'
+                : tab === 'approval'
+                  ? 'No codes waiting for Ooruda.'
+                  : 'No active or paused codes.'}
           </CardContent>
         </Card>
       ) : (
@@ -187,7 +282,7 @@ export function DiscountsView(props: {
             className="divide-border divide-y"
             data-test={'villa-discounts-list'}
           >
-            {props.codes.map((c) => (
+            {visible.map((c) => (
               <li
                 key={c.id}
                 className="flex flex-col gap-2 p-4"
@@ -206,6 +301,7 @@ export function DiscountsView(props: {
                         'border-success/40 text-success',
                       c.status === 'pending_approval' &&
                         'border-warning/50 text-warning',
+                      c.status === 'archived' && 'text-muted-foreground',
                     )}
                     data-test={'villa-discount-status'}
                   >
@@ -272,7 +368,7 @@ export function DiscountsView(props: {
                         {c.status === 'active' ? 'Pause' : 'Resume'}
                       </Button>
                     ) : null}
-                    {props.canEdit ? (
+                    {props.canEdit && c.status !== 'archived' ? (
                       <Button
                         size="sm"
                         variant="ghost"
@@ -282,6 +378,10 @@ export function DiscountsView(props: {
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
+                    ) : null}
+                    <HistoryButton code={c} />
+                    {props.canEdit && c.status !== 'archived' ? (
+                      <ArchiveButton accountId={props.accountId} code={c} />
                     ) : null}
                   </span>
                 </div>
@@ -293,19 +393,12 @@ export function DiscountsView(props: {
                   {formatDateReadable(c.validTo)}
                   {c.note ? ` · ${c.note}` : ''}
                 </p>
-                {c.history.length ? (
+                {c.lastAction ? (
                   <p
                     className="text-muted-foreground text-xs"
                     data-test={'villa-discount-history'}
                   >
-                    {c.history
-                      .map((h) => {
-                        const label = `${ACTION[h.action] ?? h.action} ${formatDateReadable(h.at.slice(0, 10))}`;
-                        return h.actorName
-                          ? `${label} by ${h.actorName}`
-                          : label;
-                      })
-                      .join(' · ')}
+                    {entryLine(c.lastAction)}
                   </p>
                 ) : null}
                 <p
@@ -329,13 +422,209 @@ export function DiscountsView(props: {
           today={props.today}
           code={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
-          onSaved={() => {
+          onSaved={(status) => {
             setEditing(null);
+            // A code over the ceiling lands in Approval, not Current. Follow
+            // it, or the person who just saved it watches it disappear.
+            const landed = TABS.find((t) =>
+              (t.statuses as readonly string[]).includes(status),
+            );
+            if (landed) setTab(landed.id);
             router.refresh();
           }}
         />
       ) : null}
     </div>
+  );
+}
+
+/** "Changed 02-11-2026, 01:30 pm by Nisha" — one audit entry, one line. */
+function entryLine(h: DiscountLastAction): string {
+  const label = `${ACTION[h.action] ?? h.action} ${formatTimestampDMY(h.at)}`;
+  return h.actorName ? `${label} by ${h.actorName}` : label;
+}
+
+/**
+ * The full trail for one code. A code is never deleted, so this is the
+ * record of every term it ever had: each 'updated' entry carries the fields
+ * that moved, worked out on the server by diffing the stored snapshots.
+ */
+function HistoryButton(props: { code: DiscountRow }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger
+        render={
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label={`History of ${props.code.code}`}
+            data-test={'villa-discount-history-open'}
+          />
+        }
+      >
+        <History className="h-3.5 w-3.5" />
+      </SheetTrigger>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle className="font-mono">{props.code.code}</SheetTitle>
+          <SheetDescription>
+            Everything that has happened to this code.
+          </SheetDescription>
+        </SheetHeader>
+
+        {/* Mounted only while the panel is open, so a list of codes never
+            carries every code's snapshots. */}
+        <div className="px-4 pb-6">
+          {open ? <Timeline codeId={props.code.id} /> : null}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function Timeline(props: { codeId: string }) {
+  const client = useSupabase();
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['villa-discount-audit', props.codeId],
+    queryFn: async (): Promise<DiscountAuditRow[]> => {
+      const { data, error } = await client
+        .from('villa_discount_audit')
+        .select('action, created_at, actor_name, terms')
+        .eq('code_id', props.codeId)
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      if (error) throw error;
+      return data as DiscountAuditRow[];
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <p className="text-muted-foreground text-sm" role="status">
+        Loading…
+      </p>
+    );
+  }
+
+  if (isError) {
+    return (
+      <p className="text-destructive text-sm" role="status">
+        Could not load the history. Close this and try again.
+      </p>
+    );
+  }
+
+  const history = buildDiscountHistory(data ?? []);
+
+  if (history.length === 0) {
+    return (
+      <p className="text-muted-foreground text-sm">Nothing recorded yet.</p>
+    );
+  }
+
+  return (
+    <ol className="flex flex-col gap-4" data-test={'villa-discount-timeline'}>
+      {history.map((entry, i) => (
+        <li
+          key={`${entry.at}-${i}`}
+          className="border-border border-l-2 pl-3"
+          data-test={'villa-discount-timeline-entry'}
+        >
+          <p className="text-sm font-medium">
+            {ACTION[entry.action] ?? entry.action}
+          </p>
+          <p className="text-muted-foreground text-xs">
+            {formatTimestampDMY(entry.at)}
+            {entry.actorName ? ` · ${entry.actorName}` : ''}
+          </p>
+          {entry.changes.length ? (
+            <ul className="mt-1.5 flex flex-col gap-1">
+              {entry.changes.map((ch) => (
+                <li key={ch.label} className="text-xs">
+                  <span className="text-muted-foreground">{ch.label}: </span>
+                  <span className="line-through">{ch.from}</span>
+                  {' → '}
+                  <span className="font-medium">{ch.to}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {entry.unknownBefore ? (
+            <p className="text-muted-foreground mt-1.5 text-xs italic">
+              The terms before this change were not recorded.
+            </p>
+          ) : null}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * Archive, not delete. Past bookings record the code they used by its text,
+ * so removing the row would strand them — and the code string stays reserved
+ * afterwards for the same reason. One way: the database refuses to edit,
+ * pause or resume an archived code.
+ */
+function ArchiveButton(props: { accountId: string; code: DiscountRow }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const { execute, isPending } = useAction(archiveDiscountAction, {
+    onSuccess: () => {
+      setOpen(false);
+      toast.success(`${props.code.code} archived`);
+      router.refresh();
+    },
+    onError: ({ error }) =>
+      toast.error(error.serverError ?? 'Could not archive the code.'),
+  });
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger
+        render={
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label={`Archive ${props.code.code}`}
+            data-test={'villa-discount-archive'}
+          />
+        }
+      >
+        <Archive className="h-3.5 w-3.5" />
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Archive {props.code.code}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            It stops working on your website immediately. Its history and past
+            bookings are preserved. This cannot be undone, and the code{' '}
+            {props.code.code} cannot be used again. Create a new code if you
+            need one.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {/* Not AlertDialogFooter: its bg-muted band clashes with the dialog. */}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <AlertDialogCancel data-test={'villa-discount-archive-cancel'}>
+            Cancel
+          </AlertDialogCancel>
+          <Button
+            variant="destructive"
+            disabled={isPending}
+            data-test={'villa-discount-archive-confirm'}
+            onClick={() =>
+              execute({ accountId: props.accountId, id: props.code.id })
+            }
+          >
+            {isPending ? 'Archiving…' : 'Archive'}
+          </Button>
+        </div>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -345,7 +634,7 @@ function DiscountDialog(props: {
   today: string;
   code: DiscountRow | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (status: DiscountRow['status']) => void;
 }) {
   const c = props.code;
   const form = useForm<DiscountInput>({
@@ -386,7 +675,7 @@ function DiscountDialog(props: {
           ? 'Saved. Ooruda will check it before it can be used.'
           : 'Code saved',
       );
-      props.onSaved();
+      props.onSaved((data?.status ?? 'active') as DiscountRow['status']);
     },
     onError: ({ error }) =>
       toast.error(error.serverError ?? 'Could not save the code.'),

@@ -51,6 +51,9 @@ export interface RegistrationCardPdfData {
    * the guest is worse than one the guest completes.
    */
   guestName: string;
+  salutation?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   email: string;
   mobile: string;
   /** Company name and GSTIN when the booking carries them. */

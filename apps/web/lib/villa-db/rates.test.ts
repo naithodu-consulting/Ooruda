@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateBaseRates } from './rates';
+import {
+  type PricingRule,
+  coalesceNights,
+  groupPricingRules,
+  validateBaseRates,
+} from './rates';
 
 // Villa 19 today (villa-booking 00039): 8 included, 14 max, guests 9-11 at
 // ₹1,000 and 12-14 at ₹700 per night.
@@ -106,5 +111,100 @@ describe('validateBaseRates', () => {
     expect(() =>
       validateBaseRates({ ...villa19, checkOutTime: '24:00' }),
     ).toThrow();
+  });
+});
+
+describe('coalesceNights', () => {
+  it('turns one night into one half-open range', () => {
+    expect(coalesceNights(['2026-12-20'])).toEqual([
+      { startDate: '2026-12-20', endDate: '2026-12-21' },
+    ]);
+  });
+
+  it('joins consecutive nights into a single range', () => {
+    expect(coalesceNights(['2026-12-20', '2026-12-21', '2026-12-22'])).toEqual([
+      { startDate: '2026-12-20', endDate: '2026-12-23' },
+    ]);
+  });
+
+  it('keeps a gap as a separate range', () => {
+    // 20-22 December plus Christmas Day: one rate, two rows.
+    expect(
+      coalesceNights(['2026-12-20', '2026-12-21', '2026-12-22', '2026-12-25']),
+    ).toEqual([
+      { startDate: '2026-12-20', endDate: '2026-12-23' },
+      { startDate: '2026-12-25', endDate: '2026-12-26' },
+    ]);
+  });
+
+  it('does not care about order or duplicates', () => {
+    expect(
+      coalesceNights(['2026-12-22', '2026-12-20', '2026-12-21', '2026-12-20']),
+    ).toEqual([{ startDate: '2026-12-20', endDate: '2026-12-23' }]);
+  });
+
+  it('spans a month boundary', () => {
+    expect(coalesceNights(['2026-12-31', '2027-01-01'])).toEqual([
+      { startDate: '2026-12-31', endDate: '2027-01-02' },
+    ]);
+  });
+
+  it('is empty for no nights', () => {
+    expect(coalesceNights([])).toEqual([]);
+  });
+});
+
+function rule(
+  id: string,
+  name: string,
+  startDate: string,
+  endDate: string,
+  nightlyRate = 18000,
+  minStayNights = 1,
+): PricingRule {
+  return { id, name, startDate, endDate, nightlyRate, minStayNights };
+}
+
+describe('groupPricingRules', () => {
+  it('gathers the rows of one named rate into a single group', () => {
+    const groups = groupPricingRules([
+      rule('a', 'Christmas', '2026-12-20', '2026-12-23'),
+      rule('b', 'Christmas', '2026-12-25', '2026-12-26'),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.name).toBe('Christmas');
+    expect(groups[0]!.nights).toEqual([
+      '2026-12-20',
+      '2026-12-21',
+      '2026-12-22',
+      '2026-12-25',
+    ]);
+    expect(groups[0]!.ranges.map((r) => r.id)).toEqual(['a', 'b']);
+  });
+
+  it('keeps same-named rows at different prices apart', () => {
+    // Legacy rows the old form could create. Merging them would silently
+    // reprice one of the two.
+    const groups = groupPricingRules([
+      rule('a', 'Peak', '2026-12-20', '2026-12-21', 18000),
+      rule('b', 'Peak', '2026-12-25', '2026-12-26', 22000),
+    ]);
+
+    expect(groups).toHaveLength(2);
+    expect(groups.map((g) => g.nightlyRate)).toEqual([18000, 22000]);
+  });
+
+  it('orders groups by their first night', () => {
+    const groups = groupPricingRules([
+      rule('b', 'New Year', '2026-12-31', '2027-01-01'),
+      rule('a', 'Diwali', '2026-11-01', '2026-11-03'),
+    ]);
+
+    expect(groups.map((g) => g.name)).toEqual(['Diwali', 'New Year']);
+  });
+
+  it('is empty when there are no rules', () => {
+    expect(groupPricingRules([])).toEqual([]);
   });
 });

@@ -25,10 +25,12 @@ import { getBaseRates } from '~/lib/villa-db/rates';
 import { recordBookingActivity } from './activity';
 import { NO_PAYMENT_REASON, hasRecordedPayment } from './booking-payments';
 import {
+  CHANNEL_CONFIRMATION_REASON,
   DEFAULT_VILLA_ENTITY,
   DEFAULT_VILLA_SITE_URL,
   type GuestEmailContext,
   type GuestEmailTemplate,
+  blockedForChannelStay,
   formatSenderAddress,
   GUEST_EMAIL_LABELS,
   isPreArrivalDue,
@@ -730,6 +732,15 @@ export async function sendGuestEmailNow(
 
   if (!booking.guestEmail) throw new Error('The booking has no guest email.');
 
+  // A stay the channel sold never gets our confirmation, however it is asked
+  // for: the button is not the only way in here. See
+  // CHANNEL_CONFIRMATION_REASON for why this one is not merely a duplicate.
+  if (blockedForChannelStay(template, booking)) {
+    throw new Error(
+      'This stay was sold by a booking channel, which has already sent the guest its own confirmation. Ours states cancellation and refund terms that do not apply to it.',
+    );
+  }
+
   const admin = getSupabaseServerAdminClient();
 
   // The same rule the button applies, enforced here: the confirmation quotes
@@ -825,7 +836,15 @@ export async function sendBookingConfirmation(
   // The ledger spans both databases, so the context (which holds the site
   // connection) is loaded first and reused for the check.
   const ctx = await loadGuestEmailContext(accountId, propertyId);
-  const paid = await hasRecordedPayment(admin, ctx.site, propertyId, booking);
+
+  // A channel-sold stay is skipped for its own reason, ahead of the payment
+  // test: it is withheld whether or not money has been received, so saying
+  // "no payment recorded" would send staff looking for an advance that would
+  // not unlock it anyway.
+  const channelOwned = blockedForChannelStay('booking_confirmation', booking);
+  const paid =
+    !channelOwned &&
+    (await hasRecordedPayment(admin, ctx.site, propertyId, booking));
 
   const { data: row, error } = await admin
     .from('villa_message_log')
@@ -837,7 +856,11 @@ export async function sendBookingConfirmation(
       template: 'booking_confirmation' as const,
       manual: false,
       status: paid ? 'sending' : 'skipped',
-      reason: paid ? null : NO_PAYMENT_REASON,
+      reason: paid
+        ? null
+        : channelOwned
+          ? CHANNEL_CONFIRMATION_REASON
+          : NO_PAYMENT_REASON,
       to_email: booking.guestEmail,
     })
     .select('id')

@@ -2907,8 +2907,11 @@ export type Database = {
           discount_code: string | null
           extra_guest_amount: number
           guest_email: string | null
+          guest_first_name: string | null
+          guest_last_name: string | null
           guest_name: string
           guest_phone: string | null
+          guest_salutation: string | null
           id_status: string | null
           infants: number
           invoice_number: string | null
@@ -2938,8 +2941,11 @@ export type Database = {
           discount_code?: string | null
           extra_guest_amount: number
           guest_email?: string | null
+          guest_first_name?: string | null
+          guest_last_name?: string | null
           guest_name: string
           guest_phone?: string | null
+          guest_salutation?: string | null
           id_status?: string | null
           infants: number
           invoice_number?: string | null
@@ -2969,8 +2975,11 @@ export type Database = {
           discount_code?: string | null
           extra_guest_amount?: number
           guest_email?: string | null
+          guest_first_name?: string | null
+          guest_last_name?: string | null
           guest_name?: string
           guest_phone?: string | null
+          guest_salutation?: string | null
           id_status?: string | null
           infants?: number
           invoice_number?: string | null
@@ -3052,6 +3061,7 @@ export type Database = {
           account_id: string
           action: string
           actor: string | null
+          actor_name: string | null
           code_id: string
           created_at: string
           id: string
@@ -3061,6 +3071,7 @@ export type Database = {
           account_id: string
           action: string
           actor?: string | null
+          actor_name?: string | null
           code_id: string
           created_at?: string
           id?: string
@@ -3070,6 +3081,7 @@ export type Database = {
           account_id?: string
           action?: string
           actor?: string | null
+          actor_name?: string | null
           code_id?: string
           created_at?: string
           id?: string
@@ -3590,10 +3602,13 @@ export type Database = {
           created_at: string
           created_by: string | null
           email: string | null
+          first_name: string | null
           full_name: string
           id: string
+          last_name: string | null
           notes: string | null
           phone: string | null
+          salutation: string | null
           updated_at: string
         }
         Insert: {
@@ -3601,10 +3616,13 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           email?: string | null
+          first_name?: string | null
           full_name: string
           id?: string
+          last_name?: string | null
           notes?: string | null
           phone?: string | null
+          salutation?: string | null
           updated_at?: string
         }
         Update: {
@@ -3612,10 +3630,13 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           email?: string | null
+          first_name?: string | null
           full_name?: string
           id?: string
+          last_name?: string | null
           notes?: string | null
           phone?: string | null
+          salutation?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -4150,6 +4171,41 @@ export type Database = {
           p_unit_id: string
         }
         Returns: number
+      }
+      archive_villa_discount: {
+        Args: { p_id: string }
+        Returns: {
+          account_id: string
+          approved_at: string | null
+          approved_by: string | null
+          blackouts: Json
+          channels: string[]
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          max_discount: number | null
+          max_uses: number | null
+          max_uses_per_guest: number
+          min_booking_value: number
+          min_nights: number
+          needs_approval: boolean | null
+          note: string | null
+          property_id: string
+          stackable: boolean
+          status: string
+          updated_at: string
+          valid_from: string
+          valid_to: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "villa_discount_codes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       association_role: { Args: { p_association_id: string }; Returns: string }
       can_action_account_member: {

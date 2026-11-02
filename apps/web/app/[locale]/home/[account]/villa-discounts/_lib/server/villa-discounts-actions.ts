@@ -8,6 +8,7 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { villaDiscountsEnabled } from '~/lib/villa/discount-flag';
 
 import {
+  DiscountArchiveSchema,
   DiscountReviewSchema,
   DiscountSchema,
   DiscountToggleSchema,
@@ -37,6 +38,14 @@ export const toggleDiscountAction = authActionClient
   .action(async ({ parsedInput }) => {
     assertEnabled();
     await service().toggle(parsedInput);
+    revalidatePath('/[locale]/home/[account]/villa-discounts', 'page');
+  });
+
+export const archiveDiscountAction = authActionClient
+  .inputSchema(DiscountArchiveSchema)
+  .action(async ({ parsedInput }) => {
+    assertEnabled();
+    await service().archive(parsedInput);
     revalidatePath('/[locale]/home/[account]/villa-discounts', 'page');
   });
 

@@ -90,7 +90,14 @@ export function createGuestsService(client: Client) {
   /** The chosen register entry, or a new/deduplicated one by phone. */
   async function resolveGuest(
     accountId: string,
-    input: { guestId: string; newGuestName: string; newGuestPhone: string },
+    input: {
+      guestId: string;
+      newGuestName?: string;
+      newGuestSalutation?: string;
+      newGuestFirstName?: string;
+      newGuestLastName?: string;
+      newGuestPhone: string;
+    },
     actor: string,
   ): Promise<string> {
     if (input.guestId) {
@@ -125,11 +132,22 @@ export function createGuestsService(client: Client) {
       if (existing) return existing.id;
     }
 
+    const salutation = input.newGuestSalutation || null;
+    const firstName = input.newGuestFirstName?.trim() || null;
+    const lastName = input.newGuestLastName?.trim() || null;
+    const fullName =
+      (firstName
+        ? [firstName, lastName].filter(Boolean).join(' ')
+        : input.newGuestName?.trim()) || '';
+
     const { data, error } = await db
       .from('villa_guests')
       .insert({
         account_id: accountId,
-        full_name: input.newGuestName,
+        full_name: fullName,
+        salutation,
+        first_name: firstName || fullName,
+        last_name: lastName,
         phone,
         created_by: actor,
       })
@@ -281,7 +299,7 @@ export function createGuestsService(client: Client) {
           propertyId: input.propertyId,
           booking: { id: booking.id, bookingCode: booking.bookingCode },
           action: 'guest_added',
-          note: `Guest added: ${input.newGuestName || 'from directory'}`,
+          note: `Guest added: ${input.newGuestFirstName ? [input.newGuestFirstName, input.newGuestLastName].filter(Boolean).join(' ') : input.newGuestName || 'from directory'}`,
         },
         actor,
       );

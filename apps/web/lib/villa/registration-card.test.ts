@@ -259,4 +259,20 @@ describe('buildRegistrationCard', () => {
     expect(card.arrival).toBe('15 Nov 2026');
     expect(card.departure).toBe('18 Nov 2026');
   });
+
+  it('populates salutation, first name, and last name from booking', () => {
+    const card = input({
+      booking: booking({
+        salutation: 'Mr',
+        firstName: 'Rahul',
+        lastName: 'Sharma',
+        guestName: 'Rahul Sharma',
+      }),
+    });
+
+    expect(card.salutation).toBe('Mr');
+    expect(card.firstName).toBe('Rahul');
+    expect(card.lastName).toBe('Sharma');
+    expect(card.guestName).toBe('Rahul Sharma');
+  });
 });

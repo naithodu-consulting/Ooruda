@@ -4,6 +4,76 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Guest Salutation and Split Name — 2026-11-02
+
+### Salutation, first name, optional last name — everywhere a guest is recorded
+- **Manual (offline) booking, Airbnb/channel enrichment, the guest register's Add ID dialog and the website checkout** all now collect **Salutation** (Mr / Mrs / Ms, required), **First name** (required) and **Last name** (optional), in place of a single "Guest name" field.
+- **The guest registration card is filled in properly.** Its SALUTATION and LAST NAME boxes were printed blank with the whole name crammed into FIRST NAME; each now carries its own value.
+- **`guest_name` is still the composed full name** ("Rahul Sharma", or just "Rahul" when there is no last name) and is still what invoices, WhatsApp messages, reports, booking codes and search read, so nothing downstream changed shape.
+- Existing rows are backfilled by splitting the stored name on its first space — first word to first name, the remainder to last name, salutation left empty rather than guessed.
+
+### Migrations
+
+| Migration | Purpose |
+| --- | --- |
+| `20261102151500_villa_salutation_and_name_split` (Ooruda) | Adds nullable `guest_salutation` (checked against Mr/Mrs/Ms), `guest_first_name` and `guest_last_name` to `villa_bookings_mirror`, and `salutation`, `first_name`, `last_name` to `villa_guests`, each with a length check; backfills both from the existing name. Additive only. |
+| `00109_guest_salutation_and_name_split` (villa-booking) | Adds the same three columns to `bookings` with a salutation check constraint and backfills them. Re-creates `create_booking_atomic` with three new trailing parameters, all defaulted, and **drops the previous 20-argument overload explicitly** so no ambiguous-candidate call is possible. Composes `guest_name` from the parts when they are given, and falls back to the passed name when they are not. |
+
+**Apply both migrations BEFORE deploying the code**: Ooruda selects `guest_salutation, guest_first_name, guest_last_name` from the booking site and passes the three new parameters to `create_booking_atomic`, so the bookings screens fail against a booking database that has not been migrated.
+
+---
+
+## Villa Rate Calendar — 2026-11-02
+
+### Rates are set on a calendar, not a form
+- **Villa Settings → Seasonal rates now opens on a rate calendar** showing two months (one on a phone) with the price a guest actually pays on every night — base weekday, base weekend, or the seasonal rate that covers it. Nights already on a rate are shaded with that rate's price, so the whole rate card is readable at a glance instead of being inferred from a list of date ranges.
+- **Pick nights by clicking.** A click toggles one night; shift-click takes in everything up to that night. So 20–25 December *and* 20, 22, 25 January go into one selection in a few clicks, and the panel says exactly what is selected ("9 nights selected · 20 Dec 2026 – 25 Dec 2026, 20 Jan 2027, 22 Jan 2027").
+- **Rates can be edited.** Previously a seasonal rate could only be created and deleted; changing a date or a price meant deleting and re-entering it. The pencil loads the rate back into the calendar with its nights selected and its price and minimum stay filled in — add nights, drop nights, change the price, save.
+- **Past nights keep their price.** They are shown but not selectable, and an edit silently preserves them: they were charged at that rate and the booking site has rows for them, so dropping them would rewrite history. The panel says when a rate also covers nights that have passed.
+- **A night already on another rate cannot be taken.** It stays visible in that rate's colour, with a tooltip naming the rate that owns it, because two rates on one night let checkout and the homepage widget quote different prices. Free the night by editing the rate that holds it.
+- **A rate is identified by its name**, so two rates cannot share one — the screen says so rather than letting an edit guess which rows it owns.
+
+### Under the hood
+- One rate is now stored as however many `pricing_rules` rows its nights need (a row is one continuous span), grouped back into a single named rate when read. Rows written by the old form are groups of one, so nothing had to be migrated.
+- Saving an edit removes the rate's old rows and writes the new ones. If the write fails halfway, the removed rows are put back before the error is raised — the booking site offers no transaction across requests, so this is a compensating restore, and it says so in the log if the restore itself fails.
+- The old single-range "add seasonal rate" and "delete seasonal rate" actions, services and schemas were **removed**: the calendar replaced every caller.
+
+### Blocked: one rate over separate stretches of dates
+- The booking site's `pricing_rules` carries `uq_pricing_property_rule UNIQUE (property_id, rule_name)`, so a rate made of more than one stretch of nights collides with itself on the first write. That constraint is not a pricing rule — `00013` added it only so `seed.sql` could use `ON CONFLICT ON CONSTRAINT … DO NOTHING` and be re-runnable.
+- **villa-booking migration `00110_pricing_rules_multi_range` is written but NOT applied.** It drops that constraint and re-adds it as `UNIQUE (property_id, rule_name, start_date)` — the grain a rate's rows actually have, which keeps the seed idempotent and allows one name over several spans. The pricing engine picks a row by date and never reads the constraint, so two rows with one name behave exactly as one row did over each of its spans.
+- Until it is applied, a continuous stretch saves normally and a split selection is refused with a message naming the limit rather than a generic failure.
+
+---
+
+## Coupon Codes: Archive and Full History — 2026-11-02
+
+### Codes are archived, never deleted
+- **A coupon code can now be retired.** Archiving stops it working on the booking website straight away while the row, its usage figures and its history stay.
+- **The website is cleared first, then the code is archived.** Every other write pushes to the booking site in the background and shrugs off a failure, because saving, pausing or resuming again retries it. Archiving closes all three of those paths for good, so a swallowed failure would leave the code live at checkout for ever under an "Archived" badge — a discount nobody could withdraw. If the site cannot be reached, nothing is archived and the operator is told to try again; the only other outcome is the harmless one, where the code is already off the site and archiving again finishes the job.
+- **Deletion is still not offered, deliberately.** Past bookings record the code a guest used as *text* (`villa_bookings_mirror.discount_code`), and the audit trail cascades off the code row — so removing it would turn a real ₹2,000 discount into "code unknown" and take the trail with it.
+- **One way, and the code string stays reserved.** An archived code cannot be edited, paused, resumed or reviewed (the database refuses, not just the screen), and `MONSOON10` cannot be created again afterwards: usage is matched by text, so re-using a retired code would make its figures ambiguous. A new code is created instead.
+- Codes a super-admin refused can be archived too, so the list is not stuck with them.
+
+### The list is grouped
+- Three tabs with counts — **Current** (active and paused), **Approval** (awaiting Ooruda, or refused) and **Archived**. Archived codes are out of the way by default and read-only, with their usage still visible.
+
+### Every change, with what changed
+- **A History panel on each code** replaces the one-line "Changed on …": the whole trail, newest first — created, changed, paused, resumed, approved, refused, archived — with the exact time and who did it.
+- **It loads when it is opened, not before.** The list page carries only each code's latest action for its one-line summary; the trail and the term snapshots it diffs — by far the heaviest column on the audit table — are fetched for a single code when its panel opens, on the index that already exists for exactly that query. A villa with years of history pays nothing for it on page load, and no trail is ever truncated by a page-wide cap.
+- **An edit whose previous terms were never recorded says so**, rather than rendering as a change with nothing in it.
+- **Each change says what moved.** The audit table already stored a full snapshot of the terms after every action, so "Discount: 10% off → 15% off", "Valid until: 31 Dec 2026 → 31 Jan 2027" is diffed from those snapshots; nothing new had to be recorded. Fields are named as the form names them, and status changes are not double-counted as edits.
+- **Who did it survives them leaving.** The actor's name is now written onto the audit row at the time of the action. It used to be looked up from the member's profile when the page was read, so removing a member rewrote all their past entries to "Unknown". Existing rows are backfilled.
+
+### Migrations
+
+| Migration | Purpose |
+| --- | --- |
+| `20261102080147_villa_discount_archive_and_history` | Adds `archived` to `villa_discount_codes_status_check` and to `villa_discount_audit_action_check` (both strict supersets, so every existing row still satisfies them). Adds `villa_discount_audit.actor_name`, backfilled from `profiles`, and writes it in `kit.villa_discount_log`. Adds `public.archive_villa_discount(uuid)` (villa owner only; refuses an already-archived code). Re-creates `save_villa_discount` and `set_villa_discount_active` from their current definitions in `20261020115735` (§6/§7), unchanged except for one guard each refusing an archived code. `review_villa_discount` needed no change: it already required `pending_approval`. |
+
+**Apply this migration BEFORE deploying the code**: the screen calls `archive_villa_discount` and selects `villa_discount_audit.actor_name`, neither of which exists until it runs. The migration is additive and safe to apply ahead of the code — nothing writes `archived` until the new screen ships.
+
+---
+
 ## Airbnb Booking Details, Blocked Tab Filter & Calendar Links — 2026-11-02
 
 ### Add booking details simplified
@@ -26,8 +96,10 @@ This document covers all feature work, enhancements, and notable changes built o
 ### Filling in a stay a channel sold
 - **"Add booking details" on an imported channel stay.** An Airbnb stay reaches Ooruda as an iCal block: nights, and nothing else — no guest, no phone, no money, and nothing in Reports. The Bookings tabs and the Blocked list now offer a form on each imported stay where the operator records who stayed and what Airbnb paid out. The result is an ordinary booking with channel **Airbnb**, so it counts in revenue, occupancy, ADR, RevPAR and the channel breakdown like any other.
 - **The dates are the feed's, not the form's.** They are shown, never edited; a stale dialog whose nights have since moved on the channel is refused rather than writing a booking over the wrong nights.
-- **The money is the operator's figure, not the rate card's.** The rate card never sold these nights, so the stay is not priced: the form asks for the payout, plus the GST inside it, which defaults to zero because the channel normally collects and remits it. Ticking "the payout is already in the bank" writes a receipt against the booking (mode: bank, reference: the Airbnb confirmation code), so the money reaches the ledger and the cash figures, not just the status badge.
-- **No guest email is sent.** Airbnb gives us no address and has already sent the guest their confirmation; a second one from a sender they do not know is not an improvement.
+- **The money is the operator's figure, not the rate card's.** The rate card never sold these nights, so the stay is not priced: the form asks for the amount charged, and that is what the stay is worth. It is recorded both ways — the booking is marked paid *and* a receipt is written against it (mode: bank, payer: the channel, reference: the Airbnb confirmation code). Both, because the status badge and the money are read from different places: Reports, the cash position and the booking's own Payments panel all read receipts, so a stay marked paid with no receipt would show "Fully paid" beside "Unpaid" and leave the period's revenue short by the whole amount.
+- **No GST is split out.** The channel collects and remits the tax on these stays, so Ooruda records the amount and claims nothing about the tax inside it. For the same reason a channel-sold stay is excluded from the villa's own GST invoice series (migration below): a second tax invoice for a supply Airbnb already invoiced cannot be withdrawn once its number is allocated.
+- **The confirmation email is never sent for a channel stay**, and not only because Airbnb has already sent one. Ours carries a CANCELLATIONS & REFUND block — a ladder in rupees, an address to write to, and a promise that refunds reach the original payment method in five to seven working days. None of that governs an Airbnb booking: their policy applies, the guest cancels there, and any refund comes out of money we never held. Sending it under the company's CIN and GSTIN would state refund terms the guest does not have. The booking page says so in place of the button, and both send paths — "Send now" and the automatic send — refuse it, because the button is not the only way in.
+- **The arrival and thank-you emails are left alone.** They quote no terms, and a channel guest still needs directions, a check-in time and the caretaker's number. They go only if an email address is on file; Airbnb does not share one, so the card says that too.
 
 ### One stay, shown once
 - A filled-in stay appears in the Bookings tabs as its booking, never also as a bare channel row, and the calendar draws the booking instead of a booking stacked on a block. The Blocked list still shows the block — it is what holds the nights — but offers **Open booking** rather than the form.

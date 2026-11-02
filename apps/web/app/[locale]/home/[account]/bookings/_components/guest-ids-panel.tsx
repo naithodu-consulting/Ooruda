@@ -70,6 +70,9 @@ export function GuestIdsPanel(props: {
   propertyId: string;
   bookingId: string;
   bookingGuestName: string;
+  bookingSalutation?: string | null;
+  bookingFirstName?: string | null;
+  bookingLastName?: string | null;
   bookingGuestPhone: string | null;
   adults: number;
   idStatus: string;
@@ -149,6 +152,9 @@ export function GuestIdsPanel(props: {
               {...ref}
               guests={props.guests}
               bookingGuestName={props.bookingGuestName}
+              bookingSalutation={props.bookingSalutation}
+              bookingFirstName={props.bookingFirstName}
+              bookingLastName={props.bookingLastName}
               bookingGuestPhone={props.bookingGuestPhone}
               uploadsEnabled={props.uploadsEnabled}
               onSaved={() => router.refresh()}

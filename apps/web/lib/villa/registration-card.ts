@@ -24,6 +24,9 @@ export interface RegistrationCardBooking {
   bookingCode: string | null;
   referenceNumber: string;
   guestName: string;
+  salutation?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   guestEmail: string;
   /** As the booking site stores it: 10 digits for an Indian mobile. */
   guestPhone: string;
@@ -218,6 +221,9 @@ export function buildRegistrationCard(
     },
     bookingId: booking.bookingCode ?? booking.referenceNumber,
     guestName: booking.guestName.trim(),
+    salutation: booking.salutation ?? null,
+    firstName: (booking.firstName || booking.guestName).trim(),
+    lastName: booking.lastName?.trim() ?? null,
     email: booking.guestEmail.trim(),
     mobile: formatCardPhone(booking.guestPhone) ?? '',
     companyInfo,

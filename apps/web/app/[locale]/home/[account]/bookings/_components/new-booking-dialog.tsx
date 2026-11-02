@@ -131,7 +131,9 @@ function NewBookingForm(props: {
       adults: 8,
       children: 0,
       infants: 0,
-      guestName: '',
+      salutation: 'Mr',
+      firstName: '',
+      lastName: '',
       guestPhone: '',
       guestEmail: '',
       channel: 'phone',
@@ -448,16 +450,72 @@ function NewBookingForm(props: {
 
               <QuotePanel state={quote} />
 
-              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <section className="grid grid-cols-1 gap-4 sm:grid-cols-12">
                 <FormField
-                  name="guestName"
+                  name="salutation"
                   control={form.control}
                   render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
-                      <FormLabel>Guest name</FormLabel>
+                    <FormItem className="sm:col-span-3">
+                      <FormLabel>Salutation</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger
+                            className="w-full"
+                            data-test={'villa-booking-salutation'}
+                          >
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Mr">Mr</SelectItem>
+                          <SelectItem value="Mrs">Mrs</SelectItem>
+                          <SelectItem value="Ms">Ms</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  name="firstName"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-5">
+                      <FormLabel>First name</FormLabel>
                       <FormControl
                         render={
-                          <Input {...field} data-test={'villa-booking-name'} />
+                          <Input
+                            {...field}
+                            data-test={'villa-booking-first-name'}
+                          />
+                        }
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  name="lastName"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-4">
+                      <FormLabel>
+                        Last name{' '}
+                        <span className="text-muted-foreground text-xs font-normal">
+                          (optional)
+                        </span>
+                      </FormLabel>
+                      <FormControl
+                        render={
+                          <Input
+                            {...field}
+                            data-test={'villa-booking-last-name'}
+                          />
                         }
                       />
                       <FormMessage />
@@ -469,7 +527,7 @@ function NewBookingForm(props: {
                   name="guestPhone"
                   control={form.control}
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="sm:col-span-6">
                       <FormLabel>Phone</FormLabel>
                       <FormControl
                         render={
@@ -492,7 +550,7 @@ function NewBookingForm(props: {
                   name="guestEmail"
                   control={form.control}
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="sm:col-span-6">
                       <FormLabel>Email</FormLabel>
                       <FormControl
                         render={
