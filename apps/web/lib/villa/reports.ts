@@ -214,8 +214,10 @@ export interface MonthLine {
   available: number;
   occupancyPct: number;
   revenue: number;
+  grossRevenue: number;
   expenses: number;
   net: number;
+  netReceived: number;
 }
 
 export interface Overview {
@@ -224,8 +226,12 @@ export interface Overview {
   occupancyPct: number;
   revenue: number;
   gstCollected: number;
+  grossRevenue: number;
+  netReceived: number;
   averageNightly: number;
+  grossAverageNightly: number;
   revenuePerNight: number;
+  grossRevenuePerNight: number;
   stays: number;
   events: number;
   expenses: number;
@@ -285,10 +291,12 @@ export function buildOverview(
 
     let n = 0;
     let r = 0;
+    let g = 0;
     for (const s of selling) {
       const part = slice(s, mFrom, mTo);
       n += part.nights;
       r += part.revenuePaise;
+      g += part.gstPaise;
     }
 
     const e = inRange
@@ -302,12 +310,16 @@ export function buildOverview(
       available,
       occupancyPct: Math.round((n / available) * 1000) / 10,
       revenue: rupees(r),
+      grossRevenue: rupees(r + g),
       expenses: rupees(e),
       net: rupees(r - e),
+      netReceived: rupees(r + g - e),
     });
   }
 
   const days = daysIn(range);
+  const grossPaise = revenue + gst;
+  const netReceivedPaise = grossPaise - spent;
 
   return {
     days,
@@ -315,8 +327,12 @@ export function buildOverview(
     occupancyPct: Math.round((nights / days) * 1000) / 10,
     revenue: rupees(revenue),
     gstCollected: rupees(gst),
+    grossRevenue: rupees(grossPaise),
+    netReceived: rupees(netReceivedPaise),
     averageNightly: nights ? rupees(revenue / nights) : 0,
+    grossAverageNightly: nights ? rupees(grossPaise / nights) : 0,
     revenuePerNight: rupees(revenue / days),
+    grossRevenuePerNight: rupees(grossPaise / days),
     stays: count,
     events,
     expenses: rupees(spent),

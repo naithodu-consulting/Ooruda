@@ -4,6 +4,19 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: Simplified Cash-In View for Reports Overview — 2026-11-03
+
+### Simplified Revenue Overview (Option 2)
+- Streamlined the **Revenue & Occupancy** (Overview) tab to present clear, cash-focused numbers matching bank transfers and OTA payouts:
+  - **Total Booking Value**: Displays total stay charges billed to guests (e.g. ₹13,216), replacing "Revenue (Before GST)".
+  - **Total Expenses**: Displays total operating and channel expenses (e.g. ₹1,736 Airbnb commission) without GST sub-line clutter.
+  - **Net Received**: Displays net cash earnings after deducting expenses (e.g. ₹11,480 = ₹13,216 − ₹1,736), directly matching Airbnb's payout and host bank deposits.
+  - **Secondary KPIs**: Removed the separate "GST Collected" card from the Overview tab; updated ADR and RevPAR to reflect gross booking realization.
+  - **Monthly Performance Table & Charts**: Updated monthly columns, tooltips, and CSV export from taxable revenue to gross booking value and net received.
+- **GST Summary Isolation**: Kept all statutory GST compliance data (Taxable Revenue, Output GST, Input GST, Net GST Position) intact on the dedicated **GST Summary** tab for tax filings.
+
+---
+
 ## Ooruda Villa: Preferential Special Pricing, Airbnb Base/GST Breakdown & OTA Expense Accounting — 2026-11-03
 
 ### Preferential / Special Price Option for Manual Bookings
