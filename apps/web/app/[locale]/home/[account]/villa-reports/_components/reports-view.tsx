@@ -559,27 +559,27 @@ export function ReportsView(props: {
           'Nights booked',
           'Nights available',
           'Occupancy %',
-          'Revenue before GST (INR)',
+          'Booking Value',
           'Expenses (INR)',
-          'Net (INR)',
+          'Net Received',
         ],
         ...o.months.map((m) => [
           m.month,
           m.nights,
           m.available,
           m.occupancyPct,
-          m.revenue,
+          m.grossRevenue,
           m.expenses,
-          m.net,
+          m.netReceived,
         ]),
         [
           'Total',
           o.bookedNights,
           o.days,
           o.occupancyPct,
-          o.revenue,
+          o.grossRevenue,
           o.expenses,
-          o.net,
+          o.netReceived,
         ],
       ]),
     );
@@ -954,8 +954,8 @@ function OverviewTab({ o }: { o: Overview }) {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiTile
           test="revenue"
-          label="Revenue (Before GST)"
-          value={formatINR(o.revenue)}
+          label="Total Booking Value"
+          value={formatINR(o.grossRevenue)}
           highlight="green"
           sub={`${o.stays} stay${o.stays === 1 ? '' : 's'}${o.events ? `, ${o.events} event${o.events === 1 ? '' : 's'}` : ''}`}
         />
@@ -977,36 +977,30 @@ function OverviewTab({ o }: { o: Overview }) {
           label="Total Expenses"
           value={formatINR(o.expenses)}
           highlight={o.expenses > 0 ? 'amber' : undefined}
-          sub={`GST on expenses: ${formatINR(o.expensesGst)}`}
+          sub={`${o.expensesByCategory.length} categor${o.expensesByCategory.length === 1 ? 'y' : 'ies'} · operating & channel`}
         />
         <KpiTile
           test="net"
-          label="Net Operating Income"
-          value={formatINR(o.net)}
-          highlight={o.net >= 0 ? 'green' : 'red'}
-          sub="Revenue less expenses, before tax"
+          label="Net Received"
+          value={formatINR(o.netReceived)}
+          highlight={o.netReceived >= 0 ? 'green' : 'red'}
+          sub="Net Booking amount"
         />
       </div>
 
-      {/* Secondary Rate & Tax KPIs */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* Secondary Rate KPIs */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <KpiTile
           test="adr"
           label="Avg. Daily Rate (ADR)"
-          value={formatINR(o.averageNightly)}
-          sub="Average revenue per booked night"
+          value={formatINR(o.grossAverageNightly)}
+          sub="Average gross booking per booked night"
         />
         <KpiTile
           test="revpar"
           label="Revenue Per Available Night"
-          value={formatINR(o.revenuePerNight)}
+          value={formatINR(o.grossRevenuePerNight)}
           sub="RevPAR across all nights in period"
-        />
-        <KpiTile
-          test="gst"
-          label="GST Collected"
-          value={formatINR(o.gstCollected)}
-          sub="Output GST on stays in period"
         />
       </div>
 
@@ -1023,7 +1017,7 @@ function OverviewTab({ o }: { o: Overview }) {
               Monthly Revenue vs. Expenses
             </CardTitle>
             <CardDescription>
-              Taxable stay revenue compared against operating expenses per month
+              Total booking value compared against operating expenses per month
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1033,7 +1027,7 @@ function OverviewTab({ o }: { o: Overview }) {
                   data={o.months.map((m) => ({
                     label: monthLabel(m.month),
                     fullPeriod: fullMonthLabel(m.month),
-                    revenue: m.revenue,
+                    revenue: m.grossRevenue,
                     expenses: m.expenses,
                   }))}
                 />
@@ -1076,8 +1070,8 @@ function OverviewTab({ o }: { o: Overview }) {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Monthly Performance</CardTitle>
           <CardDescription>
-            Period-wise occupancy, revenue before GST, operating expenses, and
-            net income
+            Period-wise occupancy, booking value, operating expenses, and net
+            received
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1088,9 +1082,11 @@ function OverviewTab({ o }: { o: Overview }) {
                   <TableHead>Month</TableHead>
                   <TableHead className="text-right">Nights</TableHead>
                   <TableHead className="text-right">Occupancy</TableHead>
-                  <TableHead className="text-right">Revenue (₹)</TableHead>
+                  <TableHead className="text-right">
+                    Booking Value (₹)
+                  </TableHead>
                   <TableHead className="text-right">Expenses (₹)</TableHead>
-                  <TableHead className="text-right">Net Income (₹)</TableHead>
+                  <TableHead className="text-right">Net Received (₹)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1109,7 +1105,7 @@ function OverviewTab({ o }: { o: Overview }) {
                       {m.occupancyPct}%
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatINR(m.revenue)}
+                      {formatINR(m.grossRevenue)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {m.expenses > 0 ? formatINR(m.expenses) : '₹0'}
@@ -1117,10 +1113,12 @@ function OverviewTab({ o }: { o: Overview }) {
                     <TableCell
                       className={cn(
                         'text-right font-semibold tabular-nums',
-                        m.net < 0 ? 'text-destructive' : 'text-foreground',
+                        m.netReceived < 0
+                          ? 'text-destructive'
+                          : 'text-foreground',
                       )}
                     >
-                      {formatINR(m.net)}
+                      {formatINR(m.netReceived)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1137,18 +1135,20 @@ function OverviewTab({ o }: { o: Overview }) {
                       {o.occupancyPct}%
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatINR(o.revenue)}
+                      {formatINR(o.grossRevenue)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {o.expenses > 0 ? formatINR(o.expenses) : '₹0'}
+                      {formatINR(o.expenses)}
                     </TableCell>
                     <TableCell
                       className={cn(
                         'text-right tabular-nums',
-                        o.net < 0 ? 'text-destructive' : 'text-foreground',
+                        o.netReceived < 0
+                          ? 'text-destructive'
+                          : 'text-foreground',
                       )}
                     >
-                      {formatINR(o.net)}
+                      {formatINR(o.netReceived)}
                     </TableCell>
                   </TableRow>
                 </TableFooter>
