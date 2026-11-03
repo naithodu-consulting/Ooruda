@@ -886,6 +886,36 @@ export function createBookingsService(client: Client) {
     },
 
     async complete(input: z.output<typeof CompleteStaySchema>, actor: string) {
+      const admin = getSupabaseServerAdminClient();
+
+      const { data: mirror, error: mirrorError } = await admin
+        .from('villa_bookings_mirror')
+        .select('checked_in_at')
+        .eq('property_id', input.propertyId)
+        .eq('site_booking_id', input.bookingId)
+        .maybeSingle();
+
+      if (mirrorError) {
+        (await getLogger()).error(
+          { bookingId: input.bookingId, error: mirrorError.message },
+          'villa check-out check-in status check failed',
+        );
+
+        throw new VillaDbError(
+          'CONFLICT',
+          `booking ${input.bookingId} check-in lookup failed`,
+          'Could not verify check-in status. Please try again.',
+        );
+      }
+
+      if (!mirror?.checked_in_at) {
+        throw new VillaDbError(
+          'CONFLICT',
+          `booking ${input.bookingId} is not checked in`,
+          'A stay must be checked in before it can be checked out.',
+        );
+      }
+
       const site = await getVillaSite(input.accountId, input.propertyId);
       const booking = await markStayCompleted(site, input.bookingId, actor);
 
