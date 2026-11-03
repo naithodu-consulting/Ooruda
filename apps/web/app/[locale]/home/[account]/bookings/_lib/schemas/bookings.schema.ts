@@ -115,13 +115,45 @@ const bookingFields = {
   paymentReference: z.string().trim().max(100),
   specialRequests: z.string().trim().max(1000),
   isEvent: z.boolean(),
+  isSpecialPrice: z.boolean().default(false),
+  specialBaseAmount: z.coerce
+    .number()
+    .min(0)
+    .max(10_000_000)
+    .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, {
+      message: 'Use at most 2 decimals',
+    })
+    .optional(),
+  specialGstAmount: z.coerce
+    .number()
+    .min(0)
+    .max(10_000_000)
+    .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, {
+      message: 'Use at most 2 decimals',
+    })
+    .optional()
+    .default(0),
 };
+
+function specialPriceCheck(v: {
+  isSpecialPrice?: boolean;
+  specialBaseAmount?: number;
+}) {
+  if (v.isSpecialPrice) {
+    return typeof v.specialBaseAmount === 'number' && v.specialBaseAmount > 0;
+  }
+  return true;
+}
 
 /** What the new-booking form collects. */
 export const NewBookingFormSchema = z
   .object(bookingFields)
   .refine(checkOutAfterCheckIn, checkOutMessage)
-  .refine(advanceWhenHasPaid, advanceMessage);
+  .refine(advanceWhenHasPaid, advanceMessage)
+  .refine(specialPriceCheck, {
+    message: 'Enter preferential base amount',
+    path: ['specialBaseAmount'],
+  });
 
 export type NewBookingInput = z.input<typeof NewBookingFormSchema>;
 
@@ -133,7 +165,18 @@ export type NewBookingInput = z.input<typeof NewBookingFormSchema>;
 export const NewBookingSchema = z
   .object({ ...bookingFields, expectedTotalPaise: z.number().int().positive() })
   .refine(checkOutAfterCheckIn, checkOutMessage)
-  .refine(advanceWhenHasPaid, advanceMessage);
+  .refine(advanceWhenHasPaid, advanceMessage)
+  .refine(specialPriceCheck, {
+    message: 'Enter preferential base amount',
+    path: ['specialBaseAmount'],
+  });
+
+function enrichAmountCheck(v: { baseAmount?: number; totalAmount?: number }) {
+  return (
+    (typeof v.baseAmount === 'number' && v.baseAmount > 0) ||
+    (typeof v.totalAmount === 'number' && v.totalAmount > 0)
+  );
+}
 
 /**
  * Guest and money details for a stay a booking channel sold, attached to the
@@ -186,17 +229,63 @@ export const EnrichChannelStaySchema = z
       .max(100),
     children: guests,
     infants: guests,
+    /** Base total / stay tariff charged to the guest, in rupees. */
+    baseAmount: z.preprocess(
+      (v) => (v === '' || v === null || v === undefined ? undefined : v),
+      z.coerce
+        .number()
+        .positive({ message: 'Enter base total' })
+        .max(10_000_000)
+        .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, {
+          message: 'Use at most 2 decimals',
+        })
+        .optional(),
+    ),
+    /** GST charged to the guest, in rupees. */
+    gstAmount: z.preprocess(
+      (v) => (v === '' || v === null || v === undefined ? 0 : v),
+      z.coerce
+        .number()
+        .min(0, { message: 'GST cannot be negative' })
+        .max(10_000_000)
+        .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, {
+          message: 'Use at most 2 decimals',
+        })
+        .optional()
+        .default(0),
+    ),
     /** Total amount charged to the guest, in rupees. */
-    totalAmount: z.coerce
-      .number()
-      .positive({ message: 'Enter the amount charged' })
-      .max(10_000_000)
-      .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, {
-        message: 'Use at most 2 decimals',
-      }),
+    totalAmount: z.preprocess(
+      (v) => (v === '' || v === null || v === undefined ? undefined : v),
+      z.coerce
+        .number()
+        .positive({ message: 'Enter the amount charged' })
+        .max(10_000_000)
+        .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, {
+          message: 'Use at most 2 decimals',
+        })
+        .optional(),
+    ),
+    /** Airbnb commission / charges deducted from host payout, in rupees. */
+    airbnbCharges: z.preprocess(
+      (v) => (v === '' || v === null || v === undefined ? 0 : v),
+      z.coerce
+        .number()
+        .min(0, { message: 'Airbnb charges cannot be negative' })
+        .max(10_000_000)
+        .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, {
+          message: 'Use at most 2 decimals',
+        })
+        .optional()
+        .default(0),
+    ),
     specialRequests: z.string().trim().max(1000),
   })
-  .refine(checkOutAfterCheckIn, checkOutMessage);
+  .refine(checkOutAfterCheckIn, checkOutMessage)
+  .refine(enrichAmountCheck, {
+    message: 'Enter base total',
+    path: ['baseAmount'],
+  });
 
 export type EnrichChannelStayInput = z.input<typeof EnrichChannelStaySchema>;
 

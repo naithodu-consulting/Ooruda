@@ -329,6 +329,8 @@ function ExpenseDialog(props: {
     },
   });
 
+  const currentCategory = form.watch('category');
+
   const { execute, isPending } = useAction(saveVillaExpenseAction, {
     onSuccess: () => {
       toast.success(e ? 'Expense updated' : 'Expense added');
@@ -418,7 +420,9 @@ function ExpenseDialog(props: {
                         value={field.value}
                         onChange={field.onChange}
                         onBlur={field.onBlur}
-                        max={today}
+                        max={
+                          currentCategory === 'commission' ? undefined : today
+                        }
                         data-test={'villa-expense-date'}
                       />
                     </FormControl>

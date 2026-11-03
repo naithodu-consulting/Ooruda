@@ -20,7 +20,7 @@ type Client = SupabaseClient<Database>;
 export function createVillaExpensesService(client: Client) {
   return {
     async save(input: z.output<typeof ExpenseSchema>, actor: string) {
-      if (input.spentOn > todayIst()) {
+      if (input.category !== 'commission' && input.spentOn > todayIst()) {
         throw new Error('An expense cannot be dated in the future.');
       }
 

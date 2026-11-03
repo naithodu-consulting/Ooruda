@@ -358,25 +358,50 @@ export function createBookingsService(client: Client) {
         );
       }
 
-      if (!result.ok) {
-        throw new VillaDbError(
-          'INVALID_INPUT',
-          result.error.code,
-          result.error.message,
-        );
-      }
+      let basePaise: number;
+      let extraGuestPaise: number;
+      let taxPaise: number;
+      let totalPaise: number;
 
-      const q = result.quote;
+      if (input.isSpecialPrice && input.specialBaseAmount) {
+        basePaise = Math.round(input.specialBaseAmount * 100);
+        extraGuestPaise = 0;
+        taxPaise = Math.round((input.specialGstAmount ?? 0) * 100);
+        totalPaise = basePaise + taxPaise;
 
-      // The price is always computed here; the quote the user saw is only
-      // compared, never trusted. If rates changed in between, say so rather
-      // than silently booking a different total than the guest was told.
-      if (q.totalPaise !== input.expectedTotalPaise) {
-        throw new VillaDbError(
-          'CONFLICT',
-          `quoted ${input.expectedTotalPaise}, now ${q.totalPaise}`,
-          'The price changed since the quote. Check the new total and confirm again.',
-        );
+        if (totalPaise !== input.expectedTotalPaise) {
+          throw new VillaDbError(
+            'CONFLICT',
+            `special total ${input.expectedTotalPaise}, calculated ${totalPaise}`,
+            'The preferential price total does not match. Check the numbers and confirm again.',
+          );
+        }
+      } else {
+        if (!result.ok) {
+          throw new VillaDbError(
+            'INVALID_INPUT',
+            result.error.code,
+            result.error.message,
+          );
+        }
+
+        const q = result.quote;
+
+        // The price is always computed here; the quote the user saw is only
+        // compared, never trusted. If rates changed in between, say so rather
+        // than silently booking a different total than the guest was told.
+        if (q.totalPaise !== input.expectedTotalPaise) {
+          throw new VillaDbError(
+            'CONFLICT',
+            `quoted ${input.expectedTotalPaise}, now ${q.totalPaise}`,
+            'The price changed since the quote. Check the new total and confirm again.',
+          );
+        }
+
+        basePaise = q.basePaise;
+        extraGuestPaise = q.extraGuestPaise;
+        taxPaise = q.taxPaise;
+        totalPaise = q.totalPaise;
       }
 
       const guestFullName = [input.firstName, input.lastName]
@@ -399,10 +424,10 @@ export function createBookingsService(client: Client) {
           infants: input.infants,
           checkIn: input.checkIn,
           checkOut: input.checkOut,
-          baseAmount: fromPaiseToString(q.basePaise),
-          extraGuestAmount: fromPaiseToString(q.extraGuestPaise),
-          taxAmount: fromPaiseToString(q.taxPaise),
-          totalAmount: fromPaiseToString(q.totalPaise),
+          baseAmount: fromPaiseToString(basePaise),
+          extraGuestAmount: fromPaiseToString(extraGuestPaise),
+          taxAmount: fromPaiseToString(taxPaise),
+          totalAmount: fromPaiseToString(totalPaise),
           specialRequests: input.specialRequests,
           channel: input.channel,
           paymentStatus: input.paymentStatus,
@@ -415,6 +440,9 @@ export function createBookingsService(client: Client) {
       // site would have refused should say who decided to take it.
       const notes = [
         input.isEvent ? 'Event booking' : null,
+        input.isSpecialPrice && input.specialBaseAmount
+          ? `Preferential price applied: ₹${input.specialBaseAmount.toLocaleString('en-IN')} + ₹${(input.specialGstAmount ?? 0).toLocaleString('en-IN')} GST`
+          : null,
         cutoff.kind === 'override'
           ? `Recorded past the booking cutoff (${formatDateReadable(cutoff.cutoff)}) by an admin`
           : null,
@@ -444,10 +472,10 @@ export function createBookingsService(client: Client) {
           input.paymentStatus === 'paid') &&
         input.amountReceived > 0
       ) {
-        if (input.amountReceived > fromPaise(q.totalPaise)) {
+        if (input.amountReceived > fromPaise(totalPaise)) {
           throw new VillaDbError(
             'INVALID_INPUT',
-            `advance ${input.amountReceived} over total ${q.totalPaise}`,
+            `advance ${input.amountReceived} over total ${totalPaise}`,
             'The amount received is more than the booking total.',
           );
         }
@@ -542,7 +570,15 @@ export function createBookingsService(client: Client) {
         );
       }
 
-      const totalPaise = Math.round(input.totalAmount * 100);
+      const basePaise = input.baseAmount
+        ? Math.round(input.baseAmount * 100)
+        : Math.round((input.totalAmount ?? 0) * 100);
+      const taxPaise = input.baseAmount
+        ? Math.round((input.gstAmount ?? 0) * 100)
+        : 0;
+      const totalPaise = input.baseAmount
+        ? basePaise + taxPaise
+        : Math.round((input.totalAmount ?? 0) * 100);
 
       let booking: SiteBooking;
 
@@ -567,9 +603,9 @@ export function createBookingsService(client: Client) {
             infants: input.infants,
             checkIn: block.startDate,
             checkOut: block.endDate,
-            baseAmount: fromPaiseToString(totalPaise),
+            baseAmount: fromPaiseToString(basePaise),
             extraGuestAmount: '0',
-            taxAmount: '0',
+            taxAmount: fromPaiseToString(taxPaise),
             totalAmount: fromPaiseToString(totalPaise),
             specialRequests: input.specialRequests,
             channel: channelValueForFeed(block.channelName),
@@ -626,9 +662,14 @@ export function createBookingsService(client: Client) {
       }
 
       const channel = block.channelName ?? 'the channel';
+      const chargesNote =
+        input.airbnbCharges && input.airbnbCharges > 0
+          ? `${channel} charges: ₹${input.airbnbCharges.toLocaleString('en-IN')}`
+          : null;
       const note = [
         `Recorded from the ${channel} calendar`,
         block.notes ? blockNoteForDisplay(block.notes) : null,
+        chargesNote,
         existing
           ? `Replaces cancelled booking ${existing.bookingCode ?? existing.referenceNumber}`
           : null,
@@ -656,7 +697,7 @@ export function createBookingsService(client: Client) {
         p_site_booking_id: booking.id,
         p_request_id: channelPayoutRequestId(booking.id),
         p_mode: 'bank',
-        p_amount: input.totalAmount,
+        p_amount: fromPaise(totalPaise),
         p_paid_on: todayIst(),
         p_reference:
           parseChannelNote(blockNoteForDisplay(block.notes)).confirmationCode ??
@@ -670,6 +711,37 @@ export function createBookingsService(client: Client) {
           { bookingId: booking.id, code: receiptError.code },
           'villa channel enrich: payout receipt failed',
         );
+      }
+
+      // Option A: If channel charges / commission was deducted by Airbnb,
+      // record an expense under 'commission' so debits, net income and reports tally.
+      if (input.airbnbCharges && input.airbnbCharges > 0) {
+        const { error: expenseError } = await client
+          .from('villa_expenses')
+          .insert({
+            account_id: input.accountId,
+            property_id: input.propertyId,
+            category: 'commission',
+            description: `${channel} charges · ${booking.bookingCode ?? booking.referenceNumber}`,
+            vendor: channel,
+            amount: input.airbnbCharges,
+            gst_amount: 0,
+            mode: 'bank',
+            spent_on: block.startDate,
+            notes: `Commission/charges deducted by ${channel} for booking ${booking.bookingCode ?? booking.referenceNumber}`,
+            created_by: actor,
+          });
+
+        if (expenseError) {
+          (await getLogger()).error(
+            {
+              bookingId: booking.id,
+              code: expenseError.code,
+              error: expenseError.message,
+            },
+            'villa channel enrich: commission expense creation failed',
+          );
+        }
       }
 
       // The trail comes last and never fails the call: the stay is recorded

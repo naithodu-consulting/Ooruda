@@ -150,9 +150,10 @@ export async function GuestEmailsSection(props: {
     }
 
     if (template === 'booking_confirmation') {
-      return paid
-        ? `Sent automatically when the booking was created.${extra}`
-        : `Enabled once the payment(partial/full) is recorded.${extra}`;
+      if (paid) {
+        return manual.length > 0 ? extra.trim() : 'Ready to send.';
+      }
+      return 'Enabled once a payment is recorded.';
     }
 
     if (template === 'pre_arrival') {
