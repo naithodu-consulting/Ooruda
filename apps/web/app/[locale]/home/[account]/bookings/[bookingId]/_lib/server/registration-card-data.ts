@@ -90,7 +90,7 @@ export async function loadRegistrationCardData(options: {
     // no foreign key between them for PostgREST to follow.
     client
       .from('villa_booking_guests')
-      .select('guest_id')
+      .select('guest_id, guest:villa_guests(salutation, first_name, last_name)')
       .eq('property_id', options.propertyId)
       .eq('site_booking_id', options.bookingId)
       .eq('is_primary', true)
@@ -144,9 +144,24 @@ export async function loadRegistrationCardData(options: {
   // A failed guest read must not block the card: the ID type is one optional
   // box on a form the guest completes by hand anyway. The primary guest only -
   // the card carries one name and one signature.
-  const primaryGuestId = primaryResult.error
-    ? null
-    : (primaryResult.data?.[0]?.guest_id ?? null);
+  const primaryRow = primaryResult.error ? null : primaryResult.data?.[0];
+  const primaryGuestId = primaryRow?.guest_id ?? null;
+  const primaryGuestData = (
+    primaryRow as unknown as {
+      guest?: {
+        salutation?: string | null;
+        first_name?: string | null;
+        last_name?: string | null;
+      } | null;
+    } | null
+  )?.guest;
+
+  const enrichedBooking = {
+    ...booking,
+    salutation: booking.salutation || primaryGuestData?.salutation || null,
+    firstName: booking.firstName || primaryGuestData?.first_name || null,
+    lastName: booking.lastName || primaryGuestData?.last_name || null,
+  };
 
   const docs =
     docsResult.error || !primaryGuestId
@@ -169,7 +184,7 @@ export async function loadRegistrationCardData(options: {
       supportEmail: property.support_email,
       whatsappNumber: property.whatsapp_number,
     },
-    booking,
+    booking: enrichedBooking,
     rules: {
       checkInTime: rates.checkInTime,
       checkOutTime: rates.checkOutTime,

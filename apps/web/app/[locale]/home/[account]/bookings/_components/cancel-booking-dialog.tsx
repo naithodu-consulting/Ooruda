@@ -101,7 +101,7 @@ export function CancelBookingDialog(props: {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className="max-w-md"
+          className="sm:max-w-md"
           data-test={'villa-booking-cancel-dialog'}
         >
           <DialogHeader>

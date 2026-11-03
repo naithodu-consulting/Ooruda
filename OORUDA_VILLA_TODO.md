@@ -195,3 +195,47 @@ The major findings were fixed in the change itself; these are the minor ones.
   owns" re-reads the same window after deleting the feed and gets the cached
   list. Pre-existing, unrelated to this work: invalidate on delete, or have the
   test read a different range.
+
+
+## Editing existing bookings — Phased implementation & Design (raised 2026-11-02)
+
+Comprehensive analysis of updating existing bookings (guest count, pricing, and guest contact details).
+
+### Real-World Use Cases
+1. **Guest Count Changes (Extra Guests / Fewer Guests):**
+   - *Additions:* A party booked for 8 adults arrives with 10 adults. The villa charges an extra guest fee (e.g. ₹1,500/night/guest) above the included occupancy.
+   - *Reductions:* A group booked for 12, but 3 couldn't make it. Manager agrees to drop the extra guest charge before final payment.
+2. **Total Price / Commercial Adjustments:**
+   - *Discretionary adjustments:* Manager or owner applies a ₹5,000 discount or rounds down the total bill.
+   - *Stay extensions:* Guest requests 1 additional night while in-house.
+   - *Add-ons & services:* Meals, BBQ, or extra amenities added to the booking invoice.
+3. **Guest Contact & Identity Corrections:**
+   - Correcting typos in guest's name for GST invoice / police verification.
+   - Reassigning primary contact from an assistant/agent to the actual in-house guest.
+
+### Architectural & Accounting Constraints
+1. **Direct Bookings vs Airbnb/OTA Bookings:**
+   - **Direct:** Ooruda is system of record; prices and counts can be updated directly.
+   - **Airbnb/OTA:** Airbnb is merchant of record. Modifying dates/prices in Ooruda causes payout and reporting drift. Date and price alterations must go through Airbnb. Guest counts and contact notes can be updated in Ooruda.
+2. **Invoicing & GST:**
+   - Modifying `total_amount` after generating an invoice invalidates tax compliance. Adjustments need balance due recalculation or credit/debit adjustment line items.
+3. **Audit Trail:**
+   - Every change must record `previous` and `updated` values in `villa_booking_activity` with a mandatory reason note.
+
+### Phased Roadmap
+- [ ] **Phase 1: Basic Guest & Occupancy Updates (Low Risk)**
+  - Add an **"Edit booking"** dialog in `bookings/[bookingId]/page.tsx`.
+  - Allow editing:
+    - Guest Salutation, First Name, Last Name.
+    - Phone and Email.
+    - Adults, Children, Infants count.
+    - Special requests / internal notes.
+  - Sync updates to both the booking site database and `villa_bookings_mirror`.
+  - Log `'booking_updated'` in `villa_booking_activity` with field-level diff.
+- [ ] **Phase 2: Financial Adjustments & Balance Recalculation**
+  - Allow adjusting Extra Guest charges or adding an explicit line-item discount/surcharge.
+  - Dynamically recalculate GST and balance due (`total_amount - payments_recorded = balance_due`).
+  - Restrict total price reduction below already recorded payments (prevent negative balance without explicit refund).
+- [ ] **Phase 3: Date Alterations & Stay Extensions**
+  - Date changes with real-time atomic availability & block check.
+

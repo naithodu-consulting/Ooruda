@@ -24,6 +24,9 @@ export interface RegistrationCardBooking {
   bookingCode: string | null;
   referenceNumber: string;
   guestName: string;
+  salutation?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   guestEmail: string;
   /** As the booking site stores it: 10 digits for an Indian mobile. */
   guestPhone: string;
@@ -38,6 +41,7 @@ export interface RegistrationCardBooking {
   extraGuestAmountPaise: number;
   discountAmountPaise: number;
   specialRequests?: string | null;
+  channel?: string | null;
 }
 
 export interface RegistrationCardLegal {
@@ -183,6 +187,16 @@ export function buildRegistrationCard(
 ): RegistrationCardPdfData {
   const { booking, legal, rules } = input;
 
+  const isAirbnb =
+    ['airbnb', 'channel'].includes(
+      booking.channel?.trim().toLowerCase() ?? '',
+    ) ||
+    Boolean(
+      booking.bookingCode?.startsWith('HM') ||
+      booking.referenceNumber?.startsWith('HM') ||
+      (booking as { sourceFeedId?: string | null }).sourceFeedId,
+    );
+
   // Company and GSTIN share one box on the sheet, and the box's own footnote
   // asks for the GST details, so both go in when the guest gave them.
   const companyInfo =
@@ -193,15 +207,54 @@ export function buildRegistrationCard(
       .filter(Boolean)
       .join('\n') || null;
 
-  // Printed only when exactly one mode has been used. With two receipts in
-  // different modes there is no single true answer, and with none recorded
-  // yet (the common case before check-in) the guest's own card should not
-  // assert one - staff write it in.
+  // Mode of payment: 'Airbnb' for Airbnb bookings. For direct bookings, populated
+  // when recorded in payments or 'Online' for website bookings.
   const modes = [...new Set(input.paymentModes)];
-  const modeOfPayment =
-    modes.length === 1 && modes[0]
+  const modeOfPayment = isAirbnb
+    ? 'Airbnb'
+    : modes.length === 1 && modes[0]
       ? (CARD_PAYMENT_MODES[modes[0]] ?? modes[0])
-      : null;
+      : booking.channel?.trim().toLowerCase() === 'online'
+        ? 'Online'
+        : null;
+
+  // Extract salutation, first name, last name intelligently if not already split.
+  let salutation = blankToNull(booking.salutation);
+  let firstName = blankToNull(booking.firstName);
+  let lastName = blankToNull(booking.lastName);
+
+  // If salutation is missing, check if firstName starts with a title (e.g. "Mr. John" or "Mr John")
+  if (!salutation && firstName) {
+    const titleMatch = /^(Mr|Mrs|Ms)\.?\s+(.*)$/i.exec(firstName);
+    if (titleMatch && titleMatch[1] && titleMatch[2]) {
+      const title = titleMatch[1].toLowerCase();
+      salutation = title === 'mrs' ? 'Mrs' : title === 'ms' ? 'Ms' : 'Mr';
+      firstName = titleMatch[2].trim();
+    }
+  }
+
+  if (!firstName && !lastName && booking.guestName) {
+    const parts = booking.guestName.trim().split(/\s+/);
+    if (parts.length > 0) {
+      if (
+        !salutation &&
+        ['Mr', 'Mrs', 'Ms', 'Mr.', 'Mrs.', 'Ms.'].includes(parts[0]!)
+      ) {
+        const title = parts[0]!.replace('.', '').toLowerCase();
+        salutation = title === 'mrs' ? 'Mrs' : title === 'ms' ? 'Ms' : 'Mr';
+        parts.shift();
+      }
+      if (parts.length > 0) {
+        firstName = parts[0]!;
+        if (parts.length > 1) {
+          lastName = parts.slice(1).join(' ');
+        }
+      }
+    }
+  }
+
+  // Tariff: either 'Airbnb' or 'Direct booking' based on booking type (amount not shown).
+  const tariff = isAirbnb ? 'Airbnb' : 'Direct booking';
 
   return {
     letterhead: {
@@ -218,6 +271,9 @@ export function buildRegistrationCard(
     },
     bookingId: booking.bookingCode ?? booking.referenceNumber,
     guestName: booking.guestName.trim(),
+    salutation,
+    firstName: firstName || booking.guestName.trim(),
+    lastName,
     email: booking.guestEmail.trim(),
     mobile: formatCardPhone(booking.guestPhone) ?? '',
     companyInfo,
@@ -235,8 +291,9 @@ export function buildRegistrationCard(
     // collected at check-in and returned at check-out, and is NOT the tariff
     // advance (bookings.deposit_amount), so there is nothing to prefill from.
     securityDeposit: null,
-    tariff: perNightTariff(booking),
+    tariff,
     remarks: clamp(blankToNull(booking.specialRequests ?? null), REMARKS_LIMIT),
+    checkInDateFormatted: formatDateReadable(booking.checkIn),
   };
 }
 

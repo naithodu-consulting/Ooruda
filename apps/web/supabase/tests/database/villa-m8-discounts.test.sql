@@ -263,6 +263,84 @@ select is(
   'blackouts are stored as just their two dates'
 );
 
+-- ── Archiving: one way, and it closes every write path ───────
+-- The actor's name is stamped onto the audit row at write time, not resolved
+-- from profiles when the history is read: a member who leaves must not
+-- rewrite their own past entries to "Unknown".
+select tests.authenticate_as_service_role();
+update public.profiles set full_name = 'M8 Admin'
+ where id = tests.get_supabase_uid('m8_owner');
+select tests.authenticate_as('m8_owner');
+
+select is(
+  (select status from public.archive_villa_discount(
+     (select id from public.villa_discount_codes where code = 'FLATOK'))),
+  'archived',
+  'the villa admin can archive a code'
+);
+
+select is(
+  (select count(*)::int from public.villa_discount_audit
+    where code_id = (select id from public.villa_discount_codes where code = 'FLATOK')
+      and action = 'archived'),
+  1,
+  'archiving is recorded in the audit trail'
+);
+
+select is(
+  (select actor_name from public.villa_discount_audit
+    where code_id = (select id from public.villa_discount_codes where code = 'FLATOK')
+      and action = 'archived'),
+  'M8 Admin',
+  'the audit row carries the actor name, so history survives them leaving'
+);
+
+select throws_ok(
+  $$ select public.archive_villa_discount(
+       (select id from public.villa_discount_codes where code = 'FLATOK')) $$,
+  '22023',
+  null,
+  'a code cannot be archived twice'
+);
+
+select throws_ok(
+  $$ select public.set_villa_discount_active(
+       (select id from public.villa_discount_codes where code = 'FLATOK'), true) $$,
+  '22023',
+  null,
+  'an archived code cannot be resumed'
+);
+
+select throws_ok(
+  $$ select public.save_villa_discount(
+       (select id from public.villa_discount_codes where code = 'FLATOK'),
+       (select id from m8p), 'FLATOK', 'flat', 1000, null,
+       '2026-06-01', '2026-09-30', 1::smallint, 4000, null, 1::smallint, '[]'::jsonb, null) $$,
+  '22023',
+  null,
+  'an archived code cannot be edited back into use'
+);
+
+select tests.authenticate_as('m8_manager');
+
+select throws_ok(
+  $$ select public.archive_villa_discount(
+       (select id from public.villa_discount_codes where code = 'FLATOK')) $$,
+  '42501',
+  null,
+  'a villa manager cannot archive a code'
+);
+
+select tests.authenticate_as('m8_other');
+
+select throws_ok(
+  $$ select public.archive_villa_discount(
+       (select id from public.villa_discount_codes where code = 'FLATOK')) $$,
+  '42501',
+  null,
+  'another villa''s admin cannot archive this villa''s code'
+);
+
 select * from finish();
 
 ROLLBACK;

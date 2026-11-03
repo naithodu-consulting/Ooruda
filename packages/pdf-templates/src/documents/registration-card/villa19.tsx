@@ -204,14 +204,24 @@ export function Villa19RegistrationCardDocument({
           </View>
 
           <View style={s.row}>
-            <Cell label="SALUTATION:" width="23.7%" height={32} />
+            <Cell
+              label="SALUTATION:"
+              value={data.salutation ?? ''}
+              width="23.7%"
+              height={32}
+            />
             <Cell
               label="FIRST NAME:"
-              value={data.guestName}
+              value={data.firstName || data.guestName}
               width="39.1%"
               height={32}
             />
-            <Cell label="LAST NAME:" width="37.2%" height={32} />
+            <Cell
+              label="LAST NAME:"
+              value={data.lastName ?? ''}
+              width="37.2%"
+              height={32}
+            />
           </View>
 
           <View style={s.row}>
@@ -334,10 +344,14 @@ export function Villa19RegistrationCardDocument({
 
         <View style={s.signRow}>
           <View style={s.signSlot}>
+            <Text style={{ fontSize: 8.5, minHeight: 12, marginBottom: 2 }}>
+              {data.checkInDateFormatted}
+            </Text>
             <View style={s.signLine} />
             <Text style={s.signCaption}>Date</Text>
           </View>
           <View style={s.signSlot}>
+            <View style={{ minHeight: 12, marginBottom: 2 }} />
             <View style={s.signLine} />
             <Text style={s.signCaption}>Guest Signature</Text>
           </View>

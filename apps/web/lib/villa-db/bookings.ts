@@ -56,6 +56,9 @@ export type PaymentStatus = 'unpaid' | 'partially_paid' | 'paid';
 
 export interface NewOfflineBooking {
   guestName: string;
+  salutation?: 'Mr' | 'Mrs' | 'Ms' | string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   /** '' when unknown — the site column is NOT NULL (contract §5.1). */
   guestEmail?: string | null;
   guestPhone?: string | null;
@@ -96,6 +99,9 @@ export interface SiteBooking {
   paymentStatus: string;
   channel: string | null;
   guestName: string;
+  salutation: string | null;
+  firstName: string | null;
+  lastName: string | null;
   guestEmail: string;
   guestPhone: string;
   checkIn: string;
@@ -124,7 +130,7 @@ export interface SiteBooking {
 }
 
 const BOOKING_COLUMNS =
-  'id, booking_code, reference_number, status, payment_status, booking_channel, guest_name, guest_email, guest_phone, check_in, check_out, num_nights, num_adults, num_children, num_infants, base_amount, extra_guest_amount, tax_amount, total_amount, discount_amount, discount_code, id_status, invoice_number, special_requests, source_feed_id, source_external_uid, updated_at, created_at';
+  'id, booking_code, reference_number, status, payment_status, booking_channel, guest_name, guest_salutation, guest_first_name, guest_last_name, guest_email, guest_phone, check_in, check_out, num_nights, num_adults, num_children, num_infants, base_amount, extra_guest_amount, tax_amount, total_amount, discount_amount, discount_code, id_status, invoice_number, special_requests, source_feed_id, source_external_uid, updated_at, created_at';
 
 type BookingRow = {
   id: string;
@@ -134,6 +140,9 @@ type BookingRow = {
   payment_status: string | null;
   booking_channel: string | null;
   guest_name: string;
+  guest_salutation?: string | null;
+  guest_first_name?: string | null;
+  guest_last_name?: string | null;
   guest_email: string;
   guest_phone: string;
   check_in: string;
@@ -166,6 +175,9 @@ function toBooking(row: BookingRow): SiteBooking {
     paymentStatus: row.payment_status ?? 'unpaid',
     channel: row.booking_channel,
     guestName: row.guest_name,
+    salutation: row.guest_salutation ?? null,
+    firstName: row.guest_first_name ?? null,
+    lastName: row.guest_last_name ?? null,
     guestEmail: row.guest_email,
     guestPhone: row.guest_phone,
     checkIn: row.check_in,
@@ -287,6 +299,12 @@ export async function createOfflineBooking(
         p_guest_name: input.guestName.trim(),
         p_guest_email: input.guestEmail?.trim() ?? '',
         p_guest_phone: toSitePhone(input.guestPhone),
+        // The site's typed signature takes these as optional, not nullable;
+        // omitting one lets the function's own DEFAULT NULL stand, which is
+        // the same booking either way.
+        p_guest_salutation: input.salutation ?? undefined,
+        p_guest_first_name: input.firstName?.trim() || undefined,
+        p_guest_last_name: input.lastName?.trim() || undefined,
         p_num_adults: adults,
         p_num_children: children,
         p_num_infants: infants,

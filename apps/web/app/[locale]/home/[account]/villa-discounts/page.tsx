@@ -144,9 +144,13 @@ async function DiscountsBody({
       )
       .eq('property_id', property.id)
       .order('created_at', { ascending: false }),
+    // Only what the list's one-line summary needs: the latest entry per code.
+    // The full trail — and the `terms` snapshots the History panel diffs,
+    // by far the heaviest column — is loaded for one code when that panel is
+    // opened, so this page never carries an audit log it may not show.
     client
       .from('villa_discount_audit')
-      .select('code_id, action, created_at, actor')
+      .select('code_id, action, created_at, actor, actor_name')
       .eq('account_id', accountId)
       .order('created_at', { ascending: false })
       .limit(500),
@@ -170,10 +174,14 @@ async function DiscountsBody({
     throw new Error('Could not load the discount codes.');
   }
 
-  // Resolve actor names for the audit trail.
+  // The actor's name is denormalised onto each audit row at write time, so
+  // history stays true after a member leaves. Rows written before that (or by
+  // someone whose profile had no name yet) fall back to a lookup.
   const actorIds = [
     ...new Set(
-      (auditResult.data ?? []).map((a) => a.actor).filter(Boolean) as string[],
+      (auditResult.data ?? [])
+        .filter((a) => a.actor && !a.actor_name)
+        .map((a) => a.actor) as string[],
     ),
   ];
   const actorNames = new Map<string, string>();
@@ -185,6 +193,21 @@ async function DiscountsBody({
     for (const p of profiles ?? []) {
       if (p.full_name) actorNames.set(p.id, p.full_name);
     }
+  }
+
+  // Newest first, so the first row found for a code is its latest action.
+  const lastActionByCode = new Map<
+    string,
+    { action: string; at: string; actorName: string | null }
+  >();
+  for (const a of auditResult.data ?? []) {
+    if (lastActionByCode.has(a.code_id)) continue;
+    lastActionByCode.set(a.code_id, {
+      action: a.action,
+      at: a.created_at,
+      actorName:
+        a.actor_name ?? (a.actor ? (actorNames.get(a.actor) ?? null) : null),
+    });
   }
 
   const today = todayIst();
@@ -242,20 +265,7 @@ async function DiscountsBody({
     needsApproval: Boolean(c.needs_approval),
     status: c.status as DiscountRow['status'],
     expired: c.valid_to < today,
-    history: (() => {
-      const all = (auditResult.data ?? [])
-        .filter((a) => a.code_id === c.id)
-        .map((a) => ({
-          action: a.action,
-          at: a.created_at,
-          actorName: a.actor ? (actorNames.get(a.actor) ?? null) : null,
-        }));
-      const created = all.findLast((a) => a.action === 'created');
-      const latest = all[0];
-      if (!latest) return [];
-      if (!created || latest.action === 'created') return [latest];
-      return [latest, created];
-    })(),
+    lastAction: lastActionByCode.get(c.id) ?? null,
     usage: usageByCode.get(c.code) ?? null,
   }));
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_VILLA_ENTITY,
+  blockedForChannelStay,
   formatSenderAddress,
   isPreArrivalDue,
   isThankYouDue,
@@ -482,5 +483,25 @@ describe('booking confirmation: the refund ladder follows the money', () => {
 
     expect(html).toContain('Paid · Cash');
     expect(html).not.toContain('Paid 1 Oct 2026');
+  });
+});
+
+describe('blockedForChannelStay', () => {
+  const direct = { sourceFeedId: null };
+  const channel = { sourceFeedId: 'feed-airbnb' };
+
+  it('withholds the confirmation for a stay a channel sold', () => {
+    expect(blockedForChannelStay('booking_confirmation', channel)).toBe(true);
+  });
+
+  it('leaves a direct booking alone', () => {
+    expect(blockedForChannelStay('booking_confirmation', direct)).toBe(false);
+  });
+
+  it('does not touch the arrival and thank-you emails', () => {
+    // Those quote no cancellation terms, and a channel guest still needs
+    // directions and a gate code.
+    expect(blockedForChannelStay('pre_arrival', channel)).toBe(false);
+    expect(blockedForChannelStay('thank_you', channel)).toBe(false);
   });
 });

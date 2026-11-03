@@ -36,6 +36,16 @@ export function formatCurrency(params: {
 export const DEFAULT_PHONE_COUNTRY: CountryCode = 'IN';
 
 /**
+ * @name isPhoneEmpty
+ * @description Checks if a phone input is empty, null, or only contains a country code prefix (e.g. `+91`, `+1`, `+`).
+ */
+export function isPhoneEmpty(phone: string | null | undefined): boolean {
+  if (!phone) return true;
+  const trimmed = phone.trim();
+  return trimmed === '' || trimmed === '+' || /^\+[0-9]{1,4}$/.test(trimmed);
+}
+
+/**
  * @name normalizePhoneNumber
  * @description Normalize phone-ish input to canonical E.164 (e.g.
  * `+919911000006`, `+14155552671`). Numbers given in international form (with a

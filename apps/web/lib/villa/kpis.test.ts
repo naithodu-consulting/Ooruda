@@ -87,4 +87,23 @@ describe('todayBoard', () => {
     expect(board.departures.map((x) => x.id)).toEqual(['leave']);
     expect(board.inHouse.map((x) => x.id)).toEqual(['arrive', 'stay']);
   });
+
+  it('distinguishes arriving vs checked-in guests when checkedInIds is provided', () => {
+    const board = todayBoard(
+      [
+        b('pending-arrive', '2026-10-10', '2026-10-12'),
+        b('already-checked-in', '2026-10-10', '2026-10-12'),
+        b('staying-checked-in', '2026-10-09', '2026-10-11'),
+        b('leave', '2026-10-08', '2026-10-10'),
+      ],
+      '2026-10-10',
+      new Set(['already-checked-in', 'staying-checked-in']),
+    );
+    expect(board.arrivals.map((x) => x.id)).toEqual(['pending-arrive']);
+    expect(board.checkedIn.map((x) => x.id)).toEqual([
+      'already-checked-in',
+      'staying-checked-in',
+    ]);
+    expect(board.departures.map((x) => x.id)).toEqual(['leave']);
+  });
 });

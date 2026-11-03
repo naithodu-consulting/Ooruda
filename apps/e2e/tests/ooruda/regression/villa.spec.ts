@@ -344,20 +344,47 @@ test.describe.serial('villa product (M0)', () => {
       page.locator('[data-test="villa-settings-booking-cutoff"]'),
     ).toBeVisible();
 
-    // Seasonal rates: add one far in the future, then remove it.
+    // Seasonal rates: pick nights on the calendar — a run of two plus one
+    // night on its own, which is the whole point of the calendar — then
+    // remove the rate again.
     await page.click('[data-test="villa-settings-tab-seasonal"]');
+
+    // Well clear of today, so the nights are never in the past and never
+    // collide with a rate an earlier run left behind.
+    for (let i = 0; i < 14; i++) {
+      await page.click('[data-test="villa-rate-cal-next"]');
+    }
+
+    const days = page.locator(
+      '[data-test="villa-rate-cal-day"]:not([disabled])',
+    );
+
+    await days.nth(10).click();
+    await days.nth(11).click();
+    await days.nth(14).click();
+
+    await expect(
+      page.locator('[data-test="villa-seasonal-selection"]'),
+    ).toContainText('3 nights selected');
+
     await page.fill('[data-test="villa-seasonal-name"]', `E2E rate ${STAMP}`);
-    await pickDate(page, 'villa-seasonal-first', '2030-12-20');
-    await pickDate(page, 'villa-seasonal-last', '2030-12-22');
     await page.fill('[data-test="villa-seasonal-rate"]', '15500');
     await page.click('[data-test="villa-seasonal-submit"]');
-    await expect(page.getByText('Seasonal rate added')).toBeVisible();
+    await expect(page.getByText('Rate added')).toBeVisible();
 
     const rule = page.locator('[data-test="villa-seasonal-row"]', {
       hasText: `E2E rate ${STAMP}`,
     });
     await expect(rule).toContainText('3 nights');
     await expect(rule).toContainText('15,500');
+
+    // The rate loads back into the calendar for editing.
+    await rule.locator('[data-test="villa-seasonal-edit"]').click();
+    await expect(
+      page.locator('[data-test="villa-seasonal-selection"]'),
+    ).toContainText('3 nights selected');
+    await page.click('[data-test="villa-seasonal-cancel"]');
+
     await rule.locator('[data-test="villa-seasonal-delete"]').click();
     await page.click('[data-test="villa-seasonal-delete-confirm"]');
     await expect(rule).toHaveCount(0);
@@ -1238,6 +1265,32 @@ test.describe.serial('villa product (M0)', () => {
     await expect(
       big.locator('[data-test="villa-discount-approve"]'),
     ).toHaveCount(0);
+    // Archiving is one way, retires the code and keeps its history.
+    await owner.click('[data-test="villa-discount-tab-current"]');
+    const ten = owner.locator('[data-test="villa-discount-row"]', {
+      hasText: `TEN${STAMP.slice(-4)}`.toUpperCase(),
+    });
+    await ten.locator('[data-test="villa-discount-archive"]').click();
+    await owner.click('[data-test="villa-discount-archive-confirm"]');
+    await owner.click('[data-test="villa-discount-tab-archived"]');
+    const archived = owner.locator('[data-test="villa-discount-row"]', {
+      hasText: `TEN${STAMP.slice(-4)}`.toUpperCase(),
+    });
+    await expect(
+      archived.locator('[data-test="villa-discount-status"]'),
+    ).toHaveText('Archived');
+    // An archived code cannot be edited or paused back into use.
+    await expect(
+      archived.locator('[data-test="villa-discount-edit"]'),
+    ).toHaveCount(0);
+    await expect(
+      archived.locator('[data-test="villa-discount-toggle"]'),
+    ).toHaveCount(0);
+    await archived.locator('[data-test="villa-discount-history-open"]').click();
+    await expect(
+      owner.locator('[data-test="villa-discount-timeline-entry"]').first(),
+    ).toContainText('Archived');
+
     expect(issues.serverErrors).toEqual([]);
     await owner.context().close();
 
@@ -1247,16 +1300,25 @@ test.describe.serial('villa product (M0)', () => {
     const admin = await context.newPage();
     await admin.goto(`${VILLA_HOME}/villa-discounts`);
     await settle(admin);
+    // The list is split by status: a code waiting for Ooruda is on its own
+    // tab, and approving it moves it to Current.
+    await admin.click('[data-test="villa-discount-tab-approval"]');
     const row = admin.locator('[data-test="villa-discount-row"]', {
       hasText: `BIG${STAMP.slice(-4)}`.toUpperCase(),
     });
     await row.locator('[data-test="villa-discount-approve"]').click();
-    await expect(row.locator('[data-test="villa-discount-status"]')).toHaveText(
-      'Active',
-    );
+
+    await admin.click('[data-test="villa-discount-tab-current"]');
+    const approved = admin.locator('[data-test="villa-discount-row"]', {
+      hasText: `BIG${STAMP.slice(-4)}`.toUpperCase(),
+    });
     await expect(
-      row.locator('[data-test="villa-discount-history"]'),
+      approved.locator('[data-test="villa-discount-status"]'),
+    ).toHaveText('Active');
+    await expect(
+      approved.locator('[data-test="villa-discount-history"]'),
     ).toContainText('Approved by Ooruda');
+
     await context.close();
   });
 

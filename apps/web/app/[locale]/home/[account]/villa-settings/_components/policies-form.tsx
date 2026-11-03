@@ -48,6 +48,8 @@ export function PoliciesForm(props: {
 }) {
   const form = useForm<PoliciesInput>({
     resolver: zodResolver(PoliciesSchema),
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
     defaultValues: {
       accountId: props.accountId,
       propertyId: props.propertyId,

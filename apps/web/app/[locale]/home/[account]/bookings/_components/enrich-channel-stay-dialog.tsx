@@ -25,6 +25,13 @@ import {
 } from '@kit/ui/form';
 import { Input } from '@kit/ui/input';
 import { PhoneInput } from '@kit/ui/phone-input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@kit/ui/select';
 import { toast } from '@kit/ui/sonner';
 import { Textarea } from '@kit/ui/textarea';
 
@@ -63,6 +70,8 @@ export function EnrichChannelStayDialog(props: {
 
   const form = useForm<EnrichChannelStayInput>({
     resolver: zodResolver(EnrichChannelStaySchema),
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
     defaultValues: {
       accountId: props.accountId,
       propertyId: props.propertyId,
@@ -70,7 +79,9 @@ export function EnrichChannelStayDialog(props: {
       externalUid: stay.externalUid,
       checkIn: stay.startDate,
       checkOut: stay.endDate,
-      guestName: '',
+      salutation: 'Mr',
+      firstName: '',
+      lastName: '',
       guestPhone: '',
       guestEmail: '',
       adults: 2,
@@ -100,7 +111,7 @@ export function EnrichChannelStayDialog(props: {
   return (
     <Dialog open onOpenChange={(open) => (!open ? props.onClose() : undefined)}>
       <DialogContent
-        className="max-h-[90vh] max-w-xl overflow-y-auto"
+        className="max-h-[90vh] overflow-y-auto sm:max-w-xl"
         data-test={'villa-enrich-channel-dialog'}
       >
         <DialogHeader>
@@ -118,19 +129,64 @@ export function EnrichChannelStayDialog(props: {
             className="flex flex-col gap-4"
             onSubmit={form.handleSubmit((values) => execute(values))}
           >
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
               <FormField
-                name="guestName"
+                name="salutation"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Guest name</FormLabel>
+                  <FormItem className="sm:col-span-3">
+                    <FormLabel>Salutation</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger
+                          className="w-full"
+                          data-test={'villa-enrich-salutation'}
+                        >
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Mr">Mr</SelectItem>
+                        <SelectItem value="Mrs">Mrs</SelectItem>
+                        <SelectItem value="Ms">Ms</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                name="firstName"
+                control={form.control}
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-5">
+                    <FormLabel>First name</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
                         autoComplete="off"
-                        placeholder="Guest full name"
-                        data-test={'villa-enrich-guest-name'}
+                        placeholder="First name"
+                        data-test={'villa-enrich-first-name'}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                name="lastName"
+                control={form.control}
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-4">
+                    <FormLabel>Last name </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        autoComplete="off"
+                        placeholder="Surname"
+                        data-test={'villa-enrich-last-name'}
                       />
                     </FormControl>
                     <FormMessage />
@@ -142,7 +198,7 @@ export function EnrichChannelStayDialog(props: {
                 name="guestPhone"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="sm:col-span-6">
                     <FormLabel>Phone (optional)</FormLabel>
                     <FormControl>
                       <PhoneInput
@@ -166,7 +222,7 @@ export function EnrichChannelStayDialog(props: {
                 name="guestEmail"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="sm:col-span-6">
                     <FormLabel>Email (optional)</FormLabel>
                     <FormControl>
                       <Input
@@ -185,7 +241,7 @@ export function EnrichChannelStayDialog(props: {
                 name="adults"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="sm:col-span-4">
                     <FormLabel>Adults</FormLabel>
                     <FormControl>
                       <Input
@@ -206,7 +262,7 @@ export function EnrichChannelStayDialog(props: {
                 name="children"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="sm:col-span-4">
                     <FormLabel>Children</FormLabel>
                     <FormControl>
                       <Input
@@ -224,10 +280,31 @@ export function EnrichChannelStayDialog(props: {
               />
 
               <FormField
+                name="infants"
+                control={form.control}
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-4">
+                    <FormLabel>Infants</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={
+                          (field.value as number | string | undefined) ?? ''
+                        }
+                        inputMode="numeric"
+                        data-test={'villa-enrich-infants'}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
                 name="totalAmount"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
+                  <FormItem className="sm:col-span-12">
                     <FormLabel>Amount charged (₹)</FormLabel>
                     <FormControl>
                       <Input
@@ -240,6 +317,10 @@ export function EnrichChannelStayDialog(props: {
                         data-test={'villa-enrich-total-amount'}
                       />
                     </FormControl>
+                    <FormDescription>
+                      Recorded as received from {channel}, so the stay shows as
+                      paid and the money appears in your reports.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -249,15 +330,20 @@ export function EnrichChannelStayDialog(props: {
                 name="specialRequests"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Notes (optional)</FormLabel>
+                  <FormItem className="sm:col-span-12">
+                    <FormLabel>Special requests (optional)</FormLabel>
                     <FormControl>
                       <Textarea
                         {...field}
                         rows={2}
-                        data-test={'villa-enrich-notes'}
+                        placeholder="e.g. late check-in, extra towels, dietary preferences"
+                        data-test={'villa-enrich-special-requests'}
                       />
                     </FormControl>
+                    <FormDescription>
+                      Shows up in booking details and on the guest info card
+                      (Remarks).
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -92,6 +92,11 @@ export const DiscountToggleSchema = z.object({
   active: z.boolean(),
 });
 
+export const DiscountArchiveSchema = z.object({
+  accountId: z.string().uuid(),
+  id: z.string().uuid(),
+});
+
 export const DiscountReviewSchema = z.object({
   accountId: z.string().uuid(),
   id: z.string().uuid(),

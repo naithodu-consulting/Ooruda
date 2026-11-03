@@ -1,6 +1,4 @@
 import 'server-only';
-import { after } from 'next/server';
-
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type * as z from 'zod';
@@ -13,13 +11,14 @@ import type { Database } from '~/lib/database.types';
 import { formatDateReadable } from '~/lib/format-date';
 import type { VillaRole } from '~/lib/roles';
 import { checkAvailability } from '~/lib/villa-db/availability';
-import { getChannelBlock } from '~/lib/villa-db/blocks';
+import { getChannelBlock, listBlocks } from '~/lib/villa-db/blocks';
 import {
   type SiteBooking,
   cancelBooking,
   channelValueForFeed,
   clearChannelLink,
   createOfflineBooking,
+  getBooking,
   getChannelLinkedBooking,
   markStayCompleted,
   reopenStay,
@@ -30,7 +29,7 @@ import { VillaDbError, isVillaDbError } from '~/lib/villa-db/errors';
 import { getPricingInputs } from '~/lib/villa-db/rates';
 import { recordBookingActivity } from '~/lib/villa/activity';
 import { blockNoteForDisplay } from '~/lib/villa/calendar';
-import { sendBookingConfirmation } from '~/lib/villa/guest-email-runner';
+import { parseChannelNote } from '~/lib/villa/channel-note';
 import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
 import { mirrorBooking } from '~/lib/villa/mirror';
 import { fromPaise, fromPaiseToString } from '~/lib/villa/money';
@@ -38,12 +37,15 @@ import { type QuoteError, quoteStay } from '~/lib/villa/pricing';
 
 import type {
   CancelBookingSchema,
+  CheckInStaySchema,
   CompleteStaySchema,
   EnrichChannelStaySchema,
   NewBookingSchema,
   ReopenStaySchema,
   StaySchema,
 } from '../schemas/bookings.schema';
+
+import { createHash } from 'node:crypto';
 
 type Client = SupabaseClient<Database>;
 
@@ -80,6 +82,30 @@ const TAKEN: Record<'DATE_UNAVAILABLE' | 'DATE_BLOCKED', string> = {
   DATE_UNAVAILABLE: 'Some of those nights are already booked.',
   DATE_BLOCKED: 'Some of those nights are blocked.',
 };
+
+/**
+ * The request id for a channel payout receipt.
+ *
+ * Derived from the booking so the same payout recorded twice — a retry after
+ * a timeout, say — is recognised by `record_villa_payment`'s idempotency key
+ * instead of being counted as a second payment. A random id would make every
+ * retry a new receipt.
+ */
+function channelPayoutRequestId(bookingId: string): string {
+  const hash = createHash('sha1')
+    .update(`villa:channel-payout:${bookingId}`)
+    .digest('hex');
+
+  // Shaped as a v5-style UUID: the column is a uuid.
+  return [
+    hash.slice(0, 8),
+    hash.slice(8, 12),
+    `5${hash.slice(13, 16)}`,
+    ((parseInt(hash.slice(16, 17), 16) & 0x3) | 0x8).toString(16) +
+      hash.slice(17, 20),
+    hash.slice(20, 32),
+  ].join('-');
+}
 
 /**
  * Bookings for a villa property. Callers authorise first; every site call is
@@ -130,7 +156,13 @@ export function createBookingsService(client: Client) {
       accountId: string;
       propertyId: string;
       booking: Pick<SiteBooking, 'id' | 'bookingCode'>;
-      action: 'created' | 'cancelled' | 'completed' | 'reopened' | 'note';
+      action:
+        | 'created'
+        | 'cancelled'
+        | 'completed'
+        | 'reopened'
+        | 'note'
+        | 'checked_in';
       reasonCode?: string | null;
       note?: string | null;
     },
@@ -347,12 +379,19 @@ export function createBookingsService(client: Client) {
         );
       }
 
+      const guestFullName = [input.firstName, input.lastName]
+        .filter(Boolean)
+        .join(' ');
+
       // create_booking_atomic re-checks availability under the site's lock,
       // so a clash since the quote is still refused here.
       const booking = await createOfflineBooking(
         site,
         {
-          guestName: input.guestName,
+          guestName: guestFullName,
+          salutation: input.salutation,
+          firstName: input.firstName,
+          lastName: input.lastName || null,
           guestEmail: input.guestEmail,
           guestPhone: normalizePhoneNumber(input.guestPhone),
           adults: input.adults,
@@ -421,7 +460,7 @@ export function createBookingsService(client: Client) {
           p_amount: input.amountReceived,
           p_paid_on: todayIst(),
           p_reference: input.paymentReference,
-          p_payer_name: input.guestName,
+          p_payer_name: guestFullName,
           p_note: 'Advance taken when the booking was made',
         });
 
@@ -433,23 +472,8 @@ export function createBookingsService(client: Client) {
         }
       }
 
-      // Runs after the response: never fails the booking if the email fails,
-      // but after() keeps the invocation alive so the send is not dropped
-      // when the function would otherwise freeze on returning.
-      after(async () => {
-        try {
-          await sendBookingConfirmation(
-            input.accountId,
-            input.propertyId,
-            booking,
-          );
-        } catch (e) {
-          (await getLogger()).error(
-            { bookingId: booking.id, error: String(e) },
-            'villa booking confirmation send failed',
-          );
-        }
-      });
+      // Note: Automatic email sending on creation is removed as requested.
+      // Confirmation emails can be sent explicitly from the booking details screen when needed.
 
       return booking;
     },
@@ -522,11 +546,18 @@ export function createBookingsService(client: Client) {
 
       let booking: SiteBooking;
 
+      const guestFullName = [input.firstName, input.lastName]
+        .filter(Boolean)
+        .join(' ');
+
       try {
         booking = await createOfflineBooking(
           site,
           {
-            guestName: input.guestName,
+            guestName: guestFullName,
+            salutation: input.salutation,
+            firstName: input.firstName,
+            lastName: input.lastName || null,
             guestEmail: input.guestEmail || '',
             guestPhone: input.guestPhone
               ? normalizePhoneNumber(input.guestPhone)
@@ -564,6 +595,33 @@ export function createBookingsService(client: Client) {
           );
         }
 
+        if (isVillaDbError(error) && error.code === 'DATE_BLOCKED') {
+          const allBlocks = await listBlocks(
+            site,
+            block.startDate,
+            block.endDate,
+          ).catch(() => []);
+          const manualConflicts = allBlocks.filter(
+            (b) =>
+              b.source === 'manual' &&
+              b.startDate < block.endDate &&
+              b.endDate > block.startDate,
+          );
+          if (manualConflicts.length > 0) {
+            const names = manualConflicts
+              .map(
+                (c) =>
+                  `"${c.notes ? blockNoteForDisplay(c.notes) : c.reason || 'Blocked'}" (${formatDateReadable(c.startDate)} – ${formatDateReadable(c.endDate)})`,
+              )
+              .join(', ');
+            throw new VillaDbError(
+              'DATE_BLOCKED',
+              `conflicts with manual blocks: ${names}`,
+              `These dates overlap with manual calendar block(s): ${names}. Please release them in Calendar first.`,
+            );
+          }
+        }
+
         throw error;
       }
 
@@ -578,7 +636,41 @@ export function createBookingsService(client: Client) {
         .filter(Boolean)
         .join(' · ');
 
+      // The mirror goes first because `record_villa_payment` looks the stay
+      // up in `villa_bookings_mirror` and refuses a payment for a booking it
+      // cannot find there. It never throws (it logs and returns), so nothing
+      // between the booking and its receipt can abort this.
       await mirrorBooking(site, booking, 'stay');
+
+      // The stay is recorded as paid, so the money has to reach the ledger
+      // too. Reports, the cash position and the booking's own Payments panel
+      // all read receipts, not `payment_status`: without this the badge says
+      // "Fully paid" while the panel says "Unpaid" and the period's revenue
+      // is short by the whole amount.
+      //
+      // The request id is derived from the booking, so a retry of the same
+      // payout is recognised by `record_villa_payment`'s idempotency check
+      // instead of being counted twice.
+      const { error: receiptError } = await client.rpc('record_villa_payment', {
+        p_property_id: input.propertyId,
+        p_site_booking_id: booking.id,
+        p_request_id: channelPayoutRequestId(booking.id),
+        p_mode: 'bank',
+        p_amount: input.totalAmount,
+        p_paid_on: todayIst(),
+        p_reference:
+          parseChannelNote(blockNoteForDisplay(block.notes)).confirmationCode ??
+          '',
+        p_payer_name: channel,
+        p_note: `Payout from ${channel}`,
+      });
+
+      if (receiptError) {
+        (await getLogger()).error(
+          { bookingId: booking.id, code: receiptError.code },
+          'villa channel enrich: payout receipt failed',
+        );
+      }
 
       // The trail comes last and never fails the call: the stay is recorded
       // and the money is in the ledger, and refusing to return a booking that
@@ -691,6 +783,24 @@ export function createBookingsService(client: Client) {
       const site = await getVillaSite(input.accountId, input.propertyId);
       const booking = await reopenStay(site, input.bookingId, actor);
 
+      await mirrorBooking(site, booking);
+
+      // Undoing the check-out has to clear its timestamp, or the guest stays
+      // on the Today board as departed while being back in house. Same
+      // best-effort handling as the write in `complete`.
+      const { error: checkedOutError } = await getSupabaseServerAdminClient()
+        .from('villa_bookings_mirror')
+        .update({ checked_out_at: null })
+        .eq('property_id', input.propertyId)
+        .eq('site_booking_id', input.bookingId);
+
+      if (checkedOutError) {
+        (await getLogger()).error(
+          { bookingId: input.bookingId, error: checkedOutError.message },
+          'villa check-out timestamp clear failed',
+        );
+      }
+
       await record(
         {
           accountId: input.accountId,
@@ -700,7 +810,77 @@ export function createBookingsService(client: Client) {
         },
         actor,
       );
-      await mirrorBooking(site, booking);
+
+      return booking;
+    },
+
+    async checkIn(input: z.output<typeof CheckInStaySchema>, actor: string) {
+      const site = await getVillaSite(input.accountId, input.propertyId);
+      const booking = await getBooking(site, input.bookingId);
+
+      if (!booking) {
+        throw new VillaDbError('NOT_FOUND', input.bookingId);
+      }
+
+      if (booking.status !== 'confirmed') {
+        throw new VillaDbError(
+          'CONFLICT',
+          `booking ${input.bookingId} is ${booking.status}`,
+          `Only a confirmed stay can be checked in. This one is ${booking.status}.`,
+        );
+      }
+
+      const admin = getSupabaseServerAdminClient();
+      const now = new Date().toISOString();
+
+      // `checked_in_at` is the whole state of a check-in: the badge, the
+      // check-out gate and the Today board all read it. A failed or no-op
+      // write must stop here rather than leave an activity row claiming a
+      // check-in that nothing recorded - `select()` is what makes a
+      // zero-row update (no mirror row for this booking) visible at all.
+      const { data: mirrorRows, error: mirrorError } = await admin
+        .from('villa_bookings_mirror')
+        .update({ checked_in_at: now })
+        .eq('property_id', input.propertyId)
+        .eq('site_booking_id', input.bookingId)
+        .select('site_booking_id');
+
+      if (mirrorError) {
+        (await getLogger()).error(
+          { bookingId: input.bookingId, error: mirrorError.message },
+          'villa check-in mirror update failed',
+        );
+
+        throw new VillaDbError(
+          'CONFLICT',
+          `check-in mirror update failed for ${input.bookingId}: ${mirrorError.message}`,
+          'Could not record the check-in. Please try again.',
+        );
+      }
+
+      if (!mirrorRows?.length) {
+        (await getLogger()).error(
+          { bookingId: input.bookingId, propertyId: input.propertyId },
+          'villa check-in found no mirror row to update',
+        );
+
+        throw new VillaDbError(
+          'NOT_FOUND',
+          `no mirror row for booking ${input.bookingId}`,
+          'Could not record the check-in: this booking is not synced yet. Please try again in a moment.',
+        );
+      }
+
+      await record(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking,
+          action: 'checked_in',
+          note: 'Guest checked in at the villa',
+        },
+        actor,
+      );
 
       return booking;
     },
@@ -708,6 +888,30 @@ export function createBookingsService(client: Client) {
     async complete(input: z.output<typeof CompleteStaySchema>, actor: string) {
       const site = await getVillaSite(input.accountId, input.propertyId);
       const booking = await markStayCompleted(site, input.bookingId, actor);
+
+      // Before the timestamp, so the row is certain to exist: a booking that
+      // has never been mirrored has nothing to update. `toRow` leaves both
+      // check-in and check-out timestamps out of the payload, so re-mirroring
+      // never clears what was stamped here.
+      await mirrorBooking(site, booking);
+
+      // Unlike `checked_in_at`, this is a record of the check-out, not the
+      // check-out itself - the site booking is already 'completed' and the
+      // guest has left. A failure here costs the Today board its "departed"
+      // row, which is not worth failing an action that has already happened,
+      // so it is logged and swallowed.
+      const { error: checkedOutError } = await getSupabaseServerAdminClient()
+        .from('villa_bookings_mirror')
+        .update({ checked_out_at: new Date().toISOString() })
+        .eq('property_id', input.propertyId)
+        .eq('site_booking_id', input.bookingId);
+
+      if (checkedOutError) {
+        (await getLogger()).error(
+          { bookingId: input.bookingId, error: checkedOutError.message },
+          'villa check-out timestamp write failed',
+        );
+      }
 
       await record(
         {
@@ -718,7 +922,6 @@ export function createBookingsService(client: Client) {
         },
         actor,
       );
-      await mirrorBooking(site, booking);
 
       return booking;
     },

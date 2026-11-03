@@ -1,9 +1,8 @@
 import { Suspense } from 'react';
 
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { ArrowLeft, CircleAlert, IndianRupee, Phone } from 'lucide-react';
+import { CircleAlert, IndianRupee, Phone } from 'lucide-react';
 
 import { hasRegistrationCardTemplate } from '@kit/pdf-templates/registration-card-templates';
 import { formatPhoneNumber } from '@kit/shared/utils';
@@ -35,7 +34,9 @@ import { selectVillaProperty } from '~/lib/villa/properties';
 import { loadVillaAccountSettings } from '~/lib/villa/settings';
 
 import { TeamAccountLayoutPageHeader } from '../../_components/team-account-layout-page-header';
+import { BookingBackButton } from '../_components/booking-back-button';
 import { CancelBookingDialog } from '../_components/cancel-booking-dialog';
+import { CheckInStayButton } from '../_components/check-in-stay-button';
 import { CompleteStayButton } from '../_components/complete-stay-button';
 import { GuestEmailsSection } from '../_components/guest-emails-section';
 import { GuestIdsSection } from '../_components/guest-ids-section';
@@ -64,15 +65,21 @@ export default async function BookingPage({ params, searchParams }: Props) {
   // the property nor the booking, so all three start at once instead of
   // three serial round trips. The site read then needs the property, so it is
   // chained onto that one promise rather than awaited on its own.
-  const [{ property }, reasonsResult, settings] = await Promise.all([
-    selectVillaProperty(accountId, sp.property, { requireSite: true }),
-    client
-      .from('villa_cancellation_reasons')
-      .select('code, label, initiated_by, note_required')
-      .eq('is_active', true)
-      .order('display_order'),
-    loadVillaAccountSettings(accountId),
-  ]);
+  const [{ property }, reasonsResult, settings, mirrorResult] =
+    await Promise.all([
+      selectVillaProperty(accountId, sp.property, { requireSite: true }),
+      client
+        .from('villa_cancellation_reasons')
+        .select('code, label, initiated_by, note_required')
+        .eq('is_active', true)
+        .order('display_order'),
+      loadVillaAccountSettings(accountId),
+      client
+        .from('villa_bookings_mirror')
+        .select('checked_in_at')
+        .eq('site_booking_id', bookingId)
+        .maybeSingle(),
+    ]);
 
   if (!property) notFound();
 
@@ -114,6 +121,7 @@ export default async function BookingPage({ params, searchParams }: Props) {
   const reasons = reasonsResult.data;
 
   const today = todayIst();
+  const isCheckedIn = Boolean(mirrorResult?.data?.checked_in_at);
   // Only confirmed bookings can be cancelled from here (pending holds lapse
   // on their own).
   const active = booking.status === 'confirmed';
@@ -121,8 +129,14 @@ export default async function BookingPage({ params, searchParams }: Props) {
     active &&
     today <= booking.checkIn &&
     (role === 'villa_admin' || settings.managersCanCancel);
+  const canCheckIn =
+    booking.status === 'confirmed' && !isCheckedIn && today >= booking.checkIn;
+  // Any stay that has started can be checked out, whether or not a check-in
+  // was ever recorded: every booking taken before `checked_in_at` existed has
+  // a null there, and a guest already in house must not be stranded without a
+  // check-out. `isCheckedIn` only adds the case of a same-day check-in.
   const canCheckOut =
-    booking.status === 'confirmed' && booking.checkIn <= today;
+    booking.status === 'confirmed' && (isCheckedIn || today >= booking.checkIn);
   // The card is the villa's own sheet, printed for a stay that is happening:
   // a cancelled booking has no check-in, and a villa with no template of its
   // own offers no download at all rather than a generic form.
@@ -153,14 +167,7 @@ export default async function BookingPage({ params, searchParams }: Props) {
       />
 
       <div className="flex max-w-4xl flex-col gap-4">
-        <Link
-          href={back}
-          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1.5 text-sm font-medium transition-colors"
-          data-test={'villa-booking-back'}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          All bookings
-        </Link>
+        <BookingBackButton fallbackUrl={back} />
 
         {/*
           The status badges and the two actions share one bar inside the
@@ -177,10 +184,16 @@ export default async function BookingPage({ params, searchParams }: Props) {
                 booking.status === 'cancelled' &&
                   'border-destructive/40 text-destructive',
                 booking.status === 'confirmed' &&
+                  !isCheckedIn &&
                   'border-success/40 text-success',
+                booking.status === 'confirmed' &&
+                  isCheckedIn &&
+                  'border-success/40 bg-success/10 text-success',
               )}
             >
-              {bookingStatusLabel(booking.status)}
+              {booking.status === 'confirmed' && isCheckedIn
+                ? 'Checked in'
+                : bookingStatusLabel(booking.status)}
             </Badge>
 
             <Badge
@@ -211,11 +224,19 @@ export default async function BookingPage({ params, searchParams }: Props) {
             </Badge>
           </div>
 
-          {canCheckOut || canCancel || canDownloadCard ? (
+          {canCheckIn || canCheckOut || canCancel || canDownloadCard ? (
             <div
               className="flex flex-wrap items-center gap-2 max-sm:w-full max-sm:[&>*]:flex-1"
               data-test={'villa-booking-actions'}
             >
+              {canCheckIn ? (
+                <CheckInStayButton
+                  accountId={accountId}
+                  propertyId={propertyId}
+                  bookingId={booking.id}
+                  guestName={booking.guestName}
+                />
+              ) : null}
               {canCheckOut ? (
                 <CompleteStayButton
                   accountId={accountId}
@@ -283,6 +304,7 @@ export default async function BookingPage({ params, searchParams }: Props) {
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
                 <dt className="text-muted-foreground">Name</dt>
                 <dd className="break-words" data-test={'villa-booking-guest'}>
+                  {booking.salutation ? `${booking.salutation} ` : ''}
                   {booking.guestName}
                 </dd>
                 <dt className="text-muted-foreground">Phone</dt>

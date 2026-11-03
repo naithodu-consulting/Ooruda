@@ -186,9 +186,12 @@ export type Database = {
           extra_guest_amount: number | null;
           guest_company: string | null;
           guest_email: string;
+          guest_first_name: string | null;
           guest_gstin: string | null;
+          guest_last_name: string | null;
           guest_name: string;
           guest_phone: string;
+          guest_salutation: string | null;
           hold_expires_at: string | null;
           id: string;
           id_status: string;
@@ -229,9 +232,12 @@ export type Database = {
           extra_guest_amount?: number | null;
           guest_company?: string | null;
           guest_email: string;
+          guest_first_name?: string | null;
           guest_gstin?: string | null;
+          guest_last_name?: string | null;
           guest_name: string;
           guest_phone: string;
+          guest_salutation?: string | null;
           hold_expires_at?: string | null;
           id?: string;
           id_status?: string;
@@ -272,9 +278,12 @@ export type Database = {
           extra_guest_amount?: number | null;
           guest_company?: string | null;
           guest_email?: string;
+          guest_first_name?: string | null;
           guest_gstin?: string | null;
+          guest_last_name?: string | null;
           guest_name?: string;
           guest_phone?: string;
+          guest_salutation?: string | null;
           hold_expires_at?: string | null;
           id?: string;
           id_status?: string;
@@ -304,6 +313,13 @@ export type Database = {
             columns: ['property_id'];
             isOneToOne: false;
             referencedRelation: 'properties';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'bookings_source_feed_id_fkey';
+            columns: ['source_feed_id'];
+            isOneToOne: false;
+            referencedRelation: 'ical_feeds';
             referencedColumns: ['id'];
           },
         ];
@@ -1564,8 +1580,11 @@ export type Database = {
           p_discount_code?: string;
           p_extra_guest_amount: number;
           p_guest_email: string;
+          p_guest_first_name?: string;
+          p_guest_last_name?: string;
           p_guest_name: string;
           p_guest_phone: string;
+          p_guest_salutation?: string;
           p_ignore_cutoff?: boolean;
           p_num_adults: number;
           p_num_children: number;

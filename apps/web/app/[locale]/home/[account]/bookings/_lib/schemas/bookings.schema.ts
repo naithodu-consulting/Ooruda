@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import { normalizePhoneNumber } from '@kit/shared/utils';
+import { isPhoneEmpty, normalizePhoneNumber } from '@kit/shared/utils';
 
 import {
   NEW_BOOKING_PAYMENT_STATUSES,
@@ -66,19 +66,25 @@ export const StaySchema = z
 
 export type StayInput = z.input<typeof StaySchema>;
 
+export const SALUTATIONS = ['Mr', 'Mrs', 'Ms'] as const;
+export type Salutation = (typeof SALUTATIONS)[number];
+
 const bookingFields = {
   ...stayFields,
   infants: guests,
-  guestName: z
-    .string()
-    .trim()
-    .min(1, { message: 'Enter the guest name' })
-    .max(120),
+  salutation: z.enum(SALUTATIONS, {
+    message: 'Select a salutation',
+  }),
+  firstName: z.string().trim().min(1, { message: 'Enter first name' }).max(120),
+  lastName: z.string().trim().max(120).optional().default(''),
   guestPhone: z
     .string()
     .trim()
-    .refine((v) => normalizePhoneNumber(v) !== null, {
-      message: 'Enter a valid phone number',
+    .min(1, { message: 'Enter a phone number' })
+    .max(25)
+    .refine((v) => !isPhoneEmpty(v) && normalizePhoneNumber(v) !== null, {
+      message:
+        'Enter a valid phone number (10-digit mobile or international with country code)',
     }),
   // Required: the confirmation email is the guest's only record of a booking
   // taken by phone or message. It is held back until a payment is recorded
@@ -88,10 +94,10 @@ const bookingFields = {
   guestEmail: z
     .string()
     .trim()
-    .min(1, { message: 'Enter the guest email' })
+    .min(1, { message: 'Enter the guest email address' })
     .max(200)
     .refine((v) => z.string().email().safeParse(v).success, {
-      message: 'Enter a valid email',
+      message: 'Enter a valid email address (e.g. name@example.com)',
     }),
   channel: z.enum(OFFLINE_CHANNEL_VALUES),
   paymentStatus: z.enum(NEW_BOOKING_PAYMENT_STATUSES),
@@ -149,24 +155,29 @@ export const EnrichChannelStaySchema = z
     externalUid: z.string().trim().min(1).max(500),
     checkIn: ymd,
     checkOut: ymd,
-    guestName: z
+    salutation: z.enum(SALUTATIONS, {
+      message: 'Select a salutation',
+    }),
+    firstName: z
       .string()
       .trim()
-      .min(1, { message: 'Enter the guest name' })
+      .min(1, { message: 'Enter first name' })
       .max(120),
+    lastName: z.string().trim().max(120).optional().default(''),
     guestPhone: z
       .string()
       .trim()
-      .max(20)
-      .refine((v) => v === '' || normalizePhoneNumber(v) !== null, {
-        message: 'Enter a valid phone number',
+      .max(25)
+      .refine((v) => isPhoneEmpty(v) || normalizePhoneNumber(v) !== null, {
+        message:
+          'Enter a valid phone number (10-digit mobile or international with country code)',
       }),
     guestEmail: z
       .string()
       .trim()
       .max(200)
       .refine((v) => v === '' || z.string().email().safeParse(v).success, {
-        message: 'Enter a valid email',
+        message: 'Enter a valid email address (e.g. name@example.com)',
       }),
     adults: z.coerce
       .number()
@@ -202,6 +213,8 @@ export const CompleteStaySchema = z.object({
   ...ids,
   bookingId: z.string().uuid(),
 });
+
+export const CheckInStaySchema = CompleteStaySchema;
 
 export const ReopenStaySchema = CompleteStaySchema;
 

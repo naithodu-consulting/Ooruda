@@ -97,6 +97,11 @@ export const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
     const lastEmitted = React.useRef<string>('');
 
     const emit = (c: CountryCode, n: string) => {
+      if (!n) {
+        lastEmitted.current = '';
+        onChange?.('');
+        return;
+      }
       const calling = getCountryCallingCode(c);
       const e164 = `+${calling}${n}`;
       lastEmitted.current = e164;

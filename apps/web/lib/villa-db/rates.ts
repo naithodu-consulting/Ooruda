@@ -5,7 +5,7 @@ import { fromPaise, toPaise } from '~/lib/villa/money';
 import type { PricingProperty, PricingRuleInput } from '~/lib/villa/pricing';
 
 import type { VillaSite } from './client';
-import { nightsIn } from './dates';
+import { addDays, nightsIn, nightsList } from './dates';
 import {
   VillaDbError,
   fromSiteError,
@@ -402,6 +402,314 @@ export async function deletePricingRule(
 
     invalidatePricingInputs(site.sitePropertyId);
     return { result: undefined, siteId: ruleId };
+  });
+}
+
+/**
+ * Turn a set of nights into the fewest half-open ranges that cover them.
+ *
+ * A rate set the operator thinks of as one thing ("Christmas", picked as
+ * 20–25 December plus New Year's Eve) is several `pricing_rules` rows,
+ * because a row is one contiguous span. Duplicates and order do not matter.
+ */
+export function coalesceNights(
+  nights: readonly string[],
+): { startDate: string; endDate: string }[] {
+  const sorted = [...new Set(nights)].sort();
+  const ranges: { startDate: string; endDate: string }[] = [];
+
+  for (const night of sorted) {
+    const last = ranges[ranges.length - 1];
+
+    if (last && last.endDate === night) {
+      // This night starts where the open range ended: extend it.
+      last.endDate = addDays(night, 1);
+      continue;
+    }
+
+    ranges.push({ startDate: night, endDate: addDays(night, 1) });
+  }
+
+  return ranges;
+}
+
+/** One named rate, as the screen thinks of it: a set of nights at a price. */
+export interface RateGroup {
+  name: string;
+  /** Every night the rate covers, ascending. */
+  nights: string[];
+  /** The contiguous spans those nights form — one `pricing_rules` row each. */
+  ranges: { id: string; startDate: string; endDate: string }[];
+  nightlyRate: number;
+  minStayNights: number;
+}
+
+/**
+ * Group the property's rules by name.
+ *
+ * The booking site has no "rate group" column, so the name is the grouping:
+ * the screen refuses to create two rates with the same name, which keeps the
+ * grouping well defined. Rows written before this screen existed are simply
+ * groups of one, so nothing has to be migrated.
+ *
+ * Rules sharing a name but not a price are kept apart (name + price + min
+ * stay), so a legacy pair is never silently rewritten to one price.
+ */
+export function groupPricingRules(rules: readonly PricingRule[]): RateGroup[] {
+  const groups = new Map<string, RateGroup>();
+
+  for (const rule of rules) {
+    const key = `${rule.name}\u0000${rule.nightlyRate}\u0000${rule.minStayNights}`;
+    const group = groups.get(key) ?? {
+      name: rule.name,
+      nights: [],
+      ranges: [],
+      nightlyRate: rule.nightlyRate,
+      minStayNights: rule.minStayNights,
+    };
+
+    group.ranges.push({
+      id: rule.id,
+      startDate: rule.startDate,
+      endDate: rule.endDate,
+    });
+    group.nights.push(...nightsList(rule.startDate, rule.endDate));
+    groups.set(key, group);
+  }
+
+  for (const group of groups.values()) {
+    group.nights.sort();
+    group.ranges.sort((a, b) => a.startDate.localeCompare(b.startDate));
+  }
+
+  return [...groups.values()].sort((a, b) =>
+    (a.nights[0] ?? '').localeCompare(b.nights[0] ?? ''),
+  );
+}
+
+/**
+ * Create or replace a named rate covering an arbitrary set of nights.
+ *
+ * `replaceRuleIds` are the rows the group is made of today; they are removed
+ * and rewritten, which is how an edit works — the rows are not updated in
+ * place because the nights, and therefore the number of rows, can change.
+ *
+ * Overlaps with OTHER rates are still refused, for the reason they always
+ * were: with two rules on one night, checkout and the homepage widget can
+ * pick different ones and the guest is charged a price they were not shown.
+ *
+ * If a write fails halfway, the rows removed first are put back before the
+ * error is raised. The booking site gives us no transaction across requests,
+ * so this is a compensating restore, not an atomic one: it can itself fail,
+ * and says so in the log if it does.
+ */
+export async function saveRateGroup(
+  site: VillaSite,
+  input: {
+    name: string;
+    nights: readonly string[];
+    nightlyRate: number | string;
+    minStayNights?: number;
+    replaceRuleIds?: readonly string[];
+  },
+  actorUserId: string | null,
+): Promise<void> {
+  const name = input.name.trim();
+
+  if (!name || name.length > 150) {
+    throw new VillaDbError(
+      'INVALID_INPUT',
+      'rule name',
+      'Give the rate a name (up to 150 characters).',
+    );
+  }
+
+  const ranges = coalesceNights(input.nights);
+
+  if (ranges.length === 0) {
+    throw new VillaDbError(
+      'INVALID_INPUT',
+      'no nights',
+      'Pick at least one night.',
+    );
+  }
+
+  if (ranges.length > 60) {
+    throw new VillaDbError(
+      'INVALID_INPUT',
+      'too many ranges',
+      'That is too many separate stretches of dates for one rate. Split it into two rates.',
+    );
+  }
+
+  let rate: number;
+
+  try {
+    rate = toPaise(input.nightlyRate);
+  } catch {
+    throw invalidAmount('the nightly rate');
+  }
+
+  if (rate <= 0) {
+    throw new VillaDbError(
+      'INVALID_INPUT',
+      'rate must be positive',
+      'The nightly rate must be more than zero.',
+    );
+  }
+
+  const minStay = input.minStayNights ?? 1;
+
+  if (!Number.isInteger(minStay) || minStay < 1) {
+    throw new VillaDbError(
+      'INVALID_INPUT',
+      'min stay',
+      'Minimum stay must be at least 1 night.',
+    );
+  }
+
+  const replacing = new Set(input.replaceRuleIds ?? []);
+
+  await withSyncLog(site, 'rate_rule.save_group', actorUserId, async () => {
+    const { data: existing, error: readError } = await site.client
+      .from('pricing_rules')
+      .select(
+        'id, rule_name, start_date, end_date, nightly_rate, min_stay_nights',
+      )
+      .eq('property_id', site.sitePropertyId);
+
+    if (readError) throw fromSiteError(readError);
+
+    const others = (existing ?? []).filter((r) => !replacing.has(r.id));
+
+    // A name is a group's identity on this screen, so two rates cannot share
+    // one: an edit would not know which rows it owns.
+    const nameTaken = others.find((r) => r.rule_name.trim() === name);
+
+    if (nameTaken) {
+      throw new VillaDbError(
+        'INVALID_INPUT',
+        `duplicate name ${name}`,
+        `There is already a rate called "${name}". Give this one a different name.`,
+      );
+    }
+
+    const clash = others.find((r) =>
+      ranges.some(
+        (range) => r.start_date < range.endDate && r.end_date > range.startDate,
+      ),
+    );
+
+    if (clash) {
+      throw new VillaDbError(
+        'OVERLAP',
+        `overlaps ${clash.rule_name}`,
+        `Some of those nights are already on "${clash.rule_name}". Remove them from this rate, or change that one first.`,
+      );
+    }
+
+    const removed = (existing ?? []).filter((r) => replacing.has(r.id));
+
+    if (removed.length > 0) {
+      const { error } = await site.client
+        .from('pricing_rules')
+        .delete()
+        .eq('property_id', site.sitePropertyId)
+        .in(
+          'id',
+          removed.map((r) => r.id),
+        );
+
+      if (error) throw fromSiteWriteError(error);
+    }
+
+    const { error: insertError } = await site.client
+      .from('pricing_rules')
+      .insert(
+        ranges.map((range) => ({
+          property_id: site.sitePropertyId,
+          rule_name: name,
+          start_date: range.startDate,
+          end_date: range.endDate,
+          nightly_rate: rate,
+          min_stay_nights: minStay,
+        })),
+      );
+
+    if (insertError) {
+      // Put back what we removed, so an edit that fails does not leave the
+      // nights priced at the base rate without anyone being told.
+      if (removed.length > 0) {
+        const { error: restoreError } = await site.client
+          .from('pricing_rules')
+          .insert(
+            removed.map((r) => ({
+              // Same id, so anything pointing at the row still resolves.
+              id: r.id,
+              property_id: site.sitePropertyId,
+              rule_name: r.rule_name,
+              start_date: r.start_date,
+              end_date: r.end_date,
+              nightly_rate: r.nightly_rate,
+              min_stay_nights: r.min_stay_nights,
+            })),
+          );
+
+        if (restoreError) {
+          throw new VillaDbError(
+            'UNCERTAIN',
+            `restore failed: ${restoreError.message}`,
+            'The rate could not be saved and the previous dates could not be put back. Check the rates for those nights before taking bookings.',
+          );
+        }
+      }
+
+      // Before villa-booking 00110, `uq_pricing_property_rule` was UNIQUE
+      // (property_id, rule_name), so a rate made of more than one stretch of
+      // nights collided with itself on the very first write. The detail
+      // carries what the database actually said: naming the constraint from
+      // the shape of the request alone sent one earlier failure to the log
+      // under the wrong cause.
+      if (insertError.code === '23505' && ranges.length > 1) {
+        throw new VillaDbError(
+          'CONFLICT',
+          `23505 on ${ranges.length} ranges for ${name}: ${insertError.message}${
+            insertError.details ? ` | ${insertError.details}` : ''
+          }`,
+          'This villa’s booking site cannot yet hold one rate over separate stretches of dates. Save them as one continuous stretch, or ask Ooruda to update the booking site.',
+        );
+      }
+
+      throw fromSiteWriteError(insertError);
+    }
+
+    invalidatePricingInputs(site.sitePropertyId);
+    return { result: undefined, siteId: null };
+  });
+}
+
+/** Remove every row a named rate is made of. */
+export async function deleteRateGroup(
+  site: VillaSite,
+  ruleIds: readonly string[],
+  actorUserId: string | null,
+): Promise<void> {
+  if (ruleIds.length === 0) return;
+
+  await withSyncLog(site, 'rate_rule.delete_group', actorUserId, async () => {
+    const { data, error } = await site.client
+      .from('pricing_rules')
+      .delete()
+      .eq('property_id', site.sitePropertyId)
+      .in('id', [...ruleIds])
+      .select('id');
+
+    if (error) throw fromSiteWriteError(error);
+    if (!data || data.length === 0)
+      throw new VillaDbError('NOT_FOUND', `rules ${ruleIds.join(', ')}`);
+
+    invalidatePricingInputs(site.sitePropertyId);
+    return { result: undefined, siteId: null };
   });
 }
 

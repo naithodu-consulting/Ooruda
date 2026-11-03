@@ -48,6 +48,8 @@ export function BusinessDetailsCard(props: {
 }) {
   const form = useForm<BusinessDetailsInput>({
     resolver: zodResolver(BusinessDetailsSchema),
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
     defaultValues: {
       accountId: props.accountId,
       propertyId: props.propertyId,

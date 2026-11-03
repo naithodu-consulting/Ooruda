@@ -7,11 +7,10 @@ import { normalizePhoneNumber } from '@kit/shared/utils';
 
 import type { Database } from '~/lib/database.types';
 import { getVillaSite } from '~/lib/villa-db/client';
-import { endAfterLastNight } from '~/lib/villa-db/dates';
 import { VillaDbError } from '~/lib/villa-db/errors';
 import {
-  createPricingRule,
-  deletePricingRule,
+  deleteRateGroup,
+  saveRateGroup,
   updateBaseRates,
 } from '~/lib/villa-db/rates';
 
@@ -21,7 +20,8 @@ import type {
   ContactSchema,
   BusinessDetailsSchema,
   PoliciesSchema,
-  SeasonalRateSchema,
+  DeleteRateGroupSchema,
+  RateGroupSchema,
 } from '../schemas/villa-settings.schema';
 
 type Client = SupabaseClient<Database>;
@@ -66,32 +66,36 @@ export function createVillaSettingsService(client: Client) {
       );
     },
 
-    async addSeasonalRate(
-      input: z.output<typeof SeasonalRateSchema>,
+    /**
+     * Create or edit a named rate over any set of nights picked on the
+     * calendar. This replaced the old one-range-at-a-time add and delete,
+     * which nothing called once the calendar landed.
+     */
+    async saveRateGroup(
+      input: z.output<typeof RateGroupSchema>,
       actor: string,
     ) {
       const site = await getVillaSite(input.accountId, input.propertyId);
 
-      return createPricingRule(
+      await saveRateGroup(
         site,
         {
           name: input.name,
-          startDate: input.firstNight,
-          // The site stores the morning after the last night (half-open).
-          endDate: endAfterLastNight(input.lastNight),
+          nights: input.nights,
           nightlyRate: input.nightlyRate,
           minStayNights: input.minStayNights,
+          replaceRuleIds: input.replaceRuleIds,
         },
         actor,
       );
     },
 
-    async removeSeasonalRate(
-      input: { accountId: string; propertyId: string; ruleId: string },
+    async removeRateGroup(
+      input: z.output<typeof DeleteRateGroupSchema>,
       actor: string,
     ) {
       const site = await getVillaSite(input.accountId, input.propertyId);
-      await deletePricingRule(site, input.ruleId, actor);
+      await deleteRateGroup(site, input.ruleIds, actor);
     },
 
     async saveAddon(input: z.output<typeof AddonSchema>) {

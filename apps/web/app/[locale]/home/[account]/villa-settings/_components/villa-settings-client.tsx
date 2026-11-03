@@ -195,7 +195,8 @@ export function VillaSettingsClient(props: {
               <SeasonalRates
                 {...ids}
                 canEdit={props.canEdit}
-                rules={props.site.rules}
+                groups={props.site.groups}
+                rates={props.site.rates}
               />
             ) : null}
           </SiteGate>

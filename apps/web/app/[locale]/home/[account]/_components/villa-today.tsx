@@ -1,7 +1,14 @@
 import Link from 'next/link';
 
-import { ArrowRight, CircleAlert, LogIn, LogOut, Moon } from 'lucide-react';
+import {
+  ArrowRight,
+  CheckCircle2,
+  CircleAlert,
+  LogIn,
+  LogOut,
+} from 'lucide-react';
 
+import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import { cn } from '@kit/ui/utils';
 
@@ -29,15 +36,46 @@ export async function VillaToday(props: {
   const today = todayIst();
   let bookings: SiteBooking[];
   let overdue: SiteBooking[] = [];
+  let checkedInIds = new Set<string>();
+  let departed: { id: string; guestName: string }[] = [];
 
   try {
+    const client = getSupabaseServerClient();
     const site = await getVillaSite(props.accountId, props.propertyId);
-    [bookings, overdue] = await Promise.all([
-      listBookings(site, addDays(today, -1), addDays(today, 1)),
-      listBookingsByView(site, 'past', 50).then((rows) =>
-        rows.filter((b) => b.status === 'confirmed' && b.checkOut < today),
-      ),
-    ]);
+    const [bookingsData, overdueData, inHouseRows, departedRows] =
+      await Promise.all([
+        listBookings(site, addDays(today, -1), addDays(today, 1)),
+        listBookingsByView(site, 'past', 50).then((rows) =>
+          rows.filter((b) => b.status === 'confirmed' && b.checkOut < today),
+        ),
+        // Bounded to stays that have not ended: without the check_out floor
+        // this grows into every stay ever checked in, to answer a question
+        // only about today.
+        client
+          .from('villa_bookings_mirror')
+          .select('site_booking_id')
+          .eq('property_id', props.propertyId)
+          .not('checked_in_at', 'is', null)
+          .gte('check_out', addDays(today, -1)),
+        // Checked out today, by when the check-out happened rather than by
+        // the booking's dates: an early departure and a late one both belong
+        // on today's board, and neither is found by `check_out`.
+        client
+          .from('villa_bookings_mirror')
+          .select('site_booking_id, guest_name')
+          .eq('property_id', props.propertyId)
+          .gte('checked_out_at', `${today}T00:00:00+05:30`)
+          .lt('checked_out_at', `${addDays(today, 1)}T00:00:00+05:30`),
+      ]);
+    bookings = bookingsData;
+    overdue = overdueData;
+    checkedInIds = new Set(
+      (inHouseRows.data ?? []).map((r) => r.site_booking_id),
+    );
+    departed = (departedRows.data ?? []).map((r) => ({
+      id: r.site_booking_id,
+      guestName: r.guest_name,
+    }));
   } catch (error) {
     if (!isVillaDbError(error)) throw error;
 
@@ -51,17 +89,61 @@ export async function VillaToday(props: {
     );
   }
 
-  const board = todayBoard(bookings, today);
+  const board = todayBoard(bookings, today, checkedInIds);
   const href = (id: string) =>
     `${pathsConfig.app.accountVillaBookings.replace('[account]', props.account)}/${id}?property=${props.propertyId}`;
+
+  // One shape for every tile, so a row renders the same whether it came from
+  // the booking site or from the mirror's check-out stamp.
+  interface TodayRow {
+    id: string;
+    guestName: string;
+    /** The day's work on this guest is finished: shown as a tick, not a dot. */
+    done?: boolean;
+    idPending?: boolean;
+    paymentDue?: boolean;
+  }
+
+  const arrivalRows: TodayRow[] = board.arrivals.map((b) => ({
+    id: b.id,
+    guestName: b.guestName,
+    idPending: b.idStatus === 'pending',
+    paymentDue: b.paymentStatus !== 'paid',
+  }));
+
+  const checkedInRows: TodayRow[] = board.checkedIn.map((b) => ({
+    id: b.id,
+    guestName: b.guestName,
+  }));
+
+  // Today's departures are the stays still to leave plus the ones already
+  // checked out, in that order: what is left to do first, then the record
+  // that the rest is done. A stay checked out today is `completed`, so it
+  // has already dropped out of `board.departures` - the two cannot overlap.
+  const departureRows: TodayRow[] = [
+    ...board.departures.map((b) => ({ id: b.id, guestName: b.guestName })),
+    ...departed.map((d) => ({ id: d.id, guestName: d.guestName, done: true })),
+  ];
+
+  const departuresLeft = departureRows.filter((r) => !r.done).length;
 
   const columns = [
     {
       key: 'arrivals',
       label: 'Arriving',
       Icon: LogIn,
-      rows: board.arrivals,
+      rows: arrivalRows,
       empty: 'No arrivals',
+      accent: 'bg-info/10 text-info',
+      countAccent: 'bg-info/15 text-info',
+      dotColor: 'bg-info',
+    },
+    {
+      key: 'checked-in',
+      label: 'Checked in',
+      Icon: CheckCircle2,
+      rows: checkedInRows,
+      empty: 'None checked in',
       accent: 'bg-success/10 text-success',
       countAccent: 'bg-success/15 text-success',
       dotColor: 'bg-success',
@@ -70,21 +152,11 @@ export async function VillaToday(props: {
       key: 'departures',
       label: 'Checking out',
       Icon: LogOut,
-      rows: board.departures,
+      rows: departureRows,
       empty: 'No departures',
       accent: 'bg-warning/10 text-warning',
       countAccent: 'bg-warning/15 text-warning',
       dotColor: 'bg-warning',
-    },
-    {
-      key: 'in-house',
-      label: 'Staying tonight',
-      Icon: Moon,
-      rows: board.inHouse,
-      empty: 'Villa is free',
-      accent: 'bg-info/10 text-info',
-      countAccent: 'bg-info/15 text-info',
-      dotColor: 'bg-info',
     },
   ] as const;
 
@@ -147,26 +219,39 @@ export async function VillaToday(props: {
                         <li
                           key={b.id}
                           className="flex min-w-0 items-center gap-1.5"
+                          data-test={
+                            b.done
+                              ? 'villa-today-row-done'
+                              : 'villa-today-row-pending'
+                          }
                         >
-                          <span
-                            className={cn(
-                              'h-1.5 w-1.5 shrink-0 rounded-full',
-                              dotColor,
-                            )}
-                            aria-hidden
-                          />
+                          {b.done ? (
+                            <CheckCircle2
+                              className="text-success h-3.5 w-3.5 shrink-0"
+                              aria-label="Checked out"
+                            />
+                          ) : (
+                            <span
+                              className={cn(
+                                'h-1.5 w-1.5 shrink-0 rounded-full',
+                                dotColor,
+                              )}
+                              aria-hidden
+                            />
+                          )}
                           <Link
                             href={href(b.id)}
-                            className="hover:text-brand-ink truncate text-sm font-medium underline-offset-2 hover:underline"
+                            className={cn(
+                              'hover:text-brand-ink truncate text-sm font-medium underline-offset-2 hover:underline',
+                              b.done && 'text-muted-foreground',
+                            )}
                             data-test={'villa-today-guest'}
                           >
                             {b.guestName}
                           </Link>
-                          {key === 'arrivals' &&
-                          (b.idStatus === 'pending' ||
-                            b.paymentStatus !== 'paid') ? (
+                          {b.idPending || b.paymentDue ? (
                             <span className="inline-flex shrink-0 items-center gap-1">
-                              {b.idStatus === 'pending' ? (
+                              {b.idPending ? (
                                 <span
                                   className="bg-warning/15 text-warning rounded px-1.5 py-0.5 text-xs font-semibold"
                                   title="ID document pending"
@@ -174,7 +259,7 @@ export async function VillaToday(props: {
                                   ID
                                 </span>
                               ) : null}
-                              {b.paymentStatus !== 'paid' ? (
+                              {b.paymentDue ? (
                                 <span
                                   className="bg-destructive/15 text-destructive rounded px-1.5 py-0.5 text-xs font-semibold"
                                   title="Payment due"
@@ -189,6 +274,19 @@ export async function VillaToday(props: {
                     </ul>
                   )}
                 </div>
+
+                {/* Departures are the one tile that holds finished work too,
+                    so it says how much of the day is left to do. */}
+                {key === 'departures' && rows.length > 0 ? (
+                  <p
+                    className="text-muted-foreground text-xs"
+                    data-test={'villa-today-departures-progress'}
+                  >
+                    {departuresLeft === 0
+                      ? 'All checked out'
+                      : `${departuresLeft} still to check out`}
+                  </p>
+                ) : null}
               </div>
             ),
           )}
