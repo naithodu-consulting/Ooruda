@@ -4,6 +4,12 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: Airbnb Blocks Move to the Blocked Tab — 2026-11-03
+
+- Manual Airbnb sync no longer skips rows carrying out-of-date labels. The sync now notices when an event's booking-or-block status, confirmation code or phone digits differ, so blocks such as Airbnb's daily advance-notice cutoff leave the Upcoming and In house tabs.
+
+---
+
 ## Ooruda Villa: Guest Confirmation Email "Advance received" Terminology — 2026-11-03
 
 ### Clarity between Tariff Advances and Security Deposits

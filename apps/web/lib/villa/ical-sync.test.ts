@@ -201,6 +201,20 @@ describe('classifyEvents', () => {
 });
 
 describe('eventSetFingerprint', () => {
+  it('changes when what we read from the event changes', () => {
+    const event = {
+      uid: 'a',
+      summary: 'Airbnb (Not available)',
+      description: '',
+      start: '2026-11-08',
+      end: '2026-11-09',
+    };
+
+    expect(eventSetFingerprint([{ ...event, summary: 'Reserved' }])).not.toBe(
+      eventSetFingerprint([event]),
+    );
+  });
+
   it('produces order-independent fingerprint', () => {
     const a = {
       uid: 'u1',

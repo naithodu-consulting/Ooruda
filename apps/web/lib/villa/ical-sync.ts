@@ -344,9 +344,19 @@ export function nightsBetween(start: string, end: string): number {
   );
 }
 
+/**
+ * What we read from the event is included as well as its dates, because it is
+ * what we store: a dates-only fingerprint called a feed "unchanged" while its
+ * rows still held notes written by older code, so they were never corrected.
+ * Must match villa-booking's `eventSetFingerprint` (src/lib/ical.ts): both write
+ * `last_fingerprint`, and a difference makes each sync rewrite the other's.
+ */
 export function eventSetFingerprint(events: IcalEvent[]): string {
   return events
-    .map((e) => `${e.start}/${e.end}/${e.uid}`)
+    .map((e) => {
+      const { kind, confirmationCode, phoneLast4 } = channelEventDetails(e);
+      return `${e.start}/${e.end}/${e.uid}/${kind}/${confirmationCode ?? ''}/${phoneLast4 ?? ''}`;
+    })
     .sort()
     .join('|');
 }
