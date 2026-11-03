@@ -131,12 +131,8 @@ export default async function BookingPage({ params, searchParams }: Props) {
     (role === 'villa_admin' || settings.managersCanCancel);
   const canCheckIn =
     booking.status === 'confirmed' && !isCheckedIn && today >= booking.checkIn;
-  // Any stay that has started can be checked out, whether or not a check-in
-  // was ever recorded: every booking taken before `checked_in_at` existed has
-  // a null there, and a guest already in house must not be stranded without a
-  // check-out. `isCheckedIn` only adds the case of a same-day check-in.
-  const canCheckOut =
-    booking.status === 'confirmed' && (isCheckedIn || today >= booking.checkIn);
+  // A stay can only be checked out after it has been checked in.
+  const canCheckOut = booking.status === 'confirmed' && isCheckedIn;
   // The card is the villa's own sheet, printed for a stay that is happening:
   // a cancelled booking has no check-in, and a villa with no template of its
   // own offers no download at all rather than a generic form.

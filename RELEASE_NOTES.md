@@ -4,6 +4,30 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: Check-out Gating and Add ID Dialog Redesign — 2026-11-03
+
+### Check-out button hidden until check-in is complete
+- A stay cannot logically be checked out before arrival. Previously, `canCheckOut` allowed check-out on the arrival date even if the stay was not checked in, causing both `Check in` and `Check out` buttons to be shown side-by-side.
+- The `Check out` button is now hidden completely until `checked_in_at` is set on the stay. Once checked in, `Check in` disappears and `Check out` becomes the primary action.
+- The `complete()` server action now strictly requires `checked_in_at` to exist on `villa_bookings_mirror`, throwing a conflict error if an un-checked-in stay attempts completion.
+
+### Add ID Dialog UI & UX Fixes
+- **Horizontal scroll eliminated:** Added strict `overflow-x-hidden` on the scrollable modal container and removed inner negative margins (`-mx-6`) that caused horizontal trackpad scrolling and clipped form inputs.
+- **Button clipping resolved:** Fixed sticky footer overlap that cut off the "Add another guest in this booking" button by restructuring into a fixed-header, scrollable-body, and fixed-footer layout.
+- **Background content bleed fixed:** Replaced the semi-transparent blurred sticky footer with an opaque `bg-card` footer with solid border separation outside the scrollable body so scrolling content never bleeds through.
+
+### Bulk ID Upload at the End (Option A)
+- Decoupled guest entry from ID attachment.
+- Moved ID Type and ID Number fields exclusively to the Lead Guest section, ensuring lead guest ID information is always captured without forcing staff to re-enter ID metadata for every guest.
+- Other guests in the booking retain only the standard contact details (Name and optional phone number).
+- A single "Identity Documents & Photos" section at the end allows uploading all ID documents in bulk with drag-and-drop and multi-file selection support (up to 10 files).
+- All bulk ID files attach to the Lead Guest / booking party, and all additional guests are registered and linked to the booking automatically.
+
+### Payment mode labeling
+- Updated payment mode label for `card` from "Card (at the villa)" to "Credit/Debit Card" across villa payment displays and registration sheets.
+
+---
+
 ## Ooruda Villa: Check-out Confirmation on the Today Board — 2026-11-03
 
 ### A completed check-out is now visible on the dashboard
@@ -5509,4 +5533,4 @@ Separated the single Supabase project into three distinct environments - local D
 | `20261031104000_user_accounts_add_product_type.sql` | Add `product_type` column to `public.user_accounts` view |
 | `20261102203000_villa_checkin_flow.sql` | Add `checked_in_at` column to `villa_bookings_mirror` and `'checked_in'` to `villa_booking_activity_action_check` |
 
-_Last updated: 2026-11-02_
+_Last updated: 2026-11-03_
