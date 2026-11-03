@@ -197,6 +197,42 @@ The major findings were fixed in the change itself; these are the minor ones.
   test read a different range.
 
 
+## Void enrichment for channel bookings (raised 2026-11-03)
+
+Hard-deleting a booking is architecturally wrong: orphaned rows in mirror, activity,
+guest documents, and payment ledger, plus broken audit trail. The codebase rule
+("never DELETE a booking; cancel it §5.5") stays. But Airbnb bookings need an
+**undo-enrichment** path the current cancel flow doesn't cover.
+
+### Scenarios this solves
+1. **Wrong enrichment** — operator entered wrong guest / wrong amount; no undo today,
+   and after check-in even cancel is unavailable.
+2. **Platform cancellation** — Airbnb guest cancelled on the platform, iCal block
+   vanished, but the enriched booking stays as "confirmed" with no action.
+3. **Duplicate / test enrichment** — permanent record today, no cleanup.
+4. **Airbnb date change** — old enriched booking has stale dates; new iCal block
+   appeared. Need to void old → re-enrich new.
+
+### Design
+- New status `voided` (distinct from `cancelled`: "created in error" vs "real booking
+  was cancelled").
+- **Reverse the auto-recorded payout receipt** — create a reversal entry in the ledger,
+  never delete the original.
+- Log void in `villa_booking_activity` with mandatory reason.
+- Release guest documents for purge.
+- **Available regardless of check-in date** — mistakes are discovered late.
+- Allow re-enrichment from the same iCal event (existing code already permits
+  re-enrichment over cancelled bookings; extend to voided).
+- Gate: `villa_admin` only.
+
+### What NOT to do
+- No hard delete — audit trail and financial integrity.
+- No auto-cancel when iCal block disappears — feed sync can be flaky; "Gone from
+  channel" warning with manual action is the right UX.
+- No voiding if real check-in records or external payment reconciliations exist.
+
+---
+
 ## Editing existing bookings — Phased implementation & Design (raised 2026-11-02)
 
 Comprehensive analysis of updating existing bookings (guest count, pricing, and guest contact details).

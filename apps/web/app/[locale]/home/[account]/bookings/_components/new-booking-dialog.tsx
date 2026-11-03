@@ -146,21 +146,42 @@ function NewBookingForm(props: {
       specialRequests: '',
       isEvent: false,
       overrideCutoff: false,
+      isSpecialPrice: false,
+      specialBaseAmount: '',
+      specialGstAmount: '0',
     },
   });
 
-  const [checkIn, checkOut, adults, children, paymentStatus, overrideCutoff] =
-    useWatch({
-      control: form.control,
-      name: [
-        'checkIn',
-        'checkOut',
-        'adults',
-        'children',
-        'paymentStatus',
-        'overrideCutoff',
-      ],
-    });
+  const [
+    checkIn,
+    checkOut,
+    adults,
+    children,
+    paymentStatus,
+    overrideCutoff,
+    isSpecialPrice,
+    specialBaseAmount,
+    specialGstAmount,
+  ] = useWatch({
+    control: form.control,
+    name: [
+      'checkIn',
+      'checkOut',
+      'adults',
+      'children',
+      'paymentStatus',
+      'overrideCutoff',
+      'isSpecialPrice',
+      'specialBaseAmount',
+      'specialGstAmount',
+    ],
+  });
+
+  const parsedSpecialBase = Number(specialBaseAmount) || 0;
+  const parsedSpecialGst = Number(specialGstAmount) || 0;
+  const specialTotalPaise = Math.round(
+    (parsedSpecialBase + parsedSpecialGst) * 100,
+  );
 
   const hasPaid =
     paymentStatus === 'partially_paid' || paymentStatus === 'paid';
@@ -255,7 +276,12 @@ function NewBookingForm(props: {
       toast.error(error.serverError ?? 'Could not create the booking.'),
   });
 
-  const canSubmit = quote.status === 'done' && quote.quote.ok && !isPending;
+  const specialPriceValid = !isSpecialPrice || parsedSpecialBase > 0;
+  const canSubmit =
+    quote.status === 'done' &&
+    quote.quote.ok &&
+    specialPriceValid &&
+    !isPending;
   const [pendingOverride, setPendingOverride] = useState<
     (NewBookingInput & { expectedTotalPaise: number }) | null
   >(null);
@@ -286,10 +312,14 @@ function NewBookingForm(props: {
               onSubmit={form.handleSubmit((values) => {
                 if (quote.status !== 'done' || !quote.quote.ok) return;
 
+                const totalPaise = isSpecialPrice
+                  ? specialTotalPaise
+                  : quote.quote.totalPaise;
+
                 // Priced again on the server; this only lets it detect a change.
                 const payload = {
                   ...values,
-                  expectedTotalPaise: quote.quote.totalPaise,
+                  expectedTotalPaise: totalPaise,
                 };
 
                 // Past the cutoff the tick is not the last word: the stay is one
@@ -452,6 +482,101 @@ function NewBookingForm(props: {
 
               <QuotePanel state={quote} />
 
+              {quote.status === 'done' && quote.quote.ok ? (
+                <div className="bg-card flex flex-col gap-3 rounded-lg border p-3.5">
+                  <FormField
+                    name="isSpecialPrice"
+                    control={form.control}
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between gap-4">
+                        <div className="flex flex-col gap-0.5">
+                          <FormLabel className="cursor-pointer font-medium">
+                            Special / Preferential price
+                          </FormLabel>
+                          <FormDescription>
+                            Override rate card rates with a custom negotiated
+                            price for this guest.
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-test={'villa-booking-special-price-switch'}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  {isSpecialPrice ? (
+                    <div className="grid grid-cols-1 gap-3 border-t pt-3 sm:grid-cols-12">
+                      <FormField
+                        name="specialBaseAmount"
+                        control={form.control}
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-6">
+                            <FormLabel>Base Amount</FormLabel>
+                            <FormControl
+                              render={
+                                <RupeeInput
+                                  {...field}
+                                  value={
+                                    (field.value as
+                                      | string
+                                      | number
+                                      | undefined) ?? ''
+                                  }
+                                  placeholder="e.g. 25000"
+                                  data-test={'villa-booking-special-base'}
+                                />
+                              }
+                            />
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        name="specialGstAmount"
+                        control={form.control}
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-6">
+                            <FormLabel>GST</FormLabel>
+                            <FormControl
+                              render={
+                                <RupeeInput
+                                  {...field}
+                                  value={
+                                    (field.value as
+                                      | string
+                                      | number
+                                      | undefined) ?? ''
+                                  }
+                                  placeholder="0 if exempt/included"
+                                  data-test={'villa-booking-special-gst'}
+                                />
+                              }
+                            />
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <div className="bg-muted/40 flex items-center justify-between rounded-lg border p-2.5 text-sm sm:col-span-12">
+                        <span className="font-semibold">Total Amount</span>
+                        <span
+                          className="text-foreground text-base font-bold tabular-nums"
+                          data-test={'villa-booking-special-total'}
+                        >
+                          {formatINR(parsedSpecialBase + parsedSpecialGst)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               <section className="grid grid-cols-1 gap-4 sm:grid-cols-12">
                 <FormField
                   name="salutation"
@@ -559,8 +684,8 @@ function NewBookingForm(props: {
                         }
                       />
                       <FormDescription>
-                        The booking confirmation goes here, once a payment is
-                        recorded.
+                        Used if staff send a booking confirmation email from the
+                        booking page.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

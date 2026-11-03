@@ -119,6 +119,24 @@ describe('Phone & Email Validations', () => {
         expect(res.success).toBe(false);
       }
     });
+    it('accepts preferential special price with base and gst', () => {
+      const res = NewBookingFormSchema.safeParse({
+        ...baseValidBooking,
+        isSpecialPrice: true,
+        specialBaseAmount: 20000,
+        specialGstAmount: 3600,
+      });
+      expect(res.success).toBe(true);
+    });
+
+    it('rejects special price when preferential base amount is missing or zero', () => {
+      const missingRes = NewBookingFormSchema.safeParse({
+        ...baseValidBooking,
+        isSpecialPrice: true,
+        specialBaseAmount: 0,
+      });
+      expect(missingRes.success).toBe(false);
+    });
   });
 
   describe('EnrichChannelStaySchema (Airbnb / OTA Enrichment)', () => {
@@ -180,6 +198,43 @@ describe('Phone & Email Validations', () => {
         guestEmail: 'invalid-email',
       });
       expect(invalidRes.success).toBe(false);
+    });
+
+    it('accepts separate baseAmount, gstAmount, and airbnbCharges', () => {
+      const res = EnrichChannelStaySchema.safeParse({
+        ...baseValidEnrich,
+        baseAmount: 12000,
+        gstAmount: 2160,
+        airbnbCharges: 1800,
+      });
+      expect(res.success).toBe(true);
+
+      const formRes = EnrichChannelStaySchema.safeParse({
+        ...baseValidEnrich,
+        baseAmount: '15000',
+        gstAmount: '2700',
+        totalAmount: '',
+        airbnbCharges: '3200',
+      });
+      expect(formRes.success).toBe(true);
+    });
+
+    it('rejects negative gstAmount or negative airbnbCharges', () => {
+      expect(
+        EnrichChannelStaySchema.safeParse({
+          ...baseValidEnrich,
+          baseAmount: 10000,
+          gstAmount: -500,
+        }).success,
+      ).toBe(false);
+
+      expect(
+        EnrichChannelStaySchema.safeParse({
+          ...baseValidEnrich,
+          baseAmount: 10000,
+          airbnbCharges: -200,
+        }).success,
+      ).toBe(false);
     });
   });
 

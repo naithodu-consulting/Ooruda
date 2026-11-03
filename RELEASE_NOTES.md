@@ -4,6 +4,30 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: Preferential Special Pricing, Airbnb Base/GST Breakdown & OTA Expense Accounting — 2026-11-03
+
+### Preferential / Special Price Option for Manual Bookings
+- Added a "Special / Preferential price" toggle in the new booking dialog (`new-booking-dialog.tsx`).
+- Allows villa operators to specify a custom negotiated base tariff (`specialBaseAmount`) and GST (`specialGstAmount`) overriding rate card quotes when enabled, while retaining automatic rate-card pricing by default.
+- Real-time calculated display of the agreed total amount with Indian Rupee formatting.
+- Preserves calendar availability checks while submitting negotiated totals, stores base and GST separately on the booking mirror, and records the preferential price breakdown in the activity audit log.
+
+### Separate Base Total & GST for Airbnb / Channel Bookings
+- Replaced the single lump-sum total field with distinct **Base total (stay tariff)** and **GST** inputs in `enrich-channel-stay-dialog.tsx`.
+- Form displays a calculated "Total charged to guest" summary and reflects base tariff and GST accurately across booking details, payments, and tax reporting.
+
+### Airbnb Charges & P&L Accounting Tallying (Option A)
+- Added an **Airbnb Charges** field in the enrichment dialog to record platform commissions/fees deducted from host payouts.
+- Kept hidden from the guest-facing booking details card to preserve the guest contract.
+- Automatically creates an OTA commission expense entry in `villa_expenses` (`category: 'commission'`, `vendor: channel`, `spent_on: block.startDate`) ensuring income statements, expense reports, credits, and net bank payouts reconcile accurately without manual double entry.
+- Updated villa expense validation and date pickers to permit commission expenses aligned with stay dates.
+
+### Booking Confirmation Email Clarity
+- Verified that booking confirmation emails are never dispatched automatically upon booking creation or channel stay enrichment.
+- Updated dialog helper hints and email status labels in `guest-emails-section.tsx` from misleading automatic-dispatch claims to clear manual send indicators ("Ready to send.").
+
+---
+
 ## Ooruda Villa: Airbnb Blocks Move to the Blocked Tab — 2026-11-03
 
 - Manual Airbnb sync no longer skips rows carrying out-of-date labels. The sync now notices when an event's booking-or-block status, confirmation code or phone digits differ, so blocks such as Airbnb's daily advance-notice cutoff leave the Upcoming and In house tabs.

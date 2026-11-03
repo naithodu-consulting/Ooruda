@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAction } from 'next-safe-action/hooks';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@kit/ui/button';
 import {
@@ -36,6 +36,7 @@ import { toast } from '@kit/ui/sonner';
 import { Textarea } from '@kit/ui/textarea';
 
 import { formatDateReadable } from '~/lib/format-date';
+import { formatINR } from '~/lib/format-inr';
 import { lastNightOf } from '~/lib/villa-db/dates';
 import { formatNights } from '~/lib/villa/labels';
 
@@ -87,10 +88,23 @@ export function EnrichChannelStayDialog(props: {
       adults: 2,
       children: 0,
       infants: 0,
-      totalAmount: '' as unknown as number,
+      baseAmount: '' as unknown as number,
+      gstAmount: '' as unknown as number,
+      airbnbCharges: '' as unknown as number,
       specialRequests: '',
     },
   });
+
+  const [baseAmount, gstAmount, airbnbCharges] = useWatch({
+    control: form.control,
+    name: ['baseAmount', 'gstAmount', 'airbnbCharges'],
+  });
+
+  const parsedBase = Number(baseAmount) || 0;
+  const parsedGst = Number(gstAmount) || 0;
+  const parsedCharges = Number(airbnbCharges) || 0;
+  const calculatedTotal = parsedBase + parsedGst;
+  const netPayout = Math.max(0, calculatedTotal - parsedCharges);
 
   const { execute, isPending } = useAction(enrichChannelStayAction, {
     onSuccess: ({ data }) => {
@@ -127,7 +141,26 @@ export function EnrichChannelStayDialog(props: {
         <Form {...form}>
           <form
             className="flex flex-col gap-4"
-            onSubmit={form.handleSubmit((values) => execute(values))}
+            onSubmit={form.handleSubmit(
+              (values) => {
+                const base = Number(values.baseAmount) || 0;
+                const gst = Number(values.gstAmount) || 0;
+                const total = base + gst;
+                execute({
+                  ...values,
+                  baseAmount: base,
+                  gstAmount: gst,
+                  totalAmount: total,
+                  airbnbCharges: Number(values.airbnbCharges) || 0,
+                });
+              },
+              (errors) => {
+                const firstError = Object.values(errors)[0];
+                if (firstError?.message) {
+                  toast.error(String(firstError.message));
+                }
+              },
+            )}
           >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
               <FormField
@@ -301,11 +334,11 @@ export function EnrichChannelStayDialog(props: {
               />
 
               <FormField
-                name="totalAmount"
+                name="baseAmount"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem className="sm:col-span-12">
-                    <FormLabel>Amount charged (₹)</FormLabel>
+                  <FormItem className="sm:col-span-6">
+                    <FormLabel>Base Amount</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -313,13 +346,81 @@ export function EnrichChannelStayDialog(props: {
                           (field.value as number | string | undefined) ?? ''
                         }
                         inputMode="decimal"
-                        placeholder="Total amount charged to guest"
-                        data-test={'villa-enrich-total-amount'}
+                        placeholder="e.g. 15000"
+                        data-test={'villa-enrich-base-amount'}
                       />
                     </FormControl>
                     <FormDescription>
-                      Recorded as received from {channel}, so the stay shows as
-                      paid and the money appears in your reports.
+                      Booking tariff charged to customer before GST.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                name="gstAmount"
+                control={form.control}
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-6">
+                    <FormLabel>GST</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={
+                          (field.value as number | string | undefined) ?? ''
+                        }
+                        inputMode="decimal"
+                        placeholder="0 if exempt/included"
+                        data-test={'villa-enrich-gst-amount'}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="bg-muted/40 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm sm:col-span-12">
+                <div>
+                  <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                    Guest Booking Total
+                  </span>
+                  <p className="text-base font-bold tabular-nums">
+                    {formatINR(calculatedTotal)}
+                  </p>
+                </div>
+                {parsedCharges > 0 ? (
+                  <div className="text-right">
+                    <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                      Net host payout
+                    </span>
+                    <p className="text-success text-base font-bold tabular-nums">
+                      {formatINR(netPayout)}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+
+              <FormField
+                name="airbnbCharges"
+                control={form.control}
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-12">
+                    <FormLabel>{channel} charges</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={
+                          (field.value as number | string | undefined) ?? ''
+                        }
+                        inputMode="decimal"
+                        placeholder="e.g. 2000 (commission/fee)"
+                        data-test={'villa-enrich-airbnb-charges'}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Commission and other fees deducted by {channel} from host
+                      payout. Not displayed in booking details.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
