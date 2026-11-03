@@ -450,7 +450,7 @@ function confirmationText(
     total: number;
     paid: number;
     paidInFull: boolean;
-    depositUnknown: boolean;
+    advanceUnknown: boolean;
     balanceDue: number;
     taxable: number;
     children: number;
@@ -482,11 +482,11 @@ function confirmationText(
             : []),
           money('Total', inrP(v.total)),
           ...(ctx.paymentStatus === 'partially_paid'
-            ? [money('Deposit received', v.depositUnknown ? '-' : inrP(v.paid))]
+            ? [money('Advance received', v.advanceUnknown ? '-' : inrP(v.paid))]
             : v.paid > 0
               ? [money(v.paidLine, inrP(v.paid))]
               : []),
-          ...(v.balanceDue > 0 && !v.depositUnknown
+          ...(v.balanceDue > 0 && !v.advanceUnknown
             ? [money('Balance due', inrP(v.balanceDue))]
             : []),
           ...(v.paidInFull ? ['', 'Amount is paid in full.'] : []),
@@ -627,9 +627,9 @@ export function renderGuestEmail(
     const paid =
       ctx.amountPaidPaise ?? (ctx.paymentStatus === 'paid' ? total : 0);
     const paidInFull = ctx.paymentStatus === 'paid';
-    // A part-paid stay whose deposit was never receipted: we know money came
+    // A part-paid stay whose advance was never receipted: we know money came
     // in but not how much, so no figure is printed rather than a wrong one.
-    const depositUnknown = ctx.paymentStatus === 'partially_paid' && paid <= 0;
+    const advanceUnknown = ctx.paymentStatus === 'partially_paid' && paid <= 0;
     const balanceDue = Math.max(0, total - paid);
     const taxable = base + extra - discount;
     const children = ctx.children ?? 0;
@@ -673,7 +673,7 @@ export function renderGuestEmail(
     const preheader = `${ctx.bookingCode ?? ''} · ${stayRange(ctx.checkIn, ctx.checkOut)} · ${
       paidInFull
         ? `${inrP(total)} paid in full`
-        : depositUnknown
+        : advanceUnknown
           ? 'balance due at check-in'
           : `${inrP(balanceDue)} balance due`
     }`;
@@ -705,8 +705,8 @@ export function renderGuestEmail(
         : '',
       ctx.paymentStatus === 'partially_paid'
         ? `<tr>
-        <td style="padding:0 0 4px;font-family:${SANS};font-size:13px;color:${MUTED};">Deposit received</td>
-        <td style="padding:0 0 4px;font-family:${SANS};font-size:13px;color:${MUTED};text-align:right;white-space:nowrap;">${depositUnknown ? '&mdash;' : esc(inrP(paid))}</td>
+        <td style="padding:0 0 4px;font-family:${SANS};font-size:13px;color:${MUTED};">Advance received</td>
+        <td style="padding:0 0 4px;font-family:${SANS};font-size:13px;color:${MUTED};text-align:right;white-space:nowrap;">${advanceUnknown ? '&mdash;' : esc(inrP(paid))}</td>
       </tr>`
         : paid > 0
           ? `<tr>
@@ -714,7 +714,7 @@ export function renderGuestEmail(
         <td style="padding:0 0 4px;font-family:${SANS};font-size:13px;color:${MUTED};text-align:right;white-space:nowrap;">${esc(inrP(paid))}</td>
       </tr>`
           : '',
-      balanceDue > 0 && !depositUnknown
+      balanceDue > 0 && !advanceUnknown
         ? `<tr>
         <td style="padding:6px 0 4px;font-family:${SANS};font-size:14px;font-weight:bold;color:${INK};">Balance due</td>
         <td style="padding:6px 0 4px;font-family:${SANS};font-size:14px;font-weight:bold;color:${INK};text-align:right;white-space:nowrap;">${esc(inrP(balanceDue))}</td>
@@ -732,7 +732,7 @@ export function renderGuestEmail(
 
     const partialPayNote =
       ctx.paymentStatus === 'partially_paid'
-        ? `<p style="margin:14px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;color:#5d5550;">A deposit has been received. The balance is due at check-in.</p>`
+        ? `<p style="margin:14px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;color:#5d5550;">An advance has been received. The balance is due at check-in.</p>`
         : ctx.paymentStatus === 'unpaid'
           ? `<p style="margin:14px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;color:#5d5550;">Payment is due at check-in.</p>`
           : '';
@@ -1002,7 +1002,7 @@ ${footerBlock(ctx)}
         total,
         paid,
         paidInFull,
-        depositUnknown,
+        advanceUnknown,
         balanceDue,
         taxable,
         children,

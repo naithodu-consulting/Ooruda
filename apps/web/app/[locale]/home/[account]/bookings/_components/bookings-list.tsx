@@ -243,9 +243,6 @@ function ChannelStayRow(props: {
             />
             <span className="truncate text-sm font-medium">{name} booking</span>
           </div>
-          <span className="text-muted-foreground font-mono text-xs">
-            {stay.confirmationCode ?? 'No code in feed'}
-          </span>
         </div>
 
         <div className="flex min-w-0 flex-col sm:flex-1">

@@ -436,7 +436,7 @@ export function createBookingsService(client: Client) {
 
       // The advance taken when the booking was agreed becomes a receipt, so
       // the ledger — and the confirmation email that reads it — states a real
-      // figure instead of "a deposit was received". Written before the email
+      // figure instead of "an advance was received". Written before the email
       // is queued below. A receipt that fails must not undo a booking the
       // guest has been promised, so it is logged for staff to add by hand.
       if (

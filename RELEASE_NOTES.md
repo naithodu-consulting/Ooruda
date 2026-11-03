@@ -4,6 +4,16 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: Guest Confirmation Email "Advance received" Terminology — 2026-11-03
+
+### Clarity between Tariff Advances and Security Deposits
+- In the booking confirmation email (both HTML and plain-text formats), updated the payment row label from **"Deposit received"** to **"Advance received"**.
+- Updated the partial payment helper notice from *"A deposit has been received. The balance is due at check-in."* to *"An advance has been received. The balance is due at check-in."*
+- Resolves guest confusion between stay advance payments (tariff advance) and the separate refundable security deposit collected in-person upon check-in.
+- Updated internal email generation variables, comments, and regression tests (`guest-emails.test.ts`) to align with the new terminology.
+
+---
+
 ## Ooruda Villa: Check-out Gating and Add ID Dialog Redesign — 2026-11-03
 
 ### Check-out button hidden until check-in is complete
