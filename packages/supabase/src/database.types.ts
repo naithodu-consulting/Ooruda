@@ -2902,6 +2902,8 @@ export type Database = {
           channel: string | null
           check_in: string
           check_out: string
+          checked_in_at: string | null
+          checked_out_at: string | null
           children: number
           discount_amount: number
           discount_code: string | null
@@ -2936,6 +2938,8 @@ export type Database = {
           channel?: string | null
           check_in: string
           check_out: string
+          checked_in_at?: string | null
+          checked_out_at?: string | null
           children: number
           discount_amount?: number
           discount_code?: string | null
@@ -2970,6 +2974,8 @@ export type Database = {
           channel?: string | null
           check_in?: string
           check_out?: string
+          checked_in_at?: string | null
+          checked_out_at?: string | null
           children?: number
           discount_amount?: number
           discount_code?: string | null

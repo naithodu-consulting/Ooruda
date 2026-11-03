@@ -29,10 +29,10 @@ import { ID_FILE_MAX_BYTES } from '~/lib/villa/guest-ids';
 export const POST = enhanceRouteHandler(
   async function ({ request, user }) {
     // Refuse oversized bodies before reading them into memory.
-    // Allow up to 4 × 10 MB files + headers overhead.
+    // Allow up to 10 × 10 MB files + headers overhead.
     const length = Number(request.headers.get('content-length') ?? 0);
 
-    if (!length || length > 4 * ID_FILE_MAX_BYTES + 128 * 1024) {
+    if (!length || length > 10 * ID_FILE_MAX_BYTES + 256 * 1024) {
       return NextResponse.json(
         { ok: false, message: 'The total upload is too large.' },
         { status: 413 },

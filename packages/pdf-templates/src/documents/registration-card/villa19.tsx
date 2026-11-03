@@ -344,10 +344,14 @@ export function Villa19RegistrationCardDocument({
 
         <View style={s.signRow}>
           <View style={s.signSlot}>
+            <Text style={{ fontSize: 8.5, minHeight: 12, marginBottom: 2 }}>
+              {data.checkInDateFormatted}
+            </Text>
             <View style={s.signLine} />
             <Text style={s.signCaption}>Date</Text>
           </View>
           <View style={s.signSlot}>
+            <View style={{ minHeight: 12, marginBottom: 2 }} />
             <View style={s.signLine} />
             <Text style={s.signCaption}>Guest Signature</Text>
           </View>

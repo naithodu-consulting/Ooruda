@@ -144,7 +144,17 @@ describe('buildRegistrationCard', () => {
     expect(card.arrival).toBe('15 Nov 2026, 2:00 PM');
     expect(card.departure).toBe('18 Nov 2026, 11:00 AM');
     expect(card.numberOfGuests).toBe('10 (8 adults, 2 children)');
-    expect(card.tariff).toBe('₹20,000 per night + GST');
+    expect(card.tariff).toBe('Direct booking');
+    expect(card.checkInDateFormatted).toBe('15 Nov 2026');
+  });
+
+  it('populates tariff as Airbnb and mode of payment as Airbnb for Airbnb stays', () => {
+    const card = input({
+      booking: booking({ channel: 'airbnb' }),
+    });
+
+    expect(card.tariff).toBe('Airbnb');
+    expect(card.modeOfPayment).toBe('Airbnb');
   });
 
   it('leaves the fields the guest must complete blank', () => {
@@ -274,5 +284,32 @@ describe('buildRegistrationCard', () => {
     expect(card.firstName).toBe('Rahul');
     expect(card.lastName).toBe('Sharma');
     expect(card.guestName).toBe('Rahul Sharma');
+  });
+
+  it('extracts salutation from firstName when not explicitly set', () => {
+    const card = input({
+      booking: booking({
+        salutation: null,
+        firstName: 'Mr. Rahul',
+        lastName: 'Sharma',
+        guestName: 'Mr. Rahul Sharma',
+      }),
+    });
+
+    expect(card.salutation).toBe('Mr');
+    expect(card.firstName).toBe('Rahul');
+    expect(card.lastName).toBe('Sharma');
+  });
+
+  it('populates mode of payment as Online for direct website bookings when no payments recorded', () => {
+    const card = input({
+      booking: booking({
+        channel: 'online',
+      }),
+      paymentModes: [],
+    });
+
+    expect(card.tariff).toBe('Direct booking');
+    expect(card.modeOfPayment).toBe('Online');
   });
 });

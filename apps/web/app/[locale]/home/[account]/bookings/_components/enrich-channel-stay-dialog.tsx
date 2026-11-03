@@ -70,6 +70,8 @@ export function EnrichChannelStayDialog(props: {
 
   const form = useForm<EnrichChannelStayInput>({
     resolver: zodResolver(EnrichChannelStaySchema),
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
     defaultValues: {
       accountId: props.accountId,
       propertyId: props.propertyId,
@@ -109,7 +111,7 @@ export function EnrichChannelStayDialog(props: {
   return (
     <Dialog open onOpenChange={(open) => (!open ? props.onClose() : undefined)}>
       <DialogContent
-        className="max-h-[90vh] max-w-xl overflow-y-auto"
+        className="max-h-[90vh] overflow-y-auto sm:max-w-xl"
         data-test={'villa-enrich-channel-dialog'}
       >
         <DialogHeader>
@@ -178,12 +180,7 @@ export function EnrichChannelStayDialog(props: {
                 control={form.control}
                 render={({ field }) => (
                   <FormItem className="sm:col-span-4">
-                    <FormLabel>
-                      Last name{' '}
-                      <span className="text-muted-foreground text-xs font-normal">
-                        (optional)
-                      </span>
-                    </FormLabel>
+                    <FormLabel>Last name </FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -244,7 +241,7 @@ export function EnrichChannelStayDialog(props: {
                 name="adults"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="sm:col-span-4">
                     <FormLabel>Adults</FormLabel>
                     <FormControl>
                       <Input
@@ -265,7 +262,7 @@ export function EnrichChannelStayDialog(props: {
                 name="children"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="sm:col-span-4">
                     <FormLabel>Children</FormLabel>
                     <FormControl>
                       <Input
@@ -283,10 +280,31 @@ export function EnrichChannelStayDialog(props: {
               />
 
               <FormField
+                name="infants"
+                control={form.control}
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-4">
+                    <FormLabel>Infants</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={
+                          (field.value as number | string | undefined) ?? ''
+                        }
+                        inputMode="numeric"
+                        data-test={'villa-enrich-infants'}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
                 name="totalAmount"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
+                  <FormItem className="sm:col-span-12">
                     <FormLabel>Amount charged (₹)</FormLabel>
                     <FormControl>
                       <Input
@@ -312,15 +330,20 @@ export function EnrichChannelStayDialog(props: {
                 name="specialRequests"
                 control={form.control}
                 render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Notes (optional)</FormLabel>
+                  <FormItem className="sm:col-span-12">
+                    <FormLabel>Special requests (optional)</FormLabel>
                     <FormControl>
                       <Textarea
                         {...field}
                         rows={2}
-                        data-test={'villa-enrich-notes'}
+                        placeholder="e.g. late check-in, extra towels, dietary preferences"
+                        data-test={'villa-enrich-special-requests'}
                       />
                     </FormControl>
+                    <FormDescription>
+                      Shows up in booking details and on the guest info card
+                      (Remarks).
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

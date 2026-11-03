@@ -1,6 +1,4 @@
 import 'server-only';
-import { after } from 'next/server';
-
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type * as z from 'zod';
@@ -13,13 +11,14 @@ import type { Database } from '~/lib/database.types';
 import { formatDateReadable } from '~/lib/format-date';
 import type { VillaRole } from '~/lib/roles';
 import { checkAvailability } from '~/lib/villa-db/availability';
-import { getChannelBlock } from '~/lib/villa-db/blocks';
+import { getChannelBlock, listBlocks } from '~/lib/villa-db/blocks';
 import {
   type SiteBooking,
   cancelBooking,
   channelValueForFeed,
   clearChannelLink,
   createOfflineBooking,
+  getBooking,
   getChannelLinkedBooking,
   markStayCompleted,
   reopenStay,
@@ -31,7 +30,6 @@ import { getPricingInputs } from '~/lib/villa-db/rates';
 import { recordBookingActivity } from '~/lib/villa/activity';
 import { blockNoteForDisplay } from '~/lib/villa/calendar';
 import { parseChannelNote } from '~/lib/villa/channel-note';
-import { sendBookingConfirmation } from '~/lib/villa/guest-email-runner';
 import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
 import { mirrorBooking } from '~/lib/villa/mirror';
 import { fromPaise, fromPaiseToString } from '~/lib/villa/money';
@@ -39,6 +37,7 @@ import { type QuoteError, quoteStay } from '~/lib/villa/pricing';
 
 import type {
   CancelBookingSchema,
+  CheckInStaySchema,
   CompleteStaySchema,
   EnrichChannelStaySchema,
   NewBookingSchema,
@@ -157,7 +156,13 @@ export function createBookingsService(client: Client) {
       accountId: string;
       propertyId: string;
       booking: Pick<SiteBooking, 'id' | 'bookingCode'>;
-      action: 'created' | 'cancelled' | 'completed' | 'reopened' | 'note';
+      action:
+        | 'created'
+        | 'cancelled'
+        | 'completed'
+        | 'reopened'
+        | 'note'
+        | 'checked_in';
       reasonCode?: string | null;
       note?: string | null;
     },
@@ -467,23 +472,8 @@ export function createBookingsService(client: Client) {
         }
       }
 
-      // Runs after the response: never fails the booking if the email fails,
-      // but after() keeps the invocation alive so the send is not dropped
-      // when the function would otherwise freeze on returning.
-      after(async () => {
-        try {
-          await sendBookingConfirmation(
-            input.accountId,
-            input.propertyId,
-            booking,
-          );
-        } catch (e) {
-          (await getLogger()).error(
-            { bookingId: booking.id, error: String(e) },
-            'villa booking confirmation send failed',
-          );
-        }
-      });
+      // Note: Automatic email sending on creation is removed as requested.
+      // Confirmation emails can be sent explicitly from the booking details screen when needed.
 
       return booking;
     },
@@ -603,6 +593,33 @@ export function createBookingsService(client: Client) {
               'villa channel enrich: could not free a stranded link',
             ),
           );
+        }
+
+        if (isVillaDbError(error) && error.code === 'DATE_BLOCKED') {
+          const allBlocks = await listBlocks(
+            site,
+            block.startDate,
+            block.endDate,
+          ).catch(() => []);
+          const manualConflicts = allBlocks.filter(
+            (b) =>
+              b.source === 'manual' &&
+              b.startDate < block.endDate &&
+              b.endDate > block.startDate,
+          );
+          if (manualConflicts.length > 0) {
+            const names = manualConflicts
+              .map(
+                (c) =>
+                  `"${c.notes ? blockNoteForDisplay(c.notes) : c.reason || 'Blocked'}" (${formatDateReadable(c.startDate)} – ${formatDateReadable(c.endDate)})`,
+              )
+              .join(', ');
+            throw new VillaDbError(
+              'DATE_BLOCKED',
+              `conflicts with manual blocks: ${names}`,
+              `These dates overlap with manual calendar block(s): ${names}. Please release them in Calendar first.`,
+            );
+          }
         }
 
         throw error;
@@ -766,6 +783,24 @@ export function createBookingsService(client: Client) {
       const site = await getVillaSite(input.accountId, input.propertyId);
       const booking = await reopenStay(site, input.bookingId, actor);
 
+      await mirrorBooking(site, booking);
+
+      // Undoing the check-out has to clear its timestamp, or the guest stays
+      // on the Today board as departed while being back in house. Same
+      // best-effort handling as the write in `complete`.
+      const { error: checkedOutError } = await getSupabaseServerAdminClient()
+        .from('villa_bookings_mirror')
+        .update({ checked_out_at: null })
+        .eq('property_id', input.propertyId)
+        .eq('site_booking_id', input.bookingId);
+
+      if (checkedOutError) {
+        (await getLogger()).error(
+          { bookingId: input.bookingId, error: checkedOutError.message },
+          'villa check-out timestamp clear failed',
+        );
+      }
+
       await record(
         {
           accountId: input.accountId,
@@ -775,7 +810,77 @@ export function createBookingsService(client: Client) {
         },
         actor,
       );
-      await mirrorBooking(site, booking);
+
+      return booking;
+    },
+
+    async checkIn(input: z.output<typeof CheckInStaySchema>, actor: string) {
+      const site = await getVillaSite(input.accountId, input.propertyId);
+      const booking = await getBooking(site, input.bookingId);
+
+      if (!booking) {
+        throw new VillaDbError('NOT_FOUND', input.bookingId);
+      }
+
+      if (booking.status !== 'confirmed') {
+        throw new VillaDbError(
+          'CONFLICT',
+          `booking ${input.bookingId} is ${booking.status}`,
+          `Only a confirmed stay can be checked in. This one is ${booking.status}.`,
+        );
+      }
+
+      const admin = getSupabaseServerAdminClient();
+      const now = new Date().toISOString();
+
+      // `checked_in_at` is the whole state of a check-in: the badge, the
+      // check-out gate and the Today board all read it. A failed or no-op
+      // write must stop here rather than leave an activity row claiming a
+      // check-in that nothing recorded - `select()` is what makes a
+      // zero-row update (no mirror row for this booking) visible at all.
+      const { data: mirrorRows, error: mirrorError } = await admin
+        .from('villa_bookings_mirror')
+        .update({ checked_in_at: now })
+        .eq('property_id', input.propertyId)
+        .eq('site_booking_id', input.bookingId)
+        .select('site_booking_id');
+
+      if (mirrorError) {
+        (await getLogger()).error(
+          { bookingId: input.bookingId, error: mirrorError.message },
+          'villa check-in mirror update failed',
+        );
+
+        throw new VillaDbError(
+          'CONFLICT',
+          `check-in mirror update failed for ${input.bookingId}: ${mirrorError.message}`,
+          'Could not record the check-in. Please try again.',
+        );
+      }
+
+      if (!mirrorRows?.length) {
+        (await getLogger()).error(
+          { bookingId: input.bookingId, propertyId: input.propertyId },
+          'villa check-in found no mirror row to update',
+        );
+
+        throw new VillaDbError(
+          'NOT_FOUND',
+          `no mirror row for booking ${input.bookingId}`,
+          'Could not record the check-in: this booking is not synced yet. Please try again in a moment.',
+        );
+      }
+
+      await record(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking,
+          action: 'checked_in',
+          note: 'Guest checked in at the villa',
+        },
+        actor,
+      );
 
       return booking;
     },
@@ -783,6 +888,30 @@ export function createBookingsService(client: Client) {
     async complete(input: z.output<typeof CompleteStaySchema>, actor: string) {
       const site = await getVillaSite(input.accountId, input.propertyId);
       const booking = await markStayCompleted(site, input.bookingId, actor);
+
+      // Before the timestamp, so the row is certain to exist: a booking that
+      // has never been mirrored has nothing to update. `toRow` leaves both
+      // check-in and check-out timestamps out of the payload, so re-mirroring
+      // never clears what was stamped here.
+      await mirrorBooking(site, booking);
+
+      // Unlike `checked_in_at`, this is a record of the check-out, not the
+      // check-out itself - the site booking is already 'completed' and the
+      // guest has left. A failure here costs the Today board its "departed"
+      // row, which is not worth failing an action that has already happened,
+      // so it is logged and swallowed.
+      const { error: checkedOutError } = await getSupabaseServerAdminClient()
+        .from('villa_bookings_mirror')
+        .update({ checked_out_at: new Date().toISOString() })
+        .eq('property_id', input.propertyId)
+        .eq('site_booking_id', input.bookingId);
+
+      if (checkedOutError) {
+        (await getLogger()).error(
+          { bookingId: input.bookingId, error: checkedOutError.message },
+          'villa check-out timestamp write failed',
+        );
+      }
 
       await record(
         {
@@ -793,7 +922,6 @@ export function createBookingsService(client: Client) {
         },
         actor,
       );
-      await mirrorBooking(site, booking);
 
       return booking;
     },

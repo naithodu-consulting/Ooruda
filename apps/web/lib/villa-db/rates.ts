@@ -664,14 +664,18 @@ export async function saveRateGroup(
         }
       }
 
-      // Until villa-booking 00110 is applied, `uq_pricing_property_rule` is
-      // UNIQUE (property_id, rule_name), so a rate made of more than one
-      // stretch of nights collides with itself on the very first write. Say
-      // that plainly rather than "could not save".
+      // Before villa-booking 00110, `uq_pricing_property_rule` was UNIQUE
+      // (property_id, rule_name), so a rate made of more than one stretch of
+      // nights collided with itself on the very first write. The detail
+      // carries what the database actually said: naming the constraint from
+      // the shape of the request alone sent one earlier failure to the log
+      // under the wrong cause.
       if (insertError.code === '23505' && ranges.length > 1) {
         throw new VillaDbError(
           'CONFLICT',
-          `uq_pricing_property_rule blocks ${ranges.length} ranges for ${name}`,
+          `23505 on ${ranges.length} ranges for ${name}: ${insertError.message}${
+            insertError.details ? ` | ${insertError.details}` : ''
+          }`,
           'This villa’s booking site cannot yet hold one rate over separate stretches of dates. Save them as one continuous stretch, or ask Ooruda to update the booking site.',
         );
       }

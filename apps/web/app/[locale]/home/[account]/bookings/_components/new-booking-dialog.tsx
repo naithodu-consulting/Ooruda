@@ -123,6 +123,8 @@ function NewBookingForm(props: {
 
   const form = useForm<NewBookingInput>({
     resolver: zodResolver(NewBookingFormSchema),
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
     defaultValues: {
       accountId: props.accountId,
       propertyId: props.propertyId,
@@ -268,7 +270,7 @@ function NewBookingForm(props: {
         onOpenChange={(open) => (!open ? props.onClose() : undefined)}
       >
         <DialogContent
-          className="max-h-[92vh] max-w-2xl overflow-y-auto"
+          className="max-h-[92vh] overflow-y-auto sm:max-w-2xl"
           data-test={'villa-booking-dialog'}
         >
           <DialogHeader>
@@ -504,12 +506,7 @@ function NewBookingForm(props: {
                   control={form.control}
                   render={({ field }) => (
                     <FormItem className="sm:col-span-4">
-                      <FormLabel>
-                        Last name{' '}
-                        <span className="text-muted-foreground text-xs font-normal">
-                          (optional)
-                        </span>
-                      </FormLabel>
+                      <FormLabel>Last name </FormLabel>
                       <FormControl
                         render={
                           <Input
@@ -574,7 +571,7 @@ function NewBookingForm(props: {
                   name="channel"
                   control={form.control}
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="sm:col-span-6">
                       <FormLabel>Booking Method</FormLabel>
                       <Select
                         value={field.value}
@@ -611,7 +608,7 @@ function NewBookingForm(props: {
                   name="paymentStatus"
                   control={form.control}
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="sm:col-span-6">
                       <FormLabel>Payment Status</FormLabel>
                       <Select
                         value={field.value}
@@ -650,7 +647,7 @@ function NewBookingForm(props: {
                       name="amountReceived"
                       control={form.control}
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="sm:col-span-4">
                           <FormLabel>Amount received</FormLabel>
                           <FormControl
                             render={
@@ -675,7 +672,7 @@ function NewBookingForm(props: {
                       name="paymentMode"
                       control={form.control}
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="sm:col-span-4">
                           <FormLabel>Payment Method</FormLabel>
                           <Select
                             value={field.value}
@@ -712,7 +709,7 @@ function NewBookingForm(props: {
                       name="paymentReference"
                       control={form.control}
                       render={({ field }) => (
-                        <FormItem className="sm:col-span-2">
+                        <FormItem className="sm:col-span-4">
                           <FormLabel>Reference (optional)</FormLabel>
                           <FormControl
                             render={
@@ -735,7 +732,7 @@ function NewBookingForm(props: {
                   name="specialRequests"
                   control={form.control}
                   render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
+                    <FormItem className="sm:col-span-12">
                       <FormLabel>Special requests (optional)</FormLabel>
                       <FormControl
                         render={
@@ -747,7 +744,8 @@ function NewBookingForm(props: {
                         }
                       />
                       <FormDescription>
-                        The guest can see this on their booking page.
+                        The guest can see this on their booking page and on the
+                        guest info card.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -758,7 +756,7 @@ function NewBookingForm(props: {
                   name="isEvent"
                   control={form.control}
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3 sm:col-span-2">
+                    <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3 sm:col-span-12">
                       <div className="flex flex-col gap-1">
                         <FormLabel>This is an event</FormLabel>
                         <FormDescription>

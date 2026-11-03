@@ -12,6 +12,7 @@ import { sendGuestEmailNow } from '~/lib/villa/guest-email-runner';
 
 import {
   CancelBookingSchema,
+  CheckInStaySchema,
   CompleteStaySchema,
   EnrichChannelStaySchema,
   NewBookingSchema,
@@ -85,6 +86,24 @@ export const cancelBookingAction = authActionClient
     revalidateBookings();
   });
 
+export const checkInStayAction = authActionClient
+  .inputSchema(CheckInStaySchema)
+  .action(async ({ parsedInput, ctx }) => {
+    await requireVillaRole(parsedInput.accountId, [
+      'villa_admin',
+      'villa_manager',
+    ]);
+
+    await createBookingsService(getSupabaseServerClient()).checkIn(
+      parsedInput,
+      ctx.user.id,
+    );
+
+    revalidateBookings();
+    revalidatePath('/[locale]/home/[account]/bookings/[bookingId]', 'page');
+    revalidatePath('/[locale]/home/[account]', 'page');
+  });
+
 export const completeStayAction = authActionClient
   .inputSchema(CompleteStaySchema)
   .action(async ({ parsedInput, ctx }) => {
@@ -99,6 +118,7 @@ export const completeStayAction = authActionClient
     );
 
     revalidateBookings();
+    revalidatePath('/[locale]/home/[account]/bookings/[bookingId]', 'page');
   });
 
 export const reopenStayAction = authActionClient

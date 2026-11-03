@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import { normalizePhoneNumber } from '@kit/shared/utils';
+import { isPhoneEmpty, normalizePhoneNumber } from '@kit/shared/utils';
 
 import { ADDON_UNITS, CONTACT_CATEGORIES } from '~/lib/villa/labels';
 
@@ -192,15 +192,18 @@ export const BusinessDetailsSchema = z.object({
     .string()
     .trim()
     .max(254)
-    .refine((v) => v === '' || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), {
-      message: 'Enter a valid email address, or leave it empty',
+    .refine((v) => v === '' || z.string().email().safeParse(v).success, {
+      message:
+        'Enter a valid email address (e.g. name@example.com), or leave it empty',
     }),
   // Where guests send their IDs and reach the property on WhatsApp.
   whatsappNumber: z
     .string()
     .trim()
-    .refine((v) => v === '' || normalizePhoneNumber(v) !== null, {
-      message: 'Enter a valid WhatsApp number or leave it empty',
+    .max(25)
+    .refine((v) => isPhoneEmpty(v) || normalizePhoneNumber(v) !== null, {
+      message:
+        'Enter a valid WhatsApp number (10-digit mobile or international with country code), or leave it empty',
     }),
 });
 
@@ -227,8 +230,10 @@ export const PoliciesSchema = z.object({
   whatsappNumber: z
     .string()
     .trim()
-    .refine((v) => v === '' || normalizePhoneNumber(v) !== null, {
-      message: 'Enter a valid WhatsApp number, or leave it empty',
+    .max(25)
+    .refine((v) => isPhoneEmpty(v) || normalizePhoneNumber(v) !== null, {
+      message:
+        'Enter a valid WhatsApp number (10-digit mobile or international with country code), or leave it empty',
     }),
 });
 

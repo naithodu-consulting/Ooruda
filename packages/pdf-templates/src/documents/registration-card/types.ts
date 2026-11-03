@@ -71,7 +71,9 @@ export interface RegistrationCardPdfData {
   modeOfPayment: string | null;
   /** Always blank today: the amount is not configured anywhere yet. */
   securityDeposit: string | null;
-  /** Per night, before GST, e.g. "₹18,500 per night". */
+  /** Per night, before GST, e.g. "₹18,500 per night" or "Airbnb" / "Direct booking". */
   tariff: string | null;
   remarks: string | null;
+  /** Check-in date formatted at the bottom sign-off, e.g. "17 Dec 2026". */
+  checkInDateFormatted: string;
 }

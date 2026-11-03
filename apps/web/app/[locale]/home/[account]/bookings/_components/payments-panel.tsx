@@ -467,7 +467,7 @@ function RecordPaymentDialog(
   return (
     <Dialog open onOpenChange={(o) => (!o ? props.onClose() : undefined)}>
       <DialogContent
-        className="max-h-[92vh] max-w-lg overflow-y-auto"
+        className="max-h-[92vh] overflow-y-auto sm:max-w-lg"
         data-test={'villa-payment-dialog'}
       >
         <DialogHeader>
@@ -641,7 +641,7 @@ function RefundDialog(
   return (
     <Dialog open onOpenChange={(o) => (!o ? props.onClose() : undefined)}>
       <DialogContent
-        className="max-h-[92vh] max-w-lg overflow-y-auto"
+        className="max-h-[92vh] overflow-y-auto sm:max-w-lg"
         data-test={'villa-refund-dialog'}
       >
         <DialogHeader>
@@ -786,7 +786,7 @@ function VoidDialog(
 
   return (
     <Dialog open onOpenChange={(o) => (!o ? props.onClose() : undefined)}>
-      <DialogContent className="max-w-md" data-test={'villa-void-dialog'}>
+      <DialogContent className="sm:max-w-md" data-test={'villa-void-dialog'}>
         <DialogHeader>
           <DialogTitle>Void this payment?</DialogTitle>
           <DialogDescription>

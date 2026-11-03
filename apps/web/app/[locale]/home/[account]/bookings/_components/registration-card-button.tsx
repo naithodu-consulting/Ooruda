@@ -31,12 +31,17 @@ export function RegistrationCardButton(props: {
     if (pending) return;
 
     setPending(true);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
     try {
       const response = await fetch(
         `/api/villa/bookings/${props.bookingId}/registration-card/pdf` +
           `?account=${props.accountId}&property=${props.propertyId}`,
+        { signal: controller.signal },
       );
+
+      clearTimeout(timeout);
 
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as {
@@ -44,6 +49,12 @@ export function RegistrationCardButton(props: {
         } | null;
 
         toast.error(body?.error ?? 'Could not generate the registration card.');
+        return;
+      }
+
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/pdf')) {
+        toast.error('Could not generate the registration card.');
         return;
       }
 
@@ -60,9 +71,17 @@ export function RegistrationCardButton(props: {
       // Revoked on the next tick: Safari cancels the save if the URL dies
       // while the click is still being handled.
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch {
-      toast.error('Could not generate the registration card.');
+      toast.success('Registration card downloaded');
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        toast.error(
+          'Registration card generation timed out. Please try again.',
+        );
+      } else {
+        toast.error('Could not generate the registration card.');
+      }
     } finally {
+      clearTimeout(timeout);
       setPending(false);
     }
   }

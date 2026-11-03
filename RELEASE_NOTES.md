@@ -4,6 +4,132 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: Check-out Confirmation on the Today Board — 2026-11-03
+
+### A completed check-out is now visible on the dashboard
+- Checking a guest out set the booking to `completed`, and all three Today tiles filter on `confirmed`, so the stay simply vanished from the board. There was no confirmation anywhere on the dashboard that the check-out had happened — only the booking badge and the Activity Log.
+- "Checking out" now holds the whole day: stays still to leave, then stays already checked out, each row marked with a dot (pending) or a tick (done), plus a line reading "N still to check out" or "All checked out".
+- Departures are matched on *when the check-out happened*, not on the booking's check-out date, so an early departure (checked out on day 3 of a 5-night stay) and a late one both appear on the day they actually left.
+
+### `checked_out_at` on the booking mirror
+- Added `checked_out_at timestamptz` to `villa_bookings_mirror`, the counterpart to `checked_in_at`. The booking site records a check-out only as `status = 'completed'` and its `updated_at` moves on any edit, so "who was checked out today" was not answerable before this.
+- Stamped in `complete()` after the mirror write-through, so the row is certain to exist; cleared in `reopen()`, so undoing a check-out takes the guest off the departed list. Both are best-effort and logged on failure: unlike `checked_in_at`, this records a check-out that has already happened rather than being the check-out itself, and must not fail the action.
+
+### Today board housekeeping
+- The checked-in lookup is now bounded to stays that have not yet ended; it previously scanned every stay ever checked in on each dashboard render.
+- Replaced the hardcoded `emerald-500/600` on the "Checked in" tile with the semantic `success` tokens.
+
+### Guest emails
+- Shortened the confirmation-email row for channel bookings to "Booked through Airbnb" from the previous three-sentence explanation of cancellation and refund terms.
+
+### Backfill of past check-outs
+- Stays checked out before the column existed carried no timestamp and would have been missing from the board. Backfilled `checked_out_at` from the activity log (`action = 'completed'`), taking the latest such event per booking so a reopened-then-recompleted stay records its second check-out.
+- Conservative by design: only rows still `completed` and still null are touched, so a timestamp written by the application is never overwritten and a reopened stay is left alone. Stays synced in from the booking site that were never checked out through Ooruda have no activity row and are deliberately left null rather than given an invented time.
+
+### Migrations
+
+| Migration | Purpose |
+| --- | --- |
+| `20261103093000_villa_checkout_timestamp.sql` | Adds `checked_out_at timestamptz` to `public.villa_bookings_mirror`. |
+| `20261103100000_villa_backfill_checked_out_at.sql` | Backfills `checked_out_at` from `villa_booking_activity` for stays checked out before the column existed. |
+
+---
+
+## Ooruda Villa: Check-in Flow & Guest ID Reliability Fixes — 2026-11-03
+
+Four correctness fixes found while reviewing the check-in flow and the multi-guest ID dialog.
+
+### Check-out no longer blocked for stays already in progress
+- Check-out gating required a recorded check-in (`checked_in_at`), which is null for every booking taken before that column existed. A guest already in house could not be checked out until their departure date. Check-out is available again for any confirmed stay whose check-in date has passed, with or without a recorded check-in.
+
+### Check-in fails loudly instead of reporting a false success
+- The `villa_bookings_mirror` write in `checkIn` only logged its error and still recorded the activity row, so staff saw "Checked in successfully" while `checked_in_at` stayed null — leaving the badge, the Today board and the check-out gate unchanged. The update now uses `.select()` so a zero-row update (booking not yet mirrored) is visible, and both an error and a no-op raise a `VillaDbError` with a plain message.
+
+### Guest ID photos no longer orphaned in storage on a failed upload
+- Parallel uploads used `Promise.all`, which rejects on the first failure while the remaining uploads are still in flight; files that landed afterwards were never rolled back and, having no `villa_guest_document_files` row, carried no `purge_after` — so retention never deleted them. Switched to `Promise.allSettled` and the rollback now removes every object that was successfully uploaded.
+
+### Multi-guest ID save no longer duplicates guests on retry
+- "Save all" posts one request per guest and stopped at the first failure, leaving earlier guests saved while all cards remained in the dialog; saving again created duplicate guests and duplicate ID documents. Saved guests are now removed from the dialog, the panel behind it refreshes, and the toast reports how many of the batch were recorded so only the remaining guests are retried.
+
+---
+
+## Ooruda Villa: Check-in Dialog State, Back Button & Registration Card Fixes — 2026-11-02
+
+### Check-in & Check-out Dialog Lifecycle & Automatic Page Refresh
+- **Dialog Auto-Close**: Connected controlled `open` state (`AlertDialog open={open} onOpenChange={setOpen}`) to `CheckInStayButton` and `CompleteStayButton`. When check-in succeeds, `setOpen(false)` closes the confirmation dialog automatically.
+- **Immediate State Transition**: Called `router.refresh()` and `revalidatePath('/[locale]/home/[account]/bookings/[bookingId]', 'page')` on check-in completion. The page immediately reflects the `Checked in` badge, dismisses the "Check in" button, and displays "Check out" in the brand yellow theme without requiring a manual browser reload.
+
+### "All Bookings" Back Button
+- **Tab & State Preservation**: Introduced `BookingBackButton` client component that calls `router.back()` when navigating from a previous session tab (e.g. `In house`), returning the user to their active tab and scroll position rather than resetting to the default "Upcoming" view. Gracefully falls back to the property bookings URL if opened directly.
+
+### Registration Card Download Reliability
+- **Timeout Protection**: Added `AbortController` with a 30-second timeout to `RegistrationCardButton` to prevent the download spinner from getting permanently stuck if compiling or downloading slowly.
+- **Content-Type Verification**: Validates that incoming response streams are valid `application/pdf` before creating the download blob, surfacing descriptive error toasts if non-PDF responses occur.
+
+---
+
+## Ooruda Villa: Check-in Theme Alignment & Add ID Popup Scroll Resolution — 2026-11-02
+
+### Check-in Button Theme & Status Gating
+- **Website Brand Alignment**: Removed hardcoded emerald styling from the "Check in" trigger and confirmation dialog buttons in `CheckInStayButton`; now uses the website's standard primary amber theme (`variant="default"`), matching "Check out", "New booking", and the primary color palette.
+- **Sequential Action Gating**: Updated booking action bar logic so that arriving stays display only the "Check in" action; once the guest is checked in, "Check in" transitions to "Check out", preventing simultaneous, contradictory check-in and check-out buttons from rendering side-by-side.
+
+### Add ID Dialog Layout & Vertical Scroll Resolution
+- **Responsive Width Override**: Added `sm:max-w-2xl` to `DialogContent` across the Villa dialogs (`add-id-dialog`, `enrich-channel-stay-dialog`, `new-booking-dialog`, `payments-panel`, `cancel-booking-dialog`). This resolves a breakpoint issue where `@kit/ui/dialog`'s base `sm:max-w-sm` was overriding non-responsive `max-w-2xl` and clamping dialogs to 384px wide on desktop.
+- **Scroll Trap Resolution**: Refactored `AddIdDialog` to use a single, native `overflow-y-auto` scrolling container with sticky header and sticky footer. Eliminated the nested `overflow-hidden` container that caused browser focus to scroll the dialog header permanently out of view with no way for the user to scroll back up.
+- **Sticky Actions**: The title bar and "Save all / Cancel" footer remain pinned and accessible while scrolling through multiple guest cards.
+
+---
+
+## Ooruda Villa: End-to-End Phone & Email Validation — 2026-11-02
+
+### Comprehensive Audit & Real-time Validation
+- **Immediate User Feedback (`onBlur`)**: Updated forms across the villa module (`NewBookingFormSchema`, `EnrichChannelStaySchema`, `BusinessDetailsSchema`, `PoliciesSchema`) from the default `onSubmit` validation mode to `mode: 'onBlur', reValidateMode: 'onChange'`. Users now get immediate inline validation feedback when clicking or tabbing out of invalid phone or email inputs rather than being confused by inactive submit buttons or silent failures.
+- **Robust Phone Parsing with `isPhoneEmpty`**: Fixed the phone input edge case where clearing a phone or selecting a country code emitted a bare prefix (e.g. `+91`). Implemented and exported `isPhoneEmpty` in `@kit/shared/utils` to treat `null`, `undefined`, empty strings, whitespace, and bare country dialing codes without national digits as truly empty.
+- **PhoneInput Component Enhancement**: Updated `packages/ui/src/makerkit/phone-input.tsx` to emit `''` when no national digits are entered, preventing phantom phone numbers from persisting in form state.
+- **Strict Phone Number Format Checking**: Validates 10-digit mobile numbers for India (`+91`) and canonical E.164 formats for international countries using `libphonenumber-js`. Incomplete numbers (e.g. 5 digits) or invalid prefixes are flagged immediately with descriptive messages (`Enter a valid phone number (10-digit mobile or international with country code)`).
+- **Strict Email Format Checking**: Applied clean email validation rules to direct booking guest email, Airbnb enrichment optional email, settings business support email, and emergency contact emails, providing helpful error hints (e.g. `Enter a valid email address (e.g. name@example.com)`).
+- **Guest ID Registration (Multi-guest Add ID Dialog)**: Integrated lead guest phone requirement (`isPhoneEmpty` validation) and optional guest phone format verification directly in `add-id-dialog.tsx`, clearing errors dynamically as the user types.
+- **Automated Validation Test Suite**: Created comprehensive vitest suite in `apps/web/lib/villa/validation.test.ts` with 15 test cases verifying `isPhoneEmpty`, `normalizePhoneNumber`, `NewBookingFormSchema`, `EnrichChannelStaySchema`, and `RecordIdSchema`.
+
+---
+
+## Ooruda Villa: Booking UX, Check-in Flow, Multi-Guest ID & Registration Card Updates — 2026-11-02
+
+### Add Booking & Enrichment Dialog Grid Layout Fixes
+- **Form Layout**: Fixed cramped input fields in both "Add booking details" (Airbnb/channel enrichment) and "New booking" (direct booking) dialogs by aligning all inputs to standard 12-column grid spans (e.g. adults, children, infants across spans 4/4/4, full width for special requests and payment notes).
+- **Special Requests Field**: Formally labeled and mapped "Special requests (optional)" in Airbnb enrichment dialog; now surfaces across booking details and on the Guest Info Card (under Remarks).
+
+### Guest Registration Card Updates
+- **Check-in Date Populated**: Displays the guest check-in date at the bottom of the registration card after terms and conditions in `17 Dec 2026` readable format.
+- **Name Breakdown**: Salutation, first name, and last name are cleanly populated into their respective fields.
+- **Mode of Payment**: Shows `'Airbnb'` for channel bookings, or direct payment mode if available.
+- **Tariff Display**: Displays strictly `'Airbnb'` or `'Direct booking'` based on the booking type, omitting monetary amounts.
+
+### Check-in Flow & Operations Dashboard
+- **Check-in Button**: Added an explicit "Check in" action button on the booking details page when guests arrive, setting `checked_in_at` and recording activity.
+- **Dashboard Today Board**: Updated operational categories to reflect the active guest journey: **Arriving**, **Checked in**, and **Checking out**.
+- **Checkout Gating**: Check-out action is contextualized to guests who have checked in.
+
+### Multi-Guest ID Document Upload & Performance Optimization
+- **Multi-Guest Entry**: Redesigned the "Add ID" dialog to allow adding multiple guests in a single dialog submission with an "+ Add another guest" button.
+- **10 File Limit**: Expanded document file upload limit up to 10 files.
+- **Performance Optimization**: Client-side canvas downscaling (max 1920px, 85% JPEG) compresses large phone camera photos before upload; server uploads to Supabase storage are parallelized with `Promise.all` alongside batch database records insertion.
+
+### Direct Booking Confirmation Email
+- Removed automatic booking confirmation email trigger on direct booking creation; confirmations can be sent on-demand from the booking details view.
+
+### Roadmap: Editing Existing Bookings
+- Documented real-world use cases (guest additions/reductions, commercial adjustments, contact corrections), architectural boundaries (Direct vs Airbnb/OTA, GST compliance), and a 3-phase implementation roadmap in `OORUDA_VILLA_TODO.md`.
+
+### Migrations
+
+| Migration | Purpose |
+| --- | --- |
+| `20261102203000_villa_checkin_flow.sql` | Adds `checked_in_at timestamptz` to `public.villa_bookings_mirror` and adds `'checked_in'` to `villa_booking_activity_action_check`. |
+
+---
+
 ## Guest Salutation and Split Name — 2026-11-02
 
 ### Salutation, first name, optional last name — everywhere a guest is recorded
@@ -5381,5 +5507,6 @@ Separated the single Supabase project into three distinct environments - local D
 | `20260804093956_reconcile_schema_drift.sql` | Drop orphaned functions, fix `account_image` storage policy, revoke anon grants |
 | `20260805000002_missing_fk_indexes.sql` | 8 missing FK indexes (CONCURRENTLY), GIN trigram indexes on `profiles.full_name` and `audit_logs.action`, new `get_unit_ledger_balances()` RPC for DB-side aggregation |
 | `20261031104000_user_accounts_add_product_type.sql` | Add `product_type` column to `public.user_accounts` view |
+| `20261102203000_villa_checkin_flow.sql` | Add `checked_in_at` column to `villa_bookings_mirror` and `'checked_in'` to `villa_booking_activity_action_check` |
 
 _Last updated: 2026-11-02_

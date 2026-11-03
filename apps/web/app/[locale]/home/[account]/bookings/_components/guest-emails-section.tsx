@@ -109,7 +109,7 @@ export async function GuestEmailsSection(props: {
     // all, so a stale "sent automatically" or "enabled once paid" line would
     // promise something the server refuses.
     if (blockedForChannelStay(template, booking)) {
-      return `${channelName} sends the guest its own confirmation. Ours states cancellation and refund terms that do not apply to this booking, so it is never sent from here.`;
+      return `Booked through ${channelName}`;
     }
 
     const auto = log.findLast(

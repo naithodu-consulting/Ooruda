@@ -51,6 +51,7 @@ export type BookingActivityAction =
   | 'cancelled'
   | 'completed'
   | 'reopened'
+  | 'checked_in'
   | 'note'
   | 'payment_recorded'
   | 'payment_voided'

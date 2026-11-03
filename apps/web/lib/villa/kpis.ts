@@ -92,16 +92,25 @@ export interface TodayBooking {
   checkOut: string;
 }
 
-/** Who arrives, who leaves and who is staying, for `today` (India). */
+/** Who arrives, who is checked in, who leaves and who is staying, for `today` (India). */
 export function todayBoard<T extends TodayBooking>(
   bookings: T[],
   today: string,
+  checkedInIds: Set<string> = new Set(),
 ) {
   const confirmed = bookings.filter((b) => b.status === 'confirmed');
 
   return {
-    arrivals: confirmed.filter((b) => b.checkIn === today),
-    // Still confirmed on check-out day = not checked out yet.
+    // Scheduled to arrive today, but not yet checked in
+    arrivals: confirmed.filter(
+      (b) => b.checkIn === today && !checkedInIds.has(b.id),
+    ),
+    // Currently checked in and in-house
+    checkedIn: confirmed.filter(
+      (b) =>
+        checkedInIds.has(b.id) && b.checkIn <= today && today <= b.checkOut,
+    ),
+    // Still confirmed on check-out day = scheduled departures
     departures: confirmed.filter((b) => b.checkOut === today),
     inHouse: confirmed.filter((b) => b.checkIn <= today && today < b.checkOut),
   };

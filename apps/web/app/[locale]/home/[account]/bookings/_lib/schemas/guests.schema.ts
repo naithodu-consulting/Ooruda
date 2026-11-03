@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import { normalizePhoneNumber } from '@kit/shared/utils';
+import { isPhoneEmpty, normalizePhoneNumber } from '@kit/shared/utils';
 
 import { ID_DOC_TYPES } from '~/lib/villa/guest-ids';
 
@@ -13,8 +13,10 @@ const bookingRef = {
 const phone = z
   .string()
   .trim()
-  .refine((v) => v === '' || normalizePhoneNumber(v) !== null, {
-    message: 'Enter a valid phone number, or leave it empty',
+  .max(25)
+  .refine((v) => isPhoneEmpty(v) || normalizePhoneNumber(v) !== null, {
+    message:
+      'Enter a valid phone number (10-digit mobile or international with country code), or leave it empty',
   });
 
 export const GUEST_SALUTATIONS = ['Mr', 'Mrs', 'Ms'] as const;

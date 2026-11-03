@@ -253,7 +253,7 @@ export function createGuestsService(client: Client) {
    */
   async function parseUploadedFiles(
     form: FormData,
-    maxFiles = 4,
+    maxFiles = 10,
   ): Promise<UploadedFile[]> {
     if (!guestIdUploadsEnabled()) {
       throw new GuestIdError(
@@ -450,56 +450,95 @@ export function createGuestsService(client: Client) {
         throw new GuestIdError('Could not save the ID. Please try again.');
       }
 
-      // Upload each file and create a file row.
-      const uploadedPaths: string[] = [];
-
-      for (let i = 0; i < parsedFiles.length; i++) {
-        const { bytes, contentType, label } = parsedFiles[i]!;
+      // Prepare file records for parallel storage upload and batch insert.
+      const fileEntries = parsedFiles.map((pf, i) => {
         const fileId = crypto.randomUUID();
         const path = `${input.accountId}/${input.propertyId}/${input.bookingId}/${documentId}/${fileId}`;
+        return {
+          fileId,
+          path,
+          bytes: pf.bytes,
+          contentType: pf.contentType,
+          label: pf.label,
+          file_order: i + 1,
+        };
+      });
 
-        const { error: uploadError } = await admin.storage
-          .from(GUEST_DOCS_BUCKET)
-          .upload(path, bytes, { contentType, upsert: false });
+      const uploadedPaths: string[] = [];
 
-        if (uploadError) {
-          (await getLogger()).error(
-            {
-              bookingId: input.bookingId,
-              fileIndex: i,
-              error: uploadError.message,
-            },
-            'villa guest id file upload failed',
-          );
-          // Roll back already-uploaded files and the document row.
-          if (uploadedPaths.length) {
-            await admin.storage.from(GUEST_DOCS_BUCKET).remove(uploadedPaths);
+      // 1. Upload all files concurrently to Supabase Storage
+      // `allSettled`, not `all`: `all` rejects on the first failure while the
+      // other uploads are still in flight, so the rollback below would miss
+      // the ones that land afterwards. An object with no
+      // villa_guest_document_files row carries no `purge_after`, so nothing
+      // ever deletes it - a guest's ID photo kept indefinitely.
+      const uploadResults = await Promise.allSettled(
+        fileEntries.map(async (entry) => {
+          const { error: uploadError } = await admin.storage
+            .from(GUEST_DOCS_BUCKET)
+            .upload(entry.path, entry.bytes, {
+              contentType: entry.contentType,
+              upsert: false,
+            });
+
+          if (uploadError) {
+            throw new Error(uploadError.message);
           }
-          await admin
-            .from('villa_guest_documents')
-            .delete()
-            .eq('id', documentId);
-          throw new GuestIdError(
-            'Could not save the ID photo. Please try again.',
-          );
+
+          return entry.path;
+        }),
+      );
+
+      for (const result of uploadResults) {
+        if (result.status === 'fulfilled') {
+          uploadedPaths.push(result.value);
+        }
+      }
+
+      const failedUpload = uploadResults.find(
+        (result) => result.status === 'rejected',
+      );
+
+      if (failedUpload) {
+        const reason = (failedUpload as PromiseRejectedResult).reason;
+
+        (await getLogger()).error(
+          {
+            bookingId: input.bookingId,
+            error: reason instanceof Error ? reason.message : String(reason),
+          },
+          'villa guest id file upload failed',
+        );
+
+        if (uploadedPaths.length) {
+          await admin.storage.from(GUEST_DOCS_BUCKET).remove(uploadedPaths);
         }
 
+        await admin.from('villa_guest_documents').delete().eq('id', documentId);
+
+        throw new GuestIdError(
+          'Could not save the ID photo. Please try again.',
+        );
+      }
+
+      // 2. Batch insert file metadata in a single round-trip
+      if (fileEntries.length > 0) {
         const { error: fileInsertError } = await admin
           .from('villa_guest_document_files')
-          .insert({
-            document_id: documentId,
-            account_id: input.accountId,
-            file_order: i + 1,
-            label,
-            storage_path: path,
-            content_type: contentType,
-            purge_after: purgeDate,
-            captured_by: actor,
-          });
+          .insert(
+            fileEntries.map((entry) => ({
+              document_id: documentId,
+              account_id: input.accountId,
+              file_order: entry.file_order,
+              label: entry.label,
+              storage_path: entry.path,
+              content_type: entry.contentType,
+              purge_after: purgeDate,
+              captured_by: actor,
+            })),
+          );
 
         if (fileInsertError) {
-          // Roll back this file from storage.
-          await admin.storage.from(GUEST_DOCS_BUCKET).remove([path]);
           if (uploadedPaths.length) {
             await admin.storage.from(GUEST_DOCS_BUCKET).remove(uploadedPaths);
           }
@@ -513,8 +552,6 @@ export function createGuestsService(client: Client) {
           );
           throw new GuestIdError('Could not save the ID. Please try again.');
         }
-
-        uploadedPaths.push(path);
       }
 
       await recordIdAccess([

@@ -1,5 +1,9 @@
 'use client';
 
+import { useState } from 'react';
+
+import { useRouter } from 'next/navigation';
+
 import { LogOut } from 'lucide-react';
 import { useAction } from 'next-safe-action/hooks';
 
@@ -23,14 +27,22 @@ export function CompleteStayButton(props: {
   bookingId: string;
   guestName: string;
 }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+
   const { execute, isPending } = useAction(completeStayAction, {
-    onSuccess: () => toast.success('Checked out'),
-    onError: ({ error }) =>
-      toast.error(error.serverError ?? 'Could not check out.'),
+    onSuccess: () => {
+      setOpen(false);
+      toast.success('Checked out');
+      router.refresh();
+    },
+    onError: ({ error }) => {
+      toast.error(error.serverError ?? 'Could not check out.');
+    },
   });
 
   return (
-    <AlertDialog>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger
         render={<Button data-test={'villa-booking-checkout-open'} />}
       >
@@ -46,7 +58,10 @@ export function CompleteStayButton(props: {
         </AlertDialogHeader>
         {/* Not AlertDialogFooter: its bg-muted band clashes with the dialog. */}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <AlertDialogCancel data-test={'villa-booking-checkout-cancel'}>
+          <AlertDialogCancel
+            disabled={isPending}
+            data-test={'villa-booking-checkout-cancel'}
+          >
             Not yet
           </AlertDialogCancel>
           <Button
