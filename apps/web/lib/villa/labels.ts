@@ -103,7 +103,7 @@ export const PAYMENT_MODE_LABELS: Record<string, string> = {
   cash: 'Cash',
   upi: 'UPI',
   bank: 'Bank transfer',
-  card: 'Card (at the villa)',
+  card: 'Credit/Debit Card',
   other: 'Other',
 };
 

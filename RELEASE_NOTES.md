@@ -23,6 +23,9 @@ This document covers all feature work, enhancements, and notable changes built o
 - A single "Identity Documents & Photos" section at the end allows uploading all ID documents in bulk with drag-and-drop and multi-file selection support (up to 10 files).
 - All bulk ID files attach to the Lead Guest / booking party, and all additional guests are registered and linked to the booking automatically.
 
+### Payment mode labeling
+- Updated payment mode label for `card` from "Card (at the villa)" to "Credit/Debit Card" across villa payment displays and registration sheets.
+
 ---
 
 ## Ooruda Villa: Check-out Confirmation on the Today Board — 2026-11-03

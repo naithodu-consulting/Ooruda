@@ -304,15 +304,6 @@ export function buildRegistrationCard(
  * pushed onto a second page - a page carrying neither the letterhead nor the
  * booking id. Capped here, in the one place that is unit-testable.
  */
-/**
- * Payment modes as the card names them.
- *
- * Not the shared `paymentModeLabel`: that one says "Card (at the villa)",
- * which is useful in the ledger - it distinguishes a card swiped at the
- * property from the website's gateway - but reads as an instruction on a form
- * the guest fills in at the gate, where "at the villa" is where they already
- * are. The sheet asks how this stay was paid, and the answer is one word.
- */
 const CARD_PAYMENT_MODES: Record<string, string> = {
   cash: 'Cash',
   upi: 'UPI',
