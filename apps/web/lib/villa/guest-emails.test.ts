@@ -126,14 +126,15 @@ describe('booking confirmation payment block', () => {
     contacts: [],
   };
 
-  it('states the real deposit and the real balance', () => {
-    const { html } = renderGuestEmail('booking_confirmation', {
+  it('states the real advance and the real balance', () => {
+    const { html, text } = renderGuestEmail('booking_confirmation', {
       ...money,
       paymentStatus: 'partially_paid',
       amountPaidPaise: 2_000_000,
     });
 
-    expect(html).toContain('Deposit received');
+    expect(html).toContain('Advance received');
+    expect(text).toContain('Advance received');
     expect(html).toContain('20,000');
     expect(html).toContain('Balance due');
     expect(html).toContain('34,280');
@@ -151,16 +152,20 @@ describe('booking confirmation payment block', () => {
     expect(html).not.toContain('balance is due at check-in');
   });
 
-  it('invents no figure when a deposit was never receipted', () => {
-    const { html } = renderGuestEmail('booking_confirmation', {
+  it('invents no figure when an advance was never receipted', () => {
+    const { html, text } = renderGuestEmail('booking_confirmation', {
       ...money,
       paymentStatus: 'partially_paid',
       amountPaidPaise: 0,
     });
 
-    expect(html).toContain('Deposit received');
+    expect(html).toContain('Advance received');
+    expect(text).toContain('Advance received');
     expect(html).not.toContain('Balance due');
     expect(html).toContain('balance is due at check-in');
+    expect(html).toContain(
+      'An advance has been received. The balance is due at check-in.',
+    );
   });
 
   it('unpaid owes the full amount at check-in', () => {
@@ -448,14 +453,15 @@ describe('booking confirmation: the refund ladder follows the money', () => {
     expect(html).toContain('stay.example.com/cancellation');
   });
 
-  it('quotes cancellation ladder even when a deposit was not yet receipted', () => {
-    const { html } = renderGuestEmail('booking_confirmation', {
+  it('quotes cancellation ladder even when an advance was not yet receipted', () => {
+    const { html, text } = renderGuestEmail('booking_confirmation', {
       ...base,
       paymentStatus: 'partially_paid',
       amountPaidPaise: 0,
     });
 
-    expect(html).toContain('Deposit received');
+    expect(html).toContain('Advance received');
+    expect(text).toContain('Advance received');
     expect(html).toContain('Cancellations &amp; refund');
     expect(html).toContain('will be refunded');
   });

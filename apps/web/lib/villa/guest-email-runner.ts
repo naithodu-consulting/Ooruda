@@ -202,7 +202,7 @@ function contextFor(
   // has paid in full that a balance is due. Ooruda's ledger is the exact
   // record, so it wins wherever it has seen money. With no receipts the site
   // value stands, which keeps bookings taken before advances were captured
-  // reading as "a deposit was received" rather than as unpaid.
+  // reading as "an advance was received" rather than as unpaid.
   const known = ledger !== undefined && ledger.netPaidPaise > 0;
 
   return {
