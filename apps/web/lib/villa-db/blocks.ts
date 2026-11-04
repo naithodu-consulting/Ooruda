@@ -106,19 +106,23 @@ const feedNamesCache = new Map<
   { value: Map<string, string>; expiresAt: number }
 >();
 
-export function invalidateFeedNamesCache(sitePropertyId?: string) {
-  if (sitePropertyId) {
-    feedNamesCache.delete(sitePropertyId);
-  } else {
-    feedNamesCache.clear();
-  }
-}
-
 /**
  * feed id → channel name for the property's iCal feeds. Feeds change about
  * never, so this is cached well past the blocks themselves; a failed read
  * returns an empty map and the UI falls back to a generic channel label
  * rather than failing the page.
+ *
+ * A failed read is NOT cached. Caching it stood a single transient error up as
+ * the answer for the whole TTL, and the fallback label is not display-only:
+ * channel enrichment writes `channelValueForFeed(block.channelName)` into
+ * `bookings.booking_channel` and the feed's name into the payout receipt, so
+ * every stay recorded in that window was permanently stamped with the generic
+ * 'channel' instead of 'airbnb' and a payer name of literally 'the channel'.
+ * Re-reading on the next call costs one query; the wrong value is forever.
+ *
+ * Nothing invalidates this cache, and nothing can: Ooruda only ever SELECTs
+ * `ical_feeds` — feeds are created and renamed on the booking site. The TTL is
+ * the policy, so a rename shows the old label for up to FEED_NAMES_TTL_MS.
  */
 async function listFeedNames(site: VillaSite): Promise<Map<string, string>> {
   const cached = feedNamesCache.get(site.sitePropertyId);
@@ -131,10 +135,10 @@ async function listFeedNames(site: VillaSite): Promise<Map<string, string>> {
 
   const value = new Map<string, string>();
 
-  if (!error) {
-    for (const row of data ?? []) {
-      if (row.name?.trim()) value.set(row.id, row.name.trim());
-    }
+  if (error) return value;
+
+  for (const row of data ?? []) {
+    if (row.name?.trim()) value.set(row.id, row.name.trim());
   }
 
   feedNamesCache.set(site.sitePropertyId, {

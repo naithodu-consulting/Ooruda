@@ -228,7 +228,9 @@ export function channelBlockNote(
 
   parts.push(details.kind === 'block' ? 'blocked on channel' : 'booking');
 
-  if (details.confirmationCode) parts.push(details.confirmationCode);
+  // Labelled, so reading it back cannot confuse it with the channel's own
+  // name: an unlabelled all-caps segment is ambiguous (see parseChannelNote).
+  if (details.confirmationCode) parts.push(`code ${details.confirmationCode}`);
   if (details.phoneLast4) parts.push(`phone ending ${details.phoneLast4}`);
 
   return parts.join(' · ');

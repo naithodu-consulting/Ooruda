@@ -8,6 +8,7 @@ import { checkAvailability, getUnavailableNights } from './availability';
 import {
   createBlock,
   deleteBlock,
+  invalidateBlocksCache,
   listBlocks,
   releaseFromBlock,
 } from './blocks';
@@ -251,6 +252,9 @@ run('villa-db adapter against a local villa-booking database', () => {
     } finally {
       // Deleting the feed cascades to its blocks.
       await site.client.from('ical_feeds').delete().eq('id', feed.id);
+      // Out-of-band write: it bypasses the service, so nothing invalidated
+      // listBlocks' 30s cache and the assertion below read the stale list.
+      invalidateBlocksCache(site.sitePropertyId);
     }
 
     expect(await listBlocks(site, d(0), d(2))).toEqual([]);

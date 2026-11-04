@@ -129,7 +129,7 @@ describe('channelEventDetails', () => {
     const { events } = parseIcal(reservation);
 
     expect(channelBlockNote('Airbnb', channelEventDetails(events[0]!))).toBe(
-      'Airbnb · booking · HM5XK3J9QW · phone ending 4821',
+      'Airbnb · booking · code HM5XK3J9QW · phone ending 4821',
     );
     expect(
       channelBlockNote('Airbnb', {
