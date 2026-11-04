@@ -4,9 +4,33 @@ Everything waiting on a decision or an action from you, in one place. Tick an it
 add the date. Engineering detail lives in `OORUDA_VILLA_TODO.md` (this repo) and the
 villa-booking repo's `TODO.md`; this file is the checklist.
 
-Last updated: 2026-09-30 (after M8a).
+Last updated: **2026-11-04** (re-checked against `release` b4e4d307; previously 2026-09-30
+after M8a). Items the code could answer were corrected in that pass, and one new item was
+found — A0 below, listed first because it inverts a safety assumption this checklist made.
 
 ---
+
+## A0. The guest-ID switch fails OPEN (found 2026-11-04)
+
+- [ ] **`VILLA_GUEST_ID_UPLOADS` is on unless explicitly set to `false`**, which is the
+      opposite of what this checklist assumed. `lib/villa/flags.ts:10` reads
+      `process.env.VILLA_GUEST_ID_UPLOADS !== 'false'`, so **any** environment that does not
+      set the variable at all has ID-file storage **enabled**. Its own docstring two lines
+      above says storage is "switched on only once BOTH privacy notices say so", and the B
+      entry below used to read "set it to true only after ..." (now corrected). The code
+      implements neither.
+      Compare `manualGuestEmailsEnabled()` directly underneath, which correctly fails closed
+      with `=== 'true'` — so the two flags in the same file disagree about which way to fail.
+      It is enforced consistently once read (`guests.service.ts:258, 379`,
+      `api/villa/guest-documents/route.ts:42`), so the gate works; it just defaults the wrong
+      way. `apps/web/.env.local:95` sets it to `true` locally, so local behaviour is
+      deliberate — the exposure is any deployed environment where nobody set it.
+      **Why it matters together with A and C:** guest ID files can be stored today, while
+      the guest-facing privacy page is still placeholder text (villa-booking TODO,
+      "Content"), and the retention purge has no scheduler (B below). That is the whole
+      compliance chain unmet at once.
+      **Fix:** flip the default to `=== 'true'` so it matches its docstring and its
+      neighbour, then set it explicitly in each environment that should have it on.
 
 ## A. Before anything reaches production
 
@@ -35,6 +59,9 @@ Last updated: 2026-09-30 (after M8a).
 - [ ] **Privacy Policy wording** — new section 5 "Villa Guests and Identity Documents" on
       ooruda.com (`app/[locale]/(legal)/privacy-policy/page.tsx`). Drafted by engineering;
       needs a legal read before production.
+      The section is live in the app (`privacy-policy/page.tsx:64`), so only the legal read
+      is outstanding. Note this is **Ooruda's** notice; the **guest site's** privacy page is
+      a separate, still-placeholder page in the villa-booking repo, and A0 depends on it.
 - [ ] **Business details** — enter the villa's legal name and GSTIN in Villa Settings >
       Policies; they print on receipt vouchers (and later on tax invoices).
 - [ ] **CA confirmation of the GST slabs** — SAC 996311; 5% up to ₹7,500 per unit per day,
@@ -51,12 +78,27 @@ Last updated: 2026-09-30 (after M8a).
 - [ ] **Sending guest emails by hand** — greyed out for everyone (and refused by the server) so no
       email goes out by mistake. Set `VILLA_MANUAL_GUEST_EMAILS=true` in the app's environment to
       switch "Send now" / "Send again" back on. Automatic emails are not affected.
-- [ ] **Guest ID photo storage** — set `VILLA_GUEST_ID_UPLOADS=true` in the app's environment
-      **only after** the booking site's Privacy page states ID storage and the 30-day
-      retention (villa-booking TODO 7). Until then staff record IDs "seen in person" (last 4
+      `flags.ts:20` uses `=== 'true'`, so this one correctly fails closed, and the variable
+      is not set in `.env.local`. The part-paid refund-ladder bug that previously blocked
+      switching this on was fixed 2026-11-04, so the remaining gate is the D-section set-up
+      (sender domain, `VILLA_EMAIL_FROM`, wording review).
+- [ ] **Guest ID photo storage** — set `VILLA_GUEST_ID_UPLOADS=false` in every environment
+      that should not store ID files, and flip the code default (see **A0**). Storage should
+      stay shut until the booking site's Privacy page states ID storage and the 30-day
+      retention (villa-booking TODO 7); until then staff record IDs "seen in person" (last 4
       digits only).
 - [ ] **Scheduled job — two of its three jobs genuinely need a scheduler, not a page
       visit.** Agreed 2026-10-03 to do this *after* the current work lands.
+      **Nothing schedules it today (confirmed 2026-11-04).** There is no `vercel.json`
+      anywhere in the repo, and the only `cron.schedule` calls in the migrations are
+      `amc-reminders` (`20260820000001`) and the association reminder cron
+      (`20260806000002`) — neither touches `/api/villa/sync`. The route exists
+      (`app/api/villa/sync/route.ts`) and the purge is reachable from it (`:46`), but it only
+      ever runs on a page visit: `purgeExpiredGuestIds` is called from
+      `_components/villa-month-kpis.tsx:53` (dashboard) and
+      `bookings/_lib/server/bookings.service.ts:217`. Read with **A0** this is a live
+      compliance gap, not a future one: storage is on by default and nothing enforces the
+      retention promise.
       (a) **Guest ID photo purge is a compliance obligation**, not a convenience: the
       privacy policy states a retention period, and if nobody opens a villa dashboard
       for longer than that, guest ID documents sit past their retention date. A page
@@ -128,6 +170,37 @@ Last updated: 2026-09-30 (after M8a).
 
 - [ ] **Add Expense dialog sometimes sticks on "Saving…"** in production builds (association
       expenses; the expense is saved). Pre-existing on `release`; details in `TODO.md`.
+      The suspected cause is still in place (`add-expense-dialog.tsx:124` wraps `execute()`
+      in `startTransition`); the intermittent symptom was not re-tested on 2026-11-04.
+
+## G. Engineering items still open (reviewed 2026-11-04 after the cloud fixes)
+
+Listed here so the checklist shows them; each is written up in full in
+`OORUDA_VILLA_TODO.md`.
+
+- [ ] **No way to undo a channel enrichment.** A wrong entry, a platform-side cancellation, a
+      duplicate or an Airbnb date change cannot be reversed: there is no `voided` booking
+      status, and after check-in even cancel is unavailable. Needs the status plus a ledger
+      reversal of the auto-recorded payout.
+- [ ] **Editing a booking, Phases 2 and 3.** Phase 1 (guest details and counts) shipped
+      2026-11-04. Phase 2 is the financial half — adjusting the extra-guest charge or adding a
+      discount/surcharge with GST and balance recalculated — and Phase 1 deliberately *refuses*
+      a count change that crosses `base_occupancy` until it lands. Phase 3 is date changes.
+- [ ] **Two refactors, no behaviour at stake.** The block/booking pairing is assembled at five
+      call sites, and the "statuses that still hold nights" list is written out four times;
+      `constants.ts` is the natural home for the latter.
+
+### Fixed 2026-11-04 (was in this section)
+
+- Part-paid bookings being promised more refund than was received — fixed, with the
+  cancellation-charge basis settled and tested. One question went to the CA: GST on the
+  retained amount (§A).
+- A failed iCal feed read being cached for five minutes, which permanently misfiled channel
+  revenue and payout payer names.
+- A feed named in capitals being read back as a confirmation code and written into a payout
+  receipt reference.
+- `invalidateFeedNamesCache` (removed — Ooruda has no local write path to invalidate from) and
+  the `listBlocks` cache breaking the integration test.
 
 ---
 

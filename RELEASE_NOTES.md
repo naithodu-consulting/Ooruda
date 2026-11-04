@@ -15,8 +15,6 @@ This document covers all feature work, enhancements, and notable changes built o
 - Phone values round-trip correctly between the app's E.164 standard and the booking site's bare 10-digit storage; the activity diff compares in one form so reformatting is not logged as a change of number.
 
 ### Part-paid bookings are no longer promised the full stay value back
-
-### Part-paid bookings are no longer promised the full stay value back
 - The cancellation ladder in the booking confirmation was computed on the contract total, so a ₹54,280 stay held with a ₹10,000 advance was promised "₹54,280 will be refunded" — under the villa's CIN and GSTIN, on money that had never been received.
 - A tier's percentage is now treated as a share of the **full stay value**, making its complement a cancellation charge the guest owes whatever they have prepaid. The refund is what receipts exceed that charge by: `refund = max(0, received − (stay value − round(stay value × fraction)))`.
 - On the example above the 50% tier charges ₹27,140 against a ₹10,000 advance, so the row reads "no refund" and the villa retains the advance. The shortfall is **written off** — no refund and no demand on the guest.

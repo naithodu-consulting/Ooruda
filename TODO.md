@@ -2,33 +2,18 @@
 
 Items that are scoped and understood but not yet implemented. Each entry includes enough context to pick up without re-investigating.
 
+Every entry was re-checked against the code on `release` (b4e4d307) on **2026-11-04**;
+resolved and incorrect entries were removed in that pass. Entries that name a file and line
+were confirmed to still exist at that point. Two were not re-tested and say so.
+
 ---
 
-## Dev DB sync - pending steps (do before next release push)
+## Blocked: auth-events-hook needs a Supabase Team plan
 
-**Priority:** High - must complete before pushing v1.4 to dev/staging  
+**Priority:** Low - blocked externally, nothing to build  
 **Linked Supabase project:** `bcdosjrbkkemsqowhigj` (dev)
 
-### Step 1 - Push pending migrations
-
-4 migrations are not yet on dev. Run:
-
-```bash
-cd apps/web && supabase migration list --linked   # verify these 4 show blank remote column
-./scripts/db-push.sh
-```
-
-Pending migrations:
-| Migration | Purpose |
-|---|---|
-| `20260805000002_missing_fk_indexes.sql` | FK index performance |
-| `20260806000001_activity_tracking_and_notifications.sql` | audit_logs enhancements, notification schema |
-| `20260806000002_reminder_cron.sql` | pg_cron schedule for `send-reminders` Edge Function |
-| `20260806000003_drop_in_app_notifications.sql` | Drop legacy in-app notification tables |
-
-### Step 2 - Register auth-events-hook in Supabase Dashboard
-
-⚠️ **Blocked - Supabase free/pro plan limitation.**  
+⚠️ **Blocked - Supabase free/pro plan limitation.**
 The Auth Hooks page only exposes: Send Email hook, JWT Claims hook, Before User Created hook. A generic post-auth-event webhook (needed to log login/logout/OTP to `audit_logs`) requires **Team or Enterprise plan**. The `auth-events-hook` Edge Function is deployed and ready - registration is blocked by plan tier.
 
 **When upgraded to Team plan:**
@@ -36,28 +21,17 @@ The Auth Hooks page only exposes: Send Email hook, JWT Claims hook, Before User 
 2. Add a new **HTTP** hook for auth events
 3. URL: `https://bcdosjrbkkemsqowhigj.supabase.co/functions/v1/auth-events-hook`
 4. Set `AUTH_HOOK_SECRET` in Dashboard → Edge Functions → auth-events-hook → Secrets
+5. Smoke-test: log out and back in, then check super-admin Activity Log → Auth Events for an `auth.login` row.
 
-### Step 3 - Wire send-reminders scheduling
+---
 
-✅ **Unblocked (2026-08-11).** The `alter database postgres set app.supabase_project_url / app.supabase_service_key` approach works via the Supabase Dashboard SQL Editor - earlier assumption that it required superuser was incorrect.
+## SMS reminders: not yet active (needs DLT-approved templates)
 
-Setup steps (once per environment, done via Supabase Dashboard SQL Editor):
-```sql
-alter database postgres set app.supabase_project_url = 'https://<ref>.supabase.co';
-alter database postgres set app.supabase_service_key = '<service_role_key>';
-select pg_reload_conf();
-```
+**Priority:** Low - blocked on Kaleyra approval
 
-Then set Edge Function secrets for `send-reminders`:
-- `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `SMS_PROVIDER=mock`, `NEXT_PUBLIC_SITE_URL`
+The `send-reminders` function supports SMS via Kaleyra but requires two DLT-approved template IDs: `KALEYRA_SMS_TEMPLATE_REMINDER` and `KALEYRA_SMS_TEMPLATE_OVERDUE`. These are separate from the OTP template (`KALEYRA_SMS_TEMPLATE_ID`). Until these are registered and approved with Kaleyra, keep `SMS_PROVIDER=mock` in the Edge Function secrets - email reminders work fully. Enable SMS by setting `SMS_PROVIDER=kaleyra` and adding both template IDs once approved.
 
-**SMS reminders: not yet active.** The `send-reminders` function supports SMS via Kaleyra but requires two DLT-approved template IDs: `KALEYRA_SMS_TEMPLATE_REMINDER` and `KALEYRA_SMS_TEMPLATE_OVERDUE`. These are separate from the OTP template (`KALEYRA_SMS_TEMPLATE_ID`). Until these are registered and approved with Kaleyra, keep `SMS_PROVIDER=mock` in the Edge Function secrets - email reminders work fully. Enable SMS by setting `SMS_PROVIDER=kaleyra` and adding both template IDs once approved.
-
-The `overdue-recompute` job works fine (pure SQL, no secrets).
-
-### Step 4 - Smoke-test auth events
-
-Log out and log back in, then check the super-admin Activity Log → Auth Events tab. A `auth.login` row should appear.
+Scheduling itself is done: the `alter database postgres set app.supabase_project_url / app.supabase_service_key` approach works via the Dashboard SQL Editor, and `overdue-recompute` runs fine (pure SQL, no secrets).
 
 ---
 
@@ -168,17 +142,21 @@ defect.
 ## Feature: assoc_admin personal bill view + Razorpay self-service
 
 **Priority:** High  
-**Depends on:** Merge `week-4` branch (contains Razorpay `create-order`/`verify` API routes and Pay button components)
+**Scope check 2026-11-04:** half of this is already built. The `canPay` prop exists and is
+wired on the payments page (`payments/page.tsx:160, 458, 492, 506`, with
+`canPay={gatewayActive}` on the resident path), so the Razorpay routes and the Pay button are
+in place and need no work. What is missing is only the admin-specific detection: there is no
+`adminPersonalUnitIds` or `hasPersonalBills` in the page, so an `assoc_admin` who also owns or
+rents a unit gets no "My Bills" view.
 
 ### Background
 
-An `assoc_admin` who is also a unit owner or tenant currently sees the full admin view of all association bills. They have no personal "My Bills" view and cannot pay their own bill online via Razorpay - the self-service Pay button is only wired up for `prop_owner` and `tenant` roles.
+An `assoc_admin` who is also a unit owner or tenant currently sees the full admin view of all association bills. They have no personal "My Bills" view.
 
 The multi-role assignment gate has already been fixed (merged to `main`): an admin can now be assigned as `owner_id` on a unit and/or as `tenant_id` on a tenancy. The payments page also already unions owned + tenanted unit IDs for restricted users. What is missing is:
 
 1. Detecting on the payments page that the logged-in `assoc_admin` also has personal bills (is `owner_id` on any unit OR has an active tenancy)
-2. Showing them a "My Bills" resident-style view alongside the admin view
-3. Wiring the Razorpay Pay button to their personal bills (same as `prop_owner`/`tenant` already get after `week-4` is merged)
+2. Showing them a "My Bills" resident-style view alongside the admin view, passing the existing `canPay` prop
 
 ### Implementation plan
 
@@ -208,7 +186,7 @@ Then fetch personal bills separately (same query used for `prop_owner`/`tenant`)
 
 **`PaymentsSection` component**
 
-Add a `canPay` prop (boolean). When true, render the Razorpay Pay / Pay All buttons (already exists in `week-4` branch, gated on `canManage === false && canPay === true`). Currently those buttons check `isUserRestricted` implicitly - after `week-4` merge, expose `canPay` as an explicit prop so admins can get the button too.
+Nothing to do - `canPay` is already an explicit prop and already renders the Razorpay Pay / Pay All buttons. Just pass it on the new section.
 
 **UI layout on payments page**
 
@@ -218,8 +196,7 @@ Add a `canPay` prop (boolean). When true, render the Razorpay Pay / Pay All butt
 ### Notes
 
 - No DB or RLS changes needed - `units.owner_id` and `tenancies.tenant_id` are already set correctly after the multi-role fix
-- The Razorpay `create-order` and `verify` routes live in `week-4`; do not re-implement them - just merge that branch first
-- After merging `week-4`, search for `isUserRestricted` in the payments section and replace with the explicit `canPay` prop pattern
+- The Razorpay `create-order` / `verify` routes and the `canPay` prop are already on `release`; do not re-implement them
 
 ---
 
@@ -227,6 +204,11 @@ Add a `canPay` prop (boolean). When true, render the Razorpay Pay / Pay All butt
 
 **Priority:** Medium  
 **Context:** Citadel PRISM sub-meters were imported without `INITIAL_METER_READING` values, so `sub_meters.initial_reading = 0` for all meters. This means the first bill's consumption is calculated as (current reading − 0) instead of (current reading − actual installation reading), producing inflated first-period units.
+
+The code path is correct - `electricity-actions.ts:501` falls back to
+`sub_meters.initial_reading` for the first-ever bill - so a wrong stored value is the whole
+problem. Whether the rows are still 0 was **not** checked on 2026-11-04; confirm with a query
+before running the update.
 
 **Fix:** Run a one-time SQL update with the correct initial readings per meter, confirmed with the association admin. No code change needed - the column and import path exist and work correctly.
 
@@ -269,6 +251,11 @@ Code: 1, 2, 3, 4, 5 (canonical), 6, 8, 9. Dashboard/off-site: 5 (www redirect), 
 
 **Symptom:** after clicking Save, the server action returns success (`{"data":{"id":…}}`, HTTP 200 in ~200ms) and the row is written, but the dialog stays on "Saving…"; the success toast never shows, so `useAction`'s `onSuccess` never runs. The page's route-refresh requests all complete within ~0.5s, with no console errors.
 
+**Status 2026-11-04:** the suspected cause is still in the code -
+`add-expense-dialog.tsx:124` reads `startTransition(() => execute(values as ExpenseInput))`.
+The intermittent symptom was **not** re-tested (it needs a production build and several
+runs), so treat the cause as present and the bug as unconfirmed.
+
 **Where to look:** `expenses/_components/add-expense-dialog.tsx` wraps `execute()` in `startTransition` while the action calls `revalidatePath(...)` for the current page. The transition likely waits on the revalidated RSC tree, and something in it occasionally never commits. Only seen in production builds, not `next dev`. Candidates: drop the extra `startTransition` (next-safe-action already manages pending state), or close the dialog from `onSuccess` before any refresh.
 
 ---
@@ -276,6 +263,11 @@ Code: 1, 2, 3, 4, 5 (canonical), 6, 8, 9. Dashboard/off-site: 5 (www redirect), 
 ## UI Component Modernization - site-wide audit
 
 **Priority:** Medium  
+**Related, verified 2026-11-04:** the competing content heading is still there at
+`home/[account]/_components/owner-units-view.tsx:109`, as an `h2 text-2xl font-bold` (not the
+`h1 font-black` recorded in older notes), still outweighing `PageTitle`'s `text-base
+font-bold`. Cosmetic.
+
 **Context:** Identified during Villa 19 (Habbaa) build. The same issues exist in Ooruda. All forms and interactive components should use modern, custom-built UI instead of OS-native or outdated widgets.
 
 ### 1. Replace native `<input type="date">` with a custom DatePicker
@@ -341,7 +333,12 @@ grep -rn "export default" src/components --include="*.tsx" | awk -F: '{print $1}
 - First delivery: `refunded_amount` → ₹300 ✓
 - Duplicate delivery: `refunded_amount` → ₹600 ✗ (bill incorrectly shows Partial with ₹400 outstanding instead of ₹700)
 
-**Why it is low-risk now:** The webhook handler returns 200 on success, so Razorpay does not retry for the same event. Retries only happen on network failure or a non-2xx response from our side.
+**Why it is low-risk now:** two reasons. The webhook handler returns 200 on success, so Razorpay does not retry for the same event - retries only happen on network failure or a non-2xx response from our side. And the overstatement is bounded: `record_payment_reversal` clamps every call with `least(coalesce(p_refund_amount, amount), amount - refunded_amount)`, so `refunded_amount` can never exceed the payment total however many duplicates arrive.
+
+`public.payments` has `refunded_amount` (migration `20260725000001`) but no
+`razorpay_refund_id` column - the only one in the schema is on the villa table
+`villa_booking_payments` (`20260930003722_villa_m5_payments_expenses.sql:155`), so
+association payments have no duplicate guard.
 
 **Proper fix:** Store the Razorpay refund ID (`rfnd_xxx`, available in the refund entity payload) in a `payments.razorpay_refund_id` column and add a unique constraint. The `record_payment_reversal` function should skip already-processed refund IDs. Requires a migration to add the column and a webhook change to pass `refundEntity.id`.
 

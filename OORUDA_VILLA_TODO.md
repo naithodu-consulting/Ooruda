@@ -3,6 +3,10 @@
 Companion to `OORUDA_VILLA_PLAN.md`. Items here are **out of v1.0** or awaiting a decision.
 Anything that becomes active moves into the plan's milestones.
 
+The engineering items were re-checked against the code on `release` (b4e4d307) on
+**2026-11-04**, and incorrect details were corrected in place. Decision and cross-repo items
+were not re-checked, since they depend on people rather than code.
+
 ---
 
 ## Deferred features
@@ -46,6 +50,8 @@ revenue and channel-mix reporting, which M6 covers. No Ooruda work needed until 
 `react-native-expo-turbo-saas-kit` was noted in the original plan. Far future.
 
 ### Foreign-national registration (separate form) — raised 2026-10-31
+**Waits on the owner, not on code.** Gated on whether Villa 19 accepts foreign guests. If it
+does, the Form C duty is statutory and this stops being deferred.
 The Villa 19 guest registration card is built for Indian guests. A foreign national needs more
 than a nationality line, and the villa has a statutory reporting duty:
 - **Form C** must be filed with the Bureau of Immigration for every foreign guest, within 24 hours
@@ -195,7 +201,9 @@ dependencies are visible from here:
 
 ## Deferred from the channel-stay enrichment review (2026-11-02)
 
-The major findings were fixed in the change itself; these are the minor ones.
+The major findings were fixed in the change itself. These were logged as the minor ones, but
+the cached-failed-read item below turned out to cost misfiled revenue in Reports — treat that
+one as a real bug.
 
 - **The channel name is stored twice.** `channelBlockNote` writes the feed's
   name into the block note, but every reader takes the name from `ical_feeds`,
@@ -204,13 +212,17 @@ The major findings were fixed in the change itself; these are the minor ones.
   reader takes the channel from it. The misread it used to cause is fixed
   (below). Left in place deliberately — the note has to read as a sentence on
   the site, where the feed name is not otherwise on screen.
-- **The block/booking pairing is assembled in three pages** (bookings, calendar,
-  blocked-dates): read blocks, read linked bookings, `linkChannelStays`, invert
+- **The block/booking pairing is assembled at five call sites** (verified
+  2026-11-04, post-merge): `bookings/page.tsx` twice (`:213`, `:267`),
+  `calendar/page.tsx:114`, `blocked-dates/page.tsx:148` and `ical-sync.ts:844`.
+  Each reads blocks, reads linked bookings, calls `linkChannelStays`, inverts
   the map. Worth one server helper (`loadChannelStays`) that owns the window;
-  `linkChannelStays` stays pure and keeps its tests.
-- **"Statuses that still hold nights"** is written out in `channel-link.ts`
-  (`HOLDING`), in `listChannelLinkedBookings`, and twice in SQL. Share the TS
-  pair from `lib/villa/constants.ts`.
+  `linkChannelStays` stays pure and keeps its tests. Refactor only.
+- **"Statuses that still hold nights" is written out four times, all in
+  TypeScript** (verified 2026-11-04): `channel-link.ts:39` (`HOLDING`) and
+  `bookings.ts:531`, `:655` (plus `cancelled`) and `:1125`. There is no SQL
+  copy. `constants.ts` now holds `EDITABLE_BOOKING_STATUSES`, so it is the
+  natural home for this pair too. Refactor only.
 - **New channel-stay UI is hard-coded English** (enrich dialog, the channel row,
   the Blocked list buttons), like the rest of the villa module. Move to
   `villa.json` with the rest when the module is translated.
@@ -256,6 +268,14 @@ The major findings were fixed in the change itself; these are the minor ones.
 
 ## Void enrichment for channel bookings (raised 2026-11-03)
 
+**Confirmed not built (2026-11-04).** There is no `voided` booking status in
+`lib/villa-db/bookings.ts` or `lib/villa/` — the only `voided` tokens are `payment_voided` (an
+activity type) and `voided_at` on individual payment rows, both about one payment rather than a
+booking. The status lists in `bookings.ts` (`:530`, `:654`, `:1015`) carry only pending /
+confirmed / completed / cancelled, so all four scenarios below are unhandled. Scenario 2 is the
+serious one: a platform-side cancellation leaves a confirmed booking with an auto-recorded
+payout and no way to reverse it.
+
 Hard-deleting a booking is architecturally wrong: orphaned rows in mirror, activity,
 guest documents, and payment ledger, plus broken audit trail. The codebase rule
 ("never DELETE a booking; cancel it §5.5") stays. But Airbnb bookings need an
@@ -291,6 +311,9 @@ guest documents, and payment ledger, plus broken audit trail. The codebase rule
 ---
 
 ## Editing existing bookings — Phased implementation & Design (raised 2026-11-02)
+
+**Phase 1 shipped 2026-11-04** (see the roadmap at the end of this section). Phases 2 and 3
+remain open.
 
 Comprehensive analysis of updating existing bookings (guest count, pricing, and guest contact details).
 
