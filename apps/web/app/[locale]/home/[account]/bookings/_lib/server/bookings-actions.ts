@@ -18,6 +18,7 @@ import {
   NewBookingSchema,
   ReopenStaySchema,
   SendGuestEmailSchema,
+  UpdateBookingSchema,
 } from '../schemas/bookings.schema';
 import { createBookingsService } from './bookings.service';
 
@@ -65,6 +66,31 @@ export const enrichChannelStayAction = authActionClient
     revalidatePath('/[locale]/home/[account]/blocked-dates', 'page');
 
     return { id: booking.id, bookingCode: booking.bookingCode };
+  });
+
+/**
+ * Correcting a booking's guest details. Same people who take bookings: it
+ * fixes who is staying, not what they owe, and a misspelt name on a
+ * registration card is a front-desk problem.
+ */
+export const updateBookingAction = authActionClient
+  .inputSchema(UpdateBookingSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    await requireVillaRole(parsedInput.accountId, [
+      'villa_admin',
+      'villa_manager',
+    ]);
+
+    const { changes, auditWritten } = await createBookingsService(
+      getSupabaseServerClient(),
+    ).updateGuestDetails(parsedInput, ctx.user.id);
+
+    revalidateBookings();
+    revalidatePath('/[locale]/home/[account]/bookings/[bookingId]', 'page');
+    // The guest name shows on the calendar and the blocked-dates list.
+    revalidatePath('/[locale]/home/[account]/calendar', 'page');
+
+    return { changedFields: changes.length, auditWritten };
   });
 
 // Owners always; managers only when the owner allowed it (checked in the

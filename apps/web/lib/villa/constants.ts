@@ -45,13 +45,34 @@ export type BookingStatus =
   | 'cancelled'
   | 'expired';
 export type PaymentStatus = 'unpaid' | 'partially_paid' | 'paid' | 'refunded';
+
+/**
+ * Bookings whose guest details may be corrected.
+ *
+ * `completed` is deliberately included: a misspelt name is usually found when
+ * the invoice or the police verification is written, which is after the stay.
+ * A `pending` hold lapses on its own, and a `cancelled` or `expired` booking
+ * is a record of something that did not happen.
+ *
+ * The load-bearing copy is the site `UPDATE`'s own `.in('status', …)`, which
+ * applies it atomically; the service and the page read this to fail early and
+ * to decide whether to offer the button at all.
+ */
+export const EDITABLE_BOOKING_STATUSES = ['confirmed', 'completed'] as const;
 export type IdStatus = 'pending' | 'received' | 'verified';
+/**
+ * `villa_booking_activity.note`'s own limit
+ * (`note is null or length(note) <= 1000`, villa_m3a_bookings).
+ */
+export const MAX_ACTIVITY_NOTE = 1000;
+
 export type BookingActivityAction =
   | 'created'
   | 'cancelled'
   | 'completed'
   | 'reopened'
   | 'checked_in'
+  | 'booking_updated'
   | 'note'
   | 'payment_recorded'
   | 'payment_voided'

@@ -142,23 +142,26 @@ Affects all actions in `admin-server-actions.ts`. Consider a shared `withAuditEr
 
 ---
 
-## Bug: "Partial" payment status filter returns no results when all partial bills are overdue
+## Resolved: "Partial" payment status filter returned no results when all partial bills were overdue
 
-**Priority:** Medium  
-**File:** `apps/web/app/[locale]/home/[account]/payments/_components/payments-section.tsx:133`
+**Closed 2026-11-04 — the root cause no longer exists.**
 
-**Root cause:** The Partial filter gates on `b.due_date >= today`, so it only finds partially paid bills still within their due date. Once a partial bill crosses its due date, `displayBillStatus()` promotes its badge to "Overdue" and the Partial filter stops matching it. In a live association where most partial bills have aged past due, the filter returns nothing - which looks broken to the admin.
+The entry cited `payments-section.tsx:133` filtering
+`b.status === 'Partial' && b.due_date >= today`. That code is gone (no
+`due_date >= today` anywhere in `apps/web`). The status filter is now a
+multi-select matching on `displayBillStatus(b)`, so filter and badge agree by
+construction.
 
-**Fix:** Remove the date restriction from the Partial filter:
-```typescript
-// Before
-rows = rows.filter((b) => b.status === 'Partial' && b.due_date >= today);
+A past-due partial bill still does not appear under "Partial" — but it is not a
+bug any more. `displayBillStatus()` promotes it to "Overdue"
+(`lib/bill-status.ts:53-61`), the badge says "Overdue", and the filter is
+multi-select so Partial + Overdue can be ticked together. The fix originally
+proposed here (filter on the raw `b.status`) would now *break* that agreement:
+rows would list under "Partial" wearing an "Overdue" badge.
 
-// After
-rows = rows.filter((b) => b.status === 'Partial');
-```
-
-"Partial" should mean any bill with a payment received but not fully paid, regardless of due date. The row-level badge already distinguishes Partial vs Overdue per bill. This is consistent with how the Paid and Collected filters work (no date restriction). The overlap between Partial and Overdue filters is acceptable - the badge tells the full story at row level.
+If "any part-paid bill regardless of due date" is wanted as a concept, add it as
+a separate "Part-paid" option in `STATUS_OPTIONS` — a product decision, not a
+defect.
 
 ---
 

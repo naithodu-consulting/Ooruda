@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   CHANNEL_SOLD_CHANNEL_VALUES,
+  EDITABLE_BOOKING_STATUSES,
   OFFLINE_CHANNEL_VALUES,
 } from '~/lib/villa/constants';
 import { toPaise } from '~/lib/villa/money';
@@ -736,6 +737,115 @@ export async function setIdStatus(
 
     // Already received or verified: nothing to change.
     return { result: existing, siteId: existing.bookingCode ?? existing.id };
+  });
+}
+
+/** Guest details an edit may change (Ooruda Villa, edit booking Phase 1). */
+export interface BookingGuestEdit {
+  salutation: string;
+  firstName: string;
+  lastName: string;
+  /** E.164 or empty; stored through `toSitePhone`. */
+  guestPhone: string;
+  guestEmail: string;
+  adults: number;
+  children: number;
+  infants: number;
+  specialRequests: string;
+  /**
+   * `updated_at` as the caller last saw it, for a compare-and-set. Empty
+   * skips the check (the column is nullable on the site).
+   */
+  expectedUpdatedAt: string;
+}
+
+/**
+ * Rewrites a booking's guest details on the site.
+ *
+ * Only who the guest is, how to reach them, how many of them there are and
+ * what they asked for. Dates, money and status are untouched - a date change
+ * needs the site's atomic availability check and a money change needs the
+ * invoice rules, both of which are later phases.
+ *
+ * Restricted to a stay that is live or finished: `pending` holds lapse on
+ * their own, and a `cancelled` or `expired` booking is a record of something
+ * that did not happen, so its guest details are history rather than data.
+ *
+ * `guest_name` is written alongside the parts because the site keeps the
+ * joined name as its own column, and every guest-facing surface (the booking
+ * page, the site's admin, the confirmation email) reads that one. Letting it
+ * drift from the parts is how a renamed guest keeps their old name.
+ */
+export async function updateBookingGuestDetails(
+  site: VillaSite,
+  bookingId: string,
+  edit: BookingGuestEdit,
+  actorUserId: string | null,
+): Promise<SiteBooking> {
+  return withSyncLog(site, 'booking.update', actorUserId, async () => {
+    const guestName = [edit.firstName.trim(), edit.lastName.trim()]
+      .filter(Boolean)
+      .join(' ');
+
+    let query = site.client
+      .from('bookings')
+      .update({
+        guest_salutation: edit.salutation.trim() || null,
+        guest_first_name: edit.firstName.trim(),
+        guest_last_name: edit.lastName.trim() || null,
+        guest_name: guestName,
+        guest_email: edit.guestEmail.trim(),
+        guest_phone: toSitePhone(edit.guestPhone),
+        num_adults: nonNegativeInt(edit.adults, 'adults'),
+        num_children: nonNegativeInt(edit.children, 'children'),
+        num_infants: nonNegativeInt(edit.infants, 'infants'),
+        special_requests: edit.specialRequests.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', bookingId)
+      .eq('property_id', site.sitePropertyId)
+      .in('status', [...EDITABLE_BOOKING_STATUSES]);
+
+    // Compare-and-set on the timestamp the caller last saw. This is the only
+    // thing standing between a full-field form and a lost update: two
+    // operators with the page open would otherwise each write all nine
+    // fields, and the later save would silently revert the earlier one.
+    if (edit.expectedUpdatedAt) {
+      query = query.eq('updated_at', edit.expectedUpdatedAt);
+    }
+
+    const { data, error } = await query.select(BOOKING_COLUMNS).maybeSingle();
+
+    if (error) throw fromSiteWriteError(error);
+
+    if (data) {
+      const booking = toBooking(data as BookingRow);
+      return { result: booking, siteId: booking.bookingCode ?? booking.id };
+    }
+
+    // Nothing matched. Re-read to say which of the three reasons it was,
+    // rather than reporting a live booking as missing.
+    const existing = await getBooking(site, bookingId);
+
+    if (!existing) throw new VillaDbError('NOT_FOUND', `booking ${bookingId}`);
+
+    if (
+      !EDITABLE_BOOKING_STATUSES.includes(
+        existing.status as (typeof EDITABLE_BOOKING_STATUSES)[number],
+      )
+    ) {
+      throw new VillaDbError(
+        'CONFLICT',
+        `booking ${bookingId} is ${existing.status}`,
+        `Only a confirmed or completed booking can be edited. This one is ${existing.status}.`,
+      );
+    }
+
+    throw new VillaDbError(
+      'CONFLICT',
+      `booking ${bookingId} changed during edit`,
+      'Someone else changed this booking while you were editing it. Close this and open it again to see their change before you re-apply yours.',
+    );
   });
 }
 

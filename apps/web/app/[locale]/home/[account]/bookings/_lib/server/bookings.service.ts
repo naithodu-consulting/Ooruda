@@ -22,14 +22,26 @@ import {
   getChannelLinkedBooking,
   markStayCompleted,
   reopenStay,
+  toSitePhone,
+  updateBookingGuestDetails,
 } from '~/lib/villa-db/bookings';
 import { type VillaSite, getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
 import { VillaDbError, isVillaDbError } from '~/lib/villa-db/errors';
 import { getPricingInputs } from '~/lib/villa-db/rates';
 import { recordBookingActivity } from '~/lib/villa/activity';
+import {
+  type BookingGuestDetails,
+  buildEditNote,
+  checkGuestChange,
+  describeBookingChanges,
+} from '~/lib/villa/booking-edit';
 import { blockNoteForDisplay } from '~/lib/villa/calendar';
 import { parseChannelNote } from '~/lib/villa/channel-note';
+import {
+  type BookingActivityAction,
+  EDITABLE_BOOKING_STATUSES,
+} from '~/lib/villa/constants';
 import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
 import { mirrorBooking } from '~/lib/villa/mirror';
 import { fromPaise, fromPaiseToString } from '~/lib/villa/money';
@@ -43,7 +55,9 @@ import type {
   NewBookingSchema,
   ReopenStaySchema,
   StaySchema,
+  UpdateBookingSchema,
 } from '../schemas/bookings.schema';
+import { SALUTATIONS } from '../schemas/bookings.schema';
 
 import { createHash } from 'node:crypto';
 
@@ -151,18 +165,28 @@ export function createBookingsService(client: Client) {
     };
   }
 
+  /** The edited fields as held on the site, for the activity-log diff. */
+  function toGuestDetails(b: SiteBooking): BookingGuestDetails {
+    return {
+      salutation: b.salutation ?? '',
+      guestName: b.guestName ?? '',
+      firstName: b.firstName ?? '',
+      lastName: b.lastName ?? '',
+      phone: toSitePhone(b.guestPhone),
+      email: b.guestEmail ?? '',
+      adults: b.adults,
+      children: b.children,
+      infants: b.infants,
+      specialRequests: b.specialRequests ?? '',
+    };
+  }
+
   async function record(
     entry: {
       accountId: string;
       propertyId: string;
       booking: Pick<SiteBooking, 'id' | 'bookingCode'>;
-      action:
-        | 'created'
-        | 'cancelled'
-        | 'completed'
-        | 'reopened'
-        | 'note'
-        | 'checked_in';
+      action: BookingActivityAction;
       reasonCode?: string | null;
       note?: string | null;
     },
@@ -764,6 +788,131 @@ export function createBookingsService(client: Client) {
       );
 
       return booking;
+    },
+
+    /**
+     * Corrects a booking's guest details: who they are, how to reach them,
+     * how many of them, and what they asked for (edit booking Phase 1).
+     *
+     * Not dates, and not money. The guest counts are the one field with a
+     * money consequence, and `checkGuestChange` declines the cases that would
+     * leave the stay priced for a different party - see `lib/villa/booking-edit`.
+     *
+     * Ordering: the site is written first and is the source of truth. The
+     * mirror and the activity entry follow, both best-effort, because a failed
+     * audit write must not undo a correction the operator has already been
+     * told about - and the next mirror sync repairs the copy either way.
+     */
+    async updateGuestDetails(
+      input: z.output<typeof UpdateBookingSchema>,
+      actor: string,
+    ) {
+      const site = await getVillaSite(input.accountId, input.propertyId);
+      const existing = await getBooking(site, input.bookingId);
+
+      if (!existing) throw new Error('That booking no longer exists.');
+
+      if (
+        !EDITABLE_BOOKING_STATUSES.includes(
+          existing.status as (typeof EDITABLE_BOOKING_STATUSES)[number],
+        )
+      ) {
+        throw new Error(
+          `Only a confirmed or completed booking can be edited. This one is ${existing.status}.`,
+        );
+      }
+
+      const { property } = await getPricingInputs(site);
+
+      const refusal = checkGuestChange({
+        before: {
+          adults: existing.adults,
+          children: existing.children,
+          infants: existing.infants,
+        },
+        after: {
+          adults: input.adults,
+          children: input.children,
+          infants: input.infants,
+        },
+        rules: {
+          baseOccupancy: property.base_occupancy,
+          maxOccupancy: property.max_occupancy,
+        },
+        // A stay a channel sold: the channel charged the guest, so the counts
+        // are ours to correct while the money is not ours to restate.
+        isChannelSold: existing.sourceFeedId !== null,
+        // The booking's OWN basis. Reasoning from the live rate card alone
+        // mis-reads a preferential price (which records no extras whatever the
+        // headcount) and misses a `base_occupancy` changed after the sale.
+        recordedExtraGuestPaise: existing.extraGuestAmountPaise,
+      });
+
+      if (refusal) throw new Error(refusal.message);
+
+      // An off-list salutation is kept, never silently re-titled - but it can
+      // only be the one already stored, so this is not a way to write a new
+      // one. See the schema's note.
+      const salutation = input.salutation.trim();
+
+      if (
+        salutation !== '' &&
+        !SALUTATIONS.includes(salutation as (typeof SALUTATIONS)[number]) &&
+        salutation !== (existing.salutation ?? '').trim()
+      ) {
+        throw new Error('Select a salutation.');
+      }
+
+      // Normalised to E.164 first, then stored in the site's own form, so the
+      // diff below compares like with like instead of reporting a formatting
+      // difference as a change of number.
+      const phone = input.guestPhone.trim()
+        ? (normalizePhoneNumber(input.guestPhone) ?? input.guestPhone.trim())
+        : '';
+
+      const edit = {
+        salutation,
+        expectedUpdatedAt: input.siteUpdatedAt,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        guestPhone: phone,
+        guestEmail: input.guestEmail,
+        adults: input.adults,
+        children: input.children,
+        infants: input.infants,
+        specialRequests: input.specialRequests,
+      };
+
+      const before = toGuestDetails(existing);
+
+      const booking = await updateBookingGuestDetails(
+        site,
+        input.bookingId,
+        edit,
+        actor,
+      );
+
+      const changes = describeBookingChanges(before, toGuestDetails(booking));
+
+      // Checked, unlike every other activity write: the reason is the whole
+      // point of this entry and no resync can reconstruct it, so if the row
+      // did not land the operator has to hear about it. The commonest cause
+      // is the migration that widens the action constraint not being applied
+      // yet, which is a deploy-order mistake rather than a rare fault.
+      const auditWritten = await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking,
+          action: 'booking_updated',
+          note: buildEditNote(input.reason, changes),
+        },
+        actor,
+      );
+
+      await mirrorBooking(site, booking);
+
+      return { booking, changes, auditWritten };
     },
 
     async cancel(

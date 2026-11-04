@@ -17,11 +17,18 @@ export interface RecordBookingActivityParams {
  * Appends an entry to the booking activity log. Service role only; failures
  * are logged rather than thrown so an audit write never fails an already-completed
  * business action.
+ *
+ * Returns whether the row was written. Most callers ignore it - the action
+ * has already happened and the log is a record, not a gate. Editing a
+ * booking's guest details does check it: the reason is the whole point of
+ * that entry and there is no resync that can reconstruct it, so the operator
+ * is told when it did not land (e.g. this action's value is missing from the
+ * check constraint because the migration has not been applied yet).
  */
 export async function recordBookingActivity(
   entry: RecordBookingActivityParams,
   actor?: string | null,
-): Promise<void> {
+): Promise<boolean> {
   const { error } = await getSupabaseServerAdminClient()
     .from('villa_booking_activity')
     .insert({
@@ -45,5 +52,9 @@ export async function recordBookingActivity(
       },
       'villa booking activity write failed',
     );
+
+    return false;
   }
+
+  return true;
 }

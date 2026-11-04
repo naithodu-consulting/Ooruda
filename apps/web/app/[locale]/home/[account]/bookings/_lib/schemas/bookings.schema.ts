@@ -289,6 +289,76 @@ export const EnrichChannelStaySchema = z
 
 export type EnrichChannelStayInput = z.input<typeof EnrichChannelStaySchema>;
 
+/**
+ * Editing an existing booking's guest details (Phase 1).
+ *
+ * Deliberately NOT the new-booking schema:
+ *   - no dates and no money: a date change needs the site's atomic
+ *     availability check and a price change needs the invoice rules, which
+ *     are Phases 3 and 2;
+ *   - phone and email are optional, because a stay a channel sold often has
+ *     neither (Airbnb owns the guest conversation) and an edit must not force
+ *     staff to invent one to fix a spelling. Both are still validated when
+ *     given, and a direct booking that already has them keeps them unless
+ *     deliberately cleared;
+ *   - a reason is required. The whole point of the entry in
+ *     `villa_booking_activity` is answering "who changed what, and why",
+ *     months later, over a GST invoice or a police verification.
+ */
+export const UpdateBookingSchema = z.object({
+  ...ids,
+  bookingId: z.string().uuid(),
+  /**
+   * `bookings.updated_at` as the page rendered it, for a compare-and-set on
+   * the write. Without it this form is a full-field overwrite from a possibly
+   * stale render, so a second operator's change is silently reverted - and
+   * the activity log records the revert as if it were intended. Optional only
+   * because the column is nullable on the site; a booking with no timestamp
+   * cannot be checked and is written as before.
+   */
+  siteUpdatedAt: z.string().trim().max(40).optional().default(''),
+  /**
+   * Not `z.enum(SALUTATIONS)`: the site's own checkout, its admin and imports
+   * can hold 'Dr', 'Miss', 'Shri' or anything else, and forcing the form's
+   * three values would re-title a guest on their invoice as a side effect of
+   * fixing a phone number. The service accepts an off-list value only when it
+   * is the one already stored, so this cannot be used to write a new one.
+   */
+  salutation: z.string().trim().max(40),
+  firstName: z.string().trim().min(1, { message: 'Enter first name' }).max(120),
+  lastName: z.string().trim().max(120).optional().default(''),
+  guestPhone: z
+    .string()
+    .trim()
+    .max(25)
+    .refine((v) => isPhoneEmpty(v) || normalizePhoneNumber(v) !== null, {
+      message:
+        'Enter a valid phone number (10-digit mobile or international with country code)',
+    }),
+  guestEmail: z
+    .string()
+    .trim()
+    .max(200)
+    .refine((v) => v === '' || z.string().email().safeParse(v).success, {
+      message: 'Enter a valid email address (e.g. name@example.com)',
+    }),
+  adults: z.coerce
+    .number()
+    .int()
+    .min(1, { message: 'At least one adult' })
+    .max(100),
+  children: guests,
+  infants: guests,
+  specialRequests: z.string().trim().max(1000),
+  reason: z
+    .string()
+    .trim()
+    .min(3, { message: 'Say why this booking is being changed' })
+    .max(500),
+});
+
+export type UpdateBookingInput = z.input<typeof UpdateBookingSchema>;
+
 export const CancelBookingSchema = z.object({
   ...ids,
   bookingId: z.string().uuid(),

@@ -82,6 +82,8 @@ describe('ACTIVITY_LABELS', () => {
     'cancelled',
     'completed',
     'reopened',
+    'checked_in',
+    'booking_updated',
     'note',
     'payment_recorded',
     'payment_voided',

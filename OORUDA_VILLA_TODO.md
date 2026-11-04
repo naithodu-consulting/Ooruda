@@ -62,26 +62,66 @@ than a nationality line, and the villa has a statutory reporting duty:
 - Open question for the owner: does Villa 19 actually accept foreign guests today? If yes this
   moves from deferred into a milestone, because the Form C duty is not optional.
 
-### Refund ladder on a part-paid booking — raised 2026-10-31
-**Priority:** next, and it is a money-in-writing issue.
-`CANCELLATION_TIERS` defines `fraction` as a fraction of the total **paid**
-(`lib/villa/cancellation.ts`), but `renderGuestEmail` now feeds
-`cancellationOutlook` the contract total (`total > 0 ? total : paid`). On a
-part-paid booking the e-mail therefore prints rupee figures larger than the
-guest could ever get back: a ₹54,280 stay with a ₹10,000 advance is promised
-"₹54,280 will be refunded", under the company's CIN and GSTIN.
-- The 2026-10-31 payment gate fixes only the ₹0 case: no payment, no
-  confirmation e-mail (`lib/villa/booking-payments.ts`). Everything part-paid
-  still over-promises.
-- Fix is small — compute the ladder on the amount actually received (sum of
-  non-voided `villa_booking_payments`) — but decide the wording first: the
-  guest sees a smaller number than the policy percentages imply, so the e-mail
-  probably needs a line saying the percentages apply to amounts already paid.
-- Keep in step with `villa-booking`: its own confirmation quotes the same
-  ladder from its own copy of the tiers, and a website booking is paid in full,
-  which is why the site never hit this.
-- Add a test alongside `guest-emails.test.ts` covering unpaid / part-paid /
-  paid once the basis changes.
+### Refund ladder on a part-paid booking — FIXED 2026-11-04
+**Was:** `CANCELLATION_TIERS.fraction` was documented as a fraction of the total
+**paid**, but `renderGuestEmail` fed `cancellationOutlook` the contract total
+(`total > 0 ? total : paid`). A ₹54,280 stay held with a ₹10,000 advance was
+therefore promised "₹54,280 will be refunded", under the company's CIN and
+GSTIN, on money the villa had never received.
+
+**Settled instead:** a tier's percentage is a share of the **full stay value**,
+so its complement is a cancellation charge the guest owes whatever they have
+prepaid. The refund is what receipts exceed that charge by:
+
+    charge = stay value − round(stay value × fraction)
+    refund = max(0, received − charge)
+
+On the example above the 50% tier charges ₹27,140 against a ₹10,000 advance, so
+the row reads "no refund" and the villa retains the advance.
+
+Why this basis and not "a share of what was paid":
+- **A stay paid in full is arithmetically unchanged** — `round(total × fraction)`
+  to the paise. No regression, and `villa-booking` (whose bookings are all paid
+  in full) stays correct with no change of its own, so the two codebases do not
+  diverge.
+- It is the standard cancellation-charge model: the fee attaches to the booking,
+  not to the prepayment, which is what "50% of the stay" is read to mean.
+- It makes the advance protective. Computing the ladder on the amount received
+  would refund half the advance; capping a stay-value refund at the amount
+  received would refund all of it, leaving the villa nothing in the 50% band.
+
+**The shortfall is written off, not billed** (decided 2026-11-04). A charge above
+what was received yields no refund and no demand on the guest.
+
+**Wording unchanged — deliberately.** The table keeps the shape every other
+booking gets; only the figures move. No explanation of the charge basis and no
+mention of the write-off was added, so a part-paid guest sees the same three
+windows as anyone else:
+
+      Until Wed 21 Oct, 11:59 pm      ₹10,000 will be refunded
+      22 Oct 12:00 am to Wed 28 Oct   no refund
+      After Wed 28 Oct, 11:59 pm      no refund
+
+Two consequences that fell out of the new arithmetic, both reusing existing
+copy rather than adding any:
+- **An all-empty ladder is now stated as "This booking is non-refundable."**
+  rather than a list of rows that each say "no refund" — the existing `none`
+  state. Reached when the charge already exceeds everything received.
+- **`lastRefundableAt` now names the last tier that actually pays**, not the
+  last one still open in time. On a part-paid stay those differ, and the old
+  one promised eligibility up to a date by which the charge had swallowed the
+  advance.
+
+Covered by `cancellation.test.ts` (7 new cases, including a guard that the
+paid-in-full ladder is unchanged) and `guest-emails.test.ts`. `advanceUnknown`
+cannot reach a confirmation: the email is gated on `hasRecordedPayment`, the
+same `ledger.netPaidPaise` that fills `amountPaidPaise`.
+
+**Still open — for the CA, with the SAC 996311 question in
+`OORUDA_VILLA_OPEN_ITEMS.md` §A:** `total_amount` is GST-inclusive, so a charge
+of "50% of the stay" retains a GST component. Retention and cancellation charges
+are generally taxable in India, which means output GST on the retained amount.
+This affects how retained money is booked, not the email.
 
 ### Signed registration card scan-back — raised 2026-10-31
 The guest signs the printed card on arrival and hands it back on paper. Storing the signed copy
@@ -157,20 +197,13 @@ dependencies are visible from here:
 
 The major findings were fixed in the change itself; these are the minor ones.
 
-- **`invalidateFeedNamesCache` is never called** (`lib/villa-db/blocks.ts`), so
-  renaming or adding an iCal feed leaves blocks labelled with the old channel
-  name for up to five minutes. Wire it into the feed create/rename/delete paths,
-  or drop it and say in the comment that the TTL is the policy.
-- **A failed `ical_feeds` read caches an empty map for five minutes** (same
-  file), so one transient error labels every channel block "Channel" and makes
-  `channelValueForFeed` record the generic `channel` instead of `airbnb` —
-  splitting one channel across two values in Reports. Don't cache a failed read.
 - **The channel name is stored twice.** `channelBlockNote` writes the feed's
-  name into the block note, but every reader takes the name from `ical_feeds`.
-  The copy can drift after a rename. Worse, `parseChannelNote` picks the
-  confirmation code as the first segment matching `^[A-Z0-9]{6,20}$`, so a feed
-  named in capitals (`AIRBNB`) would be read back as a confirmation code and
-  land in a payment reference. Drop the name from the note, or label the code.
+  name into the block note, but every reader takes the name from `ical_feeds`,
+  so the copy in the note can drift after a rename. Cosmetic only: the note is
+  operator-facing prose that the booking site's own admin displays, and no
+  reader takes the channel from it. The misread it used to cause is fixed
+  (below). Left in place deliberately — the note has to read as a sentence on
+  the site, where the feed name is not otherwise on screen.
 - **The block/booking pairing is assembled in three pages** (bookings, calendar,
   blocked-dates): read blocks, read linked bookings, `linkChannelStays`, invert
   the map. Worth one server helper (`loadChannelStays`) that owns the window;
@@ -190,11 +223,35 @@ The major findings were fixed in the change itself; these are the minor ones.
   `VALIDATE CONSTRAINT`. Both take write locks on `bookings` for the length of
   a scan. Deliberate: the table is small and `CONCURRENTLY` cannot run inside
   the migration's transaction. Revisit if that table ever grows.
-- **`listBlocks`' 30-second cache breaks an existing test.**
-  `villa-db.integration.test.ts` → "refuses to release a block a channel feed
-  owns" re-reads the same window after deleting the feed and gets the cached
-  list. Pre-existing, unrelated to this work: invalidate on delete, or have the
-  test read a different range.
+
+### Fixed 2026-11-04
+
+- **A failed `ical_feeds` read no longer caches an empty map.** It was cached
+  for the full five-minute TTL, so one transient cross-DB error stood in as the
+  answer for every read in that window. Worse than the labelling problem first
+  logged: channel enrichment writes `channelValueForFeed(block.channelName)`
+  into `bookings.booking_channel` and the feed name into the payout receipt, so
+  stays enriched during that window were permanently stamped `channel` instead
+  of `airbnb`, with a payer name of literally "the channel". A failed read now
+  returns an empty map uncached (`lib/villa-db/blocks.ts`).
+- **The confirmation code in a block note is now labelled** (`code HM5XK3J9QW`).
+  `parseChannelNote` took the first segment matching `^[A-Z0-9]{6,20}$`, and
+  segment 0 is the channel's own name — so a feed named `AIRBNB`, `MAKEMYTRIP`
+  or `GOIBIBO` was read back as a confirmation code and written into the payout
+  receipt's `p_reference`. The parser now prefers the label, and falls back to
+  an unlabelled scan that starts past segment 0 so notes written before this
+  still read correctly. Covered by `lib/villa/channel-note.test.ts`.
+- **`invalidateFeedNamesCache` is gone.** It had no callers and could not have
+  any: Ooruda only ever SELECTs `ical_feeds` — feeds are created and renamed on
+  the booking site, so there is no local write path to invalidate from. The TTL
+  is the policy and the comment now says so. A rename shows the old label for
+  up to five minutes.
+- **`listBlocks`' 30-second cache no longer breaks the integration test.**
+  "refuses to release a block a channel feed owns" deletes the feed through
+  `site.client`, bypassing the service, so nothing invalidated the cache and the
+  final assertion read the stale list. The test now invalidates after that
+  out-of-band write. Production paths were never affected — `createBlock` and
+  `releaseFromBlock` both invalidate correctly.
 
 
 ## Void enrichment for channel bookings (raised 2026-11-03)
@@ -259,15 +316,49 @@ Comprehensive analysis of updating existing bookings (guest count, pricing, and 
    - Every change must record `previous` and `updated` values in `villa_booking_activity` with a mandatory reason note.
 
 ### Phased Roadmap
-- [ ] **Phase 1: Basic Guest & Occupancy Updates (Low Risk)**
-  - Add an **"Edit booking"** dialog in `bookings/[bookingId]/page.tsx`.
-  - Allow editing:
-    - Guest Salutation, First Name, Last Name.
-    - Phone and Email.
-    - Adults, Children, Infants count.
-    - Special requests / internal notes.
-  - Sync updates to both the booking site database and `villa_bookings_mirror`.
-  - Log `'booking_updated'` in `villa_booking_activity` with field-level diff.
+- [x] **Phase 1: Basic Guest & Occupancy Updates — DONE 2026-11-04**
+  - "Edit booking" dialog (`_components/edit-booking-dialog.tsx`), in the action
+    bar on the booking page beside Check in / Check out / Cancel.
+  - Editable: salutation, first and last name, phone, email, adults, children,
+    infants, special requests. Plus a **required reason**.
+  - Writes the booking site first (`updateBookingGuestDetails`, which also keeps
+    the site's joined `guest_name` column in step with the name parts), then
+    `villa_bookings_mirror`, then the activity entry.
+  - Logs `'booking_updated'` with the reason and a field-level diff
+    (`describeBookingChanges`). Migration
+    `20261104120000_villa_booking_updated_activity.sql` widens the action check
+    constraint; constraint-only, so no typegen.
+  - **Who:** `villa_admin` and `villa_manager` — correcting who is staying is a
+    front-desk job, not a money one.
+  - **When:** `confirmed` or `completed` only, enforced in the service AND in
+    the site `UPDATE`'s own `.in('status', …)`. Deliberately still editable
+    after check-out: a misspelt name is found when the invoice or the police
+    verification is written, which is after the stay. A `cancelled` or
+    `expired` booking is a record of something that did not happen.
+  - **The guest-count guard** (`lib/villa/booking-edit.ts`, unit-tested) is the
+    one place Phase 1 touches money, and it declines rather than lie:
+    - over `max_occupancy` → refused, for channel stays too (Airbnb owns the
+      money, not the fire regulations);
+    - a change that crosses `base_occupancy`, so the extra-guest charge the
+      stay was priced on is no longer the right one → refused for **direct**
+      bookings, with a message naming the old and new counts. Saving the count
+      alone would record ten guests at an eight-guest price and leave Reports,
+      the invoice and the balance due all understating it. **This is the
+      boundary Phase 2 removes** — the doc's own "booked for 8, ten arrive"
+      case needs the charge adjusting, which is Phase 2.
+    - **channel-sold stays are exempt** from that second rule: the channel has
+      already charged the guest, so the counts are ours to correct while the
+      money is not ours to restate;
+    - infants are never capped and never charged, so they always edit freely.
+  - Phone round-trips deliberately: the site holds Indian mobiles as bare 10
+    digits, `PhoneInput` takes E.164 and renders an empty field for anything it
+    cannot parse — so seeding it raw showed no number and saving would have
+    wiped it. Normalised into the form, `toSitePhone` on the way back, and the
+    diff compares in site form so a formatting difference is not reported as a
+    change of number.
+  - Phone and email are optional here (unlike the new-booking form): a stay a
+    channel sold often has neither, and an edit must not force staff to invent
+    one to fix a spelling. Both still validated when given.
 - [ ] **Phase 2: Financial Adjustments & Balance Recalculation**
   - Allow adjusting Extra Guest charges or adding an explicit line-item discount/surcharge.
   - Dynamically recalculate GST and balance due (`total_amount - payments_recorded = balance_due`).

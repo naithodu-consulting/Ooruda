@@ -39,6 +39,12 @@ Last updated: 2026-09-30 (after M8a).
       Policies; they print on receipt vouchers (and later on tax invoices).
 - [ ] **CA confirmation of the GST slabs** — SAC 996311; 5% up to ₹7,500 per unit per day,
       18% above (plan §9). Blocks tax invoices (M5b).
+- [ ] **GST on a retained cancellation charge** — ask the CA in the same breath as the
+      slabs above. From 2026-11-04 a cancelled part-paid booking retains the advance up to
+      a charge of (1 − refund %) × stay value, and `total_amount` is GST-inclusive, so the
+      retained amount carries a GST component. Retention and cancellation charges are
+      generally taxable in India, which would mean output GST on what is kept. Affects how
+      retained money is booked, not the guest email.
 
 ## B. Switches that are built but off
 

@@ -4,6 +4,51 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: Edit Booking (Phase 1), Part-Paid Refund Ladder & Channel Enrichment Data-Integrity Fixes — 2026-11-04
+
+### Editing an existing booking's guest details
+- New **"Edit booking"** dialog on the booking page, beside Check in / Check out / Cancel. Edits salutation, first and last name, phone, email, adults, children, infants and special requests, with a **required reason**.
+- Available to `villa_admin` and `villa_manager`, for `confirmed` and `completed` bookings. Still editable after check-out on purpose: a misspelt name is usually found when the invoice or the police verification is written, which is after the stay. A cancelled or expired booking cannot be edited.
+- Writes the booking site first (source of truth), keeping its joined `guest_name` column in step with the name parts, then `villa_bookings_mirror`, then a `booking_updated` entry in `villa_booking_activity` carrying the reason and a field-level diff.
+- **Dates and amounts are not editable** — a date change needs the site's atomic availability check and a price change needs the invoice rules. Those are Phases 3 and 2.
+- **Guest counts are guarded**, because they are the one Phase 1 field with a money consequence. Over the villa's maximum occupancy is refused outright (for channel stays too). A change that crosses the included occupancy — so the extra-guest charge the stay was priced on would no longer be right — is refused for direct bookings rather than recording, say, ten guests at an eight-guest price. Stays a channel sold are exempt from that second rule, since the channel has already charged the guest. Infants are never capped or charged.
+- Phone values round-trip correctly between the app's E.164 standard and the booking site's bare 10-digit storage; the activity diff compares in one form so reformatting is not logged as a change of number.
+
+### Part-paid bookings are no longer promised the full stay value back
+
+### Part-paid bookings are no longer promised the full stay value back
+- The cancellation ladder in the booking confirmation was computed on the contract total, so a ₹54,280 stay held with a ₹10,000 advance was promised "₹54,280 will be refunded" — under the villa's CIN and GSTIN, on money that had never been received.
+- A tier's percentage is now treated as a share of the **full stay value**, making its complement a cancellation charge the guest owes whatever they have prepaid. The refund is what receipts exceed that charge by: `refund = max(0, received − (stay value − round(stay value × fraction)))`.
+- On the example above the 50% tier charges ₹27,140 against a ₹10,000 advance, so the row reads "no refund" and the villa retains the advance. The shortfall is **written off** — no refund and no demand on the guest.
+- **A stay paid in full is arithmetically unchanged**, to the paise. The booking site needs no matching change, since every booking it takes is paid in full, so the two codebases continue to quote the same ladder.
+- **The email wording and table layout are unchanged** — a part-paid guest sees the same windows in the same shape as anyone else, with only the figures differing.
+- Two refinements reusing existing copy: a ladder whose every row nets to nothing is now stated as "This booking is non-refundable." instead of repeated "no refund" rows, and the "eligible until" date now names the last tier that actually pays rather than the last one still open in time.
+- `cancellation.test.ts` gains 7 cases, including a guard that the paid-in-full ladder is unchanged.
+
+### Channel enrichment data-integrity fixes
+
+#### A failed `ical_feeds` read is no longer cached
+- `listFeedNames` (`lib/villa-db/blocks.ts`) cached an empty map for the full five-minute TTL when the cross-database read failed, so one transient error became the answer for every read in that window.
+- The fallback label is not display-only: channel enrichment writes `channelValueForFeed(block.channelName)` into `bookings.booking_channel` and the feed's name into the payout receipt. Stays enriched during a poisoned window were permanently recorded with the generic channel `channel` instead of `airbnb`, a receipt payer name of literally "the channel", and a note reading "Recorded from the the channel calendar".
+- A failed read now returns an empty map **uncached**, so the next call retries. Reports no longer split one channel across two values because of a momentary error.
+
+#### Confirmation codes in block notes are now labelled
+- `channelBlockNote` writes the code as `code HM5XK3J9QW` (`lib/villa/ical-sync.ts`).
+- `parseChannelNote` took the confirmation code to be the first note segment matching `^[A-Z0-9]{6,20}$`, and segment 0 is the channel's own name — so a feed named `AIRBNB`, `MAKEMYTRIP` or `GOIBIBO` was read back as a confirmation code and written into the payout receipt's reference (`p_reference`).
+- The parser now prefers the label and falls back to an unlabelled scan that starts past segment 0, so notes written before this change still read correctly. New tests in `lib/villa/channel-note.test.ts` cover both forms and the all-caps feed names.
+
+#### Cleanups
+- Removed `invalidateFeedNamesCache`: it had no callers and could not have any, since Ooruda only ever SELECTs `ical_feeds` (feeds are created and renamed on the booking site). The TTL is now documented as the policy.
+- Fixed `villa-db.integration.test.ts` → "refuses to release a block a channel feed owns", which deleted its feed through `site.client`, bypassing the service, so nothing invalidated `listBlocks`' 30-second cache and the final assertion read a stale list. Production paths were unaffected — `createBlock` and `releaseFromBlock` both invalidate correctly.
+
+### Migrations
+
+| Migration | Purpose |
+|---|---|
+| `20261104120000_villa_booking_updated_activity.sql` | Adds `booking_updated` to the `villa_booking_activity` action check constraint. Constraint-only — no column changes, so no typegen run is needed. |
+
+---
+
 ## Ooruda Villa: Simplified Cash-In View for Reports Overview — 2026-11-03
 
 ### Simplified Revenue Overview (Option 2)

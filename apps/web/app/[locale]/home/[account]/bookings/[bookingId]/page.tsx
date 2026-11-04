@@ -23,6 +23,7 @@ import { getBooking } from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
 import { isVillaDbError } from '~/lib/villa-db/errors';
+import { EDITABLE_BOOKING_STATUSES } from '~/lib/villa/constants';
 import {
   bookingStatusLabel,
   channelLabel,
@@ -38,6 +39,7 @@ import { BookingBackButton } from '../_components/booking-back-button';
 import { CancelBookingDialog } from '../_components/cancel-booking-dialog';
 import { CheckInStayButton } from '../_components/check-in-stay-button';
 import { CompleteStayButton } from '../_components/complete-stay-button';
+import { EditBookingDialog } from '../_components/edit-booking-dialog';
 import { GuestEmailsSection } from '../_components/guest-emails-section';
 import { GuestIdsSection } from '../_components/guest-ids-section';
 import { PaymentsSection } from '../_components/payments-section';
@@ -129,6 +131,16 @@ export default async function BookingPage({ params, searchParams }: Props) {
     active &&
     today <= booking.checkIn &&
     (role === 'villa_admin' || settings.managersCanCancel);
+  // Guest details stay correctable after check-out: a misspelt name is found
+  // when the invoice or the police verification is written, which is after the
+  // stay. Money and dates are not editable here, so a finished booking is safe
+  // to correct; a cancelled or expired one is a record of something that did
+  // not happen, and the server refuses it too.
+  const canEdit =
+    EDITABLE_BOOKING_STATUSES.includes(
+      booking.status as (typeof EDITABLE_BOOKING_STATUSES)[number],
+    ) &&
+    (role === 'villa_admin' || role === 'villa_manager');
   const canCheckIn =
     booking.status === 'confirmed' && !isCheckedIn && today >= booking.checkIn;
   // A stay can only be checked out after it has been checked in.
@@ -220,7 +232,11 @@ export default async function BookingPage({ params, searchParams }: Props) {
             </Badge>
           </div>
 
-          {canCheckIn || canCheckOut || canCancel || canDownloadCard ? (
+          {canCheckIn ||
+          canCheckOut ||
+          canCancel ||
+          canDownloadCard ||
+          canEdit ? (
             <div
               className="flex flex-wrap items-center gap-2 max-sm:w-full max-sm:[&>*]:flex-1"
               data-test={'villa-booking-actions'}
@@ -246,6 +262,28 @@ export default async function BookingPage({ params, searchParams }: Props) {
                   accountId={accountId}
                   propertyId={propertyId}
                   bookingId={booking.id}
+                />
+              ) : null}
+              {canEdit ? (
+                <EditBookingDialog
+                  accountId={accountId}
+                  propertyId={propertyId}
+                  bookingId={booking.id}
+                  bookingCode={booking.bookingCode}
+                  isChannelSold={booking.sourceFeedId !== null}
+                  siteUpdatedAt={booking.updatedAt ?? ''}
+                  guest={{
+                    salutation: booking.salutation,
+                    guestName: booking.guestName,
+                    firstName: booking.firstName,
+                    lastName: booking.lastName,
+                    guestPhone: booking.guestPhone,
+                    guestEmail: booking.guestEmail,
+                    adults: booking.adults,
+                    children: booking.children,
+                    infants: booking.infants,
+                    specialRequests: booking.specialRequests,
+                  }}
                 />
               ) : null}
               {canCancel ? (

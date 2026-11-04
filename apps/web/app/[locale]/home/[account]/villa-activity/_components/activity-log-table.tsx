@@ -24,6 +24,7 @@ import {
   UserMinus,
   UserPlus,
   XCircle,
+  PencilLine,
 } from 'lucide-react';
 
 import { Input } from '@kit/ui/input';
@@ -58,6 +59,7 @@ function ActivityIcon({ action }: { action: string }) {
   if (action === 'completed') return <LogOut className={cls} />;
   if (action === 'reopened') return <Undo2 className={cls} />;
   if (action === 'checked_in') return <CheckCircle2 className={cls} />;
+  if (action === 'booking_updated') return <PencilLine className={cls} />;
   if (action === 'payment_recorded') return <CreditCard className={cls} />;
   if (action === 'payment_voided')
     return <Ban className="text-destructive h-4 w-4 shrink-0" />;

@@ -23,6 +23,34 @@
  */
 import { computeStayGst, splitCgstSgst, type StayGst } from './gst';
 
+/**
+ * Guests the occupancy rules count: infants are free and uncapped.
+ *
+ * Exported because editing a booking has to apply the same two rules without
+ * re-quoting the stay (`lib/villa/booking-edit.ts`). One definition, so a
+ * party refused at booking time and the same party refused at edit time are
+ * refused on the same arithmetic.
+ */
+export function billableGuests(guests: {
+  adults: number;
+  children: number;
+}): number {
+  return guests.adults + guests.children;
+}
+
+/** Guests charged the extra-guest rate, i.e. those above `base_occupancy`. */
+export function extraGuestCount(
+  guests: { adults: number; children: number },
+  baseOccupancy: number,
+): number {
+  return Math.max(0, billableGuests(guests) - baseOccupancy);
+}
+
+/** The refusal shown when a party will not fit, worded once. */
+export function maxOccupancyMessage(maxOccupancy: number): string {
+  return `The villa sleeps at most ${maxOccupancy} guests (infants not counted).`;
+}
+
 export type TaxMode = 'site_flat_18' | 'per_night_slab';
 
 /** Must equal what the guest site's pricing engine does today. */
@@ -140,7 +168,7 @@ export function quoteStay(input: {
 
   const adults = Math.max(0, Math.trunc(input.adults));
   const children = Math.max(0, Math.trunc(input.children));
-  const guests = adults + children;
+  const guests = billableGuests({ adults, children });
 
   if (adults < 1) {
     return {
@@ -157,7 +185,7 @@ export function quoteStay(input: {
       ok: false,
       error: {
         code: 'MAX_OCCUPANCY',
-        message: `The villa sleeps at most ${property.max_occupancy} guests (infants not counted).`,
+        message: maxOccupancyMessage(property.max_occupancy),
       },
     };
   }
@@ -188,7 +216,10 @@ export function quoteStay(input: {
   });
 
   // Extra guests, tiered exactly as the site's engine does it.
-  const extraGuests = Math.max(0, guests - property.base_occupancy);
+  const extraGuests = extraGuestCount(
+    { adults, children },
+    property.base_occupancy,
+  );
   const tier2From = property.extra_guest_tier2_from;
   const tier2Count =
     tier2From != null && property.extra_guest_tier2_rate != null
