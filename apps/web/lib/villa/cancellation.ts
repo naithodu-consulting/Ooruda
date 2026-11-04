@@ -25,7 +25,11 @@ export interface CancellationTier {
   amount: string;
   /** Lower bound of the window, in whole days before check-in. */
   minDaysBefore: number;
-  /** Refund as a fraction of the total paid. */
+  /**
+   * Refund as a fraction of the FULL STAY VALUE, not of the amount paid. The
+   * complement is the cancellation charge: a 50% tier charges 50% of the stay.
+   * See `cancellationOutlook` for how that nets against part payments.
+   */
   fraction: number;
 }
 
@@ -109,12 +113,39 @@ export const shortDayMonth = (ymd: string) =>
  * Filtered against `asOf`, the moment the booking was made: a stay booked
  * three days out must not be shown "100% refunded until <a date last month>",
  * which is true of the policy and materially misleading about their booking.
+ *
+ * THE CHARGE IS ON THE STAY, THE REFUND IS OUT OF WHAT WAS RECEIVED.
+ * A tier's percentage is a share of the full stay value, so its complement is
+ * a cancellation charge the guest owes whatever they have prepaid:
+ *
+ *   charge = stay value - round(stay value x fraction)
+ *   refund = max(0, received - charge)
+ *
+ * On a stay paid in full this is `round(total x fraction)` to the paise - the
+ * figures are unchanged, and the booking site (whose bookings are all paid in
+ * full) stays arithmetically identical without a change of its own.
+ *
+ * On a part-paid stay it is the fix for a real over-promise: the ladder used to
+ * be computed on the contract total and printed against a booking that had only
+ * an advance against it, so a 54,280 stay with a 10,000 advance was promised
+ * "54,280 will be refunded" under the villa's CIN and GSTIN. Now the 10,000 is
+ * netted against a 27,140 charge and the row reads "no refund", which is both
+ * payable and what the policy always said.
+ *
+ * The shortfall is written off, not billed: a charge above what was received
+ * yields no refund and no demand (decided 2026-11-04).
  */
 export function cancellationOutlook(
   checkIn: string,
+  /** The full stay value, in paise: the basis the charge is computed on. */
   totalPaise: number,
   /** When the booking was made, as an ISO timestamp. */
   asOf: string,
+  /**
+   * Money actually received against the booking, in paise. Defaults to the
+   * stay value, i.e. paid in full - which is every booking the site makes.
+   */
+  paidPaise: number = totalPaise,
 ): CancellationOutlook {
   const booked = new Date(asOf);
 
@@ -141,12 +172,27 @@ export function cancellationOutlook(
           // restating one instant as both an end and a beginning.
           `${shortDayMonth(addDays(deadline(prev.minDaysBefore), 1))} ${WINDOW_OPENS} to ${shortDayMonth(deadline(tier.minDaysBefore))} ${DEADLINE_TIME}`;
 
+    // Rounded on the refundable share, not on the charge, so a stay paid in
+    // full lands on exactly the figure this used to print.
+    const refundableCeiling = Math.round(totalPaise * tier.fraction);
+    const chargePaise = totalPaise - refundableCeiling;
+
     return {
       when,
-      refundPaise: Math.round(totalPaise * tier.fraction),
+      refundPaise: Math.max(0, paidPaise - chargePaise),
       amount: tier.amount,
     };
   });
+
+  // A ladder whose every row nets to nothing is a non-refundable booking, not a
+  // list of empty rows: the charge already exceeds everything received. Says it
+  // in the words the 'none' state already uses.
+  const lastPaying = rows.reduce(
+    (found, row, i) => (row.refundPaise > 0 ? i : found),
+    -1,
+  );
+
+  if (lastPaying === -1) return { state: 'none', rows: [] };
 
   // The closing row is what happens after the last refundable deadline.
   const zero = CANCELLATION_TIERS[CANCELLATION_TIERS.length - 1]!;
@@ -160,6 +206,9 @@ export function cancellationOutlook(
   return {
     state: live.length === refundable.length ? 'full' : 'partial',
     rows,
-    lastRefundableAt: `${dayMonth(deadline(last.minDaysBefore))}, ${DEADLINE_TIME}`,
+    // The last tier that actually pays something, which on a part-paid stay is
+    // not the last tier still open: naming that one would promise eligibility
+    // up to a date by which the charge has already swallowed the advance.
+    lastRefundableAt: `${dayMonth(deadline(live[lastPaying]!.minDaysBefore))}, ${DEADLINE_TIME}`,
   };
 }

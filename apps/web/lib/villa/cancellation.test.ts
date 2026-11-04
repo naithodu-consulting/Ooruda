@@ -74,4 +74,97 @@ describe('cancellationOutlook', () => {
       'none',
     );
   });
+
+  /**
+   * The charge is a share of the STAY, netted against money actually received.
+   * Worked on the real case from the 2026-10-31 report: a 54,280 stay held with
+   * a 10,000 advance, which the old arithmetic promised 54,280 back on.
+   */
+  describe('part-paid stays', () => {
+    const STAY = 54_280_00;
+    const EARLY = at('2026-10-01');
+    // Charge in the 50% tier: half the stay, so an advance under this refunds
+    // nothing. 15 days before 24 Dec is 9 Dec; 7 days before is 17 Dec.
+    const HALF_CHARGE = STAY / 2;
+
+    it('defaults to paid in full, matching the figures it always printed', () => {
+      const omitted = cancellationOutlook(CHECK_IN, STAY, EARLY);
+      const explicit = cancellationOutlook(CHECK_IN, STAY, EARLY, STAY);
+
+      expect(omitted).toEqual(explicit);
+      expect(omitted.rows.map((r) => r.refundPaise)).toEqual([
+        STAY,
+        HALF_CHARGE,
+        0,
+      ]);
+    });
+
+    it('never promises back more than was received', () => {
+      const advance = 10_000_00;
+      const o = cancellationOutlook(CHECK_IN, STAY, EARLY, advance);
+
+      // The whole advance while the charge is nil, then nothing: the 50% tier
+      // charges 27,140 against a 10,000 advance.
+      expect(o.rows.map((r) => r.refundPaise)).toEqual([advance, 0, 0]);
+
+      for (const row of o.rows) {
+        expect(row.refundPaise).toBeLessThanOrEqual(advance);
+      }
+    });
+
+    it('keeps the row structure a fully paid stay gets', () => {
+      const o = cancellationOutlook(CHECK_IN, STAY, EARLY, 10_000_00);
+      const full = cancellationOutlook(CHECK_IN, STAY, EARLY);
+
+      expect(o.rows.map((r) => r.when)).toEqual(full.rows.map((r) => r.when));
+      expect(o.rows.map((r) => r.amount)).toEqual(
+        full.rows.map((r) => r.amount),
+      );
+    });
+
+    it('refunds the excess once receipts pass the charge', () => {
+      const advance = 40_000_00;
+      const o = cancellationOutlook(CHECK_IN, STAY, EARLY, advance);
+
+      expect(o.rows.map((r) => r.refundPaise)).toEqual([
+        advance,
+        advance - HALF_CHARGE,
+        0,
+      ]);
+    });
+
+    it('refunds nothing at the exact charge, and never a negative', () => {
+      const o = cancellationOutlook(CHECK_IN, STAY, EARLY, HALF_CHARGE);
+
+      expect(o.rows[1]?.refundPaise).toBe(0);
+      for (const row of o.rows)
+        expect(row.refundPaise).toBeGreaterThanOrEqual(0);
+    });
+
+    it('names the last tier that actually pays, not the last one open', () => {
+      // 20,000 is under the 50% charge, so eligibility ends at the 100% tier's
+      // deadline (9 Dec) - not 17 Dec, by which nothing would come back.
+      const o = cancellationOutlook(CHECK_IN, STAY, EARLY, 20_000_00);
+
+      expect(o.lastRefundableAt).toBe('Wed 9 Dec, 11:59 pm');
+      expect(cancellationOutlook(CHECK_IN, STAY, EARLY).lastRefundableAt).toBe(
+        'Thu 17 Dec, 11:59 pm',
+      );
+    });
+
+    it('is non-refundable when the charge swallows everything received', () => {
+      // Booked inside the top window, so only the 50% tier is live, and the
+      // advance is under its charge: an all-empty ladder is stated as one line.
+      const o = cancellationOutlook(
+        CHECK_IN,
+        STAY,
+        at('2026-12-12'),
+        10_000_00,
+      );
+
+      expect(o.state).toBe('none');
+      expect(o.rows).toEqual([]);
+      expect(o.lastRefundableAt).toBeUndefined();
+    });
+  });
 });

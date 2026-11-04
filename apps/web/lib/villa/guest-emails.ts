@@ -643,13 +643,25 @@ export function renderGuestEmail(
         ? `Extra guests, ${ctx.extraGuests}`
         : 'Extra guests';
 
-    // The cancellation schedule is calculated against the total stay amount
-    // (matching villa-booking), with bookedAt falling back to now if omitted.
+    // The cancellation charge is calculated against the total stay amount
+    // (matching villa-booking); the refund is what the money received exceeds
+    // that charge by. Passing `total` as the basis AND `paid` as the receipts
+    // is what keeps a part-paid stay from being promised the whole stay value
+    // back - see cancellationOutlook. A stay paid in full is unaffected: the
+    // two arguments are equal and the figures are the ones this always printed.
+    //
+    // `paid` is always above zero here: the confirmation is gated on
+    // `hasRecordedPayment`, which is the same `ledger.netPaidPaise` that
+    // populates `amountPaidPaise`, so an unreceipted advance never gets this
+    // far (staff see "Record the advance payment first"). Were it ever to, the
+    // ladder nets to nothing and the outlook returns 'none' - under-promising,
+    // which is the right way round for a figure the villa cannot stand behind.
     const bookedAt = ctx.bookedAt || new Date().toISOString();
     const refunds: CancellationOutlook = cancellationOutlook(
       ctx.checkIn,
       total > 0 ? total : paid,
       bookedAt,
+      paid,
     );
 
     // "Paid 13 Oct 2026 · Razorpay" rather than a bare "Paid": the date and

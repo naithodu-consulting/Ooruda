@@ -429,41 +429,66 @@ describe('booking confirmation: the refund ladder follows the money', () => {
     siteBaseUrl: 'https://stay.example.com',
   };
 
-  it('quotes the contract total in cancellation ladder matching villa-booking', () => {
-    const { html } = renderGuestEmail('booking_confirmation', {
+  // The regression this file exists for: a 54,280 stay held with a 10,000
+  // advance was promised "54,280 will be refunded", under the villa's CIN and
+  // GSTIN, on money it had never received. The charge is a share of the stay;
+  // the refund is only ever what receipts exceed that charge by.
+  it('never quotes back more than the advance received', () => {
+    const { html, text } = renderGuestEmail('booking_confirmation', {
       ...base,
       paymentStatus: 'partially_paid',
       amountPaidPaise: 1_000_000,
     });
 
+    expect(text).toContain('₹10,000 will be refunded');
+    expect(text).not.toContain('₹54,280 will be refunded');
+
+    // The 50% tier charges 27,140 against a 10,000 advance, so it pays nothing.
+    expect(text).toContain('no refund');
+    expect(html).toContain('No refund');
+
+    // The stay value itself still appears - in the summary, not the ladder.
     expect(html).toContain('₹54,280');
-    expect(html).toContain('will be refunded');
   });
 
-  it('prints cancellation ladder even on an unpaid booking', () => {
-    const { html, text } = renderGuestEmail('booking_confirmation', {
+  it('keeps a fully paid stay on the figures it always printed', () => {
+    const { text } = renderGuestEmail('booking_confirmation', {
       ...base,
-      paymentStatus: 'unpaid',
-      amountPaidPaise: 0,
+      paymentStatus: 'paid',
+      amountPaidPaise: 5_428_000,
     });
 
-    expect(html).toContain('Cancellations &amp; refund');
-    expect(html).toContain('will be refunded');
-    expect(text).toContain('CANCELLATIONS & REFUND');
-    expect(html).toContain('stay.example.com/cancellation');
+    expect(text).toContain('₹54,280 will be refunded');
+    expect(text).toContain('₹27,140 will be refunded');
   });
 
-  it('quotes cancellation ladder even when an advance was not yet receipted', () => {
-    const { html, text } = renderGuestEmail('booking_confirmation', {
-      ...base,
-      paymentStatus: 'partially_paid',
-      amountPaidPaise: 0,
-    });
+  it('states non-refundable rather than quoting a ladder it cannot honour', () => {
+    // Both of these are held back upstream - the confirmation is gated on
+    // hasRecordedPayment, the same netPaidPaise that fills amountPaidPaise - so
+    // this is the belt to that braces. Nothing received, nothing promised.
+    for (const paymentStatus of ['unpaid', 'partially_paid'] as const) {
+      const { html, text } = renderGuestEmail('booking_confirmation', {
+        ...base,
+        paymentStatus,
+        amountPaidPaise: 0,
+      });
 
-    expect(html).toContain('Advance received');
-    expect(text).toContain('Advance received');
-    expect(html).toContain('Cancellations &amp; refund');
-    expect(html).toContain('will be refunded');
+      expect(html).toContain('Cancellations &amp; refund');
+      expect(text).toContain('CANCELLATIONS & REFUND');
+      expect(html).toContain('This booking is non-refundable.');
+      expect(text).toContain('This booking is non-refundable.');
+      expect(text).not.toContain('will be refunded');
+      // The policy link survives the non-refundable state.
+      expect(html).toContain('stay.example.com/cancellation');
+    }
+
+    expect(
+      renderGuestEmail('booking_confirmation', {
+        ...base,
+        paymentStatus: 'partially_paid',
+        amountPaidPaise: 0,
+      }).html,
+    ).toContain('Advance received');
   });
 
   it('dates the paid line from the receipt, not from the booking', () => {
