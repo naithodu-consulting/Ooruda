@@ -19,6 +19,7 @@ import {
   ReopenStaySchema,
   SendGuestEmailSchema,
   UpdateBookingSchema,
+  VoidEnrichmentSchema,
 } from '../schemas/bookings.schema';
 import { createBookingsService } from './bookings.service';
 
@@ -91,6 +92,31 @@ export const updateBookingAction = authActionClient
     revalidatePath('/[locale]/home/[account]/calendar', 'page');
 
     return { changedFields: changes.length, auditWritten };
+  });
+
+/**
+ * Retiring a channel stay filled in by mistake, money included.
+ *
+ * Admin only, and not delegated to managers the way cancelling can be: this
+ * voids a receipt and deletes an expense, so it moves the villa's numbers.
+ */
+export const voidEnrichmentAction = authActionClient
+  .inputSchema(VoidEnrichmentSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    await requireVillaRole(parsedInput.accountId, ['villa_admin']);
+
+    const { outcome, auditWritten } = await createBookingsService(
+      getSupabaseServerClient(),
+    ).voidEnrichment(parsedInput, ctx.user.id);
+
+    revalidateBookings();
+    revalidatePath('/[locale]/home/[account]/bookings/[bookingId]', 'page');
+    // The nights come back on the calendar, and Reports loses the payout.
+    revalidatePath('/[locale]/home/[account]/calendar', 'page');
+    revalidatePath('/[locale]/home/[account]/blocked-dates', 'page');
+    revalidatePath('/[locale]/home/[account]/villa-reports', 'page');
+
+    return { outcome, auditWritten };
   });
 
 // Owners always; managers only when the owner allowed it (checked in the

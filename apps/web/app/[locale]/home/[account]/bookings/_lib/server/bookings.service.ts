@@ -15,6 +15,7 @@ import { getChannelBlock, listBlocks } from '~/lib/villa-db/blocks';
 import {
   type SiteBooking,
   cancelBooking,
+  cancelBookingForVoid,
   channelValueForFeed,
   clearChannelLink,
   createOfflineBooking,
@@ -22,6 +23,7 @@ import {
   getChannelLinkedBooking,
   markStayCompleted,
   reopenStay,
+  setPaymentStatus,
   toSitePhone,
   updateBookingGuestDetails,
 } from '~/lib/villa-db/bookings';
@@ -42,7 +44,16 @@ import {
   type BookingActivityAction,
   EDITABLE_BOOKING_STATUSES,
 } from '~/lib/villa/constants';
+import {
+  type VoidOutcome,
+  buildVoidNote,
+  checkVoidable,
+  commissionNoteFor,
+  commissionNoteFragment,
+  commissionNoteMatches,
+} from '~/lib/villa/enrichment-void';
 import { purgeExpiredGuestIds } from '~/lib/villa/guest-id-retention';
+import { sitePaymentStatus } from '~/lib/villa/ledger';
 import { mirrorBooking } from '~/lib/villa/mirror';
 import { fromPaise, fromPaiseToString } from '~/lib/villa/money';
 import { type QuoteError, quoteStay } from '~/lib/villa/pricing';
@@ -56,8 +67,10 @@ import type {
   ReopenStaySchema,
   StaySchema,
   UpdateBookingSchema,
+  VoidEnrichmentSchema,
 } from '../schemas/bookings.schema';
 import { SALUTATIONS } from '../schemas/bookings.schema';
+import { loadLedger } from './payments.service';
 
 import { createHash } from 'node:crypto';
 
@@ -105,6 +118,15 @@ const TAKEN: Record<'DATE_UNAVAILABLE' | 'DATE_BLOCKED', string> = {
  * instead of being counted as a second payment. A random id would make every
  * retry a new receipt.
  */
+/**
+ * Escapes a value interpolated into a Postgres LIKE/ILIKE pattern, so a
+ * booking reference containing `%` or `_` matches literally instead of as a
+ * wildcard.
+ */
+function likeEscape(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 function channelPayoutRequestId(bookingId: string): string {
   const hash = createHash('sha1')
     .update(`villa:channel-payout:${bookingId}`)
@@ -163,6 +185,42 @@ export function createBookingsService(client: Client) {
         children: input.children,
       }),
     };
+  }
+
+  /**
+   * Re-derives `payment_status` from the receipt ledger and writes it back to
+   * the site, returning the updated booking (or null when nothing changed or
+   * it could not be done).
+   *
+   * Best-effort by design, matching the payments service: the business action
+   * has already happened and a failed status write-back must not undo it. The
+   * caller mirrors whichever booking it gets back.
+   */
+  async function resyncPaymentStatus(
+    site: VillaSite,
+    booking: SiteBooking,
+    actor: string,
+  ): Promise<SiteBooking | null> {
+    try {
+      const { summary } = await loadLedger(client, site, booking);
+
+      let next = sitePaymentStatus(summary.status);
+
+      // 'refunded' is for cancelled stays only (contract §7).
+      if (next === 'refunded' && booking.status !== 'cancelled')
+        next = 'unpaid';
+
+      if (next === booking.paymentStatus) return null;
+
+      return await setPaymentStatus(site, booking.id, next, actor);
+    } catch (error) {
+      (await getLogger()).warn(
+        { bookingId: booking.id, error: String(error) },
+        'villa void enrichment: payment status write-back failed',
+      );
+
+      return null;
+    }
   }
 
   /** The edited fields as held on the site, for the activity-log diff. */
@@ -752,7 +810,12 @@ export function createBookingsService(client: Client) {
             gst_amount: 0,
             mode: 'bank',
             spent_on: block.startDate,
-            notes: `Commission/charges deducted by ${channel} for booking ${booking.bookingCode ?? booking.referenceNumber}`,
+            // Shared with the void path's matcher, which finds this expense
+            // by this note - there is no foreign key between the two.
+            notes: commissionNoteFor(
+              channel,
+              booking.bookingCode ?? booking.referenceNumber,
+            ),
             created_by: actor,
           });
 
@@ -913,6 +976,175 @@ export function createBookingsService(client: Client) {
       await mirrorBooking(site, booking);
 
       return { booking, changes, auditWritten };
+    },
+
+    /**
+     * Retires a channel stay that was filled in by mistake, money included.
+     *
+     * Cancelling alone does not do this: it flips the site status and leaves
+     * the payout receipt standing, and Reports counts receipts without
+     * joining booking status - so a cancelled-but-not-voided enrichment keeps
+     * its payout counted as cash received. See `lib/villa/enrichment-void`
+     * for why the site status still becomes 'cancelled' rather than a new
+     * 'voided' value, and why there is no check-in date restriction.
+     *
+     * THE STAY IS CANCELLED FIRST, and nothing after it throws.
+     *
+     * The money used to come first, on the reasoning that reversing it early
+     * fails safe. It does not. `cancelBooking` only matches 'confirmed' rows,
+     * so a COMPLETED stay - which is most of them, because a wrong enrichment
+     * surfaces when the payout fails to reconcile - had its receipt voided and
+     * its commission expense deleted and then threw, leaving the money gone,
+     * the stay still completed, and no activity row at all. A retry could not
+     * mend it either: the receipt no longer matched `voided_at is null`, so
+     * the booking was wedged for good.
+     *
+     * Cancelling first inverts that. The one step that can legitimately fail -
+     * on a concurrent cancel or check-out - now fails before anything is
+     * destroyed, and its worst case afterwards is a cancelled stay whose
+     * payout is still counted, which is simply today's behaviour and is both
+     * detectable and fixable from the Payments panel. Each later step records
+     * what it managed and the operator is told which remedy to apply.
+     */
+    async voidEnrichment(
+      input: z.output<typeof VoidEnrichmentSchema>,
+      actor: string,
+    ) {
+      const site = await getVillaSite(input.accountId, input.propertyId);
+      const existing = await getBooking(site, input.bookingId);
+
+      if (!existing) throw new Error('That booking no longer exists.');
+
+      const refusal = checkVoidable(existing);
+
+      if (refusal) throw new Error(refusal.message);
+
+      const bookingRef = existing.bookingCode ?? existing.referenceNumber;
+
+      // 1. Cancel on the site. 'cancelled' specifically: it is the one status
+      // villa-booking's channel-event unique index excludes, so the same iCal
+      // event can be enriched again afterwards. Before any money moves.
+      const booking = await cancelBookingForVoid(site, input.bookingId, actor);
+
+      const outcome: VoidOutcome = { receipt: 'none', commission: 'none' };
+
+      // 2. The auto-recorded payout receipt, found by the same derived request
+      // id enrichment wrote it with rather than by amount or date.
+      const { data: receipts, error: receiptsError } = await client
+        .from('villa_booking_payments')
+        .select('id')
+        .eq('property_id', input.propertyId)
+        .eq('site_booking_id', booking.id)
+        .eq('request_id', channelPayoutRequestId(booking.id))
+        .is('voided_at', null);
+
+      if (receiptsError) {
+        outcome.receipt = 'failed';
+        (await getLogger()).error(
+          { bookingId: booking.id, code: receiptsError.code },
+          'villa void enrichment: payout receipt lookup failed',
+        );
+      } else {
+        for (const receipt of receipts ?? []) {
+          const { error } = await client.rpc('void_villa_payment', {
+            p_payment_id: receipt.id,
+            p_reason: `Enrichment voided: ${input.reason}`,
+          });
+
+          if (error) {
+            outcome.receipt = 'failed';
+            (await getLogger()).error(
+              {
+                bookingId: booking.id,
+                paymentId: receipt.id,
+                code: error.code,
+              },
+              'villa void enrichment: could not void the payout receipt',
+            );
+          } else if (outcome.receipt !== 'failed') {
+            outcome.receipt = 'voided';
+          }
+        }
+      }
+
+      // 3. The commission expense, linked only by the booking reference in its
+      // note (there is no foreign key). Matched in the query rather than over
+      // every commission row the property has: the unbounded read was capped
+      // at `max_rows` and silently reported "no commission" once a property
+      // had more than that, while telling the operator the void was clean.
+      //
+      // Deleted on an unambiguous single match and otherwise left for a
+      // person: `villa_expenses.amount` must be positive and there is no soft
+      // delete, so deletion is the only way back - reason enough not to guess
+      // which row.
+      const { data: expenses, error: expensesError } = await client
+        .from('villa_expenses')
+        .select('id, amount, notes')
+        .eq('account_id', input.accountId)
+        .eq('property_id', input.propertyId)
+        .eq('category', 'commission')
+        .ilike('notes', `%${likeEscape(commissionNoteFragment(bookingRef))}%`)
+        .limit(5);
+
+      if (expensesError) {
+        // Not folded into 'none': "there was nothing to remove" and "I could
+        // not look" are different things to tell an operator.
+        outcome.commission = 'unknown';
+        (await getLogger()).error(
+          { bookingId: booking.id, code: expensesError.code },
+          'villa void enrichment: commission lookup failed',
+        );
+      } else {
+        const matches = (expenses ?? []).filter((e) =>
+          commissionNoteMatches(e.notes, bookingRef),
+        );
+
+        if (matches.length === 1) {
+          const match = matches[0]!;
+          const { error } = await client
+            .from('villa_expenses')
+            .delete()
+            .eq('id', match.id)
+            .eq('property_id', input.propertyId);
+
+          if (error) {
+            outcome.commission = 'unknown';
+            (await getLogger()).error(
+              { bookingId: booking.id, code: error.code },
+              'villa void enrichment: commission delete failed',
+            );
+          } else {
+            outcome.commission = 'removed';
+            outcome.commissionAmount = Number(match.amount);
+          }
+        } else if (matches.length > 1) {
+          outcome.commission = 'ambiguous';
+        }
+      }
+
+      // 4. Re-derive payment_status from the ledger. Enrichment created the
+      // booking as 'paid', and voiding its only receipt leaves that standing
+      // on both the site and the mirror - so every badge reading
+      // `payment_status` rather than the receipts would show a cancelled,
+      // reversed stay as "Fully paid". Best-effort, as it is on the payments
+      // service, and it re-mirrors on success.
+      const synced = await resyncPaymentStatus(site, booking, actor);
+
+      const auditWritten = await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking,
+          action: 'enrichment_voided',
+          note: buildVoidNote(input.reason, outcome),
+        },
+        actor,
+      );
+
+      await mirrorBooking(site, synced ?? booking);
+      await releaseGuestIds(input.accountId, input.propertyId, booking.id);
+
+      return { booking, outcome, auditWritten };
     },
 
     async cancel(

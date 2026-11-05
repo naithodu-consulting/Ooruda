@@ -368,6 +368,24 @@ export const CancelBookingSchema = z.object({
 
 export type CancelBookingInput = z.input<typeof CancelBookingSchema>;
 
+/**
+ * Retiring a channel stay that was filled in by mistake.
+ *
+ * A longer minimum reason than cancelling asks for: this undoes money that was
+ * already recorded as received, so "wrong" on its own is not an audit trail.
+ */
+export const VoidEnrichmentSchema = z.object({
+  ...ids,
+  bookingId: z.string().uuid(),
+  reason: z
+    .string()
+    .trim()
+    .min(10, { message: 'Say what was wrong with this enrichment' })
+    .max(500),
+});
+
+export type VoidEnrichmentInput = z.input<typeof VoidEnrichmentSchema>;
+
 export const CompleteStaySchema = z.object({
   ...ids,
   bookingId: z.string().uuid(),

@@ -73,6 +73,7 @@ export type BookingActivityAction =
   | 'reopened'
   | 'checked_in'
   | 'booking_updated'
+  | 'enrichment_voided'
   | 'note'
   | 'payment_recorded'
   | 'payment_voided'

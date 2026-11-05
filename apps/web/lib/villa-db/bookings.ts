@@ -432,6 +432,54 @@ export async function cancelBooking(
 }
 
 /**
+ * Cancels a stay from EITHER 'confirmed' or 'completed', for voiding a channel
+ * enrichment.
+ *
+ * Separate from `cancelBooking`, which stays scoped to 'confirmed': cancelling
+ * a finished stay is not something the normal cancel flow should offer, and
+ * narrowing that function would have widened the user-facing action too.
+ *
+ * Voiding needs the wider scope because a wrong enrichment is usually found
+ * after the stay has been checked out - when the channel's payout fails to
+ * reconcile - and `cancelBooking` would refuse exactly those, after the void
+ * had already reversed the money.
+ */
+export async function cancelBookingForVoid(
+  site: VillaSite,
+  bookingId: string,
+  actorUserId: string | null,
+): Promise<SiteBooking> {
+  return withSyncLog(site, 'booking.void', actorUserId, async () => {
+    const { data, error } = await site.client
+      .from('bookings')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('id', bookingId)
+      .eq('property_id', site.sitePropertyId)
+      .in('status', ['confirmed', 'completed'])
+      .select(BOOKING_COLUMNS)
+      .maybeSingle();
+
+    if (error) throw fromSiteWriteError(error);
+
+    if (!data) {
+      const existing = await getBooking(site, bookingId);
+      throw existing
+        ? new VillaDbError(
+            'CONFLICT',
+            `booking ${bookingId} is ${existing.status}`,
+            `This stay is already ${existing.status}.`,
+          )
+        : new VillaDbError('NOT_FOUND', `booking ${bookingId}`);
+    }
+
+    const booking = toBooking(data as BookingRow);
+
+    invalidateBookingsViewCache(site.sitePropertyId);
+    return { result: booking, siteId: booking.bookingCode ?? booking.id };
+  });
+}
+
+/**
  * Marks a confirmed stay completed at check-out (a manager or owner action).
  * Allowed from the check-in date onward, so an early departure can be closed.
  */

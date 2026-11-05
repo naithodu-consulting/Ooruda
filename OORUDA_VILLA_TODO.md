@@ -266,49 +266,68 @@ one as a real bug.
   `releaseFromBlock` both invalidate correctly.
 
 
-## Void enrichment for channel bookings (raised 2026-11-03)
+## Void enrichment for channel bookings — DONE 2026-11-05
 
-**Confirmed not built (2026-11-04).** There is no `voided` booking status in
-`lib/villa-db/bookings.ts` or `lib/villa/` — the only `voided` tokens are `payment_voided` (an
-activity type) and `voided_at` on individual payment rows, both about one payment rather than a
-booking. The status lists in `bookings.ts` (`:530`, `:654`, `:1015`) carry only pending /
-confirmed / completed / cancelled, so all four scenarios below are unhandled. Scenario 2 is the
-serious one: a platform-side cancellation leaves a confirmed booking with an auto-recorded
-payout and no way to reverse it.
+"Void enrichment" on the booking page, `villa_admin` only, for any stay a
+channel feed sold. It cancels the stay, voids the auto-recorded payout receipt,
+removes the commission expense, re-derives `payment_status` from the ledger,
+releases the guest documents and logs `enrichment_voided` with a required
+reason. Migration `20261105090000_villa_enrichment_voided_activity.sql` adds
+the action to the activity check constraint (constraint-only, no typegen).
 
-Hard-deleting a booking is architecturally wrong: orphaned rows in mirror, activity,
-guest documents, and payment ledger, plus broken audit trail. The codebase rule
-("never DELETE a booking; cancel it §5.5") stays. But Airbnb bookings need an
-**undo-enrichment** path the current cancel flow doesn't cover.
+Hard-deleting a booking stays architecturally wrong — orphaned rows in the
+mirror, the activity log, the guest documents and the payment ledger, and a
+broken audit trail. The codebase rule ("never DELETE a booking; cancel it,
+§5.5") is unchanged: voiding cancels and reverses, and deletes nothing except
+the commission expense, which `villa_expenses` gives no other way to reverse.
 
-### Scenarios this solves
-1. **Wrong enrichment** — operator entered wrong guest / wrong amount; no undo today,
-   and after check-in even cancel is unavailable.
-2. **Platform cancellation** — Airbnb guest cancelled on the platform, iCal block
-   vanished, but the enriched booking stays as "confirmed" with no action.
-3. **Duplicate / test enrichment** — permanent record today, no cleanup.
-4. **Airbnb date change** — old enriched booking has stale dates; new iCal block
-   appeared. Need to void old → re-enrich new.
 
-### Design
-- New status `voided` (distinct from `cancelled`: "created in error" vs "real booking
-  was cancelled").
-- **Reverse the auto-recorded payout receipt** — create a reversal entry in the ledger,
-  never delete the original.
-- Log void in `villa_booking_activity` with mandatory reason.
-- Release guest documents for purge.
-- **Available regardless of check-in date** — mistakes are discovered late.
-- Allow re-enrichment from the same iCal event (existing code already permits
-  re-enrichment over cancelled bookings; extend to voided).
-- Gate: `villa_admin` only.
+**Why it was needed, beyond cancelling.** `cancelBooking` only flips the site
+status. It never touched the money, and `load-report.ts` reads
+`villa_booking_payments` filtered on `voided_at is null` with no join to booking
+status — so a cancelled-but-not-voided enrichment kept its payout counted as
+cash received for ever. Cancelling is also gated on `today <= check_in` in the
+UI, so a mistake found after the guest's arrival date had no remedy at all.
+Voiding has no date gate, which is the point: the mistake usually surfaces when
+the channel's payout fails to reconcile at month end.
 
-### What NOT to do
-- No hard delete — audit trail and financial integrity.
-- No auto-cancel when iCal block disappears — feed sync can be flaky; "Gone from
-  channel" warning with manual action is the right UX.
-- No voiding if real check-in records or external payment reconciliations exist.
+**No new `voided` status — and this is not a shortcut.** The design as first
+written called for one. It cannot work: villa-booking's
+`bookings_channel_event_unique` partial index (its 00108) excludes only
+`status <> 'cancelled'`, so a row with any other status stays inside the index
+and re-enriching the same iCal event would fail on a duplicate key for ever —
+the opposite of what voiding is for, and exactly what that migration's own
+comment warns about. The site status therefore stays `cancelled` and the
+"created in error" distinction lives in Ooruda's activity log, where we own the
+schema. Changing that needs a villa-booking migration to widen the index
+predicate; it is not an Ooruda-side decision.
 
----
+**The stay is cancelled FIRST, and nothing after it throws.** The first cut
+reversed the money first, reasoning that it failed safe. It did not:
+`cancelBooking` matches only `confirmed` rows, so a *completed* stay — most of
+them — had its receipt voided and its commission expense deleted and then threw,
+leaving the money gone, the stay still completed, and **no activity row at
+all**. A retry could not mend it, because the receipt no longer matched
+`voided_at is null`. Found by the review; fixed with a void-specific
+`cancelBookingForVoid` (confirmed *or* completed, leaving `cancelBooking`
+strict for the user-facing cancel path) and by inverting the order. The worst
+case now is a cancelled stay whose payout is still counted — today's behaviour,
+detectable and fixable from the Payments panel — and every step reports what it
+managed so the operator knows which remedy to apply.
+
+**Deliberate limits.**
+- The commission expense is linked to its booking only by the note
+  (`commissionNoteFor`, now shared by writer and matcher so one edit cannot
+  silently break every future void). Deleted on an unambiguous single match;
+  otherwise left alone and flagged, because `villa_expenses.amount` must be
+  positive and there is no soft delete, so deletion is the only way back.
+- The match is done in the query with a bounded `ilike`, not over every
+  commission row: the unbounded read was capped at `max_rows` and silently
+  reported "no commission" past that while telling the operator the void was
+  clean.
+- `payment_status` is re-derived from the ledger, not assumed. Enrichment
+  creates the booking `paid`; without this a voided, cancelled stay still read
+  "Fully paid" on every badge that trusts the column over the receipts.
 
 ## Editing existing bookings — Phased implementation & Design (raised 2026-11-02)
 

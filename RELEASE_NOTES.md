@@ -4,6 +4,24 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: Void a Channel Enrichment — 2026-11-05
+
+### Undoing an Airbnb stay that was filled in by mistake
+- New **"Void enrichment"** action on the booking page, `villa_admin` only, for any stay a channel feed sold.
+- Cancelling alone never fixed this: it flips the site status but leaves the auto-recorded payout receipt standing, and Reports counts receipts without joining booking status — so a cancelled-but-not-voided enrichment kept its payout counted as cash received indefinitely. Cancelling is also only offered before the check-in date, so a mistake found later had no remedy at all.
+- Voiding cancels the stay, voids the payout receipt, removes the commission expense, re-derives `payment_status` from the receipt ledger, releases the guest documents for purge, and logs `enrichment_voided` with a required reason. **No check-in date restriction** — the mistake usually surfaces when the channel's payout fails to reconcile at month end.
+- The same channel calendar entry can be filled in again afterwards.
+- Every outcome is reported rather than assumed: if the payout receipt could not be voided, or the commission expense could not be removed, the operator is told which remedy to apply by hand instead of being shown a clean success.
+- **No new `voided` booking status**, despite the original design calling for one: villa-booking's channel-event unique index excludes only `cancelled`, so any other status would block re-enriching the same iCal event permanently. The "created in error" distinction lives in Ooruda's activity log instead.
+
+### Migrations
+
+| Migration | Purpose |
+|---|---|
+| `20261105090000_villa_enrichment_voided_activity.sql` | Adds `enrichment_voided` to the `villa_booking_activity` action check constraint. Constraint-only — no column changes, so no typegen run is needed. |
+
+---
+
 ## Ooruda Villa: Edit Booking (Phase 1), Part-Paid Refund Ladder & Channel Enrichment Data-Integrity Fixes — 2026-11-04
 
 ### Editing an existing booking's guest details

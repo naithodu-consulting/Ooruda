@@ -44,6 +44,7 @@ import { GuestEmailsSection } from '../_components/guest-emails-section';
 import { GuestIdsSection } from '../_components/guest-ids-section';
 import { PaymentsSection } from '../_components/payments-section';
 import { RegistrationCardButton } from '../_components/registration-card-button';
+import { VoidEnrichmentDialog } from '../_components/void-enrichment-dialog';
 
 export const metadata = { title: 'Booking' };
 
@@ -141,6 +142,15 @@ export default async function BookingPage({ params, searchParams }: Props) {
       booking.status as (typeof EDITABLE_BOOKING_STATUSES)[number],
     ) &&
     (role === 'villa_admin' || role === 'villa_manager');
+  // A channel stay filled in by mistake. Admin only, and with no date gate -
+  // unlike cancelling, which is offered only before check-in. The mistake is
+  // usually found when the channel's payout fails to reconcile, long after
+  // the guest would have arrived, and that is exactly when cancelling is
+  // already unavailable and the phantom payout is still in Reports.
+  const canVoidEnrichment =
+    role === 'villa_admin' &&
+    booking.sourceFeedId !== null &&
+    booking.status !== 'cancelled';
   const canCheckIn =
     booking.status === 'confirmed' && !isCheckedIn && today >= booking.checkIn;
   // A stay can only be checked out after it has been checked in.
@@ -236,7 +246,8 @@ export default async function BookingPage({ params, searchParams }: Props) {
           canCheckOut ||
           canCancel ||
           canDownloadCard ||
-          canEdit ? (
+          canEdit ||
+          canVoidEnrichment ? (
             <div
               className="flex flex-wrap items-center gap-2 max-sm:w-full max-sm:[&>*]:flex-1"
               data-test={'villa-booking-actions'}
@@ -284,6 +295,17 @@ export default async function BookingPage({ params, searchParams }: Props) {
                     infants: booking.infants,
                     specialRequests: booking.specialRequests,
                   }}
+                />
+              ) : null}
+              {canVoidEnrichment ? (
+                <VoidEnrichmentDialog
+                  accountId={accountId}
+                  propertyId={propertyId}
+                  bookingId={booking.id}
+                  bookingCode={booking.bookingCode}
+                  channelName={
+                    booking.channel === 'airbnb' ? 'Airbnb' : 'channel'
+                  }
                 />
               ) : null}
               {canCancel ? (
