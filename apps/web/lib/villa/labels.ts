@@ -140,6 +140,7 @@ export const ACTIVITY_LABELS: Record<BookingActivityAction, string> = {
   reopened: 'Check-out undone',
   checked_in: 'Checked in',
   booking_updated: 'Details updated',
+  amount_adjusted: 'Amount adjusted',
   enrichment_voided: 'Enrichment voided',
   note: 'Note',
   payment_recorded: 'Payment recorded',

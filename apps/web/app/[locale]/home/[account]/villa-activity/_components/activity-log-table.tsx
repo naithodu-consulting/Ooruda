@@ -24,6 +24,7 @@ import {
   UserMinus,
   UserPlus,
   XCircle,
+  IndianRupee,
   PencilLine,
 } from 'lucide-react';
 
@@ -60,6 +61,7 @@ function ActivityIcon({ action }: { action: string }) {
   if (action === 'reopened') return <Undo2 className={cls} />;
   if (action === 'checked_in') return <CheckCircle2 className={cls} />;
   if (action === 'booking_updated') return <PencilLine className={cls} />;
+  if (action === 'amount_adjusted') return <IndianRupee className={cls} />;
   if (action === 'enrichment_voided')
     return <Ban className="text-destructive h-4 w-4 shrink-0" />;
   if (action === 'payment_recorded') return <CreditCard className={cls} />;

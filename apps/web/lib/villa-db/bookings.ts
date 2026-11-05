@@ -431,6 +431,118 @@ export async function cancelBooking(
   });
 }
 
+/** A booking's money, in paise, for an adjustment write. */
+export interface BookingMoneyWrite {
+  basePaise: number;
+  extraGuestPaise: number;
+  discountPaise: number;
+  taxPaise: number;
+  totalPaise: number;
+  /** `updated_at` as the caller last saw it; empty skips the check. */
+  expectedUpdatedAt: string;
+}
+
+/**
+ * Rewrites a booking's money on the site (edit booking Phase 2).
+ *
+ * The guards are in the statement, not only in the service that calls it, so
+ * they hold under a concurrent invoice issue or check-out rather than being
+ * merely checked a moment earlier:
+ *
+ *   invoice_number is null   an issued tax invoice states these figures, and
+ *                            correcting it needs a credit or debit note, which
+ *                            Ooruda cannot issue yet (M5b)
+ *   source_feed_id is null   a channel is the merchant of record for the stay
+ *                            it sold; restating its price here would only make
+ *                            Ooruda disagree with the payout
+ *   status in (...)          same reasoning as editing guest details
+ *   updated_at = expected    compare-and-set, so two adjustments cannot each
+ *                            overwrite the other's figures
+ */
+export async function updateBookingMoney(
+  site: VillaSite,
+  bookingId: string,
+  money: BookingMoneyWrite,
+  actorUserId: string | null,
+): Promise<SiteBooking> {
+  return withSyncLog(site, 'booking.adjust', actorUserId, async () => {
+    let query = site.client
+      .from('bookings')
+      .update({
+        base_amount: money.basePaise,
+        extra_guest_amount: money.extraGuestPaise,
+        discount_amount: money.discountPaise,
+        tax_amount: money.taxPaise,
+        total_amount: money.totalPaise,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', bookingId)
+      .eq('property_id', site.sitePropertyId)
+      .is('invoice_number', null)
+      .is('source_feed_id', null)
+      .in('status', [...EDITABLE_BOOKING_STATUSES]);
+
+    if (money.expectedUpdatedAt) {
+      query = query.eq('updated_at', money.expectedUpdatedAt);
+    }
+
+    const { data, error } = await query.select(BOOKING_COLUMNS).maybeSingle();
+
+    if (error) throw fromSiteWriteError(error);
+
+    if (data) {
+      const booking = toBooking(data as BookingRow);
+
+      // The list view caches for 30s per site property, and `revalidatePath`
+      // re-renders FROM that cache - so without this the bookings list showed
+      // the old total and payment status for half a minute, and reloading did
+      // not help. Every other write in this file does the same.
+      invalidateBookingsViewCache(site.sitePropertyId);
+      return { result: booking, siteId: booking.bookingCode ?? booking.id };
+    }
+
+    // Nothing matched: name the actual reason rather than reporting a live
+    // booking as missing.
+    const existing = await getBooking(site, bookingId);
+
+    if (!existing) throw new VillaDbError('NOT_FOUND', `booking ${bookingId}`);
+
+    if (existing.invoiceNumber) {
+      throw new VillaDbError(
+        'CONFLICT',
+        `booking ${bookingId} is invoiced as ${existing.invoiceNumber}`,
+        `This stay has been invoiced (${existing.invoiceNumber}). Changing the amount needs a credit or debit note, which is not available yet.`,
+      );
+    }
+
+    if (existing.sourceFeedId !== null) {
+      throw new VillaDbError(
+        'CONFLICT',
+        `booking ${bookingId} was sold by feed ${existing.sourceFeedId}`,
+        'This stay was sold by a booking channel, which charged the guest. Change the amount on the channel instead.',
+      );
+    }
+
+    if (
+      !EDITABLE_BOOKING_STATUSES.includes(
+        existing.status as (typeof EDITABLE_BOOKING_STATUSES)[number],
+      )
+    ) {
+      throw new VillaDbError(
+        'CONFLICT',
+        `booking ${bookingId} is ${existing.status}`,
+        `Only a confirmed or completed booking can be adjusted. This one is ${existing.status}.`,
+      );
+    }
+
+    throw new VillaDbError(
+      'CONFLICT',
+      `booking ${bookingId} changed during adjustment`,
+      'Someone else changed this booking while you were adjusting it. Close this and open it again before you re-apply your change.',
+    );
+  });
+}
+
 /**
  * Cancels a stay from EITHER 'confirmed' or 'completed', for voiding a channel
  * enrichment.

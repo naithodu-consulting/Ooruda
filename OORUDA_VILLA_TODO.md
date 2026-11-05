@@ -401,10 +401,64 @@ Comprehensive analysis of updating existing bookings (guest count, pricing, and 
   - Phone and email are optional here (unlike the new-booking form): a stay a
     channel sold often has neither, and an edit must not force staff to invent
     one to fix a spelling. Both still validated when given.
-- [ ] **Phase 2: Financial Adjustments & Balance Recalculation**
-  - Allow adjusting Extra Guest charges or adding an explicit line-item discount/surcharge.
-  - Dynamically recalculate GST and balance due (`total_amount - payments_recorded = balance_due`).
-  - Restrict total price reduction below already recorded payments (prevent negative balance without explicit refund).
+- [x] **Phase 2: Financial Adjustments & Balance Recalculation — DONE 2026-11-05**
+  - "Adjust amount" on the booking's **Payments** card, not the action bar: it
+    is a money action, and that card already loads the ledger the adjustment is
+    bounded by, so there is no second round trip.
+  - Editable: stay charge, extra-guest charge, discount. **GST and the total
+    are derived on the server** from the same `flat18` that priced the stay, so
+    the form cannot post a total inconsistent with its own tax. The dialog
+    previews with the identical function.
+  - Four guards, each in the service AND in the site `UPDATE` so they hold
+    against a concurrent invoice issue or cancel:
+    - `villa_admin` only — this moves revenue;
+    - **direct bookings only** — a channel charged the guest and is merchant of
+      record, so restating price here would only disagree with the payout;
+    - **no issued invoice** — correcting one needs a credit or debit note,
+      which is M5b. This is the decision taken 2026-11-05 in preference to
+      allowing adjustments and leaving the notes to follow;
+    - **never below money received** net of refunds — otherwise it is a silent
+      refund with no record.
+  - Plus compare-and-set on `updated_at` (**required**, not optional, since it
+    is the only defence against two concurrent adjustments), and
+    `payment_status` re-derived, because moving the total moves what is owed.
+  - Migration `20261105140000_villa_amount_adjusted_activity.sql`.
+
+  **The receipts guard needed a second check after the write.** It is a
+  read-then-write, and the compare-and-set cannot close the gap: receipts live
+  in Ooruda's `villa_booking_payments` and `record_villa_payment` never touches
+  the site's `bookings` row, so a payment banked in between leaves `updated_at`
+  unchanged and the write succeeds. One admin in two tabs was enough to drop a
+  total below the money received. The ledger is now re-read against the figures
+  that actually landed and the previous ones written back if it no longer
+  holds. **The proper fix is an advisory lock taken by both this path and
+  `record_villa_payment`** — that is a migration on the payments path and is
+  still owed.
+
+  **Deliberate limits.**
+  - **Itemised add-ons are out of scope.** `villa_addons` is a Settings price
+    list with no booking linkage, and neither database has a `booking_addons`
+    table, so a meal or a BBQ folds into the stay charge rather than becoming
+    its own line. Real add-on lines need a table — see "Add-on history for
+    invoices" above.
+  - **Refuses under the per-night GST slab.** The slab picks 5% or 18% per unit
+    per night from that night's own charge, so a stay whose nights are priced
+    differently has no single answer and averaging the total would land on the
+    wrong side of the ₹7,500 ceiling for some nights. `adjustmentsAvailable`
+    gates both the UI and the service, so flipping `TAX_MODE` hides the control
+    rather than producing wrong tax.
+  - **Refuses a stay whose stored tax does not follow from its own figures**
+    (`basisIsReproducible`) — a slab-priced, legacy or hand-filled row. Saving
+    with no edits would otherwise restate its tax and log that against an
+    operator who changed nothing.
+  - Amounts are diffed **to the paisa**. Rounding to whole rupees logged a real
+    ₹1,000.00 → ₹1,000.49 adjustment as "₹1,000 → ₹1,000" in the entry whose
+    purpose is being read with a tax return open.
+  - `BOOKING_ACTIVITY_ACTIONS` is now one list, and `activity.test.ts` asserts
+    it matches the check constraint. The old failure mode was quiet: an action
+    added in TypeScript but not in SQL fails its insert with 23514, which
+    `recordBookingActivity` swallows — a money change applied with no audit
+    row, surfaced only as a dismissable toast.
 - [ ] **Phase 3: Date Alterations & Stay Extensions**
   - Date changes with real-time atomic availability & block check.
 

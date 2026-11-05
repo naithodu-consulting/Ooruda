@@ -56,8 +56,14 @@ export type TaxMode = 'site_flat_18' | 'per_night_slab';
 /** Must equal what the guest site's pricing engine does today. */
 export const TAX_MODE: TaxMode = 'site_flat_18';
 
-/** The site's rule: 18% of the whole subtotal, rounded to the nearest paisa. */
-function flat18(subtotalPaise: number, nights: number): StayGst {
+/**
+ * The site's rule: 18% of the whole subtotal, rounded to the nearest paisa.
+ *
+ * Exported because adjusting a booking's money after the fact has to arrive at
+ * the same tax the stay was quoted with (`lib/villa/booking-adjust.ts`). One
+ * definition, so an adjusted total cannot drift from a quoted one.
+ */
+export function flat18(subtotalPaise: number, nights: number): StayGst {
   const taxPaise = Math.round((subtotalPaise * 18) / 100);
   const split = splitCgstSgst(taxPaise);
 

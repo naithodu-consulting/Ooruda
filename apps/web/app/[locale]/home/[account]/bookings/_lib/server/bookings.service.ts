@@ -24,6 +24,7 @@ import {
   markStayCompleted,
   reopenStay,
   setPaymentStatus,
+  updateBookingMoney,
   toSitePhone,
   updateBookingGuestDetails,
 } from '~/lib/villa-db/bookings';
@@ -32,6 +33,14 @@ import { todayIst } from '~/lib/villa-db/dates';
 import { VillaDbError, isVillaDbError } from '~/lib/villa-db/errors';
 import { getPricingInputs } from '~/lib/villa-db/rates';
 import { recordBookingActivity } from '~/lib/villa/activity';
+import {
+  type BookingMoney,
+  adjustmentsAvailable,
+  basisIsReproducible,
+  checkAdjustment,
+  describeMoneyChange,
+  recomputeMoney,
+} from '~/lib/villa/booking-adjust';
 import {
   type BookingGuestDetails,
   buildEditNote,
@@ -65,6 +74,7 @@ import type {
   EnrichChannelStaySchema,
   NewBookingSchema,
   ReopenStaySchema,
+  AdjustBookingMoneySchema,
   StaySchema,
   UpdateBookingSchema,
   VoidEnrichmentSchema,
@@ -974,6 +984,176 @@ export function createBookingsService(client: Client) {
       );
 
       await mirrorBooking(site, booking);
+
+      return { booking, changes, auditWritten };
+    },
+
+    /**
+     * Adjusts a booking's money: the stay charge, the extra-guest charge and a
+     * discount (edit booking Phase 2).
+     *
+     * GST and the total are DERIVED here, from the same `flat18` that priced
+     * the stay, so an adjusted booking cannot quote a tax its own figures do
+     * not support. The form never sends them.
+     *
+     * Three things it will not do, each for its own reason:
+     *   - an INVOICED stay. The invoice states these figures, and correcting
+     *     it needs a credit or debit note, which Ooruda cannot issue until
+     *     M5b. Refusing beats issuing a wrong tax document.
+     *   - a CHANNEL-SOLD stay. The channel charged the guest and is the
+     *     merchant of record; restating the price here would only make Ooruda
+     *     disagree with the payout.
+     *   - a total BELOW the money already received, which would leave the
+     *     booking owing the guest with no refund recorded. Refunding is its
+     *     own action with its own trail, and this is not a back door to it.
+     *
+     * The first two are enforced in the site statement as well as here, so
+     * they hold against an invoice issued or a stay cancelled in between.
+     */
+    async adjustMoney(
+      input: z.output<typeof AdjustBookingMoneySchema>,
+      actor: string,
+    ) {
+      const site = await getVillaSite(input.accountId, input.propertyId);
+      const existing = await getBooking(site, input.bookingId);
+
+      if (!existing) throw new Error('That booking no longer exists.');
+
+      // `!= null` rather than truthiness, matching the site statement's
+      // `.is('invoice_number', null)` exactly: if the two disagreed, the
+      // service would pass, the UPDATE would match nothing, and the operator
+      // would be told someone else had changed the booking.
+      if (existing.invoiceNumber != null) {
+        throw new Error(
+          `This stay has been invoiced (${existing.invoiceNumber}). Changing the amount needs a credit or debit note, which is not available yet.`,
+        );
+      }
+
+      if (existing.sourceFeedId !== null) {
+        throw new Error(
+          'This stay was sold by a booking channel, which charged the guest. Change the amount on the channel instead.',
+        );
+      }
+
+      if (
+        !EDITABLE_BOOKING_STATUSES.includes(
+          existing.status as (typeof EDITABLE_BOOKING_STATUSES)[number],
+        )
+      ) {
+        throw new Error(
+          `Only a confirmed or completed booking can be adjusted. This one is ${existing.status}.`,
+        );
+      }
+
+      if (!adjustmentsAvailable()) {
+        throw new Error(
+          'Adjusting an amount is not available under the per-night GST slab: it needs the charge for each night, not a total.',
+        );
+      }
+
+      const before: BookingMoney = {
+        basePaise: existing.baseAmountPaise,
+        extraGuestPaise: existing.extraGuestAmountPaise,
+        discountPaise: existing.discountAmountPaise,
+        taxPaise: existing.taxAmountPaise,
+        totalPaise: existing.totalAmountPaise,
+      };
+
+      // Does the stored tax follow from the stored figures? If not, this stay
+      // was priced on some other basis, and recomputing would restate its tax
+      // even on a save with no edits - logged against an operator who changed
+      // nothing.
+      if (!basisIsReproducible(before, existing.nights)) {
+        throw new Error(
+          'This stay\u2019s GST does not follow from its own figures, so it was priced outside the current rate card. Adjusting it here would restate the tax. Record the change as a payment or refund instead.',
+        );
+      }
+
+      const next = {
+        basePaise: Math.round(input.baseAmount * 100),
+        extraGuestPaise: Math.round(input.extraGuestAmount * 100),
+        discountPaise: Math.round(input.discountAmount * 100),
+      };
+
+      // What has actually been banked, net of refunds - not `payment_status`,
+      // which lags, and not the booking's own total.
+      const { summary } = await loadLedger(client, site, existing);
+
+      const refusal = checkAdjustment({
+        next,
+        receivedPaise: summary.netPaidPaise,
+        nights: existing.nights,
+      });
+
+      if (refusal) throw new Error(refusal.message);
+
+      const money = recomputeMoney(next, existing.nights);
+
+      const booking = await updateBookingMoney(
+        site,
+        input.bookingId,
+        { ...money, expectedUpdatedAt: input.siteUpdatedAt },
+        actor,
+      );
+
+      // The receipts check above is a read-then-write, and the compare-and-set
+      // CANNOT close it: receipts live in Ooruda's `villa_booking_payments`,
+      // and `record_villa_payment` never touches the site's `bookings`
+      // row - so a payment banked in between leaves `updated_at` unchanged and
+      // the write succeeds. One admin in two tabs is enough to drop a total
+      // below the money received, which is the silent refund this guard exists
+      // to prevent.
+      //
+      // So it is checked again against the figures that actually landed, and
+      // put back if it no longer holds. A compensating write rather than a
+      // lock, because the proper fix is for `record_villa_payment` to take the
+      // same advisory lock, and that is a migration on the payments path.
+      const after = await loadLedger(client, site, booking);
+
+      if (after.summary.netPaidPaise > booking.totalAmountPaise) {
+        await updateBookingMoney(
+          site,
+          input.bookingId,
+          { ...before, expectedUpdatedAt: booking.updatedAt ?? '' },
+          actor,
+        ).catch(async (error: unknown) =>
+          // Could not put it back: say so loudly. The booking is now below its
+          // receipts and only a person can decide what should happen.
+          (await getLogger()).error(
+            { bookingId: booking.id, error: String(error) },
+            'villa adjust: could not restore figures after a late payment; booking is below its receipts',
+          ),
+        );
+
+        throw new Error(
+          'A payment was recorded while you were adjusting this booking, and the new total is below the money received. Nothing was changed. Reload and try again.',
+        );
+      }
+
+      const changes = describeMoneyChange(before, {
+        basePaise: booking.baseAmountPaise,
+        extraGuestPaise: booking.extraGuestAmountPaise,
+        discountPaise: booking.discountAmountPaise,
+        taxPaise: booking.taxAmountPaise,
+        totalPaise: booking.totalAmountPaise,
+      });
+
+      // The total moved, so what the guest owes has moved with it: a stay that
+      // was 'paid' at the old figure may now be part-paid, and the reverse.
+      const synced = await resyncPaymentStatus(site, booking, actor);
+
+      const auditWritten = await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking,
+          action: 'amount_adjusted',
+          note: buildEditNote(input.reason, changes),
+        },
+        actor,
+      );
+
+      await mirrorBooking(site, synced ?? booking);
 
       return { booking, changes, auditWritten };
     },

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -103,6 +103,8 @@ export function PaymentsPanel(
     bookingStatus: string;
     guestName: string;
     isOwner: boolean;
+    /** The "Adjust amount" control, when the viewer may use it. */
+    adjustAction?: ReactNode;
     summary: {
       total: number;
       received: number;
@@ -147,15 +149,24 @@ export function PaymentsPanel(
           <Wallet className="text-muted-foreground h-4 w-4" />
           Payments
         </CardTitle>
-        <Badge
-          variant="outline"
-          className={cn(
-            s.status === 'paid' && 'border-success/40 text-success',
-          )}
-          data-test={'villa-payments-status'}
-        >
-          {STATUS_LABELS[s.status] ?? s.status}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge
+            variant="outline"
+            className={cn(
+              s.status === 'paid' && 'border-success/40 text-success',
+            )}
+            data-test={'villa-payments-status'}
+          >
+            {STATUS_LABELS[s.status] ?? s.status}
+          </Badge>
+          {/*
+            Adjusting the amount lives here rather than in the booking's
+            action bar: it is a money action, and this is the card that
+            already knows what has been received - which the adjustment is
+            bounded by.
+          */}
+          {props.adjustAction}
+        </div>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">

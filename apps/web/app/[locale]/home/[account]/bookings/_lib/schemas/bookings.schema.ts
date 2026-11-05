@@ -369,6 +369,58 @@ export const CancelBookingSchema = z.object({
 export type CancelBookingInput = z.input<typeof CancelBookingSchema>;
 
 /**
+ * An amount in rupees.
+ *
+ * The empty string is a MISS, not a zero. `z.coerce.number()` turns '' into 0,
+ * so clearing the stay charge and saving used to wipe it - and the dialog's
+ * own preview agreed, showing a ₹0 stay rather than a field error, because
+ * `Number('') || 0` lands in the same place. On an unpaid booking nothing else
+ * would have caught it.
+ */
+const money = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+  z.coerce
+    .number({ error: 'Enter an amount' })
+    .min(0, { message: 'Cannot be negative' })
+    .max(10_000_000)
+    .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, {
+      message: 'Use at most 2 decimals',
+    }),
+);
+
+/**
+ * Adjusting a booking's money (edit booking Phase 2).
+ *
+ * Rupees in, paise on the wire out. Only the three figures an operator decides
+ * are accepted: GST and the total are DERIVED on the server from the same
+ * `flat18` that priced the stay, never taken from the form. A client that
+ * could post a total would be a client that could post a total inconsistent
+ * with its own tax.
+ */
+export const AdjustBookingMoneySchema = z.object({
+  ...ids,
+  bookingId: z.string().uuid(),
+  /**
+   * Required here, unlike on the guest-details edit. The compare-and-set is
+   * the only thing standing between two concurrent adjustments, and an empty
+   * value disables it - which a server action would otherwise accept from any
+   * villa_admin who posted one.
+   */
+  siteUpdatedAt: z.string().trim().min(1).max(40),
+  /** The stay charge: a renegotiated tariff, an extra night, an add-on. */
+  baseAmount: money,
+  extraGuestAmount: money,
+  discountAmount: money,
+  reason: z
+    .string()
+    .trim()
+    .min(5, { message: 'Say why the amount is changing' })
+    .max(500),
+});
+
+export type AdjustBookingMoneyInput = z.input<typeof AdjustBookingMoneySchema>;
+
+/**
  * Retiring a channel stay that was filled in by mistake.
  *
  * A longer minimum reason than cancelling asks for: this undoes money that was

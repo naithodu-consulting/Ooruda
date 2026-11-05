@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { recordBookingActivity } from './activity';
-import type { BookingActivityAction } from './constants';
+import { BOOKING_ACTIVITY_ACTIONS } from './constants';
 import { ACTIVITY_LABELS, activityLabel } from './labels';
+
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 const mockInsert = vi.fn().mockReturnValue(Promise.resolve({ error: null }));
 const mockFrom = vi.fn().mockReturnValue({ insert: mockInsert });
@@ -77,28 +80,8 @@ describe('recordBookingActivity', () => {
 });
 
 describe('ACTIVITY_LABELS', () => {
-  const actions: BookingActivityAction[] = [
-    'created',
-    'cancelled',
-    'completed',
-    'reopened',
-    'checked_in',
-    'booking_updated',
-    'enrichment_voided',
-    'note',
-    'payment_recorded',
-    'payment_voided',
-    'refund_recorded',
-    'id_recorded',
-    'id_verified',
-    'id_deleted',
-    'email_sent',
-    'guest_added',
-    'guest_removed',
-  ];
-
   it('has readable labels for all actions', () => {
-    for (const action of actions) {
+    for (const action of BOOKING_ACTIVITY_ACTIONS) {
       expect(ACTIVITY_LABELS[action]).toBeDefined();
       expect(typeof ACTIVITY_LABELS[action]).toBe('string');
       expect(activityLabel(action)).toBe(ACTIVITY_LABELS[action]);
@@ -107,5 +90,36 @@ describe('ACTIVITY_LABELS', () => {
 
   it('returns action itself if unrecognized', () => {
     expect(activityLabel('unknown_action')).toBe('unknown_action');
+  });
+});
+
+describe('the database constraint and the TypeScript union agree', () => {
+  /**
+   * The quiet failure this guards: an action added in TypeScript but not to
+   * the check constraint fails its insert with 23514, which
+   * `recordBookingActivity` swallows into `auditWritten: false`. The business
+   * action still happens - a money adjustment, a void - with no audit row,
+   * surfaced only as a toast the operator can dismiss.
+   */
+  it('lists exactly the same actions', () => {
+    const dir = join(__dirname, '../../supabase/migrations');
+
+    // The newest migration that rewrites the constraint is the live one.
+    const latest = readdirSync(dir)
+      .filter((f) => f.endsWith('.sql'))
+      .sort()
+      .reverse()
+      .map((f) => readFileSync(join(dir, f), 'utf8'))
+      .find((sql) => sql.includes('villa_booking_activity_action_check'));
+
+    expect(latest).toBeDefined();
+
+    const block = /check \(action in \(([^)]*)\)\)/.exec(latest!);
+
+    expect(block).not.toBeNull();
+
+    const inSql = [...block![1]!.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);
+
+    expect([...inSql].sort()).toEqual([...BOOKING_ACTIVITY_ACTIONS].sort());
   });
 });

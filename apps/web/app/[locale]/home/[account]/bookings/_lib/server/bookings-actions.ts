@@ -19,6 +19,7 @@ import {
   ReopenStaySchema,
   SendGuestEmailSchema,
   UpdateBookingSchema,
+  AdjustBookingMoneySchema,
   VoidEnrichmentSchema,
 } from '../schemas/bookings.schema';
 import { createBookingsService } from './bookings.service';
@@ -90,6 +91,29 @@ export const updateBookingAction = authActionClient
     revalidatePath('/[locale]/home/[account]/bookings/[bookingId]', 'page');
     // The guest name shows on the calendar and the blocked-dates list.
     revalidatePath('/[locale]/home/[account]/calendar', 'page');
+
+    return { changedFields: changes.length, auditWritten };
+  });
+
+/**
+ * Adjusting what a booking comes to.
+ *
+ * Admin only, unlike correcting guest details: this moves the villa's revenue
+ * and what the guest owes.
+ */
+export const adjustBookingMoneyAction = authActionClient
+  .inputSchema(AdjustBookingMoneySchema)
+  .action(async ({ parsedInput, ctx }) => {
+    await requireVillaRole(parsedInput.accountId, ['villa_admin']);
+
+    const { changes, auditWritten } = await createBookingsService(
+      getSupabaseServerClient(),
+    ).adjustMoney(parsedInput, ctx.user.id);
+
+    revalidateBookings();
+    revalidatePath('/[locale]/home/[account]/bookings/[bookingId]', 'page');
+    // Revenue and the cash position both read this booking's total.
+    revalidatePath('/[locale]/home/[account]/villa-reports', 'page');
 
     return { changedFields: changes.length, auditWritten };
   });

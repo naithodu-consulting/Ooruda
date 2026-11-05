@@ -3,9 +3,11 @@ import { getSupabaseServerClient } from '@kit/supabase/server-client';
 import type { VillaRole } from '~/lib/roles';
 import type { SiteBooking } from '~/lib/villa-db/bookings';
 import { getVillaSite } from '~/lib/villa-db/client';
+import { adjustmentsAvailable } from '~/lib/villa/booking-adjust';
 import { fromPaise } from '~/lib/villa/money';
 
 import { loadLedger } from '../_lib/server/payments.service';
+import { AdjustAmountDialog } from './adjust-amount-dialog';
 import { PaymentsPanel } from './payments-panel';
 
 /**
@@ -35,6 +37,33 @@ export async function PaymentsSection(props: {
       bookingStatus={props.booking.status}
       guestName={props.booking.guestName}
       isOwner={props.role === 'villa_admin'}
+      adjustAction={
+        // Admin only, direct bookings only, and never once a tax invoice has
+        // been issued: correcting an invoiced amount needs a credit or debit
+        // note, which is not available until M5b. The server enforces all
+        // three again, and the site statement enforces the last two
+        // atomically.
+        adjustmentsAvailable() &&
+        props.role === 'villa_admin' &&
+        props.booking.sourceFeedId === null &&
+        props.booking.invoiceNumber == null &&
+        ['confirmed', 'completed'].includes(props.booking.status) ? (
+          <AdjustAmountDialog
+            accountId={props.accountId}
+            propertyId={props.propertyId}
+            bookingId={props.booking.id}
+            bookingCode={props.booking.bookingCode}
+            siteUpdatedAt={props.booking.updatedAt ?? ''}
+            nights={props.booking.nights}
+            receivedRupees={fromPaise(s.netPaidPaise)}
+            money={{
+              baseRupees: fromPaise(props.booking.baseAmountPaise),
+              extraGuestRupees: fromPaise(props.booking.extraGuestAmountPaise),
+              discountRupees: fromPaise(props.booking.discountAmountPaise),
+            }}
+          />
+        ) : null
+      }
       summary={{
         total: fromPaise(s.totalPaise),
         received: fromPaise(s.onlinePaise + s.offlinePaise),

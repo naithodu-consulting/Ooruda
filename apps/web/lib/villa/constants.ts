@@ -66,24 +66,38 @@ export type IdStatus = 'pending' | 'received' | 'verified';
  */
 export const MAX_ACTIVITY_NOTE = 1000;
 
-export type BookingActivityAction =
-  | 'created'
-  | 'cancelled'
-  | 'completed'
-  | 'reopened'
-  | 'checked_in'
-  | 'booking_updated'
-  | 'enrichment_voided'
-  | 'note'
-  | 'payment_recorded'
-  | 'payment_voided'
-  | 'refund_recorded'
-  | 'id_recorded'
-  | 'id_verified'
-  | 'id_deleted'
-  | 'email_sent'
-  | 'guest_added'
-  | 'guest_removed';
+/**
+ * Every booking-activity action, as ONE list.
+ *
+ * The same values live in the `villa_booking_activity_action_check`
+ * constraint, and `activity.test.ts` asserts the two agree. They used to be
+ * maintained separately in three places, and the failure mode was quiet: an
+ * action added here but not to the constraint fails the insert with 23514,
+ * which `recordBookingActivity` swallows into `auditWritten: false` - a money
+ * change applied with no audit trail, surfaced only as a dismissable toast.
+ */
+export const BOOKING_ACTIVITY_ACTIONS = [
+  'created',
+  'cancelled',
+  'completed',
+  'reopened',
+  'checked_in',
+  'booking_updated',
+  'amount_adjusted',
+  'enrichment_voided',
+  'note',
+  'payment_recorded',
+  'payment_voided',
+  'refund_recorded',
+  'id_recorded',
+  'id_verified',
+  'id_deleted',
+  'email_sent',
+  'guest_added',
+  'guest_removed',
+] as const;
+
+export type BookingActivityAction = (typeof BOOKING_ACTIVITY_ACTIONS)[number];
 
 /**
  * Block reasons offered on the calendar. The site also accepts

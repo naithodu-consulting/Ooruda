@@ -4,6 +4,29 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: Adjust a Booking's Amount (Edit Booking Phase 2) — 2026-11-05
+
+### Adjusting what a booking comes to
+- New **"Adjust amount"** control on the booking's Payments card: stay charge, extra-guest charge and discount. Available to `villa_admin` only.
+- **GST and the total are worked out on the server**, from the same function that priced the stay, so an adjusted booking cannot quote a tax its own figures do not support. The dialog previews with the identical function, so no figure is shown that the save would not produce.
+- `payment_status` is re-derived from the receipt ledger, because moving the total moves what the guest owes — a stay that was paid in full at the old figure may now be part-paid, or the reverse.
+- Four guards, each enforced in the service **and** in the booking-site statement so they hold against a concurrent invoice issue or cancellation: admin only; direct bookings only (a channel charged the guest and is merchant of record); no stay that has already been invoiced (correcting it needs a credit or debit note, which is not available yet); and never a total below the money already received net of refunds, which would be a refund with no record of it.
+- The receipts guard is re-checked **after** the write and rolled back if it no longer holds: receipts live in Ooruda's database while the booking lives on the site, so a payment banked mid-adjustment could otherwise slip past the compare-and-set.
+- Amounts are recorded in the booking history to the paisa, with a required reason.
+
+### Deliberate limits
+- Itemised add-ons (a meal, a BBQ, an extra bed) are **not** supported: there is no booking-level add-on table on either database, so such a charge folds into the stay charge. Itemised lines need a schema change.
+- Adjusting is unavailable under the per-night GST slab, which needs the charge for each night rather than a total. The control hides itself rather than producing a figure it cannot stand behind.
+- A stay whose stored GST does not follow from its own figures (priced outside the current rate card) is refused, rather than having its tax silently restated.
+
+### Migrations
+
+| Migration | Purpose |
+|---|---|
+| `20261105140000_villa_amount_adjusted_activity.sql` | Adds `amount_adjusted` to the `villa_booking_activity` action check constraint. Constraint-only — no column changes, so no typegen run is needed. |
+
+---
+
 ## Ooruda Villa: Void a Channel Enrichment — 2026-11-05
 
 ### Undoing an Airbnb stay that was filled in by mistake
