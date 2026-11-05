@@ -9,6 +9,7 @@ import {
   parseIcal,
   redactFeedUrl,
   renderIcalConflictEmail,
+  unreportedConflicts,
 } from './ical-sync';
 
 describe('redactFeedUrl', () => {
@@ -264,5 +265,81 @@ describe('renderIcalConflictEmail', () => {
     );
     expect(html).toContain('Sunset Villa');
     expect(html).not.toContain('villa19.in');
+  });
+});
+
+describe('unreportedConflicts', () => {
+  const conflict = (
+    bookingId: string,
+    feedStart = '2026-11-05',
+    feedEnd = '2026-11-06',
+  ) => ({
+    bookingId,
+    reference: `REF-${bookingId}`,
+    checkIn: feedStart,
+    checkOut: feedEnd,
+    feedStart,
+    feedEnd,
+  });
+
+  it('reports a conflict nobody has seen before', () => {
+    expect(unreportedConflicts([conflict('b1')], [])).toEqual([conflict('b1')]);
+  });
+
+  it('stays silent while the same conflict is still open', () => {
+    expect(
+      unreportedConflicts(
+        [conflict('b1')],
+        [
+          {
+            booking_id: 'b1',
+            feed_start: '2026-11-05',
+            feed_end: '2026-11-06',
+          },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it('speaks again when the channel moves the stay to other nights', () => {
+    const moved = conflict('b1', '2026-11-07', '2026-11-08');
+
+    expect(
+      unreportedConflicts(
+        [moved],
+        [
+          {
+            booking_id: 'b1',
+            feed_start: '2026-11-05',
+            feed_end: '2026-11-06',
+          },
+        ],
+      ),
+    ).toEqual([moved]);
+  });
+
+  it('speaks again once the open row is resolved (not passed in)', () => {
+    expect(unreportedConflicts([conflict('b1')], [])).toHaveLength(1);
+  });
+
+  it('de-duplicates identical conflicts detected within one run', () => {
+    expect(
+      unreportedConflicts([conflict('b1'), conflict('b1')], []),
+    ).toHaveLength(1);
+  });
+
+  it('still reports a second booking caught by the same block', () => {
+    expect(
+      unreportedConflicts(
+        [conflict('b1'), conflict('b2')],
+        [
+          {
+            booking_id: 'b1',
+            feed_start: '2026-11-05',
+            feed_end: '2026-11-06',
+          },
+        ],
+      ),
+    ).toEqual([conflict('b2')]);
   });
 });

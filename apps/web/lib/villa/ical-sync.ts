@@ -581,14 +581,122 @@ async function resolveConflictAlertRecipients(
   return fallback ? [fallback] : [];
 }
 
+/**
+ * The key an `ical_conflicts` row and a freshly detected conflict share.
+ *
+ * Dates are part of it on purpose: a channel that moves a stay onto new
+ * nights while the booking stays put is a different problem, and deserves to
+ * be said again.
+ */
+function conflictKey(c: {
+  bookingId: string;
+  feedStart: string;
+  feedEnd: string;
+}): string {
+  return `${c.bookingId}|${c.feedStart}|${c.feedEnd}`;
+}
+
+/**
+ * The conflicts worth telling a human about: the ones not already open
+ * against this feed.
+ *
+ * Sync runs on a schedule, and a double booking stays detectable until
+ * somebody moves a guest. Without this, every run writes another
+ * `ical_conflicts` row and sends another identical email, so the operator
+ * gets one alert per sync for a situation they already know about — which
+ * teaches them to ignore the alert that matters (villa-booking: repeat
+ * conflict alerts, 5 Nov 2026).
+ *
+ * An alert resumes once the row is resolved: `resolved_at` is the operator
+ * saying they dealt with it, so a conflict still detectable after that is
+ * news again.
+ */
+export function unreportedConflicts(
+  detected: ConflictReport[],
+  open: { booking_id: string; feed_start: string; feed_end: string }[],
+): ConflictReport[] {
+  const seen = new Set(
+    open.map((o) =>
+      conflictKey({
+        bookingId: o.booking_id,
+        feedStart: o.feed_start,
+        feedEnd: o.feed_end,
+      }),
+    ),
+  );
+
+  const fresh: ConflictReport[] = [];
+
+  // Also de-duplicates within one run: two feed events overlapping one
+  // booking on the same nights is one thing to tell somebody about.
+  for (const c of detected) {
+    const key = conflictKey(c);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    fresh.push(c);
+  }
+
+  return fresh;
+}
+
+/**
+ * Reads the conflicts already open against this feed, or null if the read
+ * failed.
+ *
+ * Null is not an empty list: when we cannot tell what is already open, we
+ * alert anyway. A duplicate email is an annoyance; a silent double booking
+ * is a guest arriving at a villa somebody else is sleeping in.
+ */
+async function readOpenConflicts(
+  site: VillaSite,
+  feedId: string,
+  bookingIds: string[],
+): Promise<
+  { booking_id: string; feed_start: string; feed_end: string }[] | null
+> {
+  const { data, error } = await site.client
+    .from('ical_conflicts')
+    .select('booking_id, feed_start, feed_end')
+    .eq('feed_id', feedId)
+    .is('resolved_at', null)
+    .in('booking_id', bookingIds);
+
+  if (error) {
+    const logger = await getLogger();
+    logger.error(
+      { feedId, error: error.message },
+      'ical sync: could not read open conflicts; alerting without de-duplication',
+    );
+    return null;
+  }
+
+  return data ?? [];
+}
+
 async function recordConflicts(
   site: VillaSite,
   feed: { id: string; name: string },
-  conflicts: ConflictReport[],
+  detected: ConflictReport[],
 ): Promise<void> {
-  if (conflicts.length === 0) return;
+  if (detected.length === 0) return;
 
   const logger = await getLogger();
+
+  const open = await readOpenConflicts(site, feed.id, [
+    ...new Set(detected.map((c) => c.bookingId)),
+  ]);
+
+  const conflicts =
+    open === null ? detected : unreportedConflicts(detected, open);
+
+  if (conflicts.length === 0) {
+    logger.info(
+      { feed: feed.name, alreadyOpen: detected.length },
+      'ical sync: conflicts still open, already reported — no new alert',
+    );
+    return;
+  }
+
   const { error } = await site.client.from('ical_conflicts').insert(
     conflicts.map((c) => ({
       feed_id: feed.id,

@@ -4,6 +4,25 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: One Alert Per Double Booking — 2026-11-05
+
+### Conflict alerts no longer repeat every sync
+- A double-booking alert is now sent **once per conflict**, not once per sync run. An operator reported receiving the same "The villa is booked twice" email nine times for a single unresolved overlap.
+- Before sending, the sync reads the conflicts already open against the feed (`ical_conflicts` rows with no `resolved_at`) and drops any it has already reported. The alert resumes if the row is resolved and the overlap is still detectable, because that is news again.
+- The match is on booking **and** the feed's nights, so a channel that moves a stay onto different dates raises a fresh alert rather than hiding behind the old one.
+- Duplicates within a single run are collapsed too: two feed events overlapping one booking on the same nights is one thing to tell somebody about.
+- **If the open-conflict read fails, the alert is sent anyway.** A duplicate email is an annoyance; a silent double booking is a guest arriving at an occupied villa.
+
+### Not covered by this change
+- A stay recorded through the ordinary new-booking form instead of **"Record this channel stay"** carries no `source_feed_id`, so the sync cannot pair it with the channel event and reports it as a double booking. The alert is now sent once instead of endlessly, but the underlying false positive remains open.
+- `ical_conflicts` lives in the booking-site database, so the de-duplication is enforced in application code only. A partial unique index on `(feed_id, booking_id, feed_start, feed_end) WHERE resolved_at IS NULL` belongs in that repository.
+
+### Migrations
+
+None.
+
+---
+
 ## Ooruda Villa: Adjust a Booking's Amount (Edit Booking Phase 2) — 2026-11-05
 
 ### Adjusting what a booking comes to
