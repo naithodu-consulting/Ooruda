@@ -33,7 +33,28 @@ clean across 33 packages, `lint:fix` and `format:fix` clean.
 
 ---
 
-## 1. APPLY THREE MIGRATIONS — do this first
+## 1. APPLY THREE MIGRATIONS — ✅ DONE 2026-11-05
+
+**All three are applied to Dev (`bcdosjrbkkemsqowhigj`).** Verified with
+`supabase migration list --linked`: `20261104120000`, `20261105090000` and
+`20261105140000` all show in the Remote column.
+
+Two notes from the push:
+
+- `20261105140000` emitted `WARNING (25P01): SET LOCAL can only be used in
+  transaction blocks`. The CLI did **not** wrap that file in a transaction, so
+  its `lock_timeout = '5s'` had no effect and the comment claiming "the whole
+  file runs in one transaction (Supabase CLI)" is wrong. It applied fine at
+  today's table size, but a future migration wanting a real lock timeout must
+  open its own `BEGIN`.
+- The three constraint swaps are **stacked** — each restates the full action
+  list — so they must always be applied in timestamp order, and any later
+  migration touching `villa_booking_activity_action_check` must carry all of
+  `booking_updated`, `enrichment_voided` and `amount_adjusted` forward.
+
+The original instructions are kept below for reference.
+
+### Original instructions
 
 `release` auto-deploys to `ooruda.vercel.app` against the **Dev** Supabase
 project (`DEPLOYMENT.md:75`). The code is therefore already live while these
