@@ -14,6 +14,21 @@ undone by accident.
 
 ---
 
+## 0b. Session of 2026-11-05/06 — what changed since this was written
+
+| Was | Now |
+|---|---|
+| §1 three migrations unapplied | **Applied** to local and dev. §1 notes a wrong comment in `20261105140000` (its `SET LOCAL` had no effect: the CLI does not wrap migrations in a transaction) |
+| §2 nothing runtime-tested | **All of it tested and passing** on the local stack. Two findings: 2a.4's premise is impossible, and Reports' NET RECEIVED is not cash received |
+| §3 advisory lock owed | **Partly done.** The lock it proposed cannot work as written; what was achievable is shipped and the rest is now an architecture decision |
+| §7 scheduler | **Done, shipped inert.** pg_cron job every 15 minutes, switched on by two database settings that were deliberately not set |
+| — | Separately: iCal conflict alerts no longer repeat every sync (an operator had nine copies of one alert) |
+
+Still untouched: §4 (blocked on villa-booking), §6 (invoice on demand), and
+the rest of §7.
+
+---
+
 ## 0. What was shipped, and where it stands
 
 On `release`, newest first:
@@ -96,6 +111,65 @@ did not. Still, apply the migrations promptly.
 without `--production`.
 
 ---
+
+## 2. RUNTIME-TESTED 2026-11-06 — all of it, against local
+
+Done on the local stack (Ooruda on 127.0.0.1:54321, the booking site on
+127.0.0.1:54331, both real databases), driving the real screens as
+`villa_admin`. **Every scenario below passed.** Four things worth keeping:
+
+| § | Scenario | Result |
+|---|---|---|
+| 2a.1 | Booking with only `guest_name` | PASS — split shown as Ramesh / Kumar Nair, `guest_name` intact after save, parts backfilled |
+| 2a.2 | Two tabs, compare-and-set | PASS — second save refused, dialog kept the operator's input |
+| 2a.3 | 8 → 10 adults, direct | PASS — refused, with the figures in the message |
+| 2a.3 | 8 → 10 adults, channel-sold | PASS — allowed, amount untouched |
+| 2a.4 | Off-list salutation | **PREMISE WRONG** — see below |
+| 2a.5 | Indian mobile survives an unrelated edit | PASS |
+| 2b.1 | Void a COMPLETED channel stay | PASS — the case that was broken: cancelled, `payment_status` → unpaid, receipt voided, `enrichment_voided` logged |
+| 2b.2 | Money reversed | PASS — payout receipt voided, commission expense removed (count went to 0) |
+| 2b.3 | Payout leaves Reports | PASS — cancelled stays are excluded from booking value and the expense is gone. **But see the NET RECEIVED finding below** |
+| 2b.4 | Re-enrich the same iCal event | PASS — the block returns under "In house" as "Add booking details", and a new booking was recorded on it |
+| 2b.5 | Direct booking offers no void | PASS |
+| 2c.1 | Raise the total | PASS — 20,000 + 2,000 − 1,000 = 21,000 taxable, GST 3,780, total 24,780, balance 14,780, all to the paisa |
+| 2c.2 | Below money received | PASS — refused client-side, Save disabled |
+| 2c.3 | **The race** | PASS — a receipt banked behind the open dialog was caught server-side with exact figures, and the stored figures were left untouched |
+| 2c.4 | Clear the stay charge | PASS — no ₹0 preview, Save disabled |
+| 2c.5 | Invoiced / channel-sold | PASS — no Adjust control on either |
+| 2c.6 | List shows the new total at once | PASS — the 30-second cache is invalidated |
+| 2d.1 | Part-paid refund ladder | PASS — ₹10,000 of ₹54,280 gives ₹10,000 / ₹0 / ₹0; fully paid still ₹54,280 / ₹27,140 / ₹0; nothing received gives no ladder |
+| 2d.2 | Nothing received is held back | PASS — and visibly: "Enabled once a payment is recorded.", no Send button |
+| 2d.3 | Channel notes and payout reference | PASS — `Airbnb · booking · HM5XK3J9QW · phone ending 4821`, and the receipt reference is the confirmation code, not the feed name |
+| 2d.4 | Feed rename picked up | PASS — showed as "Airbnb Renamed" after the TTL |
+
+### 2a.4's premise is wrong — there can be no 'Dr'
+
+The booking site has `bookings_guest_salutation_check`, which allows only
+`Mr`, `Mrs`, `Ms` or null. Ooruda's own `SALUTATIONS` is the same three, so
+the two agree and a 'Dr' booking cannot exist to be preserved. The
+`UpdateBookingSchema` comment about keeping 'Dr', 'Miss' or 'Shri' describes
+data the site will not store.
+
+Tested the equivalent risk instead — a booking with salutation NULL — and it
+stayed NULL rather than defaulting to 'Mr'. The defensive code is harmless;
+the scenario as written is untestable.
+
+### Finding: the Reports "NET RECEIVED" tile is not money received
+
+`netReceived` in `lib/villa/reports.ts` is `gross booking value − expenses`.
+It never reads the receipts ledger. With live receipts of ₹1,95,200 the tile
+read ₹2,59,620, which is the booking value: it counts unpaid and part-paid
+stays as received. The sub-label says "Net Booking amount", but the tile
+title and the Monthly Performance column both say NET RECEIVED, and an
+operator will read that as cash in the bank.
+
+Not caused by any of the five commits, and not fixed here because it is a
+reporting decision rather than a bug with one right answer: either rename the
+tile to what it computes, or compute what its name promises.
+
+The original instructions are kept below.
+
+### Original instructions
 
 ## 2. RUNTIME-TEST WHAT WAS BUILT — nobody has
 
