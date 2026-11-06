@@ -4,6 +4,51 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: Change a Booking's Dates (Edit Booking Phase 3) — 2026-11-06
+
+### Moving a stay
+- New **"Change dates"** action on the booking page, `villa_admin` only, for a confirmed direct booking that has not been invoiced and whose guest has not checked in.
+- The stay is **re-priced from the rate card for its new nights**, never carried over: different nights can be a different price — a weekend, a seasonal rule — and keeping the old figure would quietly sell the new dates at the old rate. GST follows from the new figures through the same `flat18` that priced the stay. `payment_status` is re-derived, because moving the total moves what the guest owes.
+- Only the span is collected. The amounts are not editable and not sent: a client that could post a price could sell a weekend at a weekday rate.
+- Recorded as `dates_changed` with a required reason and both spans.
+
+### Why the write is an RPC and not a PATCH
+- `move_booking_dates` (villa-booking `00112`) releases the old nights and claims the new ones **in one statement**. Release-then-rebook is two statements with a gap, and in that gap the villa is for sale on the website and on Airbnb — losing that race leaves the guest with no booking at all, because their original nights are gone too.
+- The booking is excluded from its own availability check. It holds its old span, so without that a stay could never be shortened, extended, or shifted by less than its own length.
+
+### Refusals
+- Nights held by another booking, or covered by a channel block or maintenance hold.
+- A channel-sold stay (the channel owns its dates), an invoiced stay, anything not confirmed, a guest who has already checked in, a reversed range, a move into the past, and a stale write.
+- **Past the booking cutoff.** Found while testing: the cutoff lives in Ooruda's `villa_account_settings`, while the booking site's own `properties.booking_cutoff_date` is null — so the site's cutoff check is inert and Ooruda is the only thing enforcing it. The site-side check is kept as a backstop.
+
+### Deploy order
+**The villa-booking migration must be applied before this code reaches an environment.** Until `move_booking_dates` exists, the button appears and the save fails. villa-booking's `db-push.sh` refuses non-interactive pushes because that project is still what the live site serves, so it has to be run from a terminal.
+
+### Migrations
+
+| Migration | Purpose |
+|---|---|
+| `20261106140000_villa_dates_changed_activity.sql` | Adds `dates_changed` to the `villa_booking_activity` action check constraint. Constraint-only — no typegen needed. |
+| villa-booking `00112_move_booking_dates.sql` | The atomic move. **Apply first.** |
+
+---
+
+## Ooruda Villa: Reports No Longer Claims a Cash Figure It Does Not Have — 2026-11-06
+
+### "Net Received" is gone
+- The tile, the column in Monthly Performance and in the outlook table, and the matching rows in the CSV and PDF exports have all been removed.
+- It was **Total Booking Value minus Total Expenses** — both already their own tiles beside it — under a name that says money received. It read ₹2,59,620 against live receipts of ₹1,95,200, because it counts unpaid and part-paid stays as received.
+- Nothing is lost: the two numbers it combined stay side by side, and real cash received already has a home on the **Payments & Refunds** tab, which loads the receipts ledger. The overview tab never loaded receipts at all.
+- The unused `net` month field (revenue − expenses, ex-GST) went with it.
+
+**Exports change shape:** a spreadsheet keyed to the Net Received column will lose it.
+
+### Migrations
+
+None.
+
+---
+
 ## Ooruda Villa: The Housekeeping Job Is Now Scheduled — 2026-11-06
 
 ### Guest ID retention no longer depends on somebody opening a page

@@ -561,7 +561,6 @@ export function ReportsView(props: {
           'Occupancy %',
           'Booking Value',
           'Expenses (INR)',
-          'Net Received',
         ],
         ...o.months.map((m) => [
           m.month,
@@ -570,7 +569,6 @@ export function ReportsView(props: {
           m.occupancyPct,
           m.grossRevenue,
           m.expenses,
-          m.netReceived,
         ]),
         [
           'Total',
@@ -579,7 +577,6 @@ export function ReportsView(props: {
           o.occupancyPct,
           o.grossRevenue,
           o.expenses,
-          o.netReceived,
         ],
       ]),
     );
@@ -979,13 +976,6 @@ function OverviewTab({ o }: { o: Overview }) {
           highlight={o.expenses > 0 ? 'amber' : undefined}
           sub={`${o.expensesByCategory.length} categor${o.expensesByCategory.length === 1 ? 'y' : 'ies'} · operating & channel`}
         />
-        <KpiTile
-          test="net"
-          label="Net Received"
-          value={formatINR(o.netReceived)}
-          highlight={o.netReceived >= 0 ? 'green' : 'red'}
-          sub="Net Booking amount"
-        />
       </div>
 
       {/* Secondary Rate KPIs */}
@@ -1086,7 +1076,6 @@ function OverviewTab({ o }: { o: Overview }) {
                     Booking Value (₹)
                   </TableHead>
                   <TableHead className="text-right">Expenses (₹)</TableHead>
-                  <TableHead className="text-right">Net Received (₹)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1110,16 +1099,6 @@ function OverviewTab({ o }: { o: Overview }) {
                     <TableCell className="text-right tabular-nums">
                       {m.expenses > 0 ? formatINR(m.expenses) : '₹0'}
                     </TableCell>
-                    <TableCell
-                      className={cn(
-                        'text-right font-semibold tabular-nums',
-                        m.netReceived < 0
-                          ? 'text-destructive'
-                          : 'text-foreground',
-                      )}
-                    >
-                      {formatINR(m.netReceived)}
-                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1139,16 +1118,6 @@ function OverviewTab({ o }: { o: Overview }) {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatINR(o.expenses)}
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        'text-right tabular-nums',
-                        o.netReceived < 0
-                          ? 'text-destructive'
-                          : 'text-foreground',
-                      )}
-                    >
-                      {formatINR(o.netReceived)}
                     </TableCell>
                   </TableRow>
                 </TableFooter>

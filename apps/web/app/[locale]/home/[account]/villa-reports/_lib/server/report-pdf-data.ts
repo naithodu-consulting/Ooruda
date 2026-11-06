@@ -426,7 +426,6 @@ export function buildPdfData(
         value: inr(o.expenses),
         sub: `${o.expensesByCategory.length} categories`,
       },
-      { label: 'Net received', value: inr(o.netReceived) },
       { label: 'Average daily rate', value: inr(o.grossAverageNightly) },
       {
         label: 'Revenue per available night',
@@ -444,7 +443,6 @@ export function buildPdfData(
           { label: 'Occupancy', align: 'right' },
           { label: 'Booking value', align: 'right', width: 1.6 },
           { label: 'Expenses', align: 'right', width: 1.2 },
-          { label: 'Net received', align: 'right', width: 1.2 },
         ],
         rows: o.months.map((m) => [
           monthLabel(m.month),
@@ -453,7 +451,6 @@ export function buildPdfData(
           pct(m.occupancyPct),
           inr(m.grossRevenue),
           inr(m.expenses),
-          inr(m.netReceived),
         ]),
         total: [
           'Total',
@@ -462,7 +459,6 @@ export function buildPdfData(
           pct(o.occupancyPct),
           inr(o.grossRevenue),
           inr(o.expenses),
-          inr(o.netReceived),
         ],
         emptyText: 'No stays or expenses in this period.',
       },

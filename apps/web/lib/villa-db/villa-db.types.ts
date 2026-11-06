@@ -1602,6 +1602,22 @@ export type Database = {
           reference_number: string;
         }[];
       };
+      move_booking_dates: {
+        Args: {
+          p_base_amount: number;
+          p_booking_id: string;
+          p_check_in: string;
+          p_check_out: string;
+          p_discount_amount: number;
+          p_expected_updated_at?: string | null;
+          p_extra_guest_amount: number;
+          p_ignore_cutoff?: boolean;
+          p_num_nights: number;
+          p_tax_amount: number;
+          p_total_amount: number;
+        };
+        Returns: Database['public']['Tables']['bookings']['Row'];
+      };
       expire_stale_booking_holds: { Args: never; Returns: number };
       generate_booking_code: { Args: { p_prefix: string }; Returns: string };
       get_export_blocked_nights: {

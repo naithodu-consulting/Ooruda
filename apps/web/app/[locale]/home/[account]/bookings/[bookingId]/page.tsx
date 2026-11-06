@@ -37,6 +37,7 @@ import { loadVillaAccountSettings } from '~/lib/villa/settings';
 import { TeamAccountLayoutPageHeader } from '../../_components/team-account-layout-page-header';
 import { BookingBackButton } from '../_components/booking-back-button';
 import { CancelBookingDialog } from '../_components/cancel-booking-dialog';
+import { ChangeDatesDialog } from '../_components/change-dates-dialog';
 import { CheckInStayButton } from '../_components/check-in-stay-button';
 import { CompleteStayButton } from '../_components/complete-stay-button';
 import { EditBookingDialog } from '../_components/edit-booking-dialog';
@@ -151,6 +152,17 @@ export default async function BookingPage({ params, searchParams }: Props) {
     role === 'villa_admin' &&
     booking.sourceFeedId !== null &&
     booking.status !== 'cancelled';
+  // Moving a stay to other nights (Phase 3). Admin only, like the other two
+  // edit phases, because a move re-prices the stay. Not once the guest has
+  // arrived — the nights they are in are a fact, not a plan — and not for a
+  // channel-sold or invoiced stay, both of which the server and the booking
+  // site refuse as well.
+  const canChangeDates =
+    role === 'villa_admin' &&
+    booking.status === 'confirmed' &&
+    !isCheckedIn &&
+    booking.sourceFeedId === null &&
+    booking.invoiceNumber === null;
   const canCheckIn =
     booking.status === 'confirmed' && !isCheckedIn && today >= booking.checkIn;
   // A stay can only be checked out after it has been checked in.
@@ -295,6 +307,17 @@ export default async function BookingPage({ params, searchParams }: Props) {
                     infants: booking.infants,
                     specialRequests: booking.specialRequests,
                   }}
+                />
+              ) : null}
+              {canChangeDates ? (
+                <ChangeDatesDialog
+                  accountId={accountId}
+                  propertyId={propertyId}
+                  bookingId={booking.id}
+                  bookingCode={booking.bookingCode ?? booking.referenceNumber}
+                  checkIn={booking.checkIn}
+                  checkOut={booking.checkOut}
+                  siteUpdatedAt={booking.updatedAt ?? ''}
                 />
               ) : null}
               {canVoidEnrichment ? (

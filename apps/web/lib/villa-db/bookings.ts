@@ -459,6 +459,73 @@ export interface BookingMoneyWrite {
  *   updated_at = expected    compare-and-set, so two adjustments cannot each
  *                            overwrite the other's figures
  */
+/** The new span and the money that goes with it. */
+export interface BookingDatesWrite {
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  basePaise: number;
+  extraGuestPaise: number;
+  discountPaise: number;
+  taxPaise: number;
+  totalPaise: number;
+  expectedUpdatedAt?: string;
+  /** Staff moving a stay past the cutoff on purpose. */
+  ignoreCutoff?: boolean;
+}
+
+/**
+ * Moves a confirmed booking to different nights, atomically.
+ *
+ * Unlike every other write in this file, this one goes through an RPC rather
+ * than a PATCH, because it is the one write that must release nights and
+ * claim nights in the same breath. A PATCH would set the new dates without
+ * ever checking whether anybody else holds them, and a read-then-PATCH has a
+ * gap in which the website or an iCal sync can take them — losing that race
+ * leaves the guest with no booking at all, since their old nights are gone
+ * too. `move_booking_dates` (villa-booking 00112) does the availability check
+ * and the update in one statement, excluding the booking from its own check.
+ *
+ * Its refusals arrive as Postgres exceptions prefixed with a code, which
+ * `fromSiteWriteError` maps the same way it maps `create_booking_atomic`'s.
+ */
+export async function moveBookingDates(
+  site: VillaSite,
+  bookingId: string,
+  dates: BookingDatesWrite,
+  actorUserId: string | null,
+): Promise<SiteBooking> {
+  return withSyncLog(site, 'booking.move_dates', actorUserId, async () => {
+    const { data, error } = await site.client.rpc('move_booking_dates', {
+      p_booking_id: bookingId,
+      p_check_in: dates.checkIn,
+      p_check_out: dates.checkOut,
+      p_num_nights: dates.nights,
+      p_base_amount: dates.basePaise,
+      p_extra_guest_amount: dates.extraGuestPaise,
+      p_tax_amount: dates.taxPaise,
+      p_total_amount: dates.totalPaise,
+      p_discount_amount: dates.discountPaise,
+      p_expected_updated_at: dates.expectedUpdatedAt || null,
+      p_ignore_cutoff: dates.ignoreCutoff ?? false,
+    });
+
+    if (error) throw fromSiteWriteError(error);
+
+    const row = (Array.isArray(data) ? data[0] : data) as BookingRow | null;
+
+    if (!row) throw new VillaDbError('NOT_FOUND', `booking ${bookingId}`);
+
+    const booking = toBooking(row);
+
+    // Same 30-second list cache as every other write here: without this the
+    // bookings list and the calendar show the old nights for half a minute.
+    invalidateBookingsViewCache(site.sitePropertyId);
+
+    return { result: booking, siteId: booking.bookingCode ?? booking.id };
+  });
+}
+
 export async function updateBookingMoney(
   site: VillaSite,
   bookingId: string,

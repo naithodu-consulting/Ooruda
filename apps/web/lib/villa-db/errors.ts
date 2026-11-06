@@ -101,6 +101,26 @@ export function fromSiteError(error: {
     return new VillaDbError('CHANNEL_EVENT_GONE', detail);
   }
 
+  // move_booking_dates (villa-booking 00112). Each refusal is also checked in
+  // the service, which gives the operator the better sentence; these are the
+  // backstop for anything that changed between that check and the write.
+  if (
+    message.startsWith('STALE_WRITE') ||
+    message.startsWith('NOT_CONFIRMED') ||
+    message.startsWith('ALREADY_INVOICED') ||
+    message.startsWith('CHANNEL_SOLD')
+  ) {
+    return new VillaDbError('CONFLICT', detail);
+  }
+
+  if (message.startsWith('INVALID_RANGE')) {
+    return new VillaDbError('INVALID_INPUT', detail);
+  }
+
+  if (message.startsWith('BOOKING_NOT_FOUND')) {
+    return new VillaDbError('NOT_FOUND', detail);
+  }
+
   // create_booking_atomic, when a link names a feed of another property.
   if (message.startsWith('FEED_MISMATCH')) {
     return new VillaDbError('INVALID_INPUT', detail);

@@ -84,6 +84,7 @@ export const BOOKING_ACTIVITY_ACTIONS = [
   'checked_in',
   'booking_updated',
   'amount_adjusted',
+  'dates_changed',
   'enrichment_voided',
   'note',
   'payment_recorded',

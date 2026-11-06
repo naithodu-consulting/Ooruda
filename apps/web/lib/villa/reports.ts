@@ -216,8 +216,6 @@ export interface MonthLine {
   revenue: number;
   grossRevenue: number;
   expenses: number;
-  net: number;
-  netReceived: number;
 }
 
 export interface Overview {
@@ -227,7 +225,6 @@ export interface Overview {
   revenue: number;
   gstCollected: number;
   grossRevenue: number;
-  netReceived: number;
   averageNightly: number;
   grossAverageNightly: number;
   revenuePerNight: number;
@@ -312,14 +309,11 @@ export function buildOverview(
       revenue: rupees(r),
       grossRevenue: rupees(r + g),
       expenses: rupees(e),
-      net: rupees(r - e),
-      netReceived: rupees(r + g - e),
     });
   }
 
   const days = daysIn(range);
   const grossPaise = revenue + gst;
-  const netReceivedPaise = grossPaise - spent;
 
   return {
     days,
@@ -328,7 +322,6 @@ export function buildOverview(
     revenue: rupees(revenue),
     gstCollected: rupees(gst),
     grossRevenue: rupees(grossPaise),
-    netReceived: rupees(netReceivedPaise),
     averageNightly: nights ? rupees(revenue / nights) : 0,
     grossAverageNightly: nights ? rupees(grossPaise / nights) : 0,
     revenuePerNight: rupees(revenue / days),

@@ -21,6 +21,7 @@ import {
   UpdateBookingSchema,
   AdjustBookingMoneySchema,
   VoidEnrichmentSchema,
+  ChangeBookingDatesSchema,
 } from '../schemas/bookings.schema';
 import { createBookingsService } from './bookings.service';
 
@@ -116,6 +117,33 @@ export const adjustBookingMoneyAction = authActionClient
     revalidatePath('/[locale]/home/[account]/villa-reports', 'page');
 
     return { changedFields: changes.length, auditWritten };
+  });
+
+/**
+ * Moving a booking to different nights (edit booking Phase 3).
+ *
+ * villa_admin only, like the other two edit phases: a move re-prices the stay
+ * and can change what the guest owes.
+ *
+ * Revalidates the calendar as well as the bookings pages — the whole point of
+ * a move is that different nights are now occupied.
+ */
+export const changeBookingDatesAction = authActionClient
+  .inputSchema(ChangeBookingDatesSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    await requireVillaRole(parsedInput.accountId, ['villa_admin']);
+
+    const { auditWritten } = await createBookingsService(
+      getSupabaseServerClient(),
+    ).changeDates(parsedInput, ctx.user.id);
+
+    revalidateBookings();
+    revalidatePath('/[locale]/home/[account]/bookings/[bookingId]', 'page');
+    revalidatePath('/[locale]/home/[account]/calendar', 'page');
+    // The stay may have moved into another month, and its price with it.
+    revalidatePath('/[locale]/home/[account]/villa-reports', 'page');
+
+    return { auditWritten };
   });
 
 /**

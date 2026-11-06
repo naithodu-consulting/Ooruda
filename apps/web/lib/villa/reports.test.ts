@@ -113,7 +113,6 @@ describe('buildOverview', () => {
       revenue: 22000,
       gstCollected: 3960,
       grossRevenue: 25960,
-      netReceived: 24780,
       averageNightly: 11000,
       grossAverageNightly: 12980,
       revenuePerNight: 709.68,

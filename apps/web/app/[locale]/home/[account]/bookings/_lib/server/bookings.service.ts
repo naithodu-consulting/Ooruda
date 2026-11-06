@@ -27,6 +27,7 @@ import {
   updateBookingMoney,
   toSitePhone,
   updateBookingGuestDetails,
+  moveBookingDates,
 } from '~/lib/villa-db/bookings';
 import { type VillaSite, getVillaSite } from '~/lib/villa-db/client';
 import { todayIst } from '~/lib/villa-db/dates';
@@ -41,6 +42,7 @@ import {
   describeMoneyChange,
   recomputeMoney,
 } from '~/lib/villa/booking-adjust';
+import { checkDateMove, describeDateMove } from '~/lib/villa/booking-dates';
 import {
   type BookingGuestDetails,
   buildEditNote,
@@ -75,6 +77,7 @@ import type {
   NewBookingSchema,
   ReopenStaySchema,
   AdjustBookingMoneySchema,
+  ChangeBookingDatesSchema,
   StaySchema,
   UpdateBookingSchema,
   VoidEnrichmentSchema,
@@ -1167,6 +1170,130 @@ export function createBookingsService(client: Client) {
       await mirrorBooking(site, synced ?? booking);
 
       return { booking, changes, auditWritten };
+    },
+
+    /**
+     * Moves a confirmed booking to different nights (edit booking Phase 3).
+     *
+     * The stay is RE-PRICED from the rate card for its new span, never
+     * carried over: different nights can be a different price — a weekend,
+     * a seasonal rule — and keeping the old figure would quietly sell the
+     * new dates at the old rate. GST follows from the new figures through
+     * the same `flat18` that priced the stay originally.
+     *
+     * The write itself is `move_booking_dates` on the booking site
+     * (villa-booking 00112), which releases the old nights and claims the
+     * new ones in one statement. Doing it as release-then-rebook would leave
+     * a gap in which the website or an iCal sync can take the new nights,
+     * and the guest would end up with no booking at all.
+     *
+     * Every refusal is checked here AND in that statement: here so the
+     * operator gets a sentence they can act on, there so nothing that
+     * changes in between can slip past. The cutoff is the exception — it
+     * lives only in Ooruda's `villa_account_settings`, so this is the only
+     * place enforcing it.
+     */
+    async changeDates(
+      input: z.output<typeof ChangeBookingDatesSchema>,
+      actor: string,
+    ) {
+      const site = await getVillaSite(input.accountId, input.propertyId);
+      const existing = await getBooking(site, input.bookingId);
+
+      if (!existing) throw new Error('That booking no longer exists.');
+
+      const admin = getSupabaseServerAdminClient();
+
+      // A guest who has arrived cannot have their stay moved: the nights
+      // they are in are a fact, not a plan. `checked_in_at` lives in the
+      // mirror, which is where the check-in flow writes it.
+      const { data: mirror } = await admin
+        .from('villa_bookings_mirror')
+        .select('checked_in_at')
+        .eq('property_id', input.propertyId)
+        .eq('site_booking_id', input.bookingId)
+        .maybeSingle();
+
+      const cutoff = await getBookingCutoffDate(input.accountId);
+
+      const refusal = checkDateMove({
+        booking: {
+          status: existing.status,
+          sourceFeedId: existing.sourceFeedId,
+          invoiceNumber: existing.invoiceNumber,
+          checkIn: existing.checkIn,
+          checkOut: existing.checkOut,
+          checkedInAt: mirror?.checked_in_at ?? null,
+        },
+        checkIn: input.checkIn,
+        checkOut: input.checkOut,
+        cutoff,
+        ignoreCutoff: input.ignoreCutoff,
+      });
+
+      if (refusal) throw new Error(refusal.message);
+
+      // Priced for the guest count the booking actually has, not the one the
+      // browser last saw.
+      const pricing = await getPricingInputs(site);
+      const quote = quoteStay({
+        ...pricing,
+        checkIn: input.checkIn,
+        checkOut: input.checkOut,
+        adults: existing.adults,
+        children: existing.children,
+      });
+
+      if (!quote.ok) throw new Error(quote.error.message);
+
+      const before = {
+        checkIn: existing.checkIn,
+        checkOut: existing.checkOut,
+      };
+
+      const booking = await moveBookingDates(
+        site,
+        input.bookingId,
+        {
+          checkIn: input.checkIn,
+          checkOut: input.checkOut,
+          nights: quote.quote.numNights,
+          basePaise: quote.quote.basePaise,
+          extraGuestPaise: quote.quote.extraGuestPaise,
+          discountPaise: 0,
+          taxPaise: quote.quote.taxPaise,
+          totalPaise: quote.quote.totalPaise,
+          expectedUpdatedAt: input.siteUpdatedAt,
+          ignoreCutoff: true,
+        },
+        actor,
+      );
+
+      const note = buildEditNote(input.reason, [
+        describeDateMove(before, {
+          checkIn: booking.checkIn,
+          checkOut: booking.checkOut,
+        }),
+      ]);
+
+      const auditWritten = await recordBookingActivity(
+        {
+          accountId: input.accountId,
+          propertyId: input.propertyId,
+          booking,
+          action: 'dates_changed',
+          note,
+        },
+        actor,
+      );
+
+      // The total moved with the dates, so what the guest owes moved too: a
+      // stay paid in full at the old price may now be part-paid.
+      const synced = await resyncPaymentStatus(site, booking, actor);
+
+      await mirrorBooking(site, synced ?? booking);
+
+      return { booking: synced ?? booking, auditWritten };
     },
 
     /**

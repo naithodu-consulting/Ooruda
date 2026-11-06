@@ -397,6 +397,32 @@ const money = z.preprocess(
  * could post a total would be a client that could post a total inconsistent
  * with its own tax.
  */
+/**
+ * Moving a booking to different nights (edit booking Phase 3).
+ *
+ * The new span is all the form sends. The amounts are NOT accepted from the
+ * browser: different nights can carry a different rate, and the server
+ * re-prices the stay from the rate card. A client that could post a price
+ * could sell a weekend at a weekday rate.
+ */
+export const ChangeBookingDatesSchema = z.object({
+  ...ids,
+  bookingId: z.string().uuid(),
+  /** `bookings.updated_at` as the page rendered it; compare-and-set. */
+  siteUpdatedAt: z.string().trim().max(40).optional().default(''),
+  checkIn: ymd,
+  checkOut: ymd,
+  /** Staff moving a stay past the booking cutoff on purpose. */
+  ignoreCutoff: z.boolean().optional().default(false),
+  reason: z
+    .string()
+    .trim()
+    .min(3, { message: 'Say why the dates are changing' })
+    .max(500),
+});
+
+export type ChangeBookingDatesInput = z.input<typeof ChangeBookingDatesSchema>;
+
 export const AdjustBookingMoneySchema = z.object({
   ...ids,
   bookingId: z.string().uuid(),
