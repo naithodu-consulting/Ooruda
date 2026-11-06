@@ -163,9 +163,37 @@ stays as received. The sub-label says "Net Booking amount", but the tile
 title and the Monthly Performance column both say NET RECEIVED, and an
 operator will read that as cash in the bank.
 
-Not caused by any of the five commits, and not fixed here because it is a
-reporting decision rather than a bug with one right answer: either rename the
-tile to what it computes, or compute what its name promises.
+Not caused by any of the five commits.
+
+**Analysed 2026-11-06, on the question of removing the tile outright.**
+
+The overview already shows **Total Booking Value** and **Total Expenses** as
+their own tiles, and `netReceived` is exactly the first minus the second. So
+the tile carries **no information the page is not already showing** — it
+contributes only a name that says something untrue.
+
+Computing what the name promises is not a small change either: the overview
+tab does not load receipts at all. `load-report.ts` fetches
+`villa_booking_payments` and `villa_refunds` only when the tab is
+`payments`, so a true cash figure means a new query on a tab that does not
+have one today.
+
+Three options, in order of preference:
+
+1. **Remove it** — the tile, the `NET RECEIVED` column in Monthly
+   Performance and in the outlook table, and the matching rows in the PDF and
+   CSV exports. Nothing is lost: the two numbers it combines stay side by
+   side, and real cash received already has a home on the Payments & Refunds
+   tab, which loads the ledger. The sibling `net` field (revenue − expenses,
+   excluding GST) is computed and never rendered, so it goes too.
+2. **Rename it** to "Booking value less expenses". Honest, but it leaves a
+   tile that restates two adjacent tiles.
+3. **Make it true cash received** — a new receipts query on the overview.
+   Most work, and it would sit oddly beside booking-value measures while
+   duplicating the Payments tab.
+
+**The one caveat for removal:** the CSV and PDF exports change shape. Anyone
+with a spreadsheet keyed to that column will see it disappear.
 
 The original instructions are kept below.
 
@@ -290,8 +318,52 @@ read receipts and refunds through separate calls and could see a payment
 without the refund that cancelled it. That torn read is now closed, and the
 receipt path is serialised against itself.
 
-**What remains open.** A receipt banked *after* the verification read is still
-missed, so the compensating write in `adjustMoney` stays as the backstop.
+**What remains open, in plain terms.**
+
+The rule being protected is: *a booking's total must never be moved below the
+money already taken for it* — otherwise the guest is owed money that no
+refund record exists for, and nothing will ever surface it.
+
+Checking that rule needs two facts that live in two different databases:
+
+| Fact | Where it lives |
+|---|---|
+| The booking's total | the booking **site**'s `bookings` row |
+| Money received | **Ooruda**'s `villa_booking_payments`, **plus** the site's own online Razorpay payments |
+
+To make the check airtight, the read and the write must happen inside one
+transaction. Two separate Postgres instances, each reached over PostgREST
+where every call is its own transaction, cannot provide one. So the sequence
+is unavoidably: read the money, decide, write the total — with a gap.
+
+What happens in that gap today: a receipt banked after the verification read
+is missed, so the adjustment stands even though it is now below the money
+taken. The compensating write in `adjustMoney` is the backstop — it re-reads
+and puts the old figures back — but it cannot catch a payment that lands
+after *it* has read either.
+
+**How likely is it?** It needs two people acting within the same second or
+two — one adjusting an amount while another banks a payment on the same
+booking. For a single villa with one or two admins this is rare. It is not
+rare enough to ignore for ever, because the failure is silent: nothing warns
+anybody, and the discrepancy only shows up when the books are reconciled.
+
+**The two ways to close it, and the trade:**
+
+1. **Move the booking total into Ooruda's database** (mirror it as the
+   authority for money, leaving the site's copy for display). Then total and
+   receipts share one database, one transaction and one lock, and the guard
+   becomes a plain assertion. Clean, and the bigger change: it moves where
+   the truth about money lives.
+2. **A two-phase protocol with the booking site** — claim the adjustment,
+   confirm it, roll back on failure. No change to where data lives, but it
+   adds a distributed-transaction shape to every amount change, which is
+   more moving parts to get wrong than the problem it solves.
+
+My reading is that (1) is the right one whenever this is picked up, because
+Ooruda already owns receipts, refunds, expenses and the activity log — the
+total is the odd one out. But it is a decision about ownership of data, not a
+patch, which is why it was not taken here.
 Closing it properly needs a decision rather than a patch: either move the
 booking total into Ooruda's database so total and receipts share a
 transaction, or run a two-phase protocol with the booking site. That is an
@@ -332,6 +404,58 @@ When it lands, the compensating write in `adjustMoney` can be simplified to a
 plain assertion.
 
 ---
+
+## 4. BLOCKED: Phase 3 — date changes — explained 2026-11-06
+
+**What the change is.** Letting an operator move a booking's check-in /
+check-out — a guest asking for 12-13 Nov instead of 10-11 Nov. Today the
+edit dialog says in as many words that "Dates and amounts cannot be changed
+here", so the only way is to cancel and re-book, which loses the booking
+code, the receipts and the history.
+
+**Why it cannot be built from Ooruda alone.** Verified against the booking
+site's own schema on 2026-11-06, the site offers exactly three relevant
+functions and no fourth:
+
+| Function | What it does |
+|---|---|
+| `check_availability(property, in, out)` | Answers yes/no for a date span |
+| `create_booking_atomic(property, …, in, out, …)` | Checks availability and creates the booking in one statement |
+| `get_unavailable_nights(property, from, to)` | Lists nights already taken |
+
+There is **no** "move this booking's dates" function, and nothing that
+releases one span and claims another in a single statement.
+
+**Why release-then-rebook is the wrong answer.** It is two statements with a
+gap between them:
+
+1. cancel / release 10-11 Nov
+2. create the booking on 12-13 Nov
+
+Between (1) and (2) the villa is for sale on both the public website and
+Airbnb. The website can sell those nights, or an iCal sync can import an
+Airbnb block onto them. Then step (2) fails and **the guest has no booking at
+all** — their original nights are gone and the new ones belong to someone
+else. There is no way back: the original span may itself have been taken in
+the same gap.
+
+The window is small and the failure is total, which is the worst shape of
+risk for a booking system.
+
+**What unblocks it.** An atomic move on the booking site — one statement that
+releases the old span and claims the new one, or fails leaving the booking
+exactly as it was. This is already on villa-booking's own TODO as **item 8b,
+"atomic block / release functions"**. It is that repo's call to design, since
+only it owns the availability tables.
+
+**Scope once unblocked** (Ooruda side, for estimating): the dialog gains two
+date fields; the service re-prices the new span through the same rate card
+and refuses when the new dates cross the GST slab or the stay has been
+invoiced; the activity log gains a `dates_changed` action with its own
+constraint migration; and the guest emails need re-sending or a "your dates
+changed" template.
+
+### Original text
 
 ## 4. BLOCKED: Phase 3 — date changes
 

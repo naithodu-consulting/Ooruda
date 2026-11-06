@@ -9,6 +9,50 @@ were not re-checked, since they depend on people rather than code.
 
 ---
 
+## Parked by the owner — 2026-11-06
+
+Raised in the 2026-11-06 review and deliberately held. None of these is
+blocked on engineering; each is waiting on something outside the code.
+
+### Invoice on demand (item 8c) — HELD, waiting on the invoice format
+- **Nothing was built, so nothing needs reverting.** `issue_booking_invoice`
+  exists only as a draft in Appendix A of `OORUDA_VILLA_HANDOVER.md`. No
+  migration, no service, no action, no UI. Everything else on `release` can
+  go to production without it, in any order.
+- **The cost of holding it:** the site's `trg_bookings_assign_invoice` still
+  issues a GST invoice the moment a direct booking becomes
+  `confirmed` + `paid`, and "Adjust amount" refuses an invoiced stay. So
+  **Adjust amount is unavailable on any direct booking that has been paid in
+  full** — only part-paid and unpaid ones can be corrected. That is the whole
+  of the limitation, and it is a correct refusal, not a bug: changing a figure
+  an invoice already states needs a credit or debit note.
+- Resume when the invoice format is settled. Order is unchanged: the Ooruda
+  "Issue tax invoice" action ships first, the villa-booking migration second.
+
+### Itemised add-ons on a booking — needs a table, in both repos
+- `villa_addons` is a Settings price list with **no booking linkage**, and
+  neither database has a `booking_addons` table. Phase 2 folds a surcharge
+  into the stay charge instead, which is why a meal or a BBQ cannot appear as
+  its own invoice line.
+- Doing it properly means a table plus invoice-line snapshots (see "Add-on
+  history for invoices (M5)" above): an invoice line must keep the add-on's
+  name, price and unit **as they were**, because add-ons get edited and
+  removed.
+
+### GST on a retained cancellation charge — needs the CA
+- Recorded in `OORUDA_VILLA_OPEN_ITEMS.md` §A. `total_amount` is
+  GST-inclusive, so money retained on a cancellation carries a GST component,
+  and retention charges are generally taxable in India.
+- This changes how retained money is **booked**, not what the guest is told,
+  so no guest-facing wording waits on it.
+
+### Villa module i18n — after the module is translated
+- Every villa screen is hard-coded English, consistent with the rest of the
+  module. Move to `villa.json` when the module is translated; doing it
+  piecemeal only splits the strings across two mechanisms.
+
+---
+
 ## Deferred features
 
 ### Subscription / pricing for the Ooruda Villa product
