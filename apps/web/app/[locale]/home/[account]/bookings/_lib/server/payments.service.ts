@@ -114,6 +114,64 @@ export async function loadLedger(
 }
 
 /**
+ * What this booking has actually been paid, read so that a receipt being
+ * written at the same moment cannot be seen half-applied.
+ *
+ * `loadLedger` fires its three reads in parallel, each its own transaction:
+ * a payment and the refund that cancelled it can land between them, and the
+ * summary then counts one without the other. That is tolerable on a screen
+ * and is NOT tolerable in the guard that decides whether a booking's total
+ * may be lowered, because the error there is a refund nobody recorded.
+ *
+ * So the Ooruda side is read through `villa_booking_receipts_snapshot`, which
+ * sums receipts and refunds in one transaction while holding the booking's
+ * advisory lock — the same lock `record_villa_payment` takes, so an in-flight
+ * receipt either lands before this read or waits for it.
+ *
+ * The online (Razorpay) side still comes from the booking site and is NOT
+ * covered by that lock: it is a different database, and no lock here spans
+ * both. It is a different source of concurrency too — a webhook rather than
+ * an operator — and the race this guards is two operators. See §3 of
+ * OORUDA_VILLA_HANDOVER.md for what remains open and what closing it needs.
+ *
+ * The arithmetic is `summariseLedger`'s, reduced: online refunds are both
+ * added to received and subtracted as refunded, so they cancel, leaving
+ *   captured online + (receipts − refunds).
+ */
+export async function lockedNetPaidPaise(
+  client: Client,
+  site: VillaSite,
+  booking: SiteBooking,
+): Promise<number> {
+  const [online, snapshot] = await Promise.all([
+    listSitePayments(site, booking.id, { verified: true }),
+    client.rpc('villa_booking_receipts_snapshot', {
+      p_property_id: site.propertyId,
+      p_site_booking_id: booking.id,
+    }),
+  ]);
+
+  if (snapshot.error) {
+    (await getLogger()).error(
+      { bookingId: booking.id, code: snapshot.error.code },
+      'villa ledger: locked receipts snapshot failed',
+    );
+
+    throw new Error('Could not check the payments. Refresh to try again.');
+  }
+
+  const row = (snapshot.data ?? [])[0];
+  const received = Math.round(Number(row?.received ?? 0) * 100);
+  const refunded = Math.round(Number(row?.refunded ?? 0) * 100);
+
+  const capturedOnline = online
+    .filter((p) => p.status === 'captured')
+    .reduce((sum, p) => sum + p.amountPaise, 0);
+
+  return capturedOnline + received - refunded;
+}
+
+/**
  * Offline payments, voids and refunds for a booking. The money itself is
  * written by the database functions (record_villa_payment and friends), under
  * the member's own session so their role is what is checked; this service

@@ -80,7 +80,7 @@ import type {
   VoidEnrichmentSchema,
 } from '../schemas/bookings.schema';
 import { SALUTATIONS } from '../schemas/bookings.schema';
-import { loadLedger } from './payments.service';
+import { loadLedger, lockedNetPaidPaise } from './payments.service';
 
 import { createHash } from 'node:crypto';
 
@@ -1105,12 +1105,23 @@ export function createBookingsService(client: Client) {
       // to prevent.
       //
       // So it is checked again against the figures that actually landed, and
-      // put back if it no longer holds. A compensating write rather than a
-      // lock, because the proper fix is for `record_villa_payment` to take the
-      // same advisory lock, and that is a migration on the payments path.
-      const after = await loadLedger(client, site, booking);
+      // put back if it no longer holds.
+      //
+      // The re-read goes through `lockedNetPaidPaise`, which sums Ooruda's
+      // receipts and refunds in ONE transaction under the booking's advisory
+      // lock - the lock `record_villa_payment` now takes too
+      // (20261105180000). A receipt being written for this booking therefore
+      // either lands before this read or waits for it, where the old
+      // three-call `loadLedger` could see a payment without the refund that
+      // cancelled it and restore a booking that never needed restoring.
+      //
+      // This still is not a lock held across the site write, and nothing in
+      // one database can be: the total lives on the booking site. So the
+      // compensating write below stays, and a receipt banked after this read
+      // is still missed. §3 of the handover says what closing that needs.
+      const afterNetPaidPaise = await lockedNetPaidPaise(client, site, booking);
 
-      if (after.summary.netPaidPaise > booking.totalAmountPaise) {
+      if (afterNetPaidPaise > booking.totalAmountPaise) {
         await updateBookingMoney(
           site,
           input.bookingId,

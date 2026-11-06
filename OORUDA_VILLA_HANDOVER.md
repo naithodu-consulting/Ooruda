@@ -191,6 +191,43 @@ Equally untested, and both touch things a guest or an accountant sees.
 
 ---
 
+## 3. PARTLY DONE 2026-11-06 — the advisory lock on the payments path
+
+**Shipped** (`20261105180000_villa_payment_advisory_lock.sql`, applied to local
+and dev):
+
+- `record_villa_payment` takes `pg_advisory_xact_lock` on the booking, so two
+  receipts for one booking cannot interleave.
+- `villa_booking_receipts_snapshot` reads receipts and refunds in one
+  transaction under the same lock, and `adjustMoney`'s post-write
+  verification uses it.
+- `villa_booking_lock_key` is the one place the lock key is derived.
+
+**The fix proposed below does not work as written, and this is why.** It says
+to hold the lock across "the ledger read plus the site write". That is not
+possible: the site write goes to a different Postgres instance, and PostgREST
+gives each call its own transaction, so no lock taken in Ooruda can still be
+held while the booking site is written. The quantity being guarded also spans
+both databases — money received is Ooruda's receipts **plus** the site's
+online Razorpay payments, and the total being compared against is the site's.
+
+What that proposal was really worth was found on the way: the old verification
+read receipts and refunds through separate calls and could see a payment
+without the refund that cancelled it. That torn read is now closed, and the
+receipt path is serialised against itself.
+
+**What remains open.** A receipt banked *after* the verification read is still
+missed, so the compensating write in `adjustMoney` stays as the backstop.
+Closing it properly needs a decision rather than a patch: either move the
+booking total into Ooruda's database so total and receipts share a
+transaction, or run a two-phase protocol with the booking site. That is an
+architecture call for the owner, not a migration.
+
+The original text is kept below, because its reasoning about the race itself
+is still correct.
+
+### Original text
+
 ## 3. OWED: an advisory lock on the payments path
 
 **Priority: do this before Phase 2 is used in earnest.**

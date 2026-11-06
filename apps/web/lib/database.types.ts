@@ -4923,6 +4923,17 @@ export type Database = {
         Returns: Json
       }
       villa_account_ids: { Args: { p_roles?: string[] }; Returns: string[] }
+      villa_booking_lock_key: {
+        Args: { p_site_booking_id: string }
+        Returns: number
+      }
+      villa_booking_receipts_snapshot: {
+        Args: { p_property_id: string; p_site_booking_id: string }
+        Returns: {
+          received: number
+          refunded: number
+        }[]
+      }
       villa_role: { Args: { p_account_id: string }; Returns: string }
       void_bill: {
         Args: { p_bill_id: string; p_reason: string }

@@ -4,6 +4,30 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: Serialising Money Writes Against the Adjustment Guard — 2026-11-06
+
+### The receipt path now takes a per-booking lock
+- `record_villa_payment` takes `pg_advisory_xact_lock` on the booking before its idempotency read, so two receipts for one booking can no longer interleave — including a retry of the same request racing a genuine second payment.
+- New `villa_booking_lock_key(uuid)` is the single source of that lock key (`hashtextextended`, immutable across sessions). Every function that locks a booking must use it, or they take different locks and neither waits.
+
+### The adjustment guard reads one untorn snapshot
+- New `villa_booking_receipts_snapshot(property, booking)` sums receipts and refunds **in one transaction under that same lock**, and `adjustMoney`'s post-write verification now uses it.
+- Previously the verification went through `loadLedger`, which fires three reads in parallel, each its own transaction. A payment and the refund that cancelled it could be seen half-applied — counting the payment without its refund, and restoring a booking that never needed restoring.
+- The arithmetic matches `summariseLedger` exactly: online refunds are both added to received and subtracted as refunded, so they cancel, leaving `captured online + (receipts − refunds)`.
+
+### What is still open, deliberately
+- **This does not make "check the ledger, then write the site row" atomic, and no lock in Ooruda's database can.** The booking total lives on the booking site while the receipts live here, and the money received includes the site's own online payments. Two Postgres instances behind PostgREST cannot share a transaction.
+- The handover proposed exactly such a lock as the "proper fix"; that proposal does not hold once the online payments and the total are accounted for. What is shipped narrows the window and removes the torn read; a receipt banked after the verification is still missed, and the compensating write remains the backstop.
+- Closing the rest needs either the booking total moved into Ooruda's database, or a two-phase protocol with the booking site.
+
+### Migrations
+
+| Migration | Purpose |
+|---|---|
+| `20261105180000_villa_payment_advisory_lock.sql` | Adds `villa_booking_lock_key` and `villa_booking_receipts_snapshot`; re-creates `record_villa_payment` with the advisory lock. The re-creation was diffed against the live `pg_get_functiondef` first, per CLAUDE.md, and changes exactly one line. Adds functions, so `supabase:web:typegen` was re-run. |
+
+---
+
 ## Ooruda Villa: One Alert Per Double Booking — 2026-11-05
 
 ### Conflict alerts no longer repeat every sync
