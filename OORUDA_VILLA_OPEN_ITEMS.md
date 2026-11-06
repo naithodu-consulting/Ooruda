@@ -87,8 +87,25 @@ found — A0 below, listed first because it inverts a safety assumption this che
       stay shut until the booking site's Privacy page states ID storage and the 30-day
       retention (villa-booking TODO 7); until then staff record IDs "seen in person" (last 4
       digits only).
-- [ ] **Scheduled job — two of its three jobs genuinely need a scheduler, not a page
-      visit.** Agreed 2026-10-03 to do this *after* the current work lands.
+- [x] **Scheduled job — DONE 2026-11-06, but shipped switched off.**
+      `20261106060000_villa_sync_schedule.sql` adds `villa_sync_tick()` and a pg_cron job
+      `villa-sync` running `*/15 * * * *`, applied to local and dev. pg_cron + pg_net rather
+      than Vercel Cron (a 15-minute Vercel schedule needs a paid plan, and pg_cron is already
+      how the association reminders run).
+      **It does nothing until both settings below are set on the database**, and these were
+      deliberately NOT set on dev: switching it on makes the route send due guest emails
+      through Resend to whatever addresses the data holds, which is a decision about real
+      mail reaching real people.
+      ```
+      alter database postgres set app.villa_app_url     = 'https://<host>';
+      alter database postgres set app.villa_cron_secret = '<CRON_SECRET>';
+      ```
+      Verified locally: unset settings → no HTTP call queued; a secret under 32 characters →
+      warning, no call; configured → exactly one call to `<url>/api/villa/sync`.
+      The original note is kept below.
+
+- [ ] ~~**Scheduled job — two of its three jobs genuinely need a scheduler, not a page
+      visit.**~~ Agreed 2026-10-03 to do this *after* the current work lands.
       **Nothing schedules it today (confirmed 2026-11-04).** There is no `vercel.json`
       anywhere in the repo, and the only `cron.schedule` calls in the migrations are
       `amc-reminders` (`20260820000001`) and the association reminder cron

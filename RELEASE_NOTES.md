@@ -4,6 +4,33 @@ This document covers all feature work, enhancements, and notable changes built o
 
 ---
 
+## Ooruda Villa: The Housekeeping Job Is Now Scheduled — 2026-11-06
+
+### Guest ID retention no longer depends on somebody opening a page
+- `GET /api/villa/sync` is now called every 15 minutes by a pg_cron job (`villa-sync`). Nothing scheduled it before: it ran only when a villa dashboard was opened.
+- **This closes a live compliance gap.** The route deletes guest ID photos past their retention date, the privacy policy states that period, and a page view cannot discharge it. If nobody opened a villa dashboard for longer than the retention period, ID documents sat past their date.
+- Fifteen minutes rather than nightly because guest emails are time-triggered: arrival at 10:00 IST, thank-you three hours after check-out.
+- pg_cron + pg_net rather than Vercel Cron: a 15-minute Vercel schedule needs a paid plan, and pg_cron is already how the association reminders run, so this adds no second mechanism and no `vercel.json`.
+
+### It ships switched off, on purpose
+- `villa_sync_tick()` does nothing unless **both** `app.villa_app_url` and `app.villa_cron_secret` are set on the database, and warns without calling if the secret is under 32 characters (the route refuses those anyway).
+- So applying the migration changes no behaviour until someone deliberately configures the environment:
+
+```
+alter database postgres set app.villa_app_url     = 'https://<host>';
+alter database postgres set app.villa_cron_secret = '<CRON_SECRET>';
+```
+
+- **Those settings were deliberately NOT applied to dev.** Switching the job on makes it call the app every 15 minutes, and the route sends due guest emails through Resend to whatever addresses the data holds. Turning it on is a decision about real email reaching real people, so it is left to the owner.
+
+### Migrations
+
+| Migration | Purpose |
+|---|---|
+| `20261106060000_villa_sync_schedule.sql` | Adds `villa_sync_tick()` and schedules it every 15 minutes as `villa-sync`. Inert until the two database settings above are set. |
+
+---
+
 ## Ooruda Villa: Serialising Money Writes Against the Adjustment Guard — 2026-11-06
 
 ### The receipt path now takes a per-booking lock
